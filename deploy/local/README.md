@@ -4,6 +4,28 @@ Local development stack for the **users-module** project. Brings up real
 infrastructure (Postgres, Authelia OIDC, MailHog SMTP catcher) on a shared
 Docker network so dev/prod parity is preserved — no mock OIDC.
 
+## First-time setup
+
+**Add a `/etc/hosts` entry for `authelia` before your first `dev.start`:**
+
+```
+127.0.0.1  authelia
+```
+
+(Use `sudo` to edit `/etc/hosts`.)
+
+Why: the OIDC issuer URL is `https://authelia:9091` so that the API container
+(on the docker network) and your browser (on the host) both see the **same**
+issuer string — a hard OIDC requirement (the issuer in the discovery document
+must match the URL the client used). Inside the docker network `authelia`
+resolves via docker DNS. From your browser it does not, so without this
+`/etc/hosts` entry the "Sign in with Authelia" button takes you to a URL your
+browser can't reach. The Authelia TLS cert already has `DNS:authelia` as a SAN,
+so it validates correctly from both sides once the name resolves.
+
+The API and local email/password login work without this entry; only the
+Authelia SSO button in the GUI needs it.
+
 ## Quick start
 
 ```sh
