@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -31,6 +33,16 @@ func NewVerifier(ctx context.Context, issuerURL, clientID, jwtSecret, localIssue
 	}
 
 	if issuerURL != "" {
+		// For local dev with self-signed certs, use an HTTP client that
+		// skips TLS verification. In production, use the default client.
+		if strings.HasPrefix(issuerURL, "https://") {
+			insecureClient := &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				},
+			}
+			ctx = oidc.ClientContext(ctx, insecureClient)
+		}
 		provider, err := oidc.NewProvider(ctx, issuerURL)
 		if err != nil {
 			return nil, fmt.Errorf("auth: oidc provider discovery: %w", err)

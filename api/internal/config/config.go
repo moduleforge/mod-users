@@ -219,13 +219,20 @@ func validate(cfg *Config, parseErrors []string) error {
 
 	required := []check{
 		{"DB_URL", cfg.DB.URL},
-		{"OIDC_ISSUER_URL", cfg.OIDC.IssuerURL},
-		{"OIDC_CLIENT_ID", cfg.OIDC.ClientID},
-		{"OIDC_CLIENT_SECRET", cfg.OIDC.ClientSecret},
-		{"OIDC_CLAIM_STYLE", cfg.OIDC.ClaimStyle},
 		{"JWT_SECRET", cfg.LocalAuth.JWTSecret},
 		{"SMTP_HOST", cfg.SMTP.Host},
 		{"SMTP_FROM", cfg.SMTP.From},
+	}
+
+	// OIDC fields are required in non-local modes. In local mode, the API
+	// starts without OIDC (local auth only) if these are missing.
+	if cfg.DeployMode != DeployModeLocal {
+		required = append(required,
+			check{"OIDC_ISSUER_URL", cfg.OIDC.IssuerURL},
+			check{"OIDC_CLIENT_ID", cfg.OIDC.ClientID},
+			check{"OIDC_CLIENT_SECRET", cfg.OIDC.ClientSecret},
+			check{"OIDC_CLAIM_STYLE", cfg.OIDC.ClaimStyle},
+		)
 	}
 
 	var problems []string

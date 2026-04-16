@@ -101,6 +101,15 @@ _dev.env:
 		echo "==> .env not found — copying from .env.example"; \
 		cp .env.example .env; \
 	fi
+	@if [ ! -f deploy/local/authelia/certs/cert.pem ]; then \
+		echo "==> Generating self-signed TLS cert for Authelia..."; \
+		mkdir -p deploy/local/authelia/certs; \
+		openssl req -x509 -nodes -newkey rsa:2048 \
+			-keyout deploy/local/authelia/certs/key.pem \
+			-out deploy/local/authelia/certs/cert.pem \
+			-days 3650 -subj "/CN=127.0.0.1" \
+			-addext "subjectAltName=IP:127.0.0.1,DNS:localhost,DNS:authelia" 2>/dev/null; \
+	fi
 
 .PHONY: _dev.urls
 _dev.urls:

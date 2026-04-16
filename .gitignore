@@ -4,3 +4,4 @@ node_modules/
 .DS_Store
 worktree/
 .env
+deploy/local/authelia/certs/

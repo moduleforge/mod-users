@@ -5,15 +5,13 @@
 #
 # Secrets (identity_validation.reset_password.jwt_secret, session.secret,
 # storage.encryption_key, identity_providers.oidc.hmac_secret) are supplied via
-# env vars (AUTHELIA_*) defined in docker-compose.yml. This keeps real secret
-# material out of the YAML on disk.
-#
-# The OIDC signing key is inlined below because it is a dev-only key already
-# committed to the repo. For non-local use, supply it via env or a secrets
-# manager.
+# env vars (AUTHELIA_*) defined in docker-compose.yml.
 
 server:
   address: "tcp://0.0.0.0:9091"
+  tls:
+    certificate: /certs/cert.pem
+    key: /certs/key.pem
 
 log:
   level: info
@@ -24,7 +22,6 @@ theme: light
 totp:
   issuer: users-module-local
 
-# File-backed user database. See users_database.yml.
 authentication_backend:
   password_reset:
     disable: false
@@ -39,7 +36,6 @@ authentication_backend:
       memory: 65536
       parallelism: 8
 
-# Permissive access control — local dev only. Real authz lives in the API.
 access_control:
   default_policy: one_factor
 
@@ -49,17 +45,15 @@ session:
   inactivity: 5m
   remember_me: 1M
   cookies:
-    - domain: localhost
-      authelia_url: http://localhost:9091
-      default_redirection_url: http://localhost:3000/
+    - domain: 127.0.0.1
+      authelia_url: https://127.0.0.1:9091
+      default_redirection_url: https://127.0.0.1:9091/
 
 regulation:
   max_retries: 5
   find_time: 2m
   ban_time: 5m
 
-# Local-only storage. SQLite written to /data (a writable path inside the
-# container) so it works even when /config is mounted read-only.
 storage:
   local:
     path: /data/db.sqlite3
@@ -67,13 +61,11 @@ storage:
 notifier:
   disable_startup_check: true
   smtp:
-    host: mailhog
-    port: 1025
+    address: smtp://mailhog:1025
     sender: "Authelia <noreply@example.test>"
     disable_require_tls: true
     disable_html_emails: false
 
-# OIDC provider — the whole point of running real Authelia locally.
 identity_providers:
   oidc:
     jwks:
@@ -139,13 +131,9 @@ identity_providers:
         - userinfo
       allowed_origins_from_client_redirect_uris: true
     clients:
-      - id: users-api
-        description: users-module API + GUI
-        # Placeholder secret — regenerate with:
-        #   docker run --rm authelia/authelia:4.38 authelia crypto hash generate pbkdf2 \
-        #     --variant sha512 --password 'your-real-secret'
-        # Plaintext (matches API/GUI client config in .env): change-me-users-api-client-secret
-        secret: '$pbkdf2-sha512$310000$g/thpMpvyP+szosZruwvrA$tHr/k5EnOIXK5aW9aw1RhPxF94o+qmMVd4OLgswqehZLI+NghdXPzdRIPVZCh6WJEy/KgfqunvdLLKn8dNPk3g'
+      - client_id: users-api
+        client_name: users-module API + GUI
+        client_secret: '$pbkdf2-sha512$310000$Y75vFGVKl3MvRcNFoL1HlQ$OP0UbZaheQHlQeNEEa9HFjjy994CYodXQaxFmgZJDI8JpJrWgec8LaVEccGxbvV5yYjaty7wmdRgICv2iYcKuw'
         public: false
         authorization_policy: one_factor
         consent_mode: implicit
@@ -157,7 +145,9 @@ identity_providers:
         redirect_uris:
           - http://localhost:8080/v1/auth/oidc/callback
           - http://localhost:3000/api/auth/oidc/callback
-        userinfo_signing_algorithm: none
+          - http://127.0.0.1:8080/v1/auth/oidc/callback
+          - http://127.0.0.1:3000/api/auth/oidc/callback
+        userinfo_signed_response_alg: none
         token_endpoint_auth_method: client_secret_post
         grant_types:
           - authorization_code

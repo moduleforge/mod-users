@@ -53,7 +53,8 @@ func main() {
 	// Build query layer.
 	queries := db.New(pool)
 
-	// Build auth components.
+	// Build auth components. OIDC verifier init is non-fatal in local mode —
+	// the local auth flow (email+password JWT) works without it.
 	verifier, err := auth.NewVerifier(ctx,
 		cfg.OIDC.IssuerURL,
 		cfg.OIDC.ClientID,
@@ -61,16 +62,25 @@ func main() {
 		cfg.LocalAuth.LocalIssuer,
 	)
 	if err != nil {
-		slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
-		os.Exit(1)
+		if cfg.DeployMode == config.DeployModeLocal {
+			slog.WarnContext(ctx, "OIDC verifier init failed (local mode — continuing without OIDC)", "error", err)
+		} else {
+			slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
+			os.Exit(1)
+		}
 	}
 
-	claimMapper, err := auth.NewClaimMapper(cfg.OIDC.ClaimStyle, auth.MapperOptions{
-		AdminRole: cfg.OIDC.AdminRole,
-	})
-	if err != nil {
-		slog.ErrorContext(ctx, "claim mapper init failed", "error", err)
-		os.Exit(1)
+	var claimMapper auth.ClaimMapper
+	if cfg.OIDC.ClaimStyle != "" {
+		claimMapper, err = auth.NewClaimMapper(cfg.OIDC.ClaimStyle, auth.MapperOptions{
+			AdminRole: cfg.OIDC.AdminRole,
+		})
+		if err != nil {
+			slog.ErrorContext(ctx, "claim mapper init failed", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		slog.WarnContext(ctx, "OIDC_CLAIM_STYLE not set — OIDC login disabled")
 	}
 
 	resolver := auth.NewUserResolver(pool, queries, cfg.OIDC.AdminRole)
