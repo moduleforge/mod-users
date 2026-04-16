@@ -67,16 +67,16 @@ restart authelia`.
 
 Authelia is preconfigured with a single OIDC client for this project:
 
-- **client_id**: `users-api`
-- **client_secret**: `change-me-users-api-client-secret` (placeholder; the
+- **client_id**: `users-module`
+- **client_secret**: `local-authelia-secret` (placeholder; the
   pbkdf2-sha512 hash is committed in `authelia/configuration.yml`. Regenerate
   with `docker run --rm authelia/authelia:4.38 authelia crypto hash generate
   pbkdf2 --variant sha512 --password 'your-real-secret'` and update both the
-  config and your API/GUI `.env`.)
+  config and the `AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET` value in `.env`.)
 - **scopes**: `openid profile email groups`
-- **redirect URIs**:
-  - `http://localhost:8080/v1/auth/oidc/callback` (API)
-  - `http://localhost:3000/api/auth/oidc/callback` (GUI)
+- **redirect URI**:
+  - `http://localhost:8080/v1/auth/oidc/authelia/callback` (API; per-provider
+    callback path introduced in Phase 9)
 
 OIDC discovery document:
 

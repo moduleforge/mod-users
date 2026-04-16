@@ -106,8 +106,22 @@ services:
       # Override localhost refs with container service names.
       DB_URL: postgresql://${POSTGRES_USER:-users}:${POSTGRES_PASSWORD:-users}@postgres:5432/${POSTGRES_DB:-users}?sslmode=disable
       SMTP_HOST: mailhog
-      OIDC_ISSUER_URL: https://authelia:9091
       SERVER_ADDR: ":8080"
+      # --- Auth providers (per-provider scheme, see api/internal/config/providers.go) ---
+      # Authelia is the default local provider; Google is enabled at runtime
+      # only when AUTH_PROVIDER_GOOGLE_CLIENT_ID is set on the host (empty
+      # string disables it; the provider registry skips it).
+      AUTH_PROVIDERS: authelia,google
+      AUTH_PROVIDER_AUTHELIA_DISPLAY_NAME: Authelia (local)
+      AUTH_PROVIDER_AUTHELIA_ISSUER_URL: http://authelia:9091
+      AUTH_PROVIDER_AUTHELIA_CLIENT_ID: users-module
+      AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET: ${AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET:-local-authelia-secret}
+      AUTH_PROVIDER_AUTHELIA_CLAIM_STYLE: authelia
+      AUTH_PROVIDER_GOOGLE_CLIENT_ID: ${AUTH_PROVIDER_GOOGLE_CLIENT_ID:-}
+      AUTH_PROVIDER_GOOGLE_CLIENT_SECRET: ${AUTH_PROVIDER_GOOGLE_CLIENT_SECRET:-}
+      AUTH_OAUTH_REDIRECT_BASE_URL: http://localhost:8080
+      AUTH_FRONTEND_RETURN_URL: http://localhost:3000/auth/oidc/return
+      AUTH_ADMIN_ROLE: admin
     ports:
       - "8080:8080"
     networks:
