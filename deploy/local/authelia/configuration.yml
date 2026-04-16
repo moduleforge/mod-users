@@ -131,7 +131,7 @@ identity_providers:
         - userinfo
       allowed_origins_from_client_redirect_uris: true
     clients:
-      - client_id: users-api
+      - client_id: users-module
         client_name: users-module API + GUI
         client_secret: '$pbkdf2-sha512$310000$Y75vFGVKl3MvRcNFoL1HlQ$OP0UbZaheQHlQeNEEa9HFjjy994CYodXQaxFmgZJDI8JpJrWgec8LaVEccGxbvV5yYjaty7wmdRgICv2iYcKuw'
         public: false
@@ -143,10 +143,8 @@ identity_providers:
           - email
           - groups
         redirect_uris:
-          - http://localhost:8080/v1/auth/oidc/callback
-          - http://localhost:3000/api/auth/oidc/callback
-          - http://127.0.0.1:8080/v1/auth/oidc/callback
-          - http://127.0.0.1:3000/api/auth/oidc/callback
+          - http://localhost:8080/v1/auth/oidc/authelia/callback
+          - http://127.0.0.1:8080/v1/auth/oidc/authelia/callback
         userinfo_signed_response_alg: none
         token_endpoint_auth_method: client_secret_post
         grant_types:

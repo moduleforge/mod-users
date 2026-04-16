@@ -57,10 +57,18 @@ spec:
                 secretKeyRef:
                   name: users-api-jwt-secret
                   key: latest
-            - name: OIDC_CLIENT_SECRET
+            # OIDC client secret(s) — one per enabled provider. Example shows
+            # Google; add additional AUTH_PROVIDER_<ID>_CLIENT_SECRET entries
+            # for other providers (microsoft, authelia, etc.).
+            - name: AUTH_PROVIDER_GOOGLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: users-api-oidc-client-secret
+                  name: users-api-google-client-id
+                  key: latest
+            - name: AUTH_PROVIDER_GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: users-api-google-client-secret
                   key: latest
 
           # Startup / liveness probe.
