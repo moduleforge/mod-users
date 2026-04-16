@@ -45,12 +45,14 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blo
   - [ ] 7.5 Admin: audit log viewer (per-user, per-object)
   - [ ] 7.6 Admin: apps + apps_users management
 - [ ] **Phase 8 — Deploy + CI** (depends on: 3 minimally; can run in parallel with 5–7)
-  - [ ] 8.1 docker-compose dev loop validated
-  - [ ] 8.2 ko image build + cosign signing
-  - [ ] 8.3 Cloud Run example (env-only differences)
-  - [ ] 8.4 Kustomize base (Postgres via CNPG, ingress, OIDC config)
-  - [ ] 8.5 GitHub Actions: lint, test, migrate-check, image build, contract test
-  - [ ] 8.6 OpenAPI contract + codegen verification
+  - [ ] 8.1 docker-compose dev loop validated **[local — must work end-to-end]**
+  - [ ] 8.2 ko image build + cosign signing **[local build/sign; no live registry push]**
+  - [ ] 8.3 Cloud Run example (env-only differences) **[draft only — defer live deploy]**
+  - [ ] 8.4 Kustomize base (Postgres via CNPG, ingress, OIDC config) **[draft only; optional kind smoke-test]**
+  - [ ] 8.5 GitHub Actions: lint, test, migrate-check, image build, contract test **[YAML drafted + actionlint clean]**
+  - [ ] 8.6 OpenAPI contract + codegen verification **[local]**
+
+> v1 access constraint: implementer has docker but no AWS/GCP/cluster. See `phase.8.deploy-ci.md` for the executable vs. draft-only split.
 
 ## Reports
 

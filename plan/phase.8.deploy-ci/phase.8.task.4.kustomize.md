@@ -13,9 +13,12 @@
 - README documents prerequisites (CNPG operator installed, cert-manager, ingress controller).
 
 ## How to verify
-- `kubectl apply -k deploy/k8s/overlays/example` against a kind cluster brings the stack up.
-- `/healthz` reachable via the ingress host.
-- Login flow round-trips against an in-cluster Authelia (or external OIDC).
+- **[local]** `kustomize build deploy/k8s/overlays/example` produces clean YAML.
+- **[local]** `kubectl apply --dry-run=client -k deploy/k8s/overlays/example` validates against installed CRDs (skips CNPG types if operator absent — note in README).
+- **[local, optional]** If `kind` is available: spin a cluster, install CNPG operator, apply overlay, verify `/healthz`.
+- **[draft-only — defer until cluster access]** Full round-trip with ingress + cert-manager + Authelia in-cluster.
 
 ## Notes
+- This task ships as documented draft.
 - We don't ship an Authelia chart; the README points to upstream chart with the values needed to register `users-api` as a client.
+- Document any CRDs the manifests assume (CNPG `Cluster`, cert-manager `Certificate`) so reviewers can install them in their target cluster.

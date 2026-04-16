@@ -14,10 +14,13 @@
 - Status checks REQUIRED on the `main` branch.
 
 ## How to verify
-- Open a PR; CI runs all jobs in < 10 minutes total.
-- Forced schema drift (manual edit) makes `migrate-check` fail.
-- Forced API spec drift makes `contract-check` fail.
+- **[local]** `actionlint .github/workflows/*.yml` passes.
+- **[local]** `act -j lint` and `act -j test-unit` execute successfully (requires `act` installed; document in CONTRIBUTING.md).
+- **[local]** Forced schema drift makes `make model.verify` fail (the same logic the `migrate-check` job runs).
+- **[local]** Forced API spec drift makes `make api.client.gen && git diff --exit-code` fail.
+- **[draft-only — defer until repo is on GitHub with secrets]** Open a real PR; CI runs all jobs in < 10 minutes total. Image push + cosign signing requires registry credentials in GitHub secrets.
 
 ## Notes
+- The `build-images` job is fully written but will only succeed once a registry secret is configured. Job is gated on `github.event_name == 'push' && github.ref == 'refs/heads/main'` so PRs don't try to push.
 - Use `act` for local CI dry-runs.
 - Flaky-test policy: tests that fail intermittently get auto-retried once with annotation; document the policy in CONTRIBUTING.md.

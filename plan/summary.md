@@ -55,7 +55,7 @@ Cloud-agnostic; same binary/image runs in all three deploy modes. Drives parity 
 5. **User management** — user CRUD, search, profile edit, admin grant, assume identity, audit/history endpoints.
 6. **Multi-tenancy** — apps CRUD, apps_users assignment, default_context, per-request scoping, admin endpoints.
 7. **GUI** — Next.js 15: login, signup, profile, admin user mgmt, search, audit, assume, apps mgmt.
-8. **Deploy + CI** — docker-compose, Cloud Run example, Kustomize base, GitHub Actions, ko images, OpenAPI contract verification.
+8. **Deploy + CI** — docker-compose (must work locally), ko image build (local only — no live push), OpenAPI codegen, GitHub Actions YAML (lint-validated). Cloud Run + Kustomize ship as **complete drafts** only — the implementer has docker but no AWS/GCP/cluster access for v1.
 
 ## Documents
 

@@ -9,8 +9,11 @@
 - Demonstrated working: deploy in a sandbox project, `/healthz` returns 200, login flow round-trips against a managed OIDC (use Google for the demo).
 
 ## How to verify
-- README walkthrough produces a working deployment in < 15 minutes from a clean GCP project.
-- Concurrency=80, single instance under load shows pool MaxConns=4 in pgx debug log; multi-instance scaling does not exhaust Postgres `max_connections`.
+- **[local]** `gcloud beta code dev` or `cloud-run-emulator` (if installed) round-trips against the manifests; otherwise `kubectl apply --dry-run=client -f service.yaml` parses cleanly.
+- **[local]** `envsubst < service.yaml | yq` renders without unresolved vars given a populated `.env`.
+- **[draft-only — defer until GCP access]** README walkthrough produces a working deployment in < 15 minutes from a clean GCP project. Concurrency=80, single instance shows pool MaxConns=4 in pgx debug log.
 
 ## Notes
+- This task ships as documented draft. The implementer MUST NOT attempt `gcloud run deploy` against a real project.
 - AWS App Runner and Fly.io variants are notes-only in v1; Cloud Run is the canonical example.
+- README must include a "self-test before deploy" section listing all the local validations one can run without GCP credentials.
