@@ -12,12 +12,12 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
 	golang.org/x/crypto v0.49.0
+	golang.org/x/oauth2 v0.36.0
 )
 
 require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 )
 

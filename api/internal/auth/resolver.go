@@ -2,10 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,31 +15,78 @@ import (
 	db "github.com/moduleforge/users-module/model/db"
 )
 
-// UserResolver resolves a Principal to a *UserContext, auto-creating the
-// user on first sight via OIDC.
+// ErrUserGone is returned by UserResolver.Resolve when a locally-issued JWT
+// references a user that no longer exists in the users table (e.g., the
+// account was deleted after the token was minted). Handlers should translate
+// this into 401 Unauthorized — the signature is valid but the identity is
+// no longer valid.
+var ErrUserGone = errors.New("auth: user no longer exists")
+
+// uuidLookupFn is the slot used by the local-issuer fast path. Extracted as
+// a field so tests can substitute a stub without needing a running Postgres.
+// Nil is valid — the fast path short-circuits and falls back to the OIDC
+// path in that case (useful for pre-Phase 9 fallback semantics in tests).
+type uuidLookupFn func(ctx context.Context, u uuid.UUID) (db.User, error)
+
+// UserResolver resolves a Principal to a *UserContext. For OIDC principals it
+// auto-creates the user on first sight; for locally-issued JWTs (matching
+// LocalIssuer) it takes a fast path that simply loads by UUID.
 type UserResolver struct {
-	pool      *pgxpool.Pool
-	queries   *db.Queries
-	adminRole string
+	pool        *pgxpool.Pool
+	queries     *db.Queries
+	adminRole   string
+	localIssuer string
+	uuidLookup  uuidLookupFn
 }
 
-// NewUserResolver creates a resolver.
-func NewUserResolver(pool *pgxpool.Pool, queries *db.Queries, adminRole string) *UserResolver {
+// NewUserResolver creates a resolver. localIssuer is the value written into
+// the "iss" claim by IssueLocalJWT — when Resolve sees a Principal with this
+// issuer, it skips the OIDC auto-create path and looks up the user by UUID.
+func NewUserResolver(pool *pgxpool.Pool, queries *db.Queries, adminRole, localIssuer string) *UserResolver {
 	if adminRole == "" {
 		adminRole = "admin"
 	}
-	return &UserResolver{pool: pool, queries: queries, adminRole: adminRole}
+	r := &UserResolver{
+		pool:        pool,
+		queries:     queries,
+		adminRole:   adminRole,
+		localIssuer: localIssuer,
+	}
+	if queries != nil {
+		r.uuidLookup = queries.GetUserByUUID
+	}
+	return r
 }
 
 // Resolve looks up or creates the user associated with the given Principal.
 // On first-ever user, sets is_admin = true (root bootstrap).
 func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, error) {
+	// Local-issuer fast path. A principal minted by IssueLocalJWT carries
+	// the user's own UUID in `sub`; the HS256 signature has already proven
+	// authenticity, so we only need to hydrate the DB row. No auto-create,
+	// no email-link attempt. A missing UUID means the user was deleted
+	// between token issue and use — 401, not 500.
+	if r.localIssuer != "" && p.Issuer == r.localIssuer && r.uuidLookup != nil {
+		parsed, err := uuid.Parse(p.Subject)
+		if err != nil {
+			return nil, fmt.Errorf("auth: local jwt sub is not a uuid: %w", err)
+		}
+		user, err := r.uuidLookup(ctx, parsed)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, ErrUserGone
+			}
+			return nil, fmt.Errorf("auth: lookup local user by uuid: %w", err)
+		}
+		return r.buildUserContext(user, p), nil
+	}
+
 	// Try to find existing user by auth credentials.
 	if p.Issuer != "" && p.Subject != "" {
 		user, err := r.queries.GetUserByAuth(ctx, db.GetUserByAuthParams{
-				AuthIssuer: pgtype.Text{String: p.Issuer, Valid: true},
-				AuthID:     pgtype.Text{String: p.Subject, Valid: true},
-			})
+			AuthIssuer: pgtype.Text{String: p.Issuer, Valid: true},
+			AuthID:     pgtype.Text{String: p.Subject, Valid: true},
+		})
 		if err == nil {
 			return r.buildUserContext(user, p), nil
 		}
@@ -139,11 +188,11 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.User, er
 	}
 
 	user, err = qtx.CreateUser(ctx, db.CreateUserParams{
-		EntityID:    entity.ID,
-		Email:       p.Email,
-		IsAdmin:     isFirstUser,
-		AuthIssuer:  authIssuer,
-		AuthID:      authID,
+		EntityID:   entity.ID,
+		Email:      p.Email,
+		IsAdmin:    isFirstUser,
+		AuthIssuer: authIssuer,
+		AuthID:     authID,
 	})
 	if err != nil {
 		return user, fmt.Errorf("create user: %w", err)

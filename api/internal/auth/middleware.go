@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -44,6 +45,13 @@ func RequireAuth(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver)
 			// 4. Resolve user.
 			uc, err := resolver.Resolve(r.Context(), principal)
 			if err != nil {
+				// A deleted user presenting a still-valid locally-issued JWT
+				// is an auth failure, not a server fault. Surface 401 so the
+				// caller re-authenticates rather than retrying.
+				if errors.Is(err, ErrUserGone) {
+					server.Error(w, http.StatusUnauthorized, "unauthorized", "user no longer exists")
+					return
+				}
 				slog.ErrorContext(r.Context(), "user resolve error", "error", err)
 				server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve user")
 				return
