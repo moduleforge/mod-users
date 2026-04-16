@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080';
 
 export interface ApiError {
   code: string;
@@ -25,14 +26,29 @@ function getToken(): string | null {
   return localStorage.getItem('auth_token');
 }
 
+export interface RequestOptions extends RequestInit {
+  /**
+   * When true, a 401 response is surfaced to the caller as an
+   * `ApiRequestError` without clearing the stored token or triggering a hard
+   * redirect to `/auth/login`. Use this when the caller needs to handle
+   * authentication failures itself (e.g., the OAuth return page, which must
+   * redirect to a login URL that carries an `?error=...` message).
+   *
+   * Defaults to false: a 401 clears the token and hard-redirects, matching
+   * the original behavior for normal authenticated requests.
+   */
+  skipAuthRedirect?: boolean;
+}
+
 async function request<T>(
   path: string,
-  options: RequestInit = {},
+  options: RequestOptions = {},
 ): Promise<T> {
+  const { skipAuthRedirect = false, ...fetchOptions } = options;
   const token = getToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...fetchOptions.headers,
   };
 
   if (token) {
@@ -42,7 +58,7 @@ async function request<T>(
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers,
     });
   } catch (err) {
@@ -56,7 +72,7 @@ async function request<T>(
   }
 
   if (response.status === 401) {
-    if (typeof window !== 'undefined') {
+    if (!skipAuthRedirect && typeof window !== 'undefined') {
       localStorage.removeItem('auth_token');
       window.location.href = '/auth/login';
     }
@@ -282,7 +298,8 @@ export const api = {
   },
 
   self: {
-    get: () => request<UserSelf>('/v1/self'),
+    get: (options?: Pick<RequestOptions, 'skipAuthRedirect'>) =>
+      request<UserSelf>('/v1/self', options),
     update: (data: UpdateProfileRequest) =>
       request<UserSelf>('/v1/self', {
         method: 'PUT',

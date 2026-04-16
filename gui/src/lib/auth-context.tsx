@@ -103,7 +103,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // picks it up via localStorage for the `/v1/self` call below.
       localStorage.setItem(TOKEN_KEY, newToken);
       try {
-        const self = await api.self.get();
+        // `skipAuthRedirect` ensures a bad/expired token surfaces as a thrown
+        // ApiRequestError instead of the shared helper hard-redirecting to
+        // /auth/login before our catch block can run. The return page needs
+        // to control that redirect so it can attach an `?error=...` message.
+        const self = await api.self.get({ skipAuthRedirect: true });
         setTokenAndUser(newToken, self);
       } catch (err) {
         // Bad/expired token or API failure: don't leave a stale token behind.

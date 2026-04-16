@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import {
+  API_BASE_URL,
   ApiRequestError,
   fetchProviders,
   type OIDCProvider,
@@ -95,8 +96,12 @@ function LoginPageInner() {
     // Full page navigation — NOT a fetch. The API responds with a 302 to the
     // provider's authorization endpoint, and the `return` param is echoed
     // back through the OAuth round-trip.
+    //
+    // The API base must match `api.ts` (dev: GUI on :3000, API on :8080), so
+    // we reuse the shared `API_BASE_URL` constant rather than defining a new
+    // source of truth here.
     window.location.assign(
-      `/v1/auth/oidc/${encodeURIComponent(providerId)}/start?return=/profile`,
+      `${API_BASE_URL}/v1/auth/oidc/${encodeURIComponent(providerId)}/start?return=/profile`,
     );
   }
 

@@ -29,6 +29,10 @@ function isSafeReturnPath(candidate: string | null): candidate is string {
   if (!candidate.startsWith('/')) return false;
   // Reject protocol-relative paths like `//evil.com/foo`.
   if (candidate.startsWith('//')) return false;
+  // Reject backslashes anywhere in the path. Some legacy browser URL parsers
+  // normalize `\` to `/`, so `/\evil.com` can be interpreted as `//evil.com`
+  // and trigger an open redirect. Belt-and-suspenders: disallow `\` outright.
+  if (candidate.includes('\\')) return false;
   // Reject anything trying to sneak a scheme in before the path separator,
   // e.g. `/\x0Ajavascript:...` variants or `javascript:...`. Since we already
   // require a leading `/`, a `:` anywhere in the first segment is suspicious.
