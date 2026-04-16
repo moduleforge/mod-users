@@ -25,11 +25,24 @@ endif
 SUBPROJECTS := model api gui
 
 # ---------------------------------------------------------------------------
+# Preflight — verify tools + fix cross-platform deps across all sub-projects
+# ---------------------------------------------------------------------------
+
+.PHONY: preflight
+preflight: preflight.model preflight.api preflight.gui ## Verify tools and fix stale deps
+	@echo "  preflight complete."
+
+.PHONY: preflight.model preflight.api preflight.gui
+preflight.model: ; @$(MAKE) -C model preflight
+preflight.api:   ; @$(MAKE) -C api   preflight
+preflight.gui:   ; @$(MAKE) -C gui   preflight
+
+# ---------------------------------------------------------------------------
 # Aggregate / canonical targets
 # ---------------------------------------------------------------------------
 
 .PHONY: build
-build: build.model build.api build.gui ## Build all sub-projects (default)
+build: preflight build.model build.api build.gui ## Build all sub-projects (default)
 
 .PHONY: test
 test: test.unit ## Alias for test.unit
@@ -111,20 +124,8 @@ _dev.migrate:
 
 .PHONY: _dev.build
 _dev.build:
-	@echo "==> Building API..."
-	@$(MAKE) -C api build
-	@echo "==> Installing GUI dependencies..."
-	@if [ -d gui/node_modules ] && ! [ -x gui/node_modules/.bin/next ]; then \
-		echo "    node_modules appears stale (wrong platform?) — reinstalling..."; \
-		rm -rf gui/node_modules; \
-	fi
-	@cd gui && if command -v pnpm >/dev/null 2>&1; then \
-		pnpm install; \
-	elif [ -f package-lock.json ]; then \
-		npm ci; \
-	else \
-		npm install; \
-	fi
+	@echo "==> Building API + installing GUI deps..."
+	@$(MAKE) build
 
 .PHONY: _dev.urls
 _dev.urls:

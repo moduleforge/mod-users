@@ -2,17 +2,39 @@
 
 DATABASE_URL ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 
+# Set by preflight if sqlc is available.
+SQLC ?=
+
 .DEFAULT_GOAL := build
 
+# ---------------------------------------------------------------------------
+# Preflight — verify tools, set vars
+# ---------------------------------------------------------------------------
+
+.PHONY: preflight
+preflight: ## Check required tools for model
+	@printf "  model preflight: "
+	@if command -v sqlc >/dev/null 2>&1; then \
+		echo "sqlc=$$(sqlc version) ✓"; \
+	elif [ -d db ]; then \
+		echo "sqlc not found (using committed generated code) ✓"; \
+	else \
+		echo "FAIL"; \
+		echo "ERROR: sqlc is not installed and no generated code exists in db/."; \
+		echo "  Install: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0"; \
+		exit 1; \
+	fi
+
+# ---------------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------------
+
 .PHONY: build
-build: ## Generate Go code from queries (skips if sqlc not installed)
+build: preflight ## Generate Go code from queries
 	@if command -v sqlc >/dev/null 2>&1; then \
 		sqlc generate; \
-	elif [ -d db ]; then \
-		echo "model: sqlc not installed — using existing generated code in db/"; \
 	else \
-		echo "ERROR: sqlc not installed and no generated code found. Install: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0"; \
-		exit 1; \
+		echo "model: using existing generated code in db/"; \
 	fi
 
 # ---------------------------------------------------------------------------
