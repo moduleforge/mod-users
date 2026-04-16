@@ -44,9 +44,15 @@ dev.stop: ## No-op (gui dev.start runs in foreground)
 clean: ## Remove build artifacts (preserves source/generated code)
 	rm -rf .next
 
-# Install deps when node_modules is missing.
-node_modules:
+# Re-install when package.json changes, or when node_modules was created by
+# a different platform (e.g. Linux container vs macOS host).
+node_modules: package.json
+	@if [ -d node_modules ] && ! [ -x node_modules/.bin/next ]; then \
+		echo "gui: node_modules stale (wrong platform?) — removing..."; \
+		rm -rf node_modules; \
+	fi
 	$(PM) install
+	@touch node_modules/.install-stamp
 
 .PHONY: help
 help: ## Show this help

@@ -114,6 +114,10 @@ _dev.build:
 	@echo "==> Building API..."
 	@$(MAKE) -C api build
 	@echo "==> Installing GUI dependencies..."
+	@if [ -d gui/node_modules ] && ! [ -x gui/node_modules/.bin/next ]; then \
+		echo "    node_modules appears stale (wrong platform?) — reinstalling..."; \
+		rm -rf gui/node_modules; \
+	fi
 	@cd gui && if command -v pnpm >/dev/null 2>&1; then \
 		pnpm install; \
 	elif [ -f package-lock.json ]; then \
