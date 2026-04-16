@@ -94,6 +94,15 @@ ifeq ($(DOCKER_COMPOSE),)
 	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
 endif
 	@command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required."; exit 1; }
+	@if ! grep -E '^[[:space:]]*127\.' /etc/hosts 2>/dev/null | grep -qw authelia; then \
+		echo ""; \
+		echo "  WARNING: /etc/hosts does not have an 'authelia' entry pointing at 127.0.0.1."; \
+		echo "  The 'Sign in with Authelia' button in the GUI will fail to reach Authelia"; \
+		echo "  from your browser. Add this line to /etc/hosts:"; \
+		echo "      127.0.0.1  authelia"; \
+		echo "  See deploy/local/README.md for details."; \
+		echo ""; \
+	fi
 
 .PHONY: _dev.env
 _dev.env:

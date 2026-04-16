@@ -117,8 +117,13 @@ services:
       AUTH_PROVIDER_AUTHELIA_CLIENT_ID: users-module
       AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET: ${AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET:-local-authelia-secret}
       AUTH_PROVIDER_AUTHELIA_CLAIM_STYLE: authelia
-      AUTH_PROVIDER_GOOGLE_CLIENT_ID: ${AUTH_PROVIDER_GOOGLE_CLIENT_ID:-}
-      AUTH_PROVIDER_GOOGLE_CLIENT_SECRET: ${AUTH_PROVIDER_GOOGLE_CLIENT_SECRET:-}
+      # Google client id/secret are intentionally NOT listed here: `environment:`
+      # values override `env_file:` values, and `${VAR:-}` substitution reads
+      # from the host shell (not from .env), which would clobber any value the
+      # user set in .env with the empty-string default. Listing the Authelia
+      # secret above is fine because its non-empty default is the intended
+      # fallback. For Google (and any future provider whose default is empty),
+      # let env_file deliver the value unmodified.
       AUTH_OAUTH_REDIRECT_BASE_URL: http://localhost:8080
       AUTH_FRONTEND_RETURN_URL: http://localhost:3000/auth/oidc/return
       AUTH_ADMIN_ROLE: admin
