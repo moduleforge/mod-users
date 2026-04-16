@@ -5,7 +5,15 @@ DATABASE_URL ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 .DEFAULT_GOAL := build
 
 .PHONY: build
-build: gen ## Generate Go code from queries (the only build artifact)
+build: ## Generate Go code from queries (skips if sqlc not installed)
+	@if command -v sqlc >/dev/null 2>&1; then \
+		sqlc generate; \
+	elif [ -d db ]; then \
+		echo "model: sqlc not installed — using existing generated code in db/"; \
+	else \
+		echo "ERROR: sqlc not installed and no generated code found. Install: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0"; \
+		exit 1; \
+	fi
 
 # ---------------------------------------------------------------------------
 # Migration targets

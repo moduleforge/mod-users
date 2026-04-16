@@ -67,6 +67,12 @@ test.all: test.unit test.integration ## Run all tests (unit + integration)
 DOCKER_COMPOSE_FILE := deploy/local/docker-compose.yml
 DATABASE_URL        ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 
+# Auto-detect docker compose command (v2 plugin or v1 standalone).
+DOCKER_COMPOSE := $(shell \
+	if docker compose version >/dev/null 2>&1; then echo "docker compose"; \
+	elif command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; \
+	else echo ""; fi)
+
 .PHONY: dev.start
 dev.start: _dev.env _dev.infra _dev.migrate _dev.build _dev.urls _dev.run ## Full local dev: infra + migrate + build + run
 
@@ -79,8 +85,11 @@ _dev.env:
 
 .PHONY: _dev.infra
 _dev.infra:
+ifeq ($(DOCKER_COMPOSE),)
+	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
+endif
 	@echo "==> Starting infrastructure (Postgres, Authelia, MailHog)..."
-	@docker compose -f $(DOCKER_COMPOSE_FILE) up -d
+	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) up -d
 	@echo "==> Waiting for Postgres to be healthy..."
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
 		if docker exec users-module-postgres pg_isready -U users -d users >/dev/null 2>&1; then \
@@ -97,14 +106,21 @@ _dev.infra:
 .PHONY: _dev.migrate
 _dev.migrate:
 	@echo "==> Running database migrations..."
-	@$(MAKE) -C model migrate.up DATABASE_URL="$(DATABASE_URL)" || true
+	@$(MAKE) -C model migrate.up DATABASE_URL="$(DATABASE_URL)" 2>&1 || \
+		echo "    (migrations already applied or atlas not installed — skipping)"
 
 .PHONY: _dev.build
 _dev.build:
 	@echo "==> Building API..."
 	@$(MAKE) -C api build
 	@echo "==> Installing GUI dependencies..."
-	@$(MAKE) -C gui node_modules 2>/dev/null || true
+	@cd gui && if command -v pnpm >/dev/null 2>&1; then \
+		pnpm install; \
+	elif [ -f package-lock.json ]; then \
+		npm ci; \
+	else \
+		npm install; \
+	fi
 
 .PHONY: _dev.urls
 _dev.urls:
@@ -133,8 +149,11 @@ _dev.run:
 
 .PHONY: dev.stop
 dev.stop: ## Tear down local docker-compose stack
+ifeq ($(DOCKER_COMPOSE),)
+	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
+endif
 	@echo "==> docker compose down"
-	@docker compose -f $(DOCKER_COMPOSE_FILE) down
+	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down
 
 # ---------------------------------------------------------------------------
 # Per-sub-project delegating targets (dot-namespaced)
