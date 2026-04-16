@@ -1,18 +1,17 @@
 {
-  "name": "@moduleforge/user-module",
+  "name": "@moduleforge/users-module",
   "version": "1.0.0-alpha.0",
-  "description": "Provides complete model, api, and UI appliactions component for user authorization and management.",
-  "main": "dist/user-module.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
+  "private": true,
+  "description": "Provides complete model, api, and UI component for user authorization and management.",
   "author": "Zane Rockenbaugh <zane@liquid-labs.com>",
   "license": "Apache-2.0",
-  "type": "commonjs",
-  "repository": "git+ssh://git@github.com/moduleforge/user-module.git",
+  "repository": "git+ssh://git@github.com/moduleforge/users-module.git",
   "bugs": {
-    "url": "https://github.com/moduleforge/user-module/issues"
+    "url": "https://github.com/moduleforge/users-module/issues"
   },
-  "homepage": "https://github.com/moduleforge/user-module#readme"
+  "homepage": "https://github.com/moduleforge/users-module#readme",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  }
 }
