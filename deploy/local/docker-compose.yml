@@ -2,18 +2,15 @@
 # Local development stack for users-module.
 #
 # Usage:
-#   cp ../../.env.example .env   # then edit secrets
-#   docker compose up -d
-#   docker compose ps
-#   docker compose down -v       # tear down + drop volumes
+#   make dev.start        # from monorepo root (recommended)
+#   docker compose up -d  # from this directory
 #
 # Services:
 #   - postgres : PostgreSQL 16 (data store)
 #   - authelia : OIDC provider (real OIDC, no mocks per dev/prod parity rule)
 #   - mailhog  : SMTP catcher for email-code auth flow testing
-#
-# All services share the `users-module-net` bridge network so they can
-# resolve each other by service name (e.g. `postgres`, `authelia`, `mailhog`).
+#   - api      : Go API server (builds from source, runs migrations on start)
+#   - gui      : Next.js dev server (hot-reload via volume mount)
 
 name: users-module
 
@@ -28,6 +25,8 @@ volumes:
     driver: local
 
 services:
+  # ---- Infrastructure -------------------------------------------------------
+
   postgres:
     image: postgres:16-alpine
     container_name: users-module-postgres
@@ -55,7 +54,6 @@ services:
     restart: unless-stopped
     environment:
       TZ: ${TZ:-UTC}
-      # Authelia reads these from env so secrets stay out of the YAML on disk.
       AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET: ${AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET:-change-me-jwt-secret-at-least-32-chars-long}
       AUTHELIA_SESSION_SECRET: ${AUTHELIA_SESSION_SECRET:-change-me-session-secret-at-least-32-chars}
       AUTHELIA_STORAGE_ENCRYPTION_KEY: ${AUTHELIA_STORAGE_ENCRYPTION_KEY:-change-me-storage-encryption-key-at-least-32}
@@ -78,16 +76,12 @@ services:
       start_period: 15s
 
   mailhog:
-    # Decision: MailHog chosen over Mailpit for this iteration purely because the
-    # `mailhog/mailhog` image is the most widely-cited SMTP catcher in OIDC dev
-    # stacks and has zero configuration. Mailpit is a fine drop-in replacement
-    # (faster, actively maintained) — swap the image and ports if preferred.
     image: mailhog/mailhog:v1.0.1
     container_name: users-module-mailhog
     restart: unless-stopped
     ports:
-      - "${SMTP_PORT:-1025}:1025"   # SMTP ingress
-      - "${MAILHOG_UI_PORT:-8025}:8025"   # Web UI
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
     networks:
       - users-module-net
     healthcheck:
@@ -96,3 +90,56 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+
+  # ---- Application -----------------------------------------------------------
+
+  api:
+    build:
+      context: ../..
+      dockerfile: api/Dockerfile
+    container_name: users-module-api
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Override localhost refs with container service names.
+      DB_URL: postgresql://${POSTGRES_USER:-users}:${POSTGRES_PASSWORD:-users}@postgres:5432/${POSTGRES_DB:-users}?sslmode=disable
+      SMTP_HOST: mailhog
+      OIDC_ISSUER_URL: http://authelia:9091
+      SERVER_ADDR: ":8080"
+    ports:
+      - "8080:8080"
+    networks:
+      - users-module-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailhog:
+        condition: service_healthy
+
+  gui:
+    build:
+      context: ../..
+      dockerfile: gui/Dockerfile.dev
+    container_name: users-module-gui
+    restart: unless-stopped
+    environment:
+      # The browser (on the host) makes API requests, so this must be the
+      # host-accessible URL, not the container-internal service name.
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source for hot-reload. Only source and config files are mounted;
+      # node_modules installed in the image stay untouched (no host shadow).
+      - ../../gui/src:/app/gui/src
+      - ../../gui/public:/app/gui/public
+      - ../../gui/next.config.ts:/app/gui/next.config.ts
+      - ../../gui/tsconfig.json:/app/gui/tsconfig.json
+      - ../../gui/postcss.config.mjs:/app/gui/postcss.config.mjs
+      - ../../gui/components.json:/app/gui/components.json
+      - ../../gui/eslint.config.mjs:/app/gui/eslint.config.mjs
+    networks:
+      - users-module-net
+    depends_on:
+      - api

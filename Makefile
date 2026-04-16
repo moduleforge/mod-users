@@ -68,17 +68,15 @@ test.all: test.unit test.integration ## Run all tests (unit + integration)
 # ---------------------------------------------------------------------------
 # Dev orchestration
 # ---------------------------------------------------------------------------
-# `dev.start` is a one-command local dev experience:
-#   1. Ensures .env exists (copies from .env.example if missing)
-#   2. Starts infrastructure (Postgres, Authelia, MailHog) via docker compose
-#   3. Waits for Postgres to be healthy
-#   4. Runs database migrations
-#   5. Builds the API + installs GUI deps
-#   6. Prints URLs for the browser
-#   7. Runs the API and GUI dev servers in the foreground (Ctrl-C stops both)
+# `dev.start` runs the full stack in Docker containers:
+#   - Postgres, Authelia, MailHog (infrastructure)
+#   - API server (Go, built from source, runs migrations on start)
+#   - GUI dev server (Next.js with hot-reload via volume mounts)
+#
+# All services publish ports to localhost for browser access.
+# Ctrl-C stops all containers.
 
 DOCKER_COMPOSE_FILE := deploy/local/docker-compose.yml
-DATABASE_URL        ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 
 # Auto-detect docker compose command (v2 plugin or v1 standalone).
 DOCKER_COMPOSE := $(shell \
@@ -87,7 +85,15 @@ DOCKER_COMPOSE := $(shell \
 	else echo ""; fi)
 
 .PHONY: dev.start
-dev.start: _dev.env _dev.infra _dev.migrate _dev.build _dev.urls _dev.run ## Full local dev: infra + migrate + build + run
+dev.start: _dev.preflight _dev.env _dev.urls ## Build and run full stack in Docker
+	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) up --build --remove-orphans
+
+.PHONY: _dev.preflight
+_dev.preflight:
+ifeq ($(DOCKER_COMPOSE),)
+	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
+endif
+	@command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required."; exit 1; }
 
 .PHONY: _dev.env
 _dev.env:
@@ -96,43 +102,11 @@ _dev.env:
 		cp .env.example .env; \
 	fi
 
-.PHONY: _dev.infra
-_dev.infra:
-ifeq ($(DOCKER_COMPOSE),)
-	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
-endif
-	@echo "==> Starting infrastructure (Postgres, Authelia, MailHog)..."
-	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) up -d --remove-orphans --force-recreate 2>/dev/null \
-		|| $(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) up -d --remove-orphans
-	@echo "==> Waiting for Postgres to be healthy..."
-	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
-		if docker exec users-module-postgres pg_isready -U users -d users >/dev/null 2>&1; then \
-			echo "    Postgres is ready."; \
-			break; \
-		fi; \
-		if [ $$i -eq 20 ]; then \
-			echo "ERROR: Postgres did not become ready in time."; \
-			exit 1; \
-		fi; \
-		sleep 1; \
-	done
-
-.PHONY: _dev.migrate
-_dev.migrate:
-	@echo "==> Running database migrations..."
-	@$(MAKE) -C model migrate.up DATABASE_URL="$(DATABASE_URL)" 2>&1 || \
-		echo "    (migrations already applied or atlas not installed — skipping)"
-
-.PHONY: _dev.build
-_dev.build:
-	@echo "==> Building API + installing GUI deps..."
-	@$(MAKE) build
-
 .PHONY: _dev.urls
 _dev.urls:
 	@echo ""
 	@echo "========================================================================"
-	@echo "  users-module local dev stack is starting"
+	@echo "  users-module local dev stack"
 	@echo ""
 	@echo "  GUI (login here):   http://localhost:3000/auth/login"
 	@echo "  API:                http://localhost:8080"
@@ -142,30 +116,17 @@ _dev.urls:
 	@echo "  Postgres:           localhost:5432  (users/users)"
 	@echo ""
 	@echo "  First registered user automatically gets admin privileges."
-	@echo "  Ctrl-C to stop the API and GUI dev servers."
+	@echo "  Ctrl-C to stop all containers."
 	@echo "========================================================================"
 	@echo ""
 
-# Source .env so the API and GUI inherit env vars when run natively (not in Docker).
-# The .env file uses docker-compose format (unquoted values, spaces allowed).
-# We parse it into valid shell exports with sed.
-.PHONY: _dev.run
-_dev.run:
-	@eval $$(sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z_0-9]*\)=\(.*\)/export \1='"'"'\2'"'"'/p' .env) && \
-		trap 'kill 0' INT TERM EXIT && \
-		$(MAKE) -C api dev.start & \
-		$(MAKE) -C gui dev.start & \
-		wait
-
 .PHONY: dev.stop
-dev.stop: ## Tear down local docker-compose stack
+dev.stop: ## Tear down all dev containers
 ifeq ($(DOCKER_COMPOSE),)
 	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
 endif
-	@echo "==> docker compose down"
 	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down --remove-orphans
-	@echo "==> Removing any stray containers..."
-	@docker rm -f users-module-postgres users-module-authelia users-module-mailhog 2>/dev/null || true
+	@docker rm -f users-module-postgres users-module-authelia users-module-mailhog users-module-api users-module-gui 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Per-sub-project delegating targets (dot-namespaced)
