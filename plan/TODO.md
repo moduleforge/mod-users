@@ -2,11 +2,11 @@
 
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
-- [~] **Phase 1 — Foundation** (depends on: none)
+- [x] **Phase 1 — Foundation** (depends on: none)
   - [x] 1.1 Monorepo skeleton + workspaces (merged deef6bc)
-  - [ ] 1.2 Make orchestration + GNU make guard
-  - [ ] 1.3 Local docker-compose (Postgres + Authelia)
-  - [ ] 1.4 Shared config + OpenTelemetry bootstrap
+  - [x] 1.2 Make orchestration + GNU make guard (merged 2c3c39c)
+  - [x] 1.3 Local docker-compose + Authelia + MailHog (merged fee32b4) — live Docker test pending restart
+  - [x] 1.4 Config loader + OTel bootstrap (merged 77d3485)
 - [ ] **Phase 2 — Data model** (depends on: 1)
   - [ ] 2.1 Atlas + sqlc setup
   - [ ] 2.2 entities + legal_entities + natural_persons + corporations + service_accounts migrations
