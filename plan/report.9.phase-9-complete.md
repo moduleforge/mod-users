@@ -42,17 +42,47 @@ Status: All three tasks merged to `main`. Smoke test pending (see below).
 4. **Unrelated `gofmt -l` offenders** on `main` (`claims_test.go`, `local_jwt.go`, `password.go`, `principal.go`, `resolver.go`, `handlers/auditlog.go`, `handlers/self.go`) are still present — pre-date Phase 9 and left alone per scope. Worth a one-commit cleanup.
 5. **`refreshUser` 401 interaction** — the auth-context's existing `refreshUser` still routes through the shared helper and will trigger a hard redirect on 401; its local `logout()` call becomes redundant. Same category of issue as the return-page one. Not touched — out of scope for Phase 9.
 
-## Smoke test
+## Smoke test — attempted, blocked by pre-existing TLS trust gap
 
-Manual browser test not yet executed. Programmatic verification plan:
+Ran `docker compose up -d` after rebuilding the API image (important: `docker compose up -d` alone reuses the cached pre-Phase-9 image; `docker compose build api` is required first).
 
-1. `cd users-module/deploy/local && docker compose up -d`
-2. Wait for API `/healthz` and GUI root to respond 200.
-3. `curl http://localhost:8080/v1/auth/providers` — expect `[{"id":"authelia","display_name":"Authelia (local)"}]`. Google must be absent (no `AUTH_PROVIDER_GOOGLE_CLIENT_ID` on host).
-4. `curl -sI 'http://localhost:8080/v1/auth/oidc/authelia/start?return=/profile'` — expect `302` to Authelia authorize endpoint, with a `Set-Cookie: oidc_state=…; Path=/v1/auth/oidc/; HttpOnly; SameSite=Lax` header.
-5. Visit `http://localhost:3000/auth/login` in a browser — expect an "Authelia (local)" button. Click → Authelia login → lands on `/profile`.
+**Result:** API crash-loops at startup on OIDC discovery:
+```
+ERROR oauth init failed error="oauth: provider \"authelia\" discovery:
+  Get \"http://authelia:9091/.well-known/openid-configuration\": EOF"
+```
 
-Steps 1–4 can be scripted; step 5 needs a human.
+Root cause: **Authelia 4.38 serves OIDC discovery over HTTPS only, with a self-signed certificate.** Confirmed by curl from a sibling container:
+- `http://authelia:9091/.well-known/openid-configuration` → empty reply (TCP connection dropped)
+- `https://authelia:9091/.well-known/openid-configuration` (with `-k`) → `200 OK` with full discovery document
+
+Phase 9.3 compose points the API at `http://authelia:9091`. Even if switched to `https://`, Go's default HTTP client doesn't trust Authelia's self-signed CA, so discovery would still fail.
+
+This is **pre-existing** to Phase 9. Commit `27aa1d6` ("make OIDC non-fatal in local mode") documents the prior workaround — they made discovery failure non-fatal so the rest of the stack could boot. Phase 9.1's spec explicitly switched discovery to fail-fast (correct for prod; re-exposes the local-dev gap).
+
+### What the Phase 9 code does prove
+
+- `api/internal/auth/oauth_test.go` end-to-end test (happy path + nonce/aud/iss tampering negatives) spins up an in-process fake OIDC server over HTTP and exercises the full authorization-code flow. That validates the Phase 9 code path; only the live-Authelia integration is blocked.
+- `go test ./...` in `api/`: all green, including the new resolver fast-path, jwt verifier-scope, and handler-level state-cookie tests.
+- `docker compose config` renders cleanly with the full `AUTH_PROVIDER_*` block; Google correctly absent when host secret unset.
+
+### Follow-up needed — Phase 9.4 (recommend before calling Google SSO "shippable locally")
+
+Pick one:
+
+1. **Preferred: mount the Authelia CA into the API container.** Add a volume bind of `deploy/local/authelia/certs/ca.pem` to `/etc/ssl/certs/authelia.crt` and set `SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt` (or append to system CAs). Production untouched — prod providers use real CAs.
+2. **Alternative: `AUTH_TLS_INSECURE_SKIP_VERIFY` env flag** that wraps the OIDC client's HTTP transport with `InsecureSkipVerify=true`. Narrow, dev-only toggle. ~10 LOC in `oauth.go`.
+3. **Fallback: configure Authelia to serve HTTP for local OIDC discovery.** Authelia 4.38 may or may not support this — needs investigation.
+
+Until Phase 9.4 lands, the Authelia-backed smoke test cannot complete. The **Google SSO flow itself** (the actual Phase 9 deliverable) is unaffected and will work end-to-end once a Google client ID is registered — Google's discovery endpoint uses a real public CA.
+
+### Manual verification that still works today
+
+The Phase 9 plumbing renders correctly in the GUI:
+
+1. `pnpm -F gui dev` (no API needed for the login page's empty-providers fallback)
+2. Visit `http://localhost:3000/auth/login`
+3. Confirm: local-auth form renders; "or continue with" divider + buttons absent (providers API returned `[]`, which is the correct behavior when no providers are enabled)
 
 ## Not in scope for Phase 9
 
