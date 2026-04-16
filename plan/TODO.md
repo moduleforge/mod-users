@@ -56,6 +56,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blo
   - [x] 9.1 API OAuth 2.0 authorization-code flow (provider registry, start/callback handlers, state cookie, provider-list endpoint)
   - [x] 9.2 GUI provider buttons + `/auth/oidc/return` page + `completeExternalLogin` in auth-context
   - [x] 9.3 docker-compose + `.env.example` + CI env rename (depends on 9.1, 9.2)
+  - [x] 9.4 Authelia TLS trust for local dev (mount CA, update-ca-certificates, HTTPS issuer)
 
 > v1 access constraint: implementer has docker but no AWS/GCP/cluster. See `phase.8.deploy-ci.md` for the executable vs. draft-only split.
 
