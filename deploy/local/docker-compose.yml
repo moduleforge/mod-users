@@ -113,7 +113,7 @@ services:
       # string disables it; the provider registry skips it).
       AUTH_PROVIDERS: authelia,google
       AUTH_PROVIDER_AUTHELIA_DISPLAY_NAME: Authelia (local)
-      AUTH_PROVIDER_AUTHELIA_ISSUER_URL: http://authelia:9091
+      AUTH_PROVIDER_AUTHELIA_ISSUER_URL: https://authelia:9091
       AUTH_PROVIDER_AUTHELIA_CLIENT_ID: users-module
       AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET: ${AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET:-local-authelia-secret}
       AUTH_PROVIDER_AUTHELIA_CLAIM_STYLE: authelia
@@ -124,6 +124,12 @@ services:
       AUTH_ADMIN_ROLE: admin
     ports:
       - "8080:8080"
+    volumes:
+      # Mount Authelia's self-signed CA into the API container's local CA
+      # directory so `update-ca-certificates` (run from entrypoint.sh) can
+      # append it to the system trust store. This is a local-dev-only concern —
+      # production OIDC providers serve certs chained to public CAs.
+      - ./authelia/certs/cert.pem:/usr/local/share/ca-certificates/authelia.crt:ro
     networks:
       - users-module-net
     depends_on:
