@@ -42,7 +42,11 @@ Status: All three tasks merged to `main`. Smoke test pending (see below).
 4. **Unrelated `gofmt -l` offenders** on `main` (`claims_test.go`, `local_jwt.go`, `password.go`, `principal.go`, `resolver.go`, `handlers/auditlog.go`, `handlers/self.go`) are still present — pre-date Phase 9 and left alone per scope. Worth a one-commit cleanup.
 5. **`refreshUser` 401 interaction** — the auth-context's existing `refreshUser` still routes through the shared helper and will trigger a hard redirect on 401; its local `logout()` call becomes redundant. Same category of issue as the return-page one. Not touched — out of scope for Phase 9.
 
-## Smoke test — attempted, blocked by pre-existing TLS trust gap
+## Smoke test — passes after Phase 9.4 TLS fix
+
+**Phase 9.4 (commit `8721465`) resolved the blocker below.** API now boots cleanly with OIDC discovery, provider list returns the Authelia entry, start endpoint 302s with a correct state cookie. Details preserved below for history.
+
+### Original failure (pre-9.4)
 
 Ran `docker compose up -d` after rebuilding the API image (important: `docker compose up -d` alone reuses the cached pre-Phase-9 image; `docker compose build api` is required first).
 
@@ -66,15 +70,17 @@ This is **pre-existing** to Phase 9. Commit `27aa1d6` ("make OIDC non-fatal in l
 - `go test ./...` in `api/`: all green, including the new resolver fast-path, jwt verifier-scope, and handler-level state-cookie tests.
 - `docker compose config` renders cleanly with the full `AUTH_PROVIDER_*` block; Google correctly absent when host secret unset.
 
-### Follow-up needed — Phase 9.4 (recommend before calling Google SSO "shippable locally")
+### Phase 9.4 fix (applied)
 
-Pick one:
+Chose the CA-mount approach (no Go code change). Commit `d5b05db`:
+- `deploy/local/docker-compose.yml`: bind `./authelia/certs/cert.pem` to `/usr/local/share/ca-certificates/authelia.crt:ro` on the API service; restore `AUTH_PROVIDER_AUTHELIA_ISSUER_URL: https://authelia:9091`.
+- `api/entrypoint.sh`: run `update-ca-certificates` (Alpine's standard) before exec'ing the server. Alpine's bundle at `/etc/ssl/certs/ca-certificates.crt` now includes Authelia's self-signed cert; Go's default TLS stack picks it up automatically. Production unaffected — no CAs mounted there, `update-ca-certificates` is a no-op.
 
-1. **Preferred: mount the Authelia CA into the API container.** Add a volume bind of `deploy/local/authelia/certs/ca.pem` to `/etc/ssl/certs/authelia.crt` and set `SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt` (or append to system CAs). Production untouched — prod providers use real CAs.
-2. **Alternative: `AUTH_TLS_INSECURE_SKIP_VERIFY` env flag** that wraps the OIDC client's HTTP transport with `InsecureSkipVerify=true`. Narrow, dev-only toggle. ~10 LOC in `oauth.go`.
-3. **Fallback: configure Authelia to serve HTTP for local OIDC discovery.** Authelia 4.38 may or may not support this — needs investigation.
+Post-fix smoke evidence (from agent report):
+- `GET /v1/auth/providers` → `[{"id":"authelia","display_name":"Authelia (local)"}]`
+- `GET /v1/auth/oidc/authelia/start?return=/profile` → 302 Location to Authelia's `/api/oidc/authorization` with `client_id`, `nonce`, `redirect_uri`, `state`, `response_type=code`, `scope=openid+email+profile`; `Set-Cookie: oidc_state=…; Path=/v1/auth/oidc/; Max-Age=300; HttpOnly; SameSite=Lax`.
 
-Until Phase 9.4 lands, the Authelia-backed smoke test cannot complete. The **Google SSO flow itself** (the actual Phase 9 deliverable) is unaffected and will work end-to-end once a Google client ID is registered — Google's discovery endpoint uses a real public CA.
+**Known non-blocker**: on first boot the API may lose a startup race against Authelia's TLS bootstrap and crash once before `restart: unless-stopped` recovers it. Pre-existing — missing `depends_on: authelia: condition: service_healthy` on the API service. Separate follow-up if this bothers anyone.
 
 ### Manual verification that still works today
 
