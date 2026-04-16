@@ -49,29 +49,83 @@ lint-fix: lint-fix.model lint-fix.api lint-fix.gui ## Apply lint fixes across al
 .PHONY: clean
 clean: clean.model clean.api clean.gui ## Remove build artifacts (preserves generated SQL/code)
 
+.PHONY: test.all
+test.all: test.unit test.integration ## Run all tests (unit + integration)
+
 # ---------------------------------------------------------------------------
 # Dev orchestration
 # ---------------------------------------------------------------------------
-# `dev.start` brings up the local docker-compose stack, then runs api + gui
-# concurrently in the foreground. We use `make -j` style parallel invocation
-# of the two run targets via a backgrounded shell + wait, which works in
-# vanilla GNU make without depending on `parallel(1)`.
-#
-# TEMPORARY TOLERANCE: deploy/local/docker-compose.yml is delivered in
-# Task 1.3. Until then, we warn and skip the compose step instead of failing
-# so `make dev.start` remains usable for api+gui-only development.
+# `dev.start` is a one-command local dev experience:
+#   1. Ensures .env exists (copies from .env.example if missing)
+#   2. Starts infrastructure (Postgres, Authelia, MailHog) via docker compose
+#   3. Waits for Postgres to be healthy
+#   4. Runs database migrations
+#   5. Builds the API + installs GUI deps
+#   6. Prints URLs for the browser
+#   7. Runs the API and GUI dev servers in the foreground (Ctrl-C stops both)
 
 DOCKER_COMPOSE_FILE := deploy/local/docker-compose.yml
+DATABASE_URL        ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 
 .PHONY: dev.start
-dev.start: ## Bring up local stack (docker-compose) and run api + gui in foreground
-	@if [ -f $(DOCKER_COMPOSE_FILE) ]; then \
-		echo "==> docker compose up -d ($(DOCKER_COMPOSE_FILE))"; \
-		docker compose -f $(DOCKER_COMPOSE_FILE) up -d; \
-	else \
-		echo "WARN: $(DOCKER_COMPOSE_FILE) not found (delivered in Task 1.3) — skipping compose up."; \
+dev.start: _dev.env _dev.infra _dev.migrate _dev.build _dev.urls _dev.run ## Full local dev: infra + migrate + build + run
+
+.PHONY: _dev.env
+_dev.env:
+	@if [ ! -f .env ]; then \
+		echo "==> .env not found — copying from .env.example"; \
+		cp .env.example .env; \
 	fi
-	@echo "==> Starting api + gui in foreground (Ctrl-C to stop both)"
+
+.PHONY: _dev.infra
+_dev.infra:
+	@echo "==> Starting infrastructure (Postgres, Authelia, MailHog)..."
+	@docker compose -f $(DOCKER_COMPOSE_FILE) up -d
+	@echo "==> Waiting for Postgres to be healthy..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
+		if docker exec users-module-postgres pg_isready -U users -d users >/dev/null 2>&1; then \
+			echo "    Postgres is ready."; \
+			break; \
+		fi; \
+		if [ $$i -eq 20 ]; then \
+			echo "ERROR: Postgres did not become ready in time."; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+
+.PHONY: _dev.migrate
+_dev.migrate:
+	@echo "==> Running database migrations..."
+	@$(MAKE) -C model migrate.up DATABASE_URL="$(DATABASE_URL)" || true
+
+.PHONY: _dev.build
+_dev.build:
+	@echo "==> Building API..."
+	@$(MAKE) -C api build
+	@echo "==> Installing GUI dependencies..."
+	@$(MAKE) -C gui node_modules 2>/dev/null || true
+
+.PHONY: _dev.urls
+_dev.urls:
+	@echo ""
+	@echo "========================================================================"
+	@echo "  users-module local dev stack is starting"
+	@echo ""
+	@echo "  GUI (login here):   http://localhost:3000/auth/login"
+	@echo "  API:                http://localhost:8080"
+	@echo "  API health:         http://localhost:8080/healthz"
+	@echo "  MailHog (emails):   http://localhost:8025"
+	@echo "  Authelia (OIDC):    http://localhost:9091"
+	@echo "  Postgres:           localhost:5432  (users/users)"
+	@echo ""
+	@echo "  First registered user automatically gets admin privileges."
+	@echo "  Ctrl-C to stop the API and GUI dev servers."
+	@echo "========================================================================"
+	@echo ""
+
+.PHONY: _dev.run
+_dev.run:
 	@trap 'kill 0' INT TERM EXIT; \
 		$(MAKE) -C api dev.start & \
 		$(MAKE) -C gui dev.start & \
@@ -79,12 +133,8 @@ dev.start: ## Bring up local stack (docker-compose) and run api + gui in foregro
 
 .PHONY: dev.stop
 dev.stop: ## Tear down local docker-compose stack
-	@if [ -f $(DOCKER_COMPOSE_FILE) ]; then \
-		echo "==> docker compose down ($(DOCKER_COMPOSE_FILE))"; \
-		docker compose -f $(DOCKER_COMPOSE_FILE) down; \
-	else \
-		echo "WARN: $(DOCKER_COMPOSE_FILE) not found (delivered in Task 1.3) — nothing to stop."; \
-	fi
+	@echo "==> docker compose down"
+	@docker compose -f $(DOCKER_COMPOSE_FILE) down
 
 # ---------------------------------------------------------------------------
 # Per-sub-project delegating targets (dot-namespaced)
