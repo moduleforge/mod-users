@@ -565,6 +565,132 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /v1/auth/providers:
+    get:
+      summary: List enabled OIDC providers for the login UI
+      description: |
+        Returns the public-facing metadata (id, display name) for every OIDC
+        provider currently enabled by server configuration. Never includes
+        client secrets, issuer URLs, or requested scopes. Always returns 200
+        with a (possibly empty) JSON array.
+      tags: [Auth]
+      security: []
+      operationId: listProviders
+      responses:
+        "200":
+          description: Array of enabled providers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, display_name]
+                  properties:
+                    id:
+                      type: string
+                      description: Stable machine identifier, e.g. "google".
+                      example: google
+                    display_name:
+                      type: string
+                      description: Human-friendly label suitable for a button.
+                      example: Google
+
+  /v1/auth/oidc/{provider}/start:
+    get:
+      summary: Begin OIDC authorization-code flow
+      description: |
+        Generates a signed state token, writes it to the `oidc_state` cookie
+        (scoped to `/v1/auth/oidc/`), and 302-redirects the browser to the
+        provider's authorization endpoint.
+      tags: [Auth]
+      security: []
+      operationId: startOIDC
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+          description: Provider identifier as listed by /v1/auth/providers.
+        - in: query
+          name: return
+          required: false
+          schema:
+            type: string
+            default: "/"
+          description: |
+            Site-relative path the GUI should navigate to after a successful
+            login. Must begin with `/`; absolute URLs or protocol-relative
+            references are rejected with 400 to prevent open-redirect attacks.
+      responses:
+        "302":
+          description: Redirect to the provider's authorization endpoint.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Unknown provider.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/oidc/{provider}/callback:
+    get:
+      summary: OIDC authorization-code flow callback
+      description: |
+        Completes the OAuth 2.0 authorization-code exchange: validates the
+        state cookie, trades the authorization code for an ID token, verifies
+        the ID token (signature, issuer, audience, nonce), normalizes claims,
+        resolves or creates the user, and mints a local session JWT. On
+        success, 302-redirects to the configured frontend return URL with the
+        JWT and original return path in the URL fragment.
+      tags: [Auth]
+      security: []
+      operationId: callbackOIDC
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code
+          required: false
+          schema:
+            type: string
+          description: Authorization code issued by the provider.
+        - in: query
+          name: state
+          required: false
+          schema:
+            type: string
+          description: Signed state token the provider echoes back.
+        - in: query
+          name: error
+          required: false
+          schema:
+            type: string
+          description: Error code when the provider denies or cancels the flow.
+      responses:
+        "302":
+          description: |
+            Redirect to the frontend return URL. On success the URL fragment
+            carries `token=<jwt>&return=<path>`; on error the query string
+            carries `error=<code>`.
+        "400":
+          description: Invalid or missing state, code, or cookie.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Unknown provider.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   # -- Self --
 
   /v1/self:

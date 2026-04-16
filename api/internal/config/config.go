@@ -39,15 +39,25 @@ type DBConfig struct {
 	MaxConnIdleTime time.Duration
 }
 
-// OIDCConfig holds settings for the pluggable OIDC provider.
-type OIDCConfig struct {
-	IssuerURL    string
-	ClientID     string
-	ClientSecret string
-	// ClaimStyle selects the ClaimMapper implementation:
-	// google | microsoft | keycloak | cognito | auth0 | authelia | generic
-	ClaimStyle string
-	AdminRole  string
+// AuthConfig holds cross-cutting settings for the authentication subsystem.
+// Per-provider settings live in the ProviderRegistry; AuthConfig carries the
+// bits that apply regardless of which provider the user came in on.
+type AuthConfig struct {
+	// AdminRole is the role name (post-normalization, lowercased) that confers
+	// admin privileges when present in a Principal.Roles slice. Defaults to
+	// "admin" when the env var AUTH_ADMIN_ROLE is unset.
+	AdminRole string
+
+	// FrontendReturnURL is the absolute URL of the GUI page that completes the
+	// OAuth callback handoff (e.g. "http://localhost:3000/auth/oidc/return").
+	// Required when any provider is enabled.
+	FrontendReturnURL string
+
+	// OAuthRedirectBaseURL is the public base URL of this API service — the
+	// callback URI registered with each OIDC provider is built as
+	// "<OAuthRedirectBaseURL>/v1/auth/oidc/{provider}/callback".
+	// Required when any provider is enabled.
+	OAuthRedirectBaseURL string
 }
 
 // ServerConfig holds HTTP server settings.
@@ -84,7 +94,8 @@ type OTelConfig struct {
 // Config is the top-level configuration struct populated by Load.
 type Config struct {
 	DB         DBConfig
-	OIDC       OIDCConfig
+	Auth       AuthConfig
+	Providers  ProviderRegistry
 	Server     ServerConfig
 	LocalAuth  LocalAuthConfig
 	SMTP       SMTPConfig
@@ -161,6 +172,13 @@ func Load() (*Config, error) {
 		parseErrors = append(parseErrors, passwordResetErr.Error())
 	}
 
+	registry, registryErr := LoadProviders()
+	if registryErr != nil {
+		parseErrors = append(parseErrors, registryErr.Error())
+		// Keep registry non-nil so downstream validation is well-defined.
+		registry = ProviderRegistry{}
+	}
+
 	cfg := &Config{
 		DeployMode: mode,
 		DB: DBConfig{
@@ -169,13 +187,12 @@ func Load() (*Config, error) {
 			MaxConnLifetime: maxConnLifetime,
 			MaxConnIdleTime: maxConnIdleTime,
 		},
-		OIDC: OIDCConfig{
-			IssuerURL:    os.Getenv("OIDC_ISSUER_URL"),
-			ClientID:     os.Getenv("OIDC_CLIENT_ID"),
-			ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"),
-			ClaimStyle:   os.Getenv("OIDC_CLAIM_STYLE"),
-			AdminRole:    os.Getenv("OIDC_ADMIN_ROLE"),
+		Auth: AuthConfig{
+			AdminRole:            getEnv("AUTH_ADMIN_ROLE", "admin"),
+			FrontendReturnURL:    os.Getenv("AUTH_FRONTEND_RETURN_URL"),
+			OAuthRedirectBaseURL: os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
 		},
+		Providers: registry,
 		Server: ServerConfig{
 			Addr:            getEnv("SERVER_ADDR", ":8080"),
 			ShutdownTimeout: shutdownTimeout,
@@ -224,14 +241,14 @@ func validate(cfg *Config, parseErrors []string) error {
 		{"SMTP_FROM", cfg.SMTP.From},
 	}
 
-	// OIDC fields are required in non-local modes. In local mode, the API
-	// starts without OIDC (local auth only) if these are missing.
-	if cfg.DeployMode != DeployModeLocal {
+	// When any OIDC provider is enabled, the OAuth callback plumbing needs
+	// both a redirect base (for the URI registered with the provider) and a
+	// frontend return URL (where the callback sends the browser after minting
+	// a local JWT). With zero providers, neither is needed — local auth only.
+	if len(cfg.Providers) > 0 {
 		required = append(required,
-			check{"OIDC_ISSUER_URL", cfg.OIDC.IssuerURL},
-			check{"OIDC_CLIENT_ID", cfg.OIDC.ClientID},
-			check{"OIDC_CLIENT_SECRET", cfg.OIDC.ClientSecret},
-			check{"OIDC_CLAIM_STYLE", cfg.OIDC.ClaimStyle},
+			check{"AUTH_FRONTEND_RETURN_URL", cfg.Auth.FrontendReturnURL},
+			check{"AUTH_OAUTH_REDIRECT_BASE_URL", cfg.Auth.OAuthRedirectBaseURL},
 		)
 	}
 

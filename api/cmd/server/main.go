@@ -53,37 +53,42 @@ func main() {
 	// Build query layer.
 	queries := db.New(pool)
 
-	// Build auth components. OIDC verifier init is non-fatal in local mode —
-	// the local auth flow (email+password JWT) works without it.
-	verifier, err := auth.NewVerifier(ctx,
-		cfg.OIDC.IssuerURL,
-		cfg.OIDC.ClientID,
-		cfg.LocalAuth.JWTSecret,
-		cfg.LocalAuth.LocalIssuer,
-	)
+	// Build auth components. The Verifier is used by RequireAuth to validate
+	// incoming Bearer tokens — post-Phase 9 those are always the local JWTs
+	// minted by /v1/auth/login or the OIDC callback, never a raw provider
+	// id_token. So the verifier is local-only.
+	verifier, err := auth.NewVerifier(ctx, "", "", cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	if err != nil {
-		if cfg.DeployMode == config.DeployModeLocal {
-			slog.WarnContext(ctx, "OIDC verifier init failed (local mode — continuing without OIDC)", "error", err)
-		} else {
-			slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
-			os.Exit(1)
-		}
+		slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
+		os.Exit(1)
 	}
 
-	var claimMapper auth.ClaimMapper
-	if cfg.OIDC.ClaimStyle != "" {
-		claimMapper, err = auth.NewClaimMapper(cfg.OIDC.ClaimStyle, auth.MapperOptions{
-			AdminRole: cfg.OIDC.AdminRole,
-		})
-		if err != nil {
-			slog.ErrorContext(ctx, "claim mapper init failed", "error", err)
-			os.Exit(1)
-		}
-	} else {
-		slog.WarnContext(ctx, "OIDC_CLAIM_STYLE not set — OIDC login disabled")
+	// RequireAuth needs a ClaimMapper to turn the local JWT's claims into a
+	// Principal. The local JWT uses flat "email" + "roles" claims, which the
+	// generic mapper handles with the pass-through paths below. After Phase 9,
+	// inbound Bearer tokens are always these locally-minted JWTs — provider
+	// id_tokens are traded for a local JWT by the OIDC callback, not presented
+	// directly to API endpoints.
+	localMapper, err := auth.NewClaimMapper("generic", auth.MapperOptions{
+		AdminRole: cfg.Auth.AdminRole,
+		EmailPath: "email",
+		RolesPath: "roles",
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "local claim mapper init failed", "error", err)
+		os.Exit(1)
 	}
 
-	resolver := auth.NewUserResolver(pool, queries, cfg.OIDC.AdminRole)
+	// Build the OAuth orchestrator. NewOAuth fetches each configured
+	// provider's discovery document, so a typo in AUTH_PROVIDER_*_ISSUER_URL
+	// fails startup rather than serving a broken /start later.
+	oauth, err := auth.NewOAuth(ctx, cfg)
+	if err != nil {
+		slog.ErrorContext(ctx, "oauth init failed", "error", err)
+		os.Exit(1)
+	}
+
+	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole)
 	auditWriter := audit.New(queries)
 
 	// Build email sender.
@@ -113,6 +118,8 @@ func main() {
 		cfg.Server.GUIBaseURL,
 	)
 
+	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
+
 	r.Route("/v1/auth", func(r chi.Router) {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
@@ -120,6 +127,11 @@ func main() {
 		r.Post("/email-code/verify", authHandler.EmailCodeVerify)
 		r.Post("/password-reset/request", authHandler.PasswordResetRequest)
 		r.Post("/password-reset/confirm", authHandler.PasswordResetConfirm)
+
+		// OIDC provider discovery + authorization-code flow (unauthenticated).
+		r.Get("/providers", oidcHandler.ListProviders)
+		r.Get("/oidc/{provider}/start", oidcHandler.Start)
+		r.Get("/oidc/{provider}/callback", oidcHandler.Callback)
 	})
 
 	// Handlers for authenticated routes.
@@ -131,7 +143,7 @@ func main() {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireAuth(verifier, claimMapper, resolver))
+			r.Use(auth.RequireAuth(verifier, localMapper, resolver))
 
 			// Self endpoints (any authenticated user).
 			r.Get("/self", selfHandler.Get)

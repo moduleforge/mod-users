@@ -8,23 +8,20 @@ import (
 	"github.com/moduleforge/users-module/api/internal/config"
 )
 
-// requiredEnv is a complete set of required environment variables with
-// valid values. Tests derive from this by adding or removing keys.
+// requiredEnv is a complete set of required environment variables with valid
+// values that exercise the local-auth-only happy path. Tests derive from this
+// by adding provider keys or clearing specific fields.
 var requiredEnv = map[string]string{
-	"DB_URL":             "postgres://user:pass@localhost:5432/users",
-	"OIDC_ISSUER_URL":    "http://auth.example.com",
-	"OIDC_CLIENT_ID":     "client-id",
-	"OIDC_CLIENT_SECRET": "client-secret",
-	"OIDC_CLAIM_STYLE":   "authelia",
-	"JWT_SECRET":         "supersecretkey",
-	"SMTP_HOST":          "smtp.example.com",
-	"SMTP_PORT":          "1025",
-	"SMTP_FROM":          "no-reply@example.com",
-	"DEPLOY_MODE":        "local",
+	"DB_URL":      "postgres://user:pass@localhost:5432/users",
+	"JWT_SECRET":  "supersecretkey",
+	"SMTP_HOST":   "smtp.example.com",
+	"SMTP_PORT":   "1025",
+	"SMTP_FROM":   "no-reply@example.com",
+	"DEPLOY_MODE": "local",
 }
 
-// setEnv applies the given map to the process environment and returns a
-// cleanup function that restores the previous values.
+// setEnv applies the given map to the process environment. t.Setenv handles
+// cleanup automatically on test completion.
 func setEnv(t *testing.T, env map[string]string) {
 	t.Helper()
 	for k, v := range env {
@@ -32,8 +29,32 @@ func setEnv(t *testing.T, env map[string]string) {
 	}
 }
 
+// clearProviderEnv wipes AUTH_PROVIDERS and any AUTH_PROVIDER_*_CLIENT_ID keys
+// so auto-discovery does not pick up state leaked from the parent process.
+// t.Setenv restores the originals when the test finishes.
+func clearProviderEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("AUTH_PROVIDERS", "")
+	// Clear commonly-set provider envs. Tests that need specific providers
+	// will set them explicitly after this call.
+	providerKeys := []string{
+		"AUTH_PROVIDER_GOOGLE_CLIENT_ID",
+		"AUTH_PROVIDER_GOOGLE_CLIENT_SECRET",
+		"AUTH_PROVIDER_MICROSOFT_CLIENT_ID",
+		"AUTH_PROVIDER_MICROSOFT_CLIENT_SECRET",
+		"AUTH_PROVIDER_AUTHELIA_CLIENT_ID",
+		"AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET",
+		"AUTH_PROVIDER_AUTHELIA_ISSUER_URL",
+		"AUTH_PROVIDER_AUTHELIA_CLAIM_STYLE",
+	}
+	for _, k := range providerKeys {
+		t.Setenv(k, "")
+	}
+}
+
 func TestLoad(t *testing.T) {
-	t.Run("all required fields set succeeds", func(t *testing.T) {
+	t.Run("all required fields set succeeds with zero providers", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
 
 		cfg, err := config.Load()
@@ -46,14 +67,16 @@ func TestLoad(t *testing.T) {
 		if cfg.DB.URL != requiredEnv["DB_URL"] {
 			t.Errorf("DB.URL = %q, want %q", cfg.DB.URL, requiredEnv["DB_URL"])
 		}
-		if cfg.OIDC.ClaimStyle != "authelia" {
-			t.Errorf("OIDC.ClaimStyle = %q, want %q", cfg.OIDC.ClaimStyle, "authelia")
+		if len(cfg.Providers) != 0 {
+			t.Errorf("Providers = %v, want empty registry", cfg.Providers)
+		}
+		if cfg.Auth.AdminRole != "admin" {
+			t.Errorf("Auth.AdminRole = %q, want %q", cfg.Auth.AdminRole, "admin")
 		}
 	})
 
 	t.Run("missing required fields produces aggregated error", func(t *testing.T) {
-		// Set none of the required vars; ensure the error lists all of them.
-		// t.Setenv ensures cleanup even on test failure.
+		clearProviderEnv(t)
 		for k := range requiredEnv {
 			t.Setenv(k, "")
 		}
@@ -63,12 +86,9 @@ func TestLoad(t *testing.T) {
 			t.Fatal("expected an error for missing required fields, got nil")
 		}
 
+		// Without providers, only the always-required fields must be listed.
 		required := []string{
 			"DB_URL",
-			"OIDC_ISSUER_URL",
-			"OIDC_CLIENT_ID",
-			"OIDC_CLIENT_SECRET",
-			"OIDC_CLAIM_STYLE",
 			"JWT_SECRET",
 			"SMTP_HOST",
 			"SMTP_PORT",
@@ -81,7 +101,49 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
+	t.Run("enabled provider requires oauth redirect + frontend return URL", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("AUTH_PROVIDER_GOOGLE_CLIENT_ID", "google-client")
+		t.Setenv("AUTH_PROVIDER_GOOGLE_CLIENT_SECRET", "google-secret")
+
+		_, err := config.Load()
+		if err == nil {
+			t.Fatal("expected error when provider enabled without redirect URLs, got nil")
+		}
+		for _, field := range []string{"AUTH_FRONTEND_RETURN_URL", "AUTH_OAUTH_REDIRECT_BASE_URL"} {
+			if !strings.Contains(err.Error(), field) {
+				t.Errorf("error should mention %q, got: %v", field, err)
+			}
+		}
+	})
+
+	t.Run("enabled provider with redirect URLs succeeds", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("AUTH_PROVIDER_GOOGLE_CLIENT_ID", "google-client")
+		t.Setenv("AUTH_PROVIDER_GOOGLE_CLIENT_SECRET", "google-secret")
+		t.Setenv("AUTH_FRONTEND_RETURN_URL", "http://localhost:3000/auth/oidc/return")
+		t.Setenv("AUTH_OAUTH_REDIRECT_BASE_URL", "http://localhost:8080")
+
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		p, ok := cfg.Providers["google"]
+		if !ok {
+			t.Fatalf("expected google provider, got %v", cfg.Providers)
+		}
+		if p.ClaimStyle != "google" {
+			t.Errorf("ClaimStyle = %q, want %q (built-in default)", p.ClaimStyle, "google")
+		}
+		if p.DisplayName != "Google" {
+			t.Errorf("DisplayName = %q, want %q", p.DisplayName, "Google")
+		}
+	})
+
 	t.Run("serverless mode sets MaxConns=4", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
 		t.Setenv("DEPLOY_MODE", "serverless")
 
@@ -98,6 +160,7 @@ func TestLoad(t *testing.T) {
 		for _, mode := range []string{"local", "k8s"} {
 			mode := mode
 			t.Run(mode, func(t *testing.T) {
+				clearProviderEnv(t)
 				setEnv(t, requiredEnv)
 				t.Setenv("DEPLOY_MODE", mode)
 
@@ -113,8 +176,9 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("explicit DB_MAX_CONNS overrides mode default", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
-		t.Setenv("DEPLOY_MODE", "local") // default would be 20
+		t.Setenv("DEPLOY_MODE", "local")
 		t.Setenv("DB_MAX_CONNS", "10")
 
 		cfg, err := config.Load()
@@ -127,6 +191,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("defaults are applied when optional env vars are absent", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
 
 		cfg, err := config.Load()
@@ -161,6 +226,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("explicit env override beats default", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
 		t.Setenv("SERVER_ADDR", ":9090")
 		t.Setenv("SERVER_SHUTDOWN_TIMEOUT", "10s")
@@ -182,6 +248,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("malformed DB_MAX_CONNS produces validation error", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
 		t.Setenv("DB_MAX_CONNS", "abc")
 
@@ -198,6 +265,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("malformed SERVER_SHUTDOWN_TIMEOUT produces validation error", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
 		t.Setenv("SERVER_SHUTDOWN_TIMEOUT", "5 minutes")
 
@@ -214,6 +282,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("invalid DEPLOY_MODE produces validation error", func(t *testing.T) {
+		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
 		t.Setenv("DEPLOY_MODE", "docker-compose")
 
