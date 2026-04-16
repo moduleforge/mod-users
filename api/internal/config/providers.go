@@ -177,7 +177,7 @@ func loadProvider(id string) (*Provider, error) {
 
 	issuerURL := firstNonEmpty(os.Getenv(envKey("ISSUER_URL")), defaults.IssuerURL)
 	claimStyle := firstNonEmpty(os.Getenv(envKey("CLAIM_STYLE")), defaults.ClaimStyle)
-	displayName := firstNonEmpty(os.Getenv(envKey("DISPLAY_NAME")), defaults.DisplayName, strings.ToTitle(id))
+	displayName := firstNonEmpty(os.Getenv(envKey("DISPLAY_NAME")), defaults.DisplayName, titleCase(id))
 
 	if issuerURL == "" {
 		return nil, fmt.Errorf("provider %q: %s is required (no built-in default)", id, envKey("ISSUER_URL"))
@@ -228,4 +228,16 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// titleCase uppercases the first byte of id and leaves the rest alone, so
+// "authelia" becomes "Authelia" (not ALL-CAPS like strings.ToTitle would
+// produce, and without pulling in golang.org/x/text for a one-liner).
+// Provider IDs are ASCII-only by construction (AUTH_PROVIDER_{ID} is an env
+// var name), so byte-level handling is safe here.
+func titleCase(id string) string {
+	if id == "" {
+		return ""
+	}
+	return strings.ToUpper(id[:1]) + id[1:]
 }

@@ -120,6 +120,12 @@ func buildCallbackURL(base, providerID string) string {
 // is not in the registry.
 var ErrUnknownProvider = errors.New("oauth: unknown provider")
 
+// ErrStateValidation is the sentinel wrapped by every state-related failure
+// in Exchange (missing state, cookie mismatch, signature/expiry failure,
+// provider-id mismatch). Handlers use errors.Is to distinguish client-fixable
+// state problems from downstream IdP failures.
+var ErrStateValidation = errors.New("oauth: state validation failed")
+
 // AuthorizeURL builds the OIDC authorization URL the browser should be
 // redirected to, along with the signed state token that must be stored in
 // the oidc_state cookie so the callback can verify it.
@@ -179,20 +185,22 @@ func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookie
 	// State must be present in both the query string and the cookie, and the
 	// two values must be byte-identical. Cookie tampering or a missing cookie
 	// (e.g., browser blocked it, or the callback was hit without /start) is
-	// treated as a mismatch.
+	// treated as a mismatch. Every state-related failure wraps
+	// ErrStateValidation so the handler can distinguish "retry your login"
+	// from "the IdP borked the token exchange".
 	if rawState == "" || cookieState == "" {
-		return empty, emptyPayload, errors.New("oauth: missing state")
+		return empty, emptyPayload, fmt.Errorf("missing state: %w", ErrStateValidation)
 	}
 	if rawState != cookieState {
-		return empty, emptyPayload, errors.New("oauth: state cookie mismatch")
+		return empty, emptyPayload, fmt.Errorf("state cookie mismatch: %w", ErrStateValidation)
 	}
 
 	payload, err := o.StateSigner.Verify(rawState)
 	if err != nil {
-		return empty, emptyPayload, fmt.Errorf("oauth: %w", err)
+		return empty, emptyPayload, fmt.Errorf("verify state (%v): %w", err, ErrStateValidation)
 	}
 	if payload.Provider != providerID {
-		return empty, emptyPayload, errors.New("oauth: state provider mismatch")
+		return empty, emptyPayload, fmt.Errorf("state provider mismatch: %w", ErrStateValidation)
 	}
 
 	tok, err := cfg.Exchange(ctx, code)

@@ -6,12 +6,12 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 	"time"
 
@@ -238,8 +238,11 @@ func TestOAuth_Exchange_StateCookieMismatch(t *testing.T) {
 	_ = authURL
 
 	_, _, err = oauth.Exchange(context.Background(), "google", "code", state, "different-cookie")
-	if err == nil || !strings.Contains(err.Error(), "state") {
-		t.Errorf("expected state mismatch error, got %v", err)
+	if err == nil {
+		t.Fatal("expected state mismatch error, got nil")
+	}
+	if !errors.Is(err, ErrStateValidation) {
+		t.Errorf("expected ErrStateValidation, got %v", err)
 	}
 }
 
@@ -250,6 +253,9 @@ func TestOAuth_Exchange_MissingState(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing state")
 	}
+	if !errors.Is(err, ErrStateValidation) {
+		t.Errorf("expected ErrStateValidation, got %v", err)
+	}
 }
 
 func TestOAuth_AuthorizeURL_UnknownProvider(t *testing.T) {
@@ -257,6 +263,197 @@ func TestOAuth_AuthorizeURL_UnknownProvider(t *testing.T) {
 	_, _, err := oauth.AuthorizeURL("unknown", "/")
 	if err == nil {
 		t.Fatal("expected ErrUnknownProvider")
+	}
+}
+
+// TestOAuth_Exchange_IDTokenTampering covers the three ways the IdP (or an
+// attacker in the middle) might return an id_token that violates the
+// integrity contract. Each variant should cause Exchange to return an error
+// and our code must never accept such a token.
+func TestOAuth_Exchange_IDTokenTampering(t *testing.T) {
+	type tampering struct {
+		name       string
+		mutator    func(claims jwt.MapClaims, serverURL, clientID string)
+		wantSubstr string
+	}
+	cases := []tampering{
+		{
+			name: "nonce mismatch",
+			mutator: func(claims jwt.MapClaims, _, _ string) {
+				claims["nonce"] = "not-the-nonce-we-asked-for"
+			},
+			// The go-oidc library checks the nonce hook first if set; we
+			// check it ourselves after Verify returns. Either way we expect
+			// an error — the message isn't load-bearing.
+			wantSubstr: "nonce",
+		},
+		{
+			name: "aud mismatch",
+			mutator: func(claims jwt.MapClaims, _, _ string) {
+				claims["aud"] = "some-other-client-id"
+			},
+			wantSubstr: "aud",
+		},
+		{
+			name: "iss mismatch",
+			mutator: func(claims jwt.MapClaims, _, _ string) {
+				claims["iss"] = "https://evil.example.com"
+			},
+			wantSubstr: "iss",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			h := newFakeOIDCHarness(t, tc.mutator)
+
+			oauth, err := NewOAuth(context.Background(), h.cfg)
+			if err != nil {
+				t.Fatalf("NewOAuth: %v", err)
+			}
+
+			authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile")
+			if err != nil {
+				t.Fatalf("AuthorizeURL: %v", err)
+			}
+			parsed, err := url.Parse(authURL)
+			if err != nil {
+				t.Fatalf("parse authURL: %v", err)
+			}
+			h.setNonce(parsed.Query().Get("nonce"))
+
+			_, _, err = oauth.Exchange(context.Background(), "google", h.expectedCode, stateToken, stateToken)
+			if err == nil {
+				t.Fatalf("expected error for %s, got nil", tc.name)
+			}
+			// Sanity: the error should plausibly mention the offending claim.
+			// Don't overfit to a specific message — just confirm rejection.
+			t.Logf("%s: %v", tc.name, err)
+		})
+	}
+}
+
+// fakeOIDCHarness encapsulates the fake-provider scaffolding used by the
+// end-to-end and tampering tests. Callers pass a mutator that can rewrite the
+// id_token claims right before they are signed; the happy-path test uses a
+// no-op mutator.
+type fakeOIDCHarness struct {
+	cfg          *config.Config
+	expectedCode string
+	setNonce     func(string)
+}
+
+func newFakeOIDCHarness(t *testing.T, mutate func(jwt.MapClaims, string, string)) *fakeOIDCHarness {
+	t.Helper()
+
+	signingKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	const keyID = "test-key-1"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	clientID := "test-client-id"
+	clientSecret := "test-client-secret"
+	expectedCode := "test-auth-code"
+	expectedSubject := "google-sub-123"
+	expectedEmail := "user@example.com"
+
+	var nonce string
+	setNonce := func(n string) { nonce = n }
+
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		cfg := map[string]any{
+			"issuer":                                srv.URL,
+			"authorization_endpoint":                srv.URL + "/authorize",
+			"token_endpoint":                        srv.URL + "/token",
+			"jwks_uri":                              srv.URL + "/jwks",
+			"response_types_supported":              []string{"code"},
+			"subject_types_supported":               []string{"public"},
+			"id_token_signing_alg_values_supported": []string{"RS256"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(cfg)
+	})
+
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		n := base64.RawURLEncoding.EncodeToString(signingKey.N.Bytes())
+		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(signingKey.E)).Bytes())
+		jwks := map[string]any{
+			"keys": []map[string]any{
+				{"kty": "RSA", "alg": "RS256", "use": "sig", "kid": keyID, "n": n, "e": e},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(jwks)
+	})
+
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if r.Form.Get("code") != expectedCode {
+			http.Error(w, "bad code", 400)
+			return
+		}
+		claims := jwt.MapClaims{
+			"iss":   srv.URL,
+			"aud":   clientID,
+			"sub":   expectedSubject,
+			"email": expectedEmail,
+			"nonce": nonce,
+			"iat":   time.Now().Unix(),
+			"exp":   time.Now().Add(time.Hour).Unix(),
+		}
+		if mutate != nil {
+			mutate(claims, srv.URL, clientID)
+		}
+		idToken, err := signIDToken(signingKey, keyID, claims)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		resp := map[string]any{
+			"access_token": "test-access-token",
+			"id_token":     idToken,
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			AdminRole:            "admin",
+			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
+			OAuthRedirectBaseURL: "http://api.test",
+		},
+		LocalAuth: config.LocalAuthConfig{
+			JWTSecret: "test-jwt-secret-for-state-signer",
+		},
+		Providers: config.ProviderRegistry{
+			"google": config.Provider{
+				ID:           "google",
+				DisplayName:  "Google",
+				IssuerURL:    srv.URL,
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				ClaimStyle:   "google",
+				Scopes:       []string{"openid", "email", "profile"},
+			},
+		},
+	}
+
+	return &fakeOIDCHarness{
+		cfg:          cfg,
+		expectedCode: expectedCode,
+		setNonce:     setNonce,
 	}
 }
 

@@ -88,7 +88,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole)
+	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
 	auditWriter := audit.New(queries)
 
 	// Build email sender.

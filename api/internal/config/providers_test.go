@@ -133,6 +133,28 @@ func TestLoadProviders(t *testing.T) {
 		}
 	})
 
+	t.Run("display_name falls back to title-case of id", func(t *testing.T) {
+		// No DISPLAY_NAME set → fallback path. authelia has no built-in default,
+		// so the last-resort titleCase("authelia") should yield "Authelia".
+		resetProviderEnv(t)
+		t.Setenv("AUTH_PROVIDER_AUTHELIA_CLIENT_ID", "aid")
+		t.Setenv("AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET", "asecret")
+		t.Setenv("AUTH_PROVIDER_AUTHELIA_ISSUER_URL", "https://auth.example.com")
+		t.Setenv("AUTH_PROVIDER_AUTHELIA_CLAIM_STYLE", "authelia")
+
+		reg, err := config.LoadProviders()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		p, ok := reg["authelia"]
+		if !ok {
+			t.Fatalf("authelia missing; registry=%v", reg)
+		}
+		if p.DisplayName != "Authelia" {
+			t.Errorf("DisplayName = %q, want %q (not ALL-CAPS)", p.DisplayName, "Authelia")
+		}
+	})
+
 	t.Run("missing client_secret is a hard error", func(t *testing.T) {
 		resetProviderEnv(t)
 		t.Setenv("AUTH_PROVIDER_GOOGLE_CLIENT_ID", "gid")

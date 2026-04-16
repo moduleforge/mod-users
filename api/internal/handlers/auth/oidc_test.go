@@ -177,6 +177,71 @@ func TestCallback_ProviderError_RedirectsToFrontend(t *testing.T) {
 	if !strings.HasPrefix(loc, "http://gui.test/auth/oidc/return") {
 		t.Errorf("Location should target frontend return URL, got %q", loc)
 	}
+
+	// Pin cookie-cleanup: every callback path must tombstone the state cookie
+	// so it cannot be reused. A future refactor that drops h.clearStateCookie
+	// would silently regress this without the assertion.
+	assertStateCookieDeleted(t, rec)
+}
+
+// TestCallback_MissingStateCookie_ClearsCookie exercises a second callback
+// branch (missing cookie → 400) and confirms the cleanup header is present
+// there too. The cookie is cleared before the branch is decided, so any
+// callback outcome ought to include it.
+func TestCallback_MissingStateCookie_ClearsCookie(t *testing.T) {
+	registry := config.ProviderRegistry{
+		"google": config.Provider{ID: "google", DisplayName: "Google"},
+	}
+	h := newTestHandler(t, registry)
+
+	req := setChiProvider(httptest.NewRequest(http.MethodGet, "/v1/auth/oidc/google/callback?code=x&state=y", nil), "google")
+	rec := httptest.NewRecorder()
+	h.Callback(rec, req)
+
+	assertStateCookieDeleted(t, rec)
+}
+
+// TestNormalizeProviderID verifies the path-param lowercasing used by Start
+// and Callback so a URL like /v1/auth/oidc/Google/start still hits the
+// "google" registry entry. Exercising the helper directly keeps this test
+// decoupled from the full Start/Callback plumbing, which would otherwise
+// 404 for unrelated reasons (empty OAuthConfigs in the handler-level stub).
+func TestNormalizeProviderID(t *testing.T) {
+	cases := map[string]string{
+		"Google":    "google",
+		"MICROSOFT": "microsoft",
+		"authelia":  "authelia",
+		"":          "",
+	}
+	for in, want := range cases {
+		req := setChiProvider(httptest.NewRequest(http.MethodGet, "/v1/auth/oidc/x/start", nil), in)
+		if got := normalizeProviderID(req); got != want {
+			t.Errorf("normalizeProviderID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// assertStateCookieDeleted verifies the response sets the oidc_state cookie
+// with an empty value and a non-positive MaxAge, which is how net/http
+// signals "delete this cookie".
+func assertStateCookieDeleted(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	var found *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "oidc_state" {
+			found = c
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("expected oidc_state cookie deletion header, found none")
+	}
+	if found.Value != "" {
+		t.Errorf("state cookie Value = %q, want empty", found.Value)
+	}
+	if found.MaxAge >= 0 {
+		t.Errorf("state cookie MaxAge = %d, want negative", found.MaxAge)
+	}
 }
 
 func TestCallback_MissingStateCookie(t *testing.T) {

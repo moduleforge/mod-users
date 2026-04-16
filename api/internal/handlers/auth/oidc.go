@@ -18,6 +18,13 @@ import (
 	db "github.com/moduleforge/users-module/model/db"
 )
 
+// normalizeProviderID lowercases the provider URL param so the lookup matches
+// the registry keys (which are lowercased at load time). Without this,
+// /v1/auth/oidc/Google/start would 404.
+func normalizeProviderID(r *http.Request) string {
+	return strings.ToLower(chi.URLParam(r, "provider"))
+}
+
 // stateCookieName is the name of the cookie that carries the signed state
 // token between /start and /callback.
 const stateCookieName = "oidc_state"
@@ -72,7 +79,7 @@ func (h *OIDCHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
 // id and return path, writes the signed state cookie, and 302s the browser
 // to the provider's authorization URL.
 func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
-	providerID := chi.URLParam(r, "provider")
+	providerID := normalizeProviderID(r)
 	if _, ok := h.oauth.Registry[providerID]; !ok {
 		server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
 		return
@@ -99,7 +106,7 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 // writes an audit row, and 302s to the GUI return page with the JWT in the
 // URL fragment so it never hits any server log.
 func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
-	providerID := chi.URLParam(r, "provider")
+	providerID := normalizeProviderID(r)
 	if _, ok := h.oauth.Registry[providerID]; !ok {
 		server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
 		return
@@ -133,7 +140,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		// State/cookie problems are client-fixable → 400. Everything downstream
 		// (token endpoint, id_token verify) reports a generic error via redirect
 		// so the GUI can surface it and the operator can inspect logs.
-		if isStateError(err) {
+		if errors.Is(err, localauth.ErrStateValidation) {
 			server.Error(w, http.StatusBadRequest, "bad_request", "invalid or expired state")
 			return
 		}
@@ -243,22 +250,13 @@ func requestIsHTTPS(r *http.Request) bool {
 	return false
 }
 
-// isStateError reports whether err came from state validation (bad signature,
-// cookie mismatch, expiry). Used to distinguish 400 from 302-with-error.
-// The oauth package prefixes all state-related errors with "oauth: state"
-// or "oauth: missing state"; matching on "state" covers both.
-func isStateError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "state")
-}
-
 // loginAuditMeta is the structured after-payload for the login audit row.
+// Email deliberately omitted — auditors reach the user record via the joined
+// users row referenced by resource_id / target_entity_id. Avoiding a denorm'd
+// copy here keeps the audit log consistent if the user later changes email.
 type loginAuditMeta struct {
 	Provider string `json:"provider"`
 	Linked   bool   `json:"linked"`
-	Email    string `json:"email"`
 }
 
 // writeLoginAudit records the login event directly via queries (not the
@@ -268,7 +266,6 @@ func (h *OIDCHandler) writeLoginAudit(ctx context.Context, uc *localauth.UserCon
 	meta := loginAuditMeta{
 		Provider: providerID,
 		Linked:   p.Subject != "" && p.Issuer != "",
-		Email:    p.Email,
 	}
 	metaJSON, err := json.Marshal(meta)
 	if err != nil {
