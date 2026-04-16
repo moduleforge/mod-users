@@ -3,76 +3,132 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/go-chi/chi/v5"
+
+	"github.com/moduleforge/users-module/api/internal/audit"
+	"github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/config"
+	localdb "github.com/moduleforge/users-module/api/internal/db"
+	"github.com/moduleforge/users-module/api/internal/handlers"
 	"github.com/moduleforge/users-module/api/internal/observability"
+	"github.com/moduleforge/users-module/api/internal/server"
+	db "github.com/moduleforge/users-module/model/db"
 )
 
 func main() {
-	// Load and validate configuration before anything else so we fail
-	// fast with a complete list of what is missing.
 	cfg, err := config.Load()
 	if err != nil {
-		// Use a minimal text logger here because slog may not be
-		// initialised yet; we want the error visible regardless.
 		slog.Error("config load failed", "error", err)
 		os.Exit(1)
 	}
 
-	// Structured JSON logging; level can be tuned via LOG_LEVEL env var.
 	logLevel := resolveLogLevel(os.Getenv("LOG_LEVEL"))
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: logLevel,
-	}))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	slog.SetDefault(logger)
 
-	// Root context cancelled on SIGTERM or SIGINT.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// Initialise OpenTelemetry. The returned shutdown function must be
-	// called before the process exits to flush any pending spans/metrics.
 	otelShutdown, err := observability.Init(ctx, cfg)
 	if err != nil {
 		slog.ErrorContext(ctx, "otel init failed", "error", err)
 		os.Exit(1)
 	}
 
-	slog.InfoContext(ctx, "users-api up", "addr", cfg.Server.Addr)
+	// Open pgx pool.
+	pool, err := localdb.New(ctx, cfg)
+	if err != nil {
+		slog.ErrorContext(ctx, "database connection failed", "error", err)
+		os.Exit(1)
+	}
 
-	// Block until a signal is received.
+	// Build query layer.
+	queries := db.New(pool)
+
+	// Build auth components.
+	verifier, err := auth.NewVerifier(ctx,
+		cfg.OIDC.IssuerURL,
+		cfg.OIDC.ClientID,
+		cfg.LocalAuth.JWTSecret,
+		cfg.LocalAuth.LocalIssuer,
+	)
+	if err != nil {
+		slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
+		os.Exit(1)
+	}
+
+	claimMapper, err := auth.NewClaimMapper(cfg.OIDC.ClaimStyle, auth.MapperOptions{
+		AdminRole: cfg.OIDC.AdminRole,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "claim mapper init failed", "error", err)
+		os.Exit(1)
+	}
+
+	resolver := auth.NewUserResolver(pool, queries, cfg.OIDC.AdminRole)
+	auditWriter := audit.New(queries)
+
+	// Build server + router.
+	srv, r := server.New(cfg)
+
+	// Health endpoints (unauthenticated).
+	r.Get("/healthz", handlers.Live)
+	r.Get("/readyz", handlers.Ready(pool))
+
+	// Authenticated v1 routes.
+	selfHandler := handlers.NewSelfHandler(queries, auditWriter)
+
+	r.Route("/v1", func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireAuth(verifier, claimMapper, resolver))
+
+			r.Get("/self", selfHandler.Get)
+			r.Put("/self", selfHandler.Put)
+		})
+	})
+
+	slog.InfoContext(ctx, "users-api starting", "addr", cfg.Server.Addr)
+
+	// Start server in background.
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.ErrorContext(ctx, "server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Block until signal.
 	<-ctx.Done()
-	stop() // release signal resources promptly
+	stop()
 
-	slog.InfoContext(context.Background(), "shutdown signal received, beginning graceful shutdown")
+	slog.Info("shutdown signal received, beginning graceful shutdown")
 
-	// Build a fresh context for shutdown with the configured deadline.
-	// The parent ctx is already cancelled; we need an independent one.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
-	// Phase 3 (Task 3.1) will add: httpServer.Shutdown(shutdownCtx), pool.Close()
-	// For now, only OTel needs flushing.
-
-	slog.InfoContext(shutdownCtx, "flushing otel telemetry")
-	if err := otelShutdown(shutdownCtx); err != nil {
-		// OTel flush errors (e.g. collector unreachable) are not fatal — the
-		// process has already drained in-flight requests. Log at ERROR so the
-		// issue is visible, but exit 0 so the orchestrator does not restart
-		// the pod unnecessarily.
-		slog.ErrorContext(shutdownCtx, "otel shutdown error", "error", err)
+	// Shutdown sequence: HTTP server → pool → OTel.
+	slog.Info("shutting down server")
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("server shutdown error", "error", err)
 	}
 
-	slog.InfoContext(shutdownCtx, "shutdown complete")
+	slog.Info("closing database pool")
+	pool.Close()
+
+	slog.Info("flushing otel telemetry")
+	if err := otelShutdown(shutdownCtx); err != nil {
+		slog.Error("otel shutdown error", "error", err)
+	}
+
+	slog.Info("shutdown complete")
 }
 
-// resolveLogLevel maps a LOG_LEVEL string to the corresponding slog.Level.
-// Matching is case-insensitive so both "debug" and "DEBUG" work.
-// It defaults to INFO for empty or unrecognised values.
 func resolveLogLevel(level string) slog.Level {
 	switch strings.ToUpper(level) {
 	case "DEBUG":

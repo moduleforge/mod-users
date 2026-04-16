@@ -54,6 +54,7 @@ type OIDCConfig struct {
 type ServerConfig struct {
 	Addr            string
 	ShutdownTimeout time.Duration
+	CORSOrigins     string // comma-separated allowed origins
 }
 
 // LocalAuthConfig holds settings for the local (non-OIDC) auth subsystem.
@@ -177,6 +178,7 @@ func Load() (*Config, error) {
 		Server: ServerConfig{
 			Addr:            getEnv("SERVER_ADDR", ":8080"),
 			ShutdownTimeout: shutdownTimeout,
+			CORSOrigins:     os.Getenv("CORS_ORIGINS"),
 		},
 		LocalAuth: LocalAuthConfig{
 			JWTSecret:        os.Getenv("JWT_SECRET"),
