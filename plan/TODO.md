@@ -39,7 +39,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blo
   - [x] 6.4 Authorization scoping (admin global; user limited to own data within app)
 - [x] **Phase 7 — GUI** (depends on: 5; can run in parallel with 6 from 6.x onward)
   - [x] 7.1 Next.js 15 app shell + auth context
-  - [x] 7.2 Login (local + OIDC) + signup + forgot-password screens
+  - [~] 7.2 Login (local + OIDC) + signup + forgot-password screens — **OIDC half stubbed only; completed in Phase 9**
   - [x] 7.3 Profile view/edit
   - [x] 7.4 Admin: user search + detail + edit + grant/revoke + assume
   - [x] 7.5 Admin: audit log viewer (per-user, per-object)
@@ -51,6 +51,11 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blo
   - [x] 8.4 Kustomize base (Postgres via CNPG, ingress, OIDC config) **[draft only]**
   - [x] 8.5 GitHub Actions CI **[YAML drafted; lint, test, migrate-check, build, image]**
   - [x] 8.6 OpenAPI 3.0.3 spec **[full coverage of all endpoints]**
+
+- [ ] **Phase 9 — Google SSO** (depends on: 3, 4, 7)
+  - [ ] 9.1 API OAuth 2.0 authorization-code flow (provider registry, start/callback handlers, state cookie, provider-list endpoint)
+  - [ ] 9.2 GUI provider buttons + `/auth/oidc/return` page + `completeExternalLogin` in auth-context
+  - [ ] 9.3 docker-compose + `.env.example` + CI env rename (depends on 9.1, 9.2)
 
 > v1 access constraint: implementer has docker but no AWS/GCP/cluster. See `phase.8.deploy-ci.md` for the executable vs. draft-only split.
 
