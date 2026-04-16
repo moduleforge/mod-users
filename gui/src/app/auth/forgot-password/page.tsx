@@ -26,7 +26,8 @@ export default function ForgotPasswordPage() {
       if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        console.error('[forgot-password]', err);
+        setError('Something went wrong. Check the browser console for details.');
       }
     } finally {
       setIsSubmitting(false);

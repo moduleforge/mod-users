@@ -47,7 +47,8 @@ function ResetPasswordForm() {
       if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        console.error('[reset-password]', err);
+        setError('Something went wrong. Check the browser console for details.');
       }
     } finally {
       setIsSubmitting(false);

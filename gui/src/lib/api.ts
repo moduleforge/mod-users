@@ -39,10 +39,21 @@ async function request<T>(
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    // Network error — API is unreachable.
+    console.error(`[api] Network error: ${path}`, err);
+    throw new ApiRequestError(
+      'network_error',
+      'Could not reach the API server. Is it running?',
+      0,
+    );
+  }
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {

@@ -35,10 +35,11 @@ export default function RegisterPage() {
       await register(email, password, givenName, familyName);
       router.push('/profile');
     } catch (err) {
+      console.error('[register]', err);
       if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        setError('Something went wrong. Check the browser console for details.');
       }
     } finally {
       setIsSubmitting(false);

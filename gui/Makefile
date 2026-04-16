@@ -11,8 +11,17 @@ CURRENT_OS := $(shell uname -s)
 PM := $(shell if command -v pnpm >/dev/null 2>&1; then echo pnpm; else echo npm; fi)
 NPX := npx
 
-# Stamp file records the OS that installed node_modules.
-PLATFORM_STAMP := node_modules/.platform
+# pnpm hoists deps to the workspace root. We need to track platform there too.
+# Resolve root: walk up looking for pnpm-workspace.yaml.
+WORKSPACE_ROOT := $(shell d=$$PWD; while [ "$$d" != "/" ]; do \
+	if [ -f "$$d/pnpm-workspace.yaml" ]; then echo "$$d"; break; fi; \
+	d=$$(dirname "$$d"); done)
+# Fall back to just this directory if not in a workspace.
+ifeq ($(WORKSPACE_ROOT),)
+WORKSPACE_ROOT := .
+endif
+
+PLATFORM_STAMP := $(WORKSPACE_ROOT)/node_modules/.platform
 
 # ---------------------------------------------------------------------------
 # Preflight — verify tools, fix cross-platform node_modules
@@ -31,19 +40,21 @@ preflight: ## Check tools + fix stale node_modules
 		echo "ERROR: neither pnpm nor npm found."; \
 		exit 1; \
 	fi
-	@if [ -d node_modules ] && [ -f $(PLATFORM_STAMP) ] && [ "$$(cat $(PLATFORM_STAMP))" != "$(CURRENT_OS)" ]; then \
+	@NEEDS_INSTALL=false; \
+	if [ -f $(PLATFORM_STAMP) ] && [ "$$(cat $(PLATFORM_STAMP))" != "$(CURRENT_OS)" ]; then \
 		echo "node_modules installed on $$(cat $(PLATFORM_STAMP)), current platform is $(CURRENT_OS) — reinstalling..."; \
-		rm -rf node_modules; \
-		$(PM) install; \
-		echo "$(CURRENT_OS)" > $(PLATFORM_STAMP); \
-	elif [ -d node_modules ] && ! [ -f $(PLATFORM_STAMP) ]; then \
+		rm -rf $(WORKSPACE_ROOT)/node_modules node_modules; \
+		NEEDS_INSTALL=true; \
+	elif [ -d $(WORKSPACE_ROOT)/node_modules ] && ! [ -f $(PLATFORM_STAMP) ]; then \
 		echo "node_modules missing platform stamp — reinstalling to be safe..."; \
-		rm -rf node_modules; \
-		$(PM) install; \
-		echo "$(CURRENT_OS)" > $(PLATFORM_STAMP); \
-	elif ! [ -d node_modules ]; then \
+		rm -rf $(WORKSPACE_ROOT)/node_modules node_modules; \
+		NEEDS_INSTALL=true; \
+	elif ! [ -d node_modules ] && ! [ -d $(WORKSPACE_ROOT)/node_modules ]; then \
 		echo "node_modules missing — installing..."; \
-		$(PM) install; \
+		NEEDS_INSTALL=true; \
+	fi; \
+	if [ "$$NEEDS_INSTALL" = "true" ]; then \
+		cd $(WORKSPACE_ROOT) && $(PM) install; \
 		echo "$(CURRENT_OS)" > $(PLATFORM_STAMP); \
 	else \
 		echo "node=$$(node --version) pm=$(PM) platform=$(CURRENT_OS) ✓"; \

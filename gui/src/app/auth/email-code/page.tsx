@@ -33,7 +33,8 @@ export default function EmailCodePage() {
       if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        console.error('[email-code]', err);
+        setError('Something went wrong. Check the browser console for details.');
       }
     } finally {
       setIsSubmitting(false);
@@ -52,7 +53,8 @@ export default function EmailCodePage() {
       if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred. Please try again.');
+        console.error('[email-code]', err);
+        setError('Something went wrong. Check the browser console for details.');
       }
     } finally {
       setIsSubmitting(false);

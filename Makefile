@@ -146,9 +146,13 @@ _dev.urls:
 	@echo "========================================================================"
 	@echo ""
 
+# Source .env so the API and GUI inherit env vars when run natively (not in Docker).
+# The .env file uses docker-compose format (unquoted values, spaces allowed).
+# We parse it into valid shell exports with sed.
 .PHONY: _dev.run
 _dev.run:
-	@trap 'kill 0' INT TERM EXIT; \
+	@eval $$(sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z_0-9]*\)=\(.*\)/export \1='"'"'\2'"'"'/p' .env) && \
+		trap 'kill 0' INT TERM EXIT && \
 		$(MAKE) -C api dev.start & \
 		$(MAKE) -C gui dev.start & \
 		wait
