@@ -1,0 +1,149 @@
+package handlers
+
+import (
+	"log/slog"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/moduleforge/users-module/api/internal/server"
+	db "github.com/moduleforge/users-module/model/db"
+)
+
+// AuditHandler serves audit log endpoints.
+type AuditHandler struct {
+	q *db.Queries
+}
+
+// NewAuditHandler creates an AuditHandler.
+func NewAuditHandler(q *db.Queries) *AuditHandler {
+	return &AuditHandler{q: q}
+}
+
+// ByUser handles GET /v1/users/{uuid}/audit (admin).
+// Returns audit log entries where the user is the actor.
+func (h *AuditHandler) ByUser(w http.ResponseWriter, r *http.Request) {
+	rawUUID := chi.URLParam(r, "uuid")
+	parsed, err := uuid.Parse(rawUUID)
+	if err != nil {
+		server.Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		return
+	}
+
+	user, err := h.q.GetUserByUUID(r.Context(), parsed)
+	if err == pgx.ErrNoRows {
+		server.Error(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "audit.by_user: get user", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user")
+		return
+	}
+
+	limit, offset := auditPagination(r)
+
+	entries, err := h.q.ListAuditByActor(r.Context(), db.ListAuditByActorParams{
+		ActorUserID: user.ID,
+		Limit:       limit,
+		Offset:      offset,
+	})
+	if err != nil {
+		slog.ErrorContext(r.Context(), "audit.by_user: list", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to list audit log")
+		return
+	}
+
+	server.JSON(w, http.StatusOK, map[string]any{
+		"audit": auditResponses(entries),
+		"total": len(entries),
+	})
+}
+
+// ByEntity handles GET /v1/audit/{entity_uuid} (admin).
+// Returns audit log entries where the entity is the target.
+func (h *AuditHandler) ByEntity(w http.ResponseWriter, r *http.Request) {
+	rawUUID := chi.URLParam(r, "entity_uuid")
+	parsed, err := uuid.Parse(rawUUID)
+	if err != nil {
+		server.Error(w, http.StatusBadRequest, "bad_request", "invalid entity uuid")
+		return
+	}
+
+	entity, err := h.q.GetEntityByUUID(r.Context(), parsed)
+	if err == pgx.ErrNoRows {
+		server.Error(w, http.StatusNotFound, "not_found", "entity not found")
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "audit.by_entity: get entity", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load entity")
+		return
+	}
+
+	limit, offset := auditPagination(r)
+
+	entries, err := h.q.ListAuditByTarget(r.Context(), db.ListAuditByTargetParams{
+		TargetEntityID: pgtype.Int8{Int64: entity.ID, Valid: true},
+		Limit:          limit,
+		Offset:         offset,
+	})
+	if err != nil {
+		slog.ErrorContext(r.Context(), "audit.by_entity: list", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to list audit log")
+		return
+	}
+
+	server.JSON(w, http.StatusOK, map[string]any{
+		"audit": auditResponses(entries),
+		"total": len(entries),
+	})
+}
+
+func auditPagination(r *http.Request) (limit, offset int32) {
+	limit = 20
+	offset = 0
+	q := r.URL.Query()
+	if l := q.Get("limit"); l != "" {
+		if v, err := strconv.ParseInt(l, 10, 32); err == nil && v > 0 && v <= 200 {
+			limit = int32(v)
+		}
+	}
+	if o := q.Get("offset"); o != "" {
+		if v, err := strconv.ParseInt(o, 10, 32); err == nil && v >= 0 {
+			offset = int32(v)
+		}
+	}
+	return limit, offset
+}
+
+func auditResponses(entries []db.AuditLog) []map[string]any {
+	out := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		row := map[string]any{
+			"id":           e.ID,
+			"actor_user_id": e.ActorUserID,
+			"op":           e.Op,
+			"resource":     e.Resource,
+			"at":           e.At.Time,
+		}
+		if e.AssumedUserID.Valid {
+			row["assumed_user_id"] = e.AssumedUserID.Int64
+		}
+		if e.TargetEntityID.Valid {
+			row["target_entity_id"] = e.TargetEntityID.Int64
+		}
+		if e.Before != nil {
+			row["before"] = string(e.Before)
+		}
+		if e.After != nil {
+			row["after"] = string(e.After)
+		}
+		out = append(out, row)
+	}
+	return out
+}

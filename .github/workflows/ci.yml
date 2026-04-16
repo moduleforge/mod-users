@@ -1,0 +1,136 @@
+# CI pipeline for users-module monorepo.
+#
+# Triggers on pushes to main and pull requests. Runs lint, test, migration
+# validation, build, and container image build (no push).
+#
+# Security: This workflow does not interpolate any user-controlled inputs
+# (issue titles, PR bodies, commit messages, etc.) into run: commands.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.24"
+  NODE_VERSION: "22"
+  SQLC_VERSION: "1.28.0"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: gui
+
+      - name: Lint (all sub-projects)
+        run: make lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: gui
+
+      - name: Unit tests
+        run: make test.unit
+
+  migrate-check:
+    name: Validate migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Atlas
+        run: curl -sSf https://atlasgo.sh | sh
+
+      - name: Validate migration directory
+        run: atlas migrate validate --dir "file://model/migrations"
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install sqlc
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v${{ env.SQLC_VERSION }}
+
+      - name: Generate model code
+        run: make build.model
+
+      - name: Build API
+        run: make build.api
+
+      - name: Install GUI dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: gui
+
+      - name: Build GUI
+        run: make build.gui
+
+  image:
+    name: Container image (ko)
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install ko
+        run: go install github.com/google/ko@latest
+
+      - name: Build OCI image (local only, no push)
+        env:
+          KO_DOCKER_REPO: ko.local
+        run: ko build --local ./api/cmd/server

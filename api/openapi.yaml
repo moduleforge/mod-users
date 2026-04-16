@@ -1,0 +1,1020 @@
+openapi: "3.0.3"
+info:
+  title: Users Module API
+  description: |
+    REST API for the users-module. Manages user accounts, authentication,
+    authorization, application tenancy, and audit logging.
+  version: 0.1.0
+  contact:
+    email: zane@liquid-labs.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT obtained via any supported auth method (password, email-code,
+        Google OIDC, Microsoft OIDC). Pass as `Authorization: Bearer <token>`.
+
+  # -------------------------------------------------------------------------
+  # Reusable schemas
+  # -------------------------------------------------------------------------
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code.
+          example: bad_request
+        message:
+          type: string
+          description: Human-readable error description.
+          example: "invalid JSON body"
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, not_ready]
+        db:
+          type: string
+
+    UserSummary:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        is_admin:
+          type: boolean
+        entity:
+          $ref: "#/components/schemas/EntityInfo"
+
+    EntityInfo:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [natural_person, corporation, service_account]
+        display_name:
+          type: string
+        given_name:
+          type: string
+        family_name:
+          type: string
+        legal_name:
+          type: string
+        jurisdiction:
+          type: string
+        label:
+          type: string
+
+    UserDetail:
+      allOf:
+        - $ref: "#/components/schemas/UserSummary"
+        - type: object
+          properties:
+            default_app:
+              $ref: "#/components/schemas/AppSummary"
+
+    SelfUpdateRequest:
+      type: object
+      properties:
+        given_name:
+          type: string
+        family_name:
+          type: string
+        default_app_uuid:
+          type: string
+          format: uuid
+
+    # -- Auth schemas --
+
+    RegisterRequest:
+      type: object
+      required: [email, password, given_name, family_name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        given_name:
+          type: string
+        family_name:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthToken:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT access token.
+        expires_at:
+          type: string
+          format: date-time
+
+    EmailCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    EmailCodeVerify:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+
+    PasswordResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    PasswordResetConfirm:
+      type: object
+      required: [token, new_password]
+      properties:
+        token:
+          type: string
+        new_password:
+          type: string
+          minLength: 8
+
+    # -- Admin user management schemas --
+
+    AdminCreateUserRequest:
+      type: object
+      required: [email, given_name, family_name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        given_name:
+          type: string
+        family_name:
+          type: string
+        is_admin:
+          type: boolean
+          default: false
+
+    AdminUpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        given_name:
+          type: string
+        family_name:
+          type: string
+        is_admin:
+          type: boolean
+
+    GrantRevokeRequest:
+      type: object
+      required: [is_admin]
+      properties:
+        is_admin:
+          type: boolean
+
+    # -- App schemas --
+
+    AppSummary:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+
+    AppDetail:
+      allOf:
+        - $ref: "#/components/schemas/AppSummary"
+        - type: object
+          properties:
+            created_at:
+              type: string
+              format: date-time
+            archived_at:
+              type: string
+              format: date-time
+              nullable: true
+
+    AppCreateRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+
+    AppUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+
+    AppMemberRequest:
+      type: object
+      required: [user_uuid]
+      properties:
+        user_uuid:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+
+    AppMember:
+      type: object
+      properties:
+        user_uuid:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            type: string
+
+    # -- Audit schemas --
+
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        actor_uuid:
+          type: string
+          format: uuid
+        before:
+          type: object
+        after:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    # -- Pagination --
+
+    PaginatedUsers:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserSummary"
+        total:
+          type: integer
+
+    PaginatedAudit:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        total:
+          type: integer
+
+  # -------------------------------------------------------------------------
+  # Reusable parameters
+  # -------------------------------------------------------------------------
+  parameters:
+    UserUUID:
+      name: user_uuid
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AppUUID:
+      name: app_uuid
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid authentication token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Caller lacks permission.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  # -- Health --
+
+  /healthz:
+    get:
+      summary: Liveness probe
+      tags: [Health]
+      security: []
+      operationId: liveness
+      responses:
+        "200":
+          description: Service is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /readyz:
+    get:
+      summary: Readiness probe
+      tags: [Health]
+      security: []
+      operationId: readiness
+      responses:
+        "200":
+          description: Service is ready (DB reachable).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: Service is not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # -- Authentication (unauthenticated) --
+
+  /v1/auth/register:
+    post:
+      summary: Create a new user account (email + password)
+      tags: [Auth]
+      security: []
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Account created; JWT returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Email already in use.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/login:
+    post:
+      summary: Authenticate with email + password
+      tags: [Auth]
+      security: []
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authentication successful.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/email-code:
+    post:
+      summary: Request a one-time email login code
+      tags: [Auth]
+      security: []
+      operationId: requestEmailCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailCodeRequest"
+      responses:
+        "202":
+          description: Code sent (if account exists). Response is always 202 to prevent enumeration.
+
+  /v1/auth/email-code/verify:
+    post:
+      summary: Verify email code and obtain JWT
+      tags: [Auth]
+      security: []
+      operationId: verifyEmailCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailCodeVerify"
+      responses:
+        "200":
+          description: Code valid; JWT returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/password-reset:
+    post:
+      summary: Request a password-reset email
+      tags: [Auth]
+      security: []
+      operationId: requestPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "202":
+          description: Reset email sent (if account exists).
+
+  /v1/auth/password-reset/confirm:
+    post:
+      summary: Set new password using reset token
+      tags: [Auth]
+      security: []
+      operationId: confirmPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirm"
+      responses:
+        "200":
+          description: Password updated.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Token invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # -- Self --
+
+  /v1/self:
+    get:
+      summary: Get the authenticated user's profile
+      tags: [Self]
+      operationId: getSelf
+      responses:
+        "200":
+          description: Caller's profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      summary: Update the authenticated user's profile
+      tags: [Self]
+      operationId: updateSelf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelfUpdateRequest"
+      responses:
+        "200":
+          description: Updated profile returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # -- Admin: Users --
+
+  /v1/users:
+    get:
+      summary: Search / list users (admin)
+      tags: [Users]
+      operationId: listUsers
+      parameters:
+        - name: q
+          in: query
+          description: Search query (matches email, name).
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated user list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Create a user (admin)
+      tags: [Users]
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCreateUserRequest"
+      responses:
+        "201":
+          description: User created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Email already in use.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/users/{user_uuid}:
+    get:
+      summary: Get a user by UUID (admin)
+      tags: [Users]
+      operationId: getUser
+      parameters:
+        - $ref: "#/components/parameters/UserUUID"
+      responses:
+        "200":
+          description: User detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Update a user (admin)
+      tags: [Users]
+      operationId: updateUser
+      parameters:
+        - $ref: "#/components/parameters/UserUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateUserRequest"
+      responses:
+        "200":
+          description: Updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Archive a user (admin, soft-delete)
+      tags: [Users]
+      operationId: archiveUser
+      parameters:
+        - $ref: "#/components/parameters/UserUUID"
+      responses:
+        "204":
+          description: User archived.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/users/{user_uuid}/grant:
+    post:
+      summary: Grant or revoke admin privileges
+      tags: [Users]
+      operationId: grantRevoke
+      parameters:
+        - $ref: "#/components/parameters/UserUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrantRevokeRequest"
+      responses:
+        "200":
+          description: Privileges updated.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/users/{user_uuid}/assume:
+    post:
+      summary: Assume a user's identity (admin)
+      description: |
+        Returns a token scoped to the target user. The admin's original identity
+        is recorded in the token so actions are audited as "admin acting as user".
+      tags: [Users]
+      operationId: assumeUser
+      parameters:
+        - $ref: "#/components/parameters/UserUUID"
+      responses:
+        "200":
+          description: Assumed-identity token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/users/{user_uuid}/audit:
+    get:
+      summary: Audit log for changes performed by a user
+      tags: [Audit]
+      operationId: auditByActor
+      parameters:
+        - $ref: "#/components/parameters/UserUUID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated audit entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAudit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # -- Apps --
+
+  /v1/apps:
+    get:
+      summary: List applications (admin)
+      tags: [Apps]
+      operationId: listApps
+      responses:
+        "200":
+          description: List of applications.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Create an application (admin)
+      tags: [Apps]
+      operationId: createApp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppCreateRequest"
+      responses:
+        "201":
+          description: Application created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/apps/{app_uuid}:
+    get:
+      summary: Get application detail (admin)
+      tags: [Apps]
+      operationId: getApp
+      parameters:
+        - $ref: "#/components/parameters/AppUUID"
+      responses:
+        "200":
+          description: Application detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Update an application (admin)
+      tags: [Apps]
+      operationId: updateApp
+      parameters:
+        - $ref: "#/components/parameters/AppUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppUpdateRequest"
+      responses:
+        "200":
+          description: Updated application.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Archive an application (admin, soft-delete)
+      tags: [Apps]
+      operationId: archiveApp
+      parameters:
+        - $ref: "#/components/parameters/AppUUID"
+      responses:
+        "204":
+          description: Application archived.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/apps/{app_uuid}/members:
+    get:
+      summary: List application members
+      tags: [Apps]
+      operationId: listAppMembers
+      parameters:
+        - $ref: "#/components/parameters/AppUUID"
+      responses:
+        "200":
+          description: List of members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppMember"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      summary: Add a member to an application
+      tags: [Apps]
+      operationId: addAppMember
+      parameters:
+        - $ref: "#/components/parameters/AppUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppMemberRequest"
+      responses:
+        "201":
+          description: Member added.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/apps/{app_uuid}/members/{user_uuid}:
+    delete:
+      summary: Remove a member from an application
+      tags: [Apps]
+      operationId: removeAppMember
+      parameters:
+        - $ref: "#/components/parameters/AppUUID"
+        - $ref: "#/components/parameters/UserUUID"
+      responses:
+        "204":
+          description: Member removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -- Audit --
+
+  /v1/audit:
+    get:
+      summary: List recent audit log entries (admin)
+      tags: [Audit]
+      operationId: listAudit
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+          description: Filter by resource type (e.g. users, apps).
+      responses:
+        "200":
+          description: Paginated audit entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAudit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/audit/{resource_type}/{resource_uuid}:
+    get:
+      summary: Audit log for a specific object (admin)
+      tags: [Audit]
+      operationId: auditByTarget
+      parameters:
+        - name: resource_type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: resource_uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated audit entries for the resource.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAudit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"

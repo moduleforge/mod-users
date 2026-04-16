@@ -1,0 +1,25 @@
+# DRAFT — Kustomize base for users-api.
+#
+# This base provides a starting point for Kubernetes deployments. It is not
+# actively deployed and should be adapted for the target cluster.
+#
+# Recommended Postgres operator: CloudNativePG (https://cloudnative-pg.io).
+# CNPG manages PostgreSQL clusters as Kubernetes-native resources with
+# automatic failover, backups, and rolling updates. A CNPG Cluster manifest
+# is NOT included here to avoid coupling the app deployment to a specific
+# operator version — create it separately per environment.
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+
+commonLabels:
+  app: users-api
+
+images:
+  - name: users-api
+    newName: ko://github.com/moduleforge/users-module/api/cmd/server

@@ -55,6 +55,7 @@ type ServerConfig struct {
 	Addr            string
 	ShutdownTimeout time.Duration
 	CORSOrigins     string // comma-separated allowed origins
+	GUIBaseURL      string // base URL of the GUI for links in emails
 }
 
 // LocalAuthConfig holds settings for the local (non-OIDC) auth subsystem.
@@ -179,6 +180,7 @@ func Load() (*Config, error) {
 			Addr:            getEnv("SERVER_ADDR", ":8080"),
 			ShutdownTimeout: shutdownTimeout,
 			CORSOrigins:     os.Getenv("CORS_ORIGINS"),
+			GUIBaseURL:      getEnv("GUI_BASE_URL", "http://localhost:3000"),
 		},
 		LocalAuth: LocalAuthConfig{
 			JWTSecret:        os.Getenv("JWT_SECRET"),

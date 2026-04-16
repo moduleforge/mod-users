@@ -1,0 +1,17 @@
+# DRAFT — Non-secret environment variables for users-api.
+#
+# Secrets (DATABASE_URL, JWT_SECRET, OIDC_CLIENT_SECRET) belong in a
+# Kubernetes Secret, not here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: users-api-config
+data:
+  DEPLOY_MODE: cloud
+  SERVER_ADDR: ":8080"
+  LOG_LEVEL: info
+  OIDC_ISSUER_URL: https://auth.example.com
+  OIDC_CLIENT_ID: users-api
+  OIDC_CLAIM_STYLE: generic
+  OIDC_ADMIN_ROLE: admin
+  CORS_ORIGINS: ""

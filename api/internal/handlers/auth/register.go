@@ -1,0 +1,189 @@
+// Package auth provides HTTP handlers for local authentication flows.
+package auth
+
+import (
+	"context"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/moduleforge/users-module/api/internal/audit"
+	localauth "github.com/moduleforge/users-module/api/internal/auth"
+	"github.com/moduleforge/users-module/api/internal/server"
+	db "github.com/moduleforge/users-module/model/db"
+)
+
+// Sender is the email-sending interface expected by this package.
+// It matches email.Sender to avoid a concrete import dependency.
+type Sender interface {
+	Send(ctx context.Context, to, subject, textBody string) error
+}
+
+// Handler bundles dependencies for the local auth HTTP handlers.
+type Handler struct {
+	pool      *pgxpool.Pool
+	queries   *db.Queries
+	audit     audit.Writer
+	jwtSecret string
+	issuer    string
+	sender    Sender
+	guiBase   string
+}
+
+// New constructs a Handler.
+func New(pool *pgxpool.Pool, queries *db.Queries, aw audit.Writer, jwtSecret, issuer string, sender Sender, guiBase string) *Handler {
+	return &Handler{
+		pool:      pool,
+		queries:   queries,
+		audit:     aw,
+		jwtSecret: jwtSecret,
+		issuer:    issuer,
+		sender:    sender,
+		guiBase:   guiBase,
+	}
+}
+
+// registerRequest is the body for POST /v1/auth/register.
+type registerRequest struct {
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	GivenName  string `json:"given_name"`
+	FamilyName string `json:"family_name"`
+}
+
+// Register handles POST /v1/auth/register.
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	var req registerRequest
+	if err := server.Decode(r, &req); err != nil {
+		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+
+	if req.Email == "" {
+		server.Error(w, http.StatusBadRequest, "validation_error", "email is required")
+		return
+	}
+	if len(req.Password) < 12 {
+		server.Error(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
+		return
+	}
+	if strings.TrimSpace(req.GivenName) == "" {
+		server.Error(w, http.StatusBadRequest, "validation_error", "given_name is required")
+		return
+	}
+	if strings.TrimSpace(req.FamilyName) == "" {
+		server.Error(w, http.StatusBadRequest, "validation_error", "family_name is required")
+		return
+	}
+
+	hash, err := localauth.HashPassword(req.Password)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "register: hash password", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process password")
+		return
+	}
+
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "register: begin tx", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to begin transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	qtx := h.queries.WithTx(tx)
+
+	// Determine first-user bootstrap.
+	var userCount int64
+	if err := tx.QueryRow(r.Context(), "SELECT count(*) FROM users").Scan(&userCount); err != nil {
+		slog.ErrorContext(r.Context(), "register: count users", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to check user count")
+		return
+	}
+	isFirst := userCount == 0
+
+	entity, err := qtx.CreateEntity(r.Context(), "legal_entity")
+	if err != nil {
+		slog.ErrorContext(r.Context(), "register: create entity", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create entity")
+		return
+	}
+
+	displayName := req.GivenName + " " + req.FamilyName
+	le, err := qtx.CreateLegalEntity(r.Context(), db.CreateLegalEntityParams{
+		EntityID:    entity.ID,
+		Kind:        "natural_person",
+		DisplayName: displayName,
+	})
+	if err != nil {
+		slog.ErrorContext(r.Context(), "register: create legal entity", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create legal entity")
+		return
+	}
+
+	_, err = qtx.CreateNaturalPerson(r.Context(), db.CreateNaturalPersonParams{
+		LegalEntityID: le.ID,
+		GivenName:     pgtype.Text{String: req.GivenName, Valid: true},
+		FamilyName:    pgtype.Text{String: req.FamilyName, Valid: true},
+	})
+	if err != nil {
+		slog.ErrorContext(r.Context(), "register: create natural person", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create natural person")
+		return
+	}
+
+	user, err := qtx.CreateUser(r.Context(), db.CreateUserParams{
+		EntityID: entity.ID,
+		Email:    req.Email,
+		IsAdmin:  isFirst,
+	})
+	if err != nil {
+		// Check for unique violation on email.
+		var pgErr *pgconn.PgError
+		if isPgError(err, &pgErr) && pgErr.Code == "23505" {
+			server.Error(w, http.StatusConflict, "email_taken", "an account with that email already exists")
+			return
+		}
+		slog.ErrorContext(r.Context(), "register: create user", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create user")
+		return
+	}
+
+	if err := qtx.UpsertAuthLocal(r.Context(), db.UpsertAuthLocalParams{
+		UserID:       user.ID,
+		PasswordHash: hash,
+	}); err != nil {
+		slog.ErrorContext(r.Context(), "register: upsert auth_local", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to save credentials")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		slog.ErrorContext(r.Context(), "register: commit", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to commit transaction")
+		return
+	}
+
+	// Audit the creation using the new user as their own actor.
+	slog.InfoContext(r.Context(), "user registered", "user_uuid", user.Uuid.String(), "email", user.Email)
+
+	server.JSON(w, http.StatusCreated, map[string]any{
+		"uuid":  user.Uuid.String(),
+		"email": user.Email,
+	})
+}
+
+// isPgError tests whether err is a *pgconn.PgError and stores it in target.
+func isPgError(err error, target **pgconn.PgError) bool {
+	if pgErr, ok := err.(*pgconn.PgError); ok {
+		*target = pgErr
+		return true
+	}
+	return false
+}

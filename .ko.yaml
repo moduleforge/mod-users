@@ -1,0 +1,11 @@
+# ko build configuration for users-module.
+#
+# ko produces minimal OCI images from Go binaries using a distroless base.
+# See https://ko.build for documentation.
+
+defaultBaseImage: cgr.dev/chainguard/static:latest
+
+builds:
+  - id: users-api
+    dir: ./api
+    main: ./cmd/server

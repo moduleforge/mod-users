@@ -15,7 +15,9 @@ import (
 	"github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/config"
 	localdb "github.com/moduleforge/users-module/api/internal/db"
+	"github.com/moduleforge/users-module/api/internal/email"
 	"github.com/moduleforge/users-module/api/internal/handlers"
+	authhandlers "github.com/moduleforge/users-module/api/internal/handlers/auth"
 	"github.com/moduleforge/users-module/api/internal/observability"
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
@@ -74,6 +76,15 @@ func main() {
 	resolver := auth.NewUserResolver(pool, queries, cfg.OIDC.AdminRole)
 	auditWriter := audit.New(queries)
 
+	// Build email sender.
+	emailSender := email.NewSMTPSender(
+		cfg.SMTP.Host,
+		cfg.SMTP.Port,
+		cfg.SMTP.From,
+		cfg.SMTP.User,
+		cfg.SMTP.Pass,
+	)
+
 	// Build server + router.
 	srv, r := server.New(cfg)
 
@@ -81,15 +92,75 @@ func main() {
 	r.Get("/healthz", handlers.Live)
 	r.Get("/readyz", handlers.Ready(pool))
 
-	// Authenticated v1 routes.
+	// Local auth handlers (unauthenticated).
+	authHandler := authhandlers.New(
+		pool,
+		queries,
+		auditWriter,
+		cfg.LocalAuth.JWTSecret,
+		cfg.LocalAuth.LocalIssuer,
+		emailSender,
+		cfg.Server.GUIBaseURL,
+	)
+
+	r.Route("/v1/auth", func(r chi.Router) {
+		r.Post("/register", authHandler.Register)
+		r.Post("/login", authHandler.Login)
+		r.Post("/email-code/request", authHandler.EmailCodeRequest)
+		r.Post("/email-code/verify", authHandler.EmailCodeVerify)
+		r.Post("/password-reset/request", authHandler.PasswordResetRequest)
+		r.Post("/password-reset/confirm", authHandler.PasswordResetConfirm)
+	})
+
+	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, auditWriter)
+	usersHandler := handlers.NewUsersHandler(pool, queries, auditWriter)
+	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	auditHandler := handlers.NewAuditHandler(queries)
+	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth(verifier, claimMapper, resolver))
 
+			// Self endpoints (any authenticated user).
 			r.Get("/self", selfHandler.Get)
 			r.Put("/self", selfHandler.Put)
+
+			// Assume identity (admin).
+			r.Delete("/assume", assumeHandler.EndAssume)
+
+			// Admin-only routes.
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequireAdmin)
+
+				// User management.
+				r.Get("/users", usersHandler.List)
+				r.Post("/users", usersHandler.Create)
+				r.Get("/users/{uuid}", usersHandler.Get)
+				r.Put("/users/{uuid}", usersHandler.Update)
+				r.Delete("/users/{uuid}", usersHandler.Delete)
+				r.Post("/users/{uuid}/grant-admin", usersHandler.GrantAdmin)
+				r.Post("/users/{uuid}/revoke-admin", usersHandler.RevokeAdmin)
+				r.Post("/users/{uuid}/assume", assumeHandler.Assume)
+
+				// Audit log.
+				r.Get("/users/{uuid}/audit", auditHandler.ByUser)
+				r.Get("/audit/{entity_uuid}", auditHandler.ByEntity)
+
+				// Apps (multi-tenancy).
+				r.Post("/apps", appsHandler.Create)
+				r.Get("/apps", appsHandler.List)
+				r.Get("/apps/{uuid}", appsHandler.GetApp)
+				r.Put("/apps/{uuid}", appsHandler.UpdateApp)
+				r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
+
+				// Apps users.
+				r.Post("/apps/{uuid}/users", appsHandler.AssignUser)
+				r.Get("/apps/{uuid}/users", appsHandler.ListAppUsers)
+				r.Delete("/apps/{uuid}/users/{user_uuid}", appsHandler.RemoveUser)
+				r.Put("/apps/{uuid}/users/{user_uuid}/roles", appsHandler.UpdateUserRoles)
+			})
 		})
 	})
 

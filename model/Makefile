@@ -78,7 +78,7 @@ dev.stop: ## No runtime for model
 
 .PHONY: clean
 clean: ## Remove generated Go code (preserves migrations and queries)
-	rm -rf internal/db
+	rm -rf db
 
 .PHONY: help
 help: ## Show this help

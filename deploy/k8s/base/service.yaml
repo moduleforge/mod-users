@@ -1,0 +1,14 @@
+# DRAFT — Kubernetes Service (ClusterIP) for users-api.
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-api
+spec:
+  type: ClusterIP
+  selector:
+    app: users-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP

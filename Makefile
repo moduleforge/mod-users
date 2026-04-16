@@ -126,6 +126,29 @@ clean.api:   ; @$(MAKE) -C api   clean
 clean.gui:   ; @$(MAKE) -C gui   clean
 
 # ---------------------------------------------------------------------------
+# Container image
+# ---------------------------------------------------------------------------
+
+.PHONY: image.build
+image.build: ## Build OCI container image locally via ko
+	@command -v ko >/dev/null 2>&1 || { echo "ERROR: ko not found. Install: go install github.com/google/ko@latest"; exit 1; }
+	KO_DOCKER_REPO=ko.local ko build --local ./api/cmd/server
+
+# ---------------------------------------------------------------------------
+# OpenAPI
+# ---------------------------------------------------------------------------
+
+.PHONY: openapi.validate
+openapi.validate: ## Validate the OpenAPI spec (requires spectral or python3+pyyaml)
+	@if command -v spectral >/dev/null 2>&1; then \
+		spectral lint api/openapi.yaml; \
+	elif command -v python3 >/dev/null 2>&1; then \
+		python3 -c "import yaml, sys; yaml.safe_load(open('api/openapi.yaml')); print('api/openapi.yaml: YAML syntax OK')"; \
+	else \
+		echo "WARN: neither spectral nor python3 found — skipping validation"; \
+	fi
+
+# ---------------------------------------------------------------------------
 # Model-specific delegating targets
 # ---------------------------------------------------------------------------
 
