@@ -79,14 +79,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Build the OAuth orchestrator. NewOAuth fetches each configured
-	// provider's discovery document, so a typo in AUTH_PROVIDER_*_ISSUER_URL
-	// fails startup rather than serving a broken /start later.
+	// Build the OAuth orchestrator. Per-provider discovery failures are
+	// captured in ProviderState.Err and logged; the bad provider is simply
+	// omitted from EnabledProviders(). Only construction-level problems
+	// (missing JWT_SECRET, missing OAUTH_REDIRECT_BASE_URL) are still fatal
+	// because no amount of provider toggling can recover from them.
 	oauth, err := auth.NewOAuth(ctx, cfg)
 	if err != nil {
 		slog.ErrorContext(ctx, "oauth init failed", "error", err)
 		os.Exit(1)
 	}
+	slog.InfoContext(ctx, "oauth initialized",
+		"status", oauth.Status(),
+		"enabled_providers", len(oauth.EnabledProviders()),
+		"total_providers", len(oauth.AllProviders()),
+	)
 
 	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
 	auditWriter := audit.New(queries)
