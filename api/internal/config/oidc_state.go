@@ -102,11 +102,13 @@ type BootStateResult struct {
 //  2. If DB overrides are non-empty, filter candidates to those marked
 //     true. Otherwise every candidate is enabled by default.
 //  3. Count InitOK among the enabled set.
-//  4. Branch:
+//  4. Branch (strict, Phase 9.10a):
 //     - no candidates → ConfirmedOptOut iff DB opt_out OR envFlag;
 //     else NoEnvNoFlag.
-//     - any InitOK   → ConfirmedOK (partial failure is non-fatal).
-//     - else         → InitFailed.
+//     - all enabled InitOK → ConfirmedOK.
+//     - any enabled failed → InitFailed (strict; partial failure is
+//       fatal — operators must disable a broken provider explicitly
+//       via /confirm before the app will serve traffic).
 func DetermineBootState(providers []ProviderInitView, db DBConfigView, envNoOIDCAccounts bool) BootStateResult {
 	hasOverrides := len(db.ProviderOverrides) > 0
 
@@ -150,21 +152,27 @@ func DetermineBootState(providers []ProviderInitView, db DBConfigView, envNoOIDC
 		return BootStateResult{State: BootStateNoEnvNoFlag, Enabled: enabled}
 	}
 
-	// At least one env-configured provider exists. If the operator has
-	// disabled all of them via DB overrides, that's an explicit opt-out
-	// via the confirm UI — treat it the same as no-env-with-flag.
-	if len(enabled) == 0 && db.OptOut {
-		return BootStateResult{State: BootStateConfirmedOptOut, Enabled: enabled}
+	// At least one env-configured provider exists. If the operator
+	// disabled all of them via DB overrides AND set opt_out, treat it
+	// as an explicit opt-out via the confirm UI. If they disabled all
+	// without opt_out, that's a limbo state — force onboarding so
+	// they explicitly opt out or re-enable something.
+	if len(enabled) == 0 {
+		if db.OptOut {
+			return BootStateResult{State: BootStateConfirmedOptOut, Enabled: enabled}
+		}
+		return BootStateResult{State: BootStateInitFailed, Enabled: enabled}
 	}
 
-	// Any successful init means we can serve OIDC traffic even if other
-	// providers failed; partial-failure-is-non-fatal is Phase 9.8's spec.
-	if initOKCount > 0 {
-		return BootStateResult{State: BootStateConfirmedOK, Enabled: enabled}
+	// Phase 9.10a: strict confirmation. Every enabled provider must
+	// have initialized. Any failure forces InitFailed — partial
+	// success is not "confirmed." The admin must either fix the env
+	// for the broken provider OR disable it explicitly via
+	// /v1/oidc-config/confirm before the app will serve traffic.
+	if len(enabled)-initOKCount > 0 {
+		return BootStateResult{State: BootStateInitFailed, Enabled: enabled}
 	}
 
-	// Env said we should have providers, DB didn't opt us out, and not a
-	// single one initialized. This is the classic "bad config" path that
-	// triggers the setup-token banner.
-	return BootStateResult{State: BootStateInitFailed, Enabled: enabled}
+	// All enabled candidates initialized cleanly.
+	return BootStateResult{State: BootStateConfirmedOK, Enabled: enabled}
 }

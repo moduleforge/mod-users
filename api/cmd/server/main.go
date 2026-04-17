@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -95,6 +96,10 @@ func main() {
 		"total_providers", len(oauth.AllProviders()),
 	)
 
+	// Build the UserResolver up-front — both the onboarding
+	// AdminChecker and the post-auth /v1/* handlers need it.
+	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
+
 	// Build the onboarding handler + state cache. The handler owns the
 	// oidc_config row and the derived BootState; RequireOIDCConfirmed
 	// reads its CurrentState closure on every /v1/* request.
@@ -104,10 +109,23 @@ func main() {
 		EnvRegistry:  cfg.Providers,
 		EnvNoOIDCEnv: oauth.EnvNoOIDCAccounts(),
 		TokenDisplay: cfg.Onboarding.TokenDisplay,
-		// AdminChecker stays nil for phase 9.9a — the only writer is
-		// the setup-token-authenticated confirm path. Phase 9.9b will
-		// wire an admin-session checker so re-confirmation after
-		// initial setup doesn't require fetching a new token.
+		// AdminChecker lets an authenticated admin re-confirm without
+		// fetching a fresh setup token (Phase 9.10a). Returns
+		// (false, nil) on missing/invalid auth so /confirm falls
+		// through to the setup-token check; surfaces internal faults
+		// as errors so they become 500 instead of being masked.
+		AdminChecker: func(r *http.Request) (bool, error) {
+			uc, err := auth.AuthenticateRequest(r, verifier, localMapper, resolver)
+			if err != nil {
+				if errors.Is(err, auth.ErrNoAuthHeader) ||
+					errors.Is(err, auth.ErrInvalidToken) ||
+					errors.Is(err, auth.ErrUserGone) {
+					return false, nil
+				}
+				return false, err
+			}
+			return uc.IsAdmin, nil
+		},
 	})
 	if err := onboarding.RefreshState(ctx); err != nil {
 		slog.ErrorContext(ctx, "oidc_config: initial state load failed", "error", err)
@@ -165,7 +183,6 @@ func main() {
 		}
 	}
 
-	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
 	auditWriter := audit.New(queries)
 
 	// Build email sender.
