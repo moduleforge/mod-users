@@ -111,7 +111,6 @@ services:
       # Authelia is the default local provider; Google is enabled at runtime
       # only when AUTH_PROVIDER_GOOGLE_CLIENT_ID is set on the host (empty
       # string disables it; the provider registry skips it).
-      AUTH_PROVIDERS: authelia,google
       AUTH_PROVIDER_AUTHELIA_DISPLAY_NAME: Authelia (local)
       AUTH_PROVIDER_AUTHELIA_ISSUER_URL: https://authelia:9091
       AUTH_PROVIDER_AUTHELIA_CLIENT_ID: users-module
