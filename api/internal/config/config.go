@@ -22,6 +22,56 @@ const (
 	DeployModeK8s        DeployMode = "k8s"
 )
 
+// TokenDisplay controls how the OIDC onboarding setup token is
+// surfaced when the API boots into an unconfirmed state. Values are
+// parsed case-insensitively from the TOKEN_DISPLAY env var.
+type TokenDisplay string
+
+const (
+	// TokenDisplayBoth emits the setup token both to stderr as a
+	// human-scannable banner AND mounts the loopback-gated
+	// /v1/oidc-config/setup-token endpoint. Default behavior; the most
+	// discoverable option for a developer pulling the repo for the
+	// first time.
+	TokenDisplayBoth TokenDisplay = "both"
+
+	// TokenDisplayStderr emits the banner only. Preferred for
+	// deployments where the container logs are the canonical source of
+	// truth (k8s with log aggregators, docker with a rotating log
+	// driver). No /setup-token endpoint mounted.
+	TokenDisplayStderr TokenDisplay = "stderr"
+
+	// TokenDisplayLocalhost mounts the /setup-token endpoint only.
+	// Useful when stderr is noisy or the operator prefers to retrieve
+	// the token with `docker exec ... wget`.
+	TokenDisplayLocalhost TokenDisplay = "localhost"
+
+	// TokenDisplayNone is the production-strict escape hatch: reverts
+	// to Phase 9.1 fail-fast. An unconfirmed boot state causes
+	// main.go to log and exit non-zero, no onboarding endpoints are
+	// mounted, and no setup token is generated. Use this in prod to
+	// prevent silent entry into the recovery flow.
+	TokenDisplayNone TokenDisplay = "none"
+)
+
+// validTokenDisplays is the set of accepted TOKEN_DISPLAY values.
+var validTokenDisplays = map[TokenDisplay]bool{
+	TokenDisplayBoth:      true,
+	TokenDisplayStderr:    true,
+	TokenDisplayLocalhost: true,
+	TokenDisplayNone:      true,
+}
+
+// OnboardingConfig bundles the knobs that govern the phase 9.9a
+// onboarding flow. Kept as its own nested struct so a future addition
+// (e.g. token TTL) doesn't clutter the top-level Config.
+type OnboardingConfig struct {
+	// TokenDisplay chooses the surface for the one-shot setup token
+	// emitted on unconfirmed boots. See the TokenDisplay consts for
+	// semantics.
+	TokenDisplay TokenDisplay
+}
+
 // validDeployModes is the set of accepted DEPLOY_MODE values.
 var validDeployModes = map[DeployMode]bool{
 	DeployModeLocal:      true,
@@ -100,6 +150,7 @@ type Config struct {
 	LocalAuth  LocalAuthConfig
 	SMTP       SMTPConfig
 	OTel       OTelConfig
+	Onboarding OnboardingConfig
 	DeployMode DeployMode
 }
 
@@ -179,6 +230,15 @@ func Load() (*Config, error) {
 		registry = ProviderRegistry{}
 	}
 
+	tokenDisplay := TokenDisplay(strings.ToLower(strings.TrimSpace(getEnv("TOKEN_DISPLAY", string(TokenDisplayBoth)))))
+	if !validTokenDisplays[tokenDisplay] {
+		parseErrors = append(parseErrors,
+			fmt.Sprintf("TOKEN_DISPLAY: invalid value %q (must be both, stderr, localhost, or none)", string(tokenDisplay)))
+		// Fall back to the safe "both" default so the rest of Load can
+		// proceed and the operator sees the full list of problems.
+		tokenDisplay = TokenDisplayBoth
+	}
+
 	cfg := &Config{
 		DeployMode: mode,
 		DB: DBConfig{
@@ -215,6 +275,9 @@ func Load() (*Config, error) {
 		OTel: OTelConfig{
 			ExporterEndpoint: os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 			ServiceName:      getEnv("OTEL_SERVICE_NAME", "users-api"),
+		},
+		Onboarding: OnboardingConfig{
+			TokenDisplay: tokenDisplay,
 		},
 	}
 

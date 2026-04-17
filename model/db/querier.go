@@ -8,10 +8,15 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	ArchiveApp(ctx context.Context, id int64) error
+	ClearSetupTokenHash(ctx context.Context) error
+	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
+	SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error
+	UpdateOIDCConfig(ctx context.Context, arg UpdateOIDCConfigParams) error
 	ArchiveEntity(ctx context.Context, argUuid uuid.UUID) error
 	AssignUserToApp(ctx context.Context, arg AssignUserToAppParams) error
 	ConsumeEmailCode(ctx context.Context, id int64) error
