@@ -93,6 +93,15 @@ type NaturalPerson struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
+type OidcConfig struct {
+	ID                  int32              `json:"id"`
+	ProviderEnabled     []byte             `json:"provider_enabled"`
+	OptOut              bool               `json:"opt_out"`
+	SetupTokenHash      pgtype.Text        `json:"setup_token_hash"`
+	SetupTokenCreatedAt *time.Time         `json:"setup_token_created_at"`
+	SavedAt             pgtype.Timestamptz `json:"saved_at"`
+}
+
 type PasswordReset struct {
 	ID         int64              `json:"id"`
 	UserID     int64              `json:"user_id"`

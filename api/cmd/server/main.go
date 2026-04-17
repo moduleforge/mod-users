@@ -95,6 +95,76 @@ func main() {
 		"total_providers", len(oauth.AllProviders()),
 	)
 
+	// Build the onboarding handler + state cache. The handler owns the
+	// oidc_config row and the derived BootState; RequireOIDCConfirmed
+	// reads its CurrentState closure on every /v1/* request.
+	onboarding := handlers.NewOIDCConfigHandler(handlers.OIDCConfigDeps{
+		Queries:      queries,
+		OAuth:        oauth,
+		EnvRegistry:  cfg.Providers,
+		EnvNoOIDCEnv: oauth.EnvNoOIDCAccounts(),
+		TokenDisplay: cfg.Onboarding.TokenDisplay,
+		// AdminChecker stays nil for phase 9.9a — the only writer is
+		// the setup-token-authenticated confirm path. Phase 9.9b will
+		// wire an admin-session checker so re-confirmation after
+		// initial setup doesn't require fetching a new token.
+	})
+	if err := onboarding.RefreshState(ctx); err != nil {
+		slog.ErrorContext(ctx, "oidc_config: initial state load failed", "error", err)
+		os.Exit(1)
+	}
+	// Replay DB overrides on top of the env-built registry so a prior
+	// "microsoft off" confirmation sticks across restarts.
+	if err := onboarding.ApplyDBOverridesToOAuth(ctx); err != nil {
+		slog.ErrorContext(ctx, "oidc_config: apply DB overrides failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Setup-token + state-display lifecycle. TOKEN_DISPLAY=none is the
+	// production-strict escape hatch — revert to Phase 9.1's fail-fast
+	// if state is unconfirmed; onboarding endpoints are NOT mounted
+	// regardless of whether this exits.
+	if cfg.Onboarding.TokenDisplay == config.TokenDisplayNone {
+		if !onboarding.CurrentState().Confirmed() {
+			slog.ErrorContext(ctx, "TOKEN_DISPLAY=none and OIDC state is unconfirmed — exiting per fail-fast policy",
+				"state", string(onboarding.CurrentState()),
+			)
+			for _, s := range oauth.AllProviders() {
+				if !s.InitOK {
+					slog.ErrorContext(ctx, "provider init failed",
+						"provider", s.ID,
+						"error", s.Err,
+					)
+				}
+			}
+			os.Exit(1)
+		}
+	} else {
+		// Ensure the setup token is active iff the state calls for
+		// it. EnsureSetupToken returns a non-empty plaintext in two
+		// cases: first-boot (no prior hash) and restart-with-unconfirmed
+		// (prior hash present but the plaintext was unrecoverable, so
+		// the token is rotated to give ops a fresh recoverable value).
+		// Both cases should trigger a fresh banner.
+		plain, err := onboarding.EnsureSetupToken(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "oidc_config: ensure setup token", "error", err)
+			os.Exit(1)
+		}
+		if plain != "" {
+			if cfg.Onboarding.TokenDisplay == config.TokenDisplayStderr ||
+				cfg.Onboarding.TokenDisplay == config.TokenDisplayBoth {
+				auth.PrintSetupTokenBanner(plain, cfg.Server.GUIBaseURL+"/oidc-config")
+			}
+			if cfg.Onboarding.TokenDisplay == config.TokenDisplayLocalhost {
+				// Structured log only; the banner is stderr-exclusive.
+				slog.ErrorContext(ctx, "oidc onboarding required: setup token ready (use /v1/oidc-config/setup-token from loopback)",
+					"setup_token_required", true,
+				)
+			}
+		}
+	}
+
 	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
 	auditWriter := audit.New(queries)
 
@@ -127,7 +197,38 @@ func main() {
 
 	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
 
+	// Handlers for authenticated routes.
+	selfHandler := handlers.NewSelfHandler(queries, auditWriter)
+	usersHandler := handlers.NewUsersHandler(pool, queries, auditWriter)
+	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	auditHandler := handlers.NewAuditHandler(queries)
+	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
+
+	// Onboarding endpoints. Mounted only when TOKEN_DISPLAY != none.
+	// They must be reachable even when state is unconfirmed (the whole
+	// point), so they sit OUTSIDE the RequireOIDCConfirmed gate.
+	if cfg.Onboarding.TokenDisplay != config.TokenDisplayNone {
+		r.Route("/v1/oidc-config", func(r chi.Router) {
+			r.Get("/status", onboarding.Status)
+			r.Post("/confirm", onboarding.Confirm)
+			r.Get("/saved", onboarding.Saved)
+			if cfg.Onboarding.TokenDisplay == config.TokenDisplayLocalhost ||
+				cfg.Onboarding.TokenDisplay == config.TokenDisplayBoth {
+				r.Get("/setup-token", onboarding.SetupToken)
+			}
+		})
+	}
+
+	// Everything else on /v1 — including local + OIDC auth — is gated
+	// by RequireOIDCConfirmed. When TOKEN_DISPLAY=none the middleware
+	// is effectively a no-op (we already exited on unconfirmed state),
+	// but attaching it unconditionally keeps behavior consistent and
+	// cheap (a CurrentState() read is a single atomic pointer load).
+	requireConfirmed := auth.RequireOIDCConfirmed(onboarding.CurrentState)
+
 	r.Route("/v1/auth", func(r chi.Router) {
+		r.Use(requireConfirmed)
+
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
 		r.Post("/email-code/request", authHandler.EmailCodeRequest)
@@ -141,14 +242,8 @@ func main() {
 		r.Get("/oidc/{provider}/callback", oidcHandler.Callback)
 	})
 
-	// Handlers for authenticated routes.
-	selfHandler := handlers.NewSelfHandler(queries, auditWriter)
-	usersHandler := handlers.NewUsersHandler(pool, queries, auditWriter)
-	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
-	auditHandler := handlers.NewAuditHandler(queries)
-	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
-
 	r.Route("/v1", func(r chi.Router) {
+		r.Use(requireConfirmed)
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth(verifier, localMapper, resolver))
 

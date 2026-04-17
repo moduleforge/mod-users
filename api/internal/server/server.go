@@ -16,6 +16,14 @@ func New(cfg *config.Config) (*http.Server, *chi.Mux) {
 	r := chi.NewRouter()
 
 	// Base middleware stack (order matters).
+	//
+	// DO NOT insert chi/middleware.RealIP or any other X-Forwarded-For
+	// rewriter in this base stack. The /v1/oidc-config/setup-token
+	// endpoint relies on r.RemoteAddr being the peer's real address for
+	// loopback-only access control; an XFF-aware middleware upstream of
+	// that handler would let any external client spoof loopback by
+	// setting a header. If per-route XFF trust is ever needed, scope it
+	// to the specific route group that requires it — never the base.
 	r.Use(RequestID)
 	r.Use(Recoverer)
 	r.Use(AccessLog)

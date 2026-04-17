@@ -1,4 +1,4 @@
-h1:xhZ8qx2S/m36UBM9X3Zlem5s4etX0b49fbbHbyVhFvg=
+h1:mNfk7m66rJBT95WnqD/nV4UTMoefs5sHb+wuQ6hwwO4=
 0000_helpers.sql h1:RTVFFvDB3K/b1se3eWLRMG0IpapWoyU1zu+x/DXg2Sg=
 0001_entities.sql h1:3TOTwytM+a/+Ge1FilGaM2YzbacSiAw+v5QIv6cT/5U=
 0002_legal_entities.sql h1:5OT6mHiELQpIGGotcCWmwwGS+2fGxRVIzcE93BeluPw=
@@ -12,3 +12,4 @@ h1:xhZ8qx2S/m36UBM9X3Zlem5s4etX0b49fbbHbyVhFvg=
 0010_apps.sql h1:ZbUuhmFtxVY/8dEv0QsXRWnUyoEgjTTwX1xyWV5alJc=
 0011_apps_users.sql h1:R0cFgT+1/aRBTk0vDa92ZkL3EljfDGrUmt+2RrDiZNg=
 0012_audit_log.sql h1:m2VBVeg9op4BnRqFLSoSuDuvSi5a2fVdo3GuIuyWaQU=
+0013_oidc_config.sql h1:kwON3qHnX5s8CwkrQzXg8zJSEkqVDUqET/k2gHY0Pvg=

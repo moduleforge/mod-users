@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -104,10 +105,20 @@ const (
 // use EnabledProviders(); the onboarding flow (phase 9.9a) uses
 // AllProviders() to render the full toggle list.
 type OAuth struct {
+	// mu guards States (the only mutable field). Rebuild takes the write
+	// lock; every read path (EnabledProviders, AllProviders, Status,
+	// stateByID, ProviderAvailable) takes the read lock. The remaining
+	// fields are set once at construction and never mutated.
+	mu                sync.RWMutex
 	States            map[string]*ProviderState
 	StateSigner       *StateSigner
 	RedirectBase      string
 	FrontendReturnURL string
+
+	// cfg is the parent config retained so Rebuild can pass admin role /
+	// redirect base / frontend return URL into initProvider without the
+	// caller having to re-plumb them. It's read-only after construction.
+	cfg *config.Config
 
 	// envNoOIDCAccounts captures the NO_OIDC_ACCOUNTS env value at
 	// construction time so Status() returns a stable answer without
@@ -177,6 +188,7 @@ func NewOAuth(ctx context.Context, cfg *config.Config) (*OAuth, error) {
 		StateSigner:       signer,
 		RedirectBase:      cfg.Auth.OAuthRedirectBaseURL,
 		FrontendReturnURL: cfg.Auth.FrontendReturnURL,
+		cfg:               cfg,
 		envNoOIDCAccounts: envOptOut,
 	}, nil
 }
@@ -229,6 +241,8 @@ func initProvider(ctx context.Context, id string, p config.Provider, cfg *config
 // that want the full set including failures — e.g. the onboarding endpoint —
 // should use AllProviders instead.
 func (o *OAuth) EnabledProviders() []*ProviderState {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	out := make([]*ProviderState, 0, len(o.States))
 	for _, s := range o.States {
 		if s.InitOK {
@@ -243,6 +257,8 @@ func (o *OAuth) EnabledProviders() []*ProviderState {
 // sorted by ID. Intended for the onboarding / status endpoint where the
 // operator needs to see which providers failed and why.
 func (o *OAuth) AllProviders() []*ProviderState {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	out := make([]*ProviderState, 0, len(o.States))
 	for _, s := range o.States {
 		out = append(out, s)
@@ -256,6 +272,8 @@ func (o *OAuth) AllProviders() []*ProviderState {
 // state on top of this to produce the full confirmed/unconfirmed flag that
 // gates the onboarding redirect.
 func (o *OAuth) Status() OverallStatus {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	if len(o.States) == 0 {
 		if o.envNoOIDCAccounts {
 			return StatusEmptyNoConsent
@@ -270,22 +288,64 @@ func (o *OAuth) Status() OverallStatus {
 	return StatusInitFailed
 }
 
-// TODO(phase-9.9a): Rebuild re-runs per-provider init against a new filtered
-// registry (produced from the /v1/oidc-config/confirm handler by applying
-// DB-persisted provider_enabled toggles on top of the env registry). Intended
-// signature:
+// Rebuild re-runs per-provider init against a new filtered registry
+// (produced from the /v1/oidc-config/confirm handler by applying
+// DB-persisted provider_enabled toggles on top of the env registry).
+// It is goroutine-safe: the write lock is held only long enough to swap
+// the new States map in; the per-provider init (which may block on
+// network discovery) runs outside the lock to avoid stalling concurrent
+// reads.
 //
-//	func (o *OAuth) Rebuild(ctx context.Context, newRegistry config.ProviderRegistry) error
-//
-// Must be goroutine-safe — handlers call it while request traffic may be
-// hitting AuthorizeURL / Exchange. An RWMutex around States (write-locked for
-// Rebuild, read-locked for stateByID) is the obvious fit.
+// Errors returned here are limited to construction-level failures that
+// no per-provider retry can fix; individual provider init failures are
+// captured on the new ProviderState entries (InitOK=false, Err set) and
+// do not propagate out of Rebuild — the caller inspects Status() to see
+// the new verdict.
+func (o *OAuth) Rebuild(ctx context.Context, newRegistry config.ProviderRegistry) error {
+	if o.cfg == nil {
+		return errors.New("oauth: rebuild requires a cfg (OAuth built with legacy initializer)")
+	}
+
+	// Build the new state map outside the lock. initProvider is the same
+	// helper NewOAuth uses, so retry logic, error wrapping, and
+	// MultiTenantIssuer handling stay in a single place.
+	newStates := make(map[string]*ProviderState, len(newRegistry))
+	for id, p := range newRegistry {
+		s := initProvider(ctx, id, p, o.cfg)
+		newStates[id] = s
+		if !s.InitOK {
+			slog.WarnContext(ctx, "oauth rebuild: provider init failed",
+				"provider", id,
+				"error", s.Err,
+			)
+		}
+	}
+
+	// Swap atomically. Old ProviderState values are referenced only
+	// through transient stateByID results already held by in-flight
+	// requests; after the swap no new reads can see them, and the Go
+	// garbage collector reclaims them once those requests finish.
+	o.mu.Lock()
+	o.States = newStates
+	o.mu.Unlock()
+	return nil
+}
+
+// EnvNoOIDCAccounts reports the NO_OIDC_ACCOUNTS env value captured at
+// construction time. Exposed so DetermineBootState callers in main.go
+// don't have to re-parse the env; a stable snapshot is also what Status()
+// uses internally so this is the same bit.
+func (o *OAuth) EnvNoOIDCAccounts() bool {
+	return o.envNoOIDCAccounts
+}
 
 // ProviderAvailable reports whether the given provider ID is present in the
 // registry AND successfully initialized. Handlers use this for cheap
 // existence checks before committing to a full Exchange; a false return is
 // the wire equivalent of "404 not found" regardless of which reason applies.
 func (o *OAuth) ProviderAvailable(id string) bool {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	s, ok := o.States[id]
 	return ok && s.InitOK
 }
@@ -297,6 +357,8 @@ func (o *OAuth) ProviderAvailable(id string) bool {
 // Handlers use these sentinels to distinguish "404 not found" from "this
 // particular provider is down right now".
 func (o *OAuth) stateByID(id string) (*ProviderState, error) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	s, ok := o.States[id]
 	if !ok {
 		return nil, ErrUnknownProvider
