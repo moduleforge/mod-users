@@ -112,8 +112,8 @@ func (h *OIDCConfigHandler) ApplyDBOverridesToOAuth(ctx context.Context) error {
 	rawOverrides := h.cachedDB.ProviderEnabled
 	h.mu.RUnlock()
 
-	overrides, err := parseProviderOverrides(rawOverrides)
-	if err != nil || len(overrides) == 0 {
+	overrides := h.overridesOrEmpty(ctx, rawOverrides)
+	if len(overrides) == 0 {
 		// Malformed / missing overrides: leave OAuth alone. The plan
 		// treats empty overrides as "no DB opinion" → use full env.
 		return nil
@@ -171,7 +171,7 @@ func (h *OIDCConfigHandler) Status(w http.ResponseWriter, r *http.Request) {
 	row := h.cachedDB
 	h.mu.RUnlock()
 
-	overrides, _ := parseProviderOverrides(row.ProviderEnabled)
+	overrides := h.overridesOrEmpty(r.Context(), row.ProviderEnabled)
 	providers := h.buildStatusProviders(overrides)
 
 	resp := statusResponse{
@@ -372,7 +372,7 @@ func (h *OIDCConfigHandler) Saved(w http.ResponseWriter, r *http.Request) {
 	row := h.cachedDB
 	h.mu.RUnlock()
 
-	overrides, _ := parseProviderOverrides(row.ProviderEnabled)
+	overrides := h.overridesOrEmpty(r.Context(), row.ProviderEnabled)
 	resp := savedResponse{
 		EnabledProviders: overrides,
 		OptOut:           row.OptOut,
@@ -386,18 +386,29 @@ func (h *OIDCConfigHandler) Saved(w http.ResponseWriter, r *http.Request) {
 
 // ----- Setup token lifecycle helpers -----------------------------
 
-// EnsureSetupToken generates and persists a fresh setup token if the
-// current state is unconfirmed and none is already active. It is
-// idempotent — on subsequent boots with the same unconfirmed state the
-// stored hash is left intact and the method reports the existing
-// plaintext as unknown (caller must regenerate if it needs to display
-// the banner again, but per spec the banner repeats only on first
-// generation). Returns the plaintext when a new token was generated;
-// empty string otherwise.
+// EnsureSetupToken maintains the invariant "at most one live setup
+// token exists per unconfirmed state." It has three branches when the
+// state is unconfirmed:
+//
+//  1. DB hash missing — first-boot path: generate a new token, persist
+//     its hash, stash the plaintext in memory, return the plaintext so
+//     the caller can emit the banner.
+//  2. DB hash present but no in-memory plaintext — restart path: the
+//     prior process died before (or just after) emitting its banner and
+//     the plaintext was unrecoverable anyway. Rotate the token so the
+//     operator has a recoverable value; the one-time-use property is
+//     unchanged because the old plaintext was already lost.
+//  3. DB hash present and in-memory plaintext already held — same
+//     process called EnsureSetupToken twice. Return "" so the banner is
+//     not re-emitted for a no-op.
+//
+// When the state is confirmed the method idempotently ensures the DB
+// hash is cleared and returns "".
 func (h *OIDCConfigHandler) EnsureSetupToken(ctx context.Context) (string, error) {
 	h.mu.RLock()
 	state := h.cachedBoot.State
 	hash := h.cachedDB.SetupTokenHash
+	plainInMem := h.currentPlain
 	h.mu.RUnlock()
 
 	if state.Confirmed() {
@@ -413,11 +424,23 @@ func (h *OIDCConfigHandler) EnsureSetupToken(ctx context.Context) (string, error
 		return "", nil
 	}
 
-	if hash.Valid {
-		// Token already exists from a prior boot — plan dictates reuse
-		// without rotation so the operator doesn't end up chasing a
-		// moving target.
+	// Unconfirmed & DB hash present & in-memory plaintext already held:
+	// same-process repeat call. Nothing to do, don't re-emit the banner.
+	if hash.Valid && plainInMem != "" {
 		return "", nil
+	}
+
+	// Either the DB has no hash (first-boot path) or the DB has a hash
+	// but we have no plaintext (restart path). Both paths mint a fresh
+	// token; the restart path additionally overwrites the stored hash.
+	// Before overwriting we clear the existing hash so SetSetupTokenHash
+	// replaces rather than races with a stale value — SetSetupTokenHash
+	// is an UPDATE so this is belt-and-braces, but the explicit clear
+	// also drops the old SetupTokenCreatedAt in the fake-querier tests.
+	if hash.Valid {
+		if err := h.deps.Queries.ClearSetupTokenHash(ctx); err != nil {
+			return "", err
+		}
 	}
 
 	plain, digest, err := auth.GenerateSetupToken()
@@ -467,6 +490,33 @@ func parseProviderOverrides(raw []byte) (map[string]bool, error) {
 		out = map[string]bool{}
 	}
 	return out, nil
+}
+
+// overridesOrEmpty is the non-fatal wrapper around parseProviderOverrides
+// used by request handlers. A parse failure is logged at Warn level with
+// a truncated preview of the raw value so operators can diagnose a
+// corrupt provider_enabled JSONB payload without chasing silent empty
+// maps, and the empty-map fallback keeps the request path working.
+func (h *OIDCConfigHandler) overridesOrEmpty(ctx context.Context, raw []byte) map[string]bool {
+	overrides, err := parseProviderOverrides(raw)
+	if err != nil {
+		slog.WarnContext(ctx, "oidc config: failed to parse provider_enabled JSONB; falling back to empty overrides",
+			"provider_overrides_parse_failed", true,
+			"error", err,
+			"raw_preview", rawPreview(raw, 128),
+		)
+	}
+	return overrides
+}
+
+// rawPreview returns up to maxLen bytes of raw as a string suitable for
+// structured logging; longer payloads are truncated with a trailing
+// ellipsis so a pathological JSONB blob doesn't flood the log.
+func rawPreview(raw []byte, maxLen int) string {
+	if len(raw) <= maxLen {
+		return string(raw)
+	}
+	return string(raw[:maxLen]) + "..."
 }
 
 // buildProviderViews turns the env-registry + OAuth init state into
@@ -562,15 +612,22 @@ func buildOverrides(registry config.ProviderRegistry, enabled []string) map[stri
 	return out
 }
 
-// filterRegistry returns a new ProviderRegistry containing only the
-// entries marked true in overrides. Unknown IDs are dropped. The
-// original registry is not mutated.
+// filterRegistry returns a new ProviderRegistry containing the
+// entries that should be active per DB overrides.
+//
+// INVARIANT: absent = enabled by default; only an explicit `false`
+// override disables a provider. This matches DetermineBootState so a
+// partial overrides map (e.g. only google mentioned) does not silently
+// drop microsoft. The original registry is not mutated.
 func filterRegistry(registry config.ProviderRegistry, overrides map[string]bool) config.ProviderRegistry {
 	out := make(config.ProviderRegistry, len(registry))
 	for id, p := range registry {
-		if overrides[id] {
-			out[id] = p
+		if v, ok := overrides[id]; ok && !v {
+			// Explicit false → disabled.
+			continue
 		}
+		// Either no override for this id (default on) or override is true.
+		out[id] = p
 	}
 	return out
 }

@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -879,6 +880,136 @@ func runMultiTenantExchange(t *testing.T, h *fakeMultiTenantHarness) (Principal,
 	h.setNonce(parsed.Query().Get("nonce"))
 
 	return oauth.Exchange(context.Background(), "microsoft", h.expectedCode, stateToken, stateToken)
+}
+
+// TestOAuth_Rebuild verifies the concurrent-safety and semantic
+// correctness of OAuth.Rebuild. Two providers are configured and
+// initialize successfully; concurrent readers call ProviderAvailable,
+// EnabledProviders, and Status while Rebuild swaps in a registry with
+// only one of the two providers. Post-rebuild the enabled set must
+// exactly match the new registry.
+//
+// This exercise focuses on the semantics — the locking is also safe
+// under -race, but CI's default Go tests run without -race (no C
+// toolchain guaranteed), so we don't depend on it.
+func TestOAuth_Rebuild(t *testing.T) {
+	// Stand up a shared fake OIDC provider. Both "google" and
+	// "microsoft" point at the same server; only the provider IDs and
+	// client IDs differ. This keeps the test self-contained without
+	// spinning up two httptest servers.
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w,
+			`{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q,"response_types_supported":["code"],"subject_types_supported":["public"],"id_token_signing_alg_values_supported":["RS256"]}`,
+			srv.URL, srv.URL+"/authorize", srv.URL+"/token", srv.URL+"/jwks")
+	})
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"keys":[]}`))
+	})
+
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			AdminRole:            "admin",
+			FrontendReturnURL:    "http://gui.test/return",
+			OAuthRedirectBaseURL: "http://api.test",
+		},
+		LocalAuth: config.LocalAuthConfig{JWTSecret: "test-secret"},
+		Providers: config.ProviderRegistry{
+			"google": config.Provider{
+				ID:           "google",
+				DisplayName:  "Google",
+				IssuerURL:    srv.URL,
+				ClientID:     "google-client",
+				ClientSecret: "google-secret",
+				ClaimStyle:   "google",
+				Scopes:       []string{"openid", "email", "profile"},
+			},
+			"microsoft": config.Provider{
+				ID:           "microsoft",
+				DisplayName:  "Microsoft",
+				IssuerURL:    srv.URL,
+				ClientID:     "ms-client",
+				ClientSecret: "ms-secret",
+				ClaimStyle:   "microsoft",
+				Scopes:       []string{"openid", "email", "profile"},
+			},
+		},
+	}
+
+	oauth, err := NewOAuth(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("NewOAuth: %v", err)
+	}
+	initial := enabledIDs(oauth)
+	if len(initial) != 2 {
+		t.Fatalf("initial EnabledProviders len = %d, want 2 (ids=%v)", len(initial), initial)
+	}
+
+	// Concurrent readers. They don't assert anything by themselves;
+	// under -race a mutation during a read would be flagged. Without
+	// -race this at least exercises the lock paths for smoke coverage.
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				_ = oauth.ProviderAvailable("google")
+				_ = oauth.ProviderAvailable("microsoft")
+				_ = oauth.EnabledProviders()
+				_ = oauth.AllProviders()
+				_ = oauth.Status()
+			}
+		}()
+	}
+
+	// Let readers spin for a moment, then rebuild mid-flight.
+	time.Sleep(25 * time.Millisecond)
+	newRegistry := config.ProviderRegistry{
+		"google": cfg.Providers["google"],
+	}
+	if err := oauth.Rebuild(context.Background(), newRegistry); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	// Give readers a little more time post-rebuild to catch any
+	// transient inconsistency.
+	time.Sleep(25 * time.Millisecond)
+
+	close(stop)
+	wg.Wait()
+
+	final := enabledIDs(oauth)
+	if len(final) != 1 || final[0] != "google" {
+		t.Errorf("post-rebuild EnabledProviders = %v, want [google]", final)
+	}
+	if oauth.ProviderAvailable("microsoft") {
+		t.Errorf("microsoft should be unavailable after rebuild")
+	}
+	if !oauth.ProviderAvailable("google") {
+		t.Errorf("google should still be available after rebuild")
+	}
+}
+
+// enabledIDs returns the sorted IDs from EnabledProviders for use in
+// Rebuild assertions.
+func enabledIDs(o *OAuth) []string {
+	states := o.EnabledProviders()
+	out := make([]string, 0, len(states))
+	for _, s := range states {
+		out = append(out, s.ID)
+	}
+	return out
 }
 
 // TestOAuth_MultiTenant_HappyPath verifies that a multi-tenant Microsoft

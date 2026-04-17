@@ -149,6 +149,88 @@ func TestEnsureSetupToken_GeneratesAndReuses(t *testing.T) {
 	}
 }
 
+// TestEnsureSetupToken_RotatesOnRestart pins the restart-recovery
+// invariant: if an operator missed the first-boot banner, a process
+// restart (simulated by zero'ing the in-memory plaintext while the DB
+// hash persists) must rotate the token so a fresh value is emittable.
+// The prior plaintext was unrecoverable by construction, so rotation
+// does not weaken one-time-use semantics.
+func TestEnsureSetupToken_RotatesOnRestart(t *testing.T) {
+	h, fq := newHandler(t, db.OidcConfig{ID: 1})
+
+	first, err := h.EnsureSetupToken(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureSetupToken: %v", err)
+	}
+	if first == "" {
+		t.Fatalf("expected plaintext on first call, got empty")
+	}
+	firstHash := fq.row.SetupTokenHash.String
+	if firstHash == "" {
+		t.Fatalf("expected DB hash persisted, got empty")
+	}
+
+	// Simulate a restart: the DB row is unchanged, but a fresh process
+	// comes up with no in-memory plaintext. The handler exposes
+	// setCurrentPlain for exactly this test hook.
+	h.setCurrentPlain("")
+
+	second, err := h.EnsureSetupToken(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureSetupToken (restart): %v", err)
+	}
+	if second == "" {
+		t.Fatalf("restart path: expected fresh plaintext, got empty (ops would be trapped)")
+	}
+	if second == first {
+		t.Errorf("restart path: rotated plaintext should differ from prior value")
+	}
+	if fq.row.SetupTokenHash.String == firstHash {
+		t.Errorf("restart path: DB hash should have been rotated")
+	}
+	if !fq.row.SetupTokenHash.Valid {
+		t.Errorf("restart path: DB hash should still be valid after rotation")
+	}
+}
+
+// TestFilterRegistry_MissingMeansEnabled verifies the invariant that
+// absent-from-overrides = enabled by default. A partial overrides map
+// (e.g. only google mentioned) must not silently drop microsoft. Only
+// an explicit `false` disables.
+func TestFilterRegistry_MissingMeansEnabled(t *testing.T) {
+	reg := config.ProviderRegistry{
+		"google":    config.Provider{ID: "google"},
+		"microsoft": config.Provider{ID: "microsoft"},
+	}
+
+	t.Run("partial overrides keep missing provider enabled", func(t *testing.T) {
+		got := filterRegistry(reg, map[string]bool{"google": true})
+		if _, ok := got["google"]; !ok {
+			t.Errorf("google should be present (explicit true)")
+		}
+		if _, ok := got["microsoft"]; !ok {
+			t.Errorf("microsoft should be present (missing = enabled by default)")
+		}
+	})
+
+	t.Run("explicit false disables", func(t *testing.T) {
+		got := filterRegistry(reg, map[string]bool{"google": true, "microsoft": false})
+		if _, ok := got["google"]; !ok {
+			t.Errorf("google should be present")
+		}
+		if _, ok := got["microsoft"]; ok {
+			t.Errorf("microsoft should be absent (explicit false)")
+		}
+	})
+
+	t.Run("empty overrides keep all enabled", func(t *testing.T) {
+		got := filterRegistry(reg, map[string]bool{})
+		if len(got) != 2 {
+			t.Errorf("empty overrides: got %d entries, want 2", len(got))
+		}
+	})
+}
+
 // TestSetupToken_LoopbackOnly covers the response-gate: requests from
 // non-loopback RemoteAddr get 403 even if a token exists; loopback
 // gets 200 with the current plaintext; and the endpoint returns 404

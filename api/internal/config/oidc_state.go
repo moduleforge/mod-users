@@ -92,6 +92,11 @@ type BootStateResult struct {
 // singleton row summary, and the NO_OIDC_ACCOUNTS env flag. The function
 // is pure — no I/O, no globals — so it's trivially unit-testable.
 //
+// INVARIANT (shared with filterRegistry in handlers/oidc_config.go):
+// absent = enabled by default; only an explicit `false` override
+// disables a provider. A partial overrides map must never silently
+// drop a provider the operator never toggled.
+//
 // Algorithm (mirrors the plan):
 //  1. Partition providers into "in-env" candidates.
 //  2. If DB overrides are non-empty, filter candidates to those marked

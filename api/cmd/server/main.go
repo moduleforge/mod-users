@@ -141,9 +141,11 @@ func main() {
 		}
 	} else {
 		// Ensure the setup token is active iff the state calls for
-		// it. A fresh plaintext is returned only when we generated one
-		// on this boot; reuse of a prior-boot token is silent (plan
-		// dictates banner emits only on first generation).
+		// it. EnsureSetupToken returns a non-empty plaintext in two
+		// cases: first-boot (no prior hash) and restart-with-unconfirmed
+		// (prior hash present but the plaintext was unrecoverable, so
+		// the token is rotated to give ops a fresh recoverable value).
+		// Both cases should trigger a fresh banner.
 		plain, err := onboarding.EnsureSetupToken(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "oidc_config: ensure setup token", "error", err)
