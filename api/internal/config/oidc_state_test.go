@@ -52,10 +52,23 @@ func TestDetermineBootState(t *testing.T) {
 			wantEnabledSet: []string{"google"},
 		},
 		{
-			name: "two providers, one fails, one OK -> ConfirmedOK (partial ok)",
+			// Phase 9.10a: strict confirmation — any enabled provider
+			// that fails init forces InitFailed regardless of other
+			// successes. Operators must explicitly disable a broken
+			// provider via /confirm before the app serves traffic.
+			name: "two providers, one fails -> InitFailed (strict)",
 			providers: []ProviderInitView{
 				{ID: "google", Configured: true, Enabled: true, InitOK: true},
 				{ID: "microsoft", Configured: true, Enabled: true, InitOK: false},
+			},
+			wantState:      BootStateInitFailed,
+			wantEnabledSet: []string{"google", "microsoft"},
+		},
+		{
+			name: "two providers both init OK -> ConfirmedOK (strict)",
+			providers: []ProviderInitView{
+				{ID: "google", Configured: true, Enabled: true, InitOK: true},
+				{ID: "microsoft", Configured: true, Enabled: true, InitOK: true},
 			},
 			wantState:      BootStateConfirmedOK,
 			wantEnabledSet: []string{"google", "microsoft"},

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -9,55 +10,94 @@ import (
 	"github.com/moduleforge/users-module/api/internal/server"
 )
 
+// Sentinel errors from AuthenticateRequest. Callers use errors.Is to
+// distinguish "no session" (treat as not-authenticated, possibly fall
+// through to an alternate auth path) from genuine internal faults.
+var (
+	// ErrNoAuthHeader is returned when the request has no Authorization
+	// header or the header isn't in "Bearer <token>" form.
+	ErrNoAuthHeader = errors.New("auth: no bearer token")
+	// ErrInvalidToken is returned when the verifier rejects the token
+	// (signature, expiry, issuer, audience, or parse failure).
+	ErrInvalidToken = errors.New("auth: invalid or expired token")
+)
+
+// AuthenticateRequest runs the Bearer-extract → verify → claim-map →
+// user-resolve pipeline on r. It does not touch the response writer;
+// callers decide how to map errors to HTTP status codes.
+//
+// Error classification:
+//   - ErrNoAuthHeader: missing or non-Bearer Authorization header.
+//   - ErrInvalidToken: verifier rejected the token.
+//   - ErrUserGone:     resolver reports the user no longer exists.
+//   - any other error: mapper/resolver internal fault (treat as 500).
+//
+// This is shared by RequireAuth (which maps the errors to HTTP
+// responses) and the onboarding AdminChecker (which maps them to
+// "fall through to setup-token" vs "500").
+func AuthenticateRequest(r *http.Request, verifier *Verifier, mapper ClaimMapper, resolver *UserResolver) (*UserContext, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return nil, ErrNoAuthHeader
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return nil, ErrNoAuthHeader
+	}
+	rawToken := strings.TrimPrefix(authHeader, "Bearer ")
+
+	claims, err := verifier.Verify(r.Context(), rawToken)
+	if err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	principal, err := mapper.Map(claims)
+	if err != nil {
+		return nil, fmt.Errorf("claim map: %w", err)
+	}
+
+	uc, err := resolver.Resolve(r.Context(), principal)
+	if err != nil {
+		return nil, err // may wrap ErrUserGone, or be an internal fault
+	}
+	return uc, nil
+}
+
 // RequireAuth returns middleware that validates the Authorization header,
 // maps claims to a Principal, resolves/creates the user, and stores
 // *UserContext on the request context.
 func RequireAuth(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// 1. Extract bearer token.
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				server.Error(w, http.StatusUnauthorized, "unauthorized", "missing Authorization header")
-				return
-			}
-			if !strings.HasPrefix(authHeader, "Bearer ") {
-				server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid Authorization header format")
-				return
-			}
-			rawToken := strings.TrimPrefix(authHeader, "Bearer ")
-
-			// 2. Verify token.
-			claims, err := verifier.Verify(r.Context(), rawToken)
+			uc, err := AuthenticateRequest(r, verifier, mapper, resolver)
 			if err != nil {
-				server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired token")
-				return
-			}
-
-			// 3. Map claims to Principal.
-			principal, err := mapper.Map(claims)
-			if err != nil {
-				slog.ErrorContext(r.Context(), "claim mapper error", "error", err)
-				server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process authentication claims")
-				return
-			}
-
-			// 4. Resolve user.
-			uc, err := resolver.Resolve(r.Context(), principal)
-			if err != nil {
-				// A deleted user presenting a still-valid locally-issued JWT
-				// is an auth failure, not a server fault. Surface 401 so the
-				// caller re-authenticates rather than retrying.
-				if errors.Is(err, ErrUserGone) {
+				switch {
+				case errors.Is(err, ErrNoAuthHeader):
+					// Preserve the pre-9.10a distinction between missing
+					// header and malformed header for any callers that
+					// assert on the message.
+					if r.Header.Get("Authorization") == "" {
+						server.Error(w, http.StatusUnauthorized, "unauthorized", "missing Authorization header")
+					} else {
+						server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid Authorization header format")
+					}
+				case errors.Is(err, ErrInvalidToken):
+					server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired token")
+				case errors.Is(err, ErrUserGone):
 					server.Error(w, http.StatusUnauthorized, "unauthorized", "user no longer exists")
-					return
+				default:
+					// Classify mapper vs resolver so ops can tell them
+					// apart; the helper doesn't differentiate but the
+					// error message does.
+					if strings.HasPrefix(err.Error(), "claim map:") {
+						slog.ErrorContext(r.Context(), "claim mapper error", "error", err)
+						server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process authentication claims")
+					} else {
+						slog.ErrorContext(r.Context(), "user resolve error", "error", err)
+						server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve user")
+					}
 				}
-				slog.ErrorContext(r.Context(), "user resolve error", "error", err)
-				server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve user")
 				return
 			}
-
-			// 5. Stash on context.
 			ctx := WithUserContext(r.Context(), uc)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

@@ -48,9 +48,14 @@ type OIDCConfigDeps struct {
 	TokenDisplay config.TokenDisplay
 	// AdminChecker is an optional second authorization path for
 	// /confirm — when non-nil, a request arriving with a valid admin
-	// session is allowed to re-confirm without a setup token. Returns
-	// (isAdmin, ok); ok=false means "no session at all".
-	AdminChecker func(r *http.Request) (isAdmin bool, ok bool)
+	// session is allowed to re-confirm without a setup token.
+	// Returns:
+	//   (true, nil)  — caller is an authenticated admin; authorize.
+	//   (false, nil) — no session or not an admin; fall through to
+	//                  the setup-token path (not an error).
+	//   (_,     err) — internal fault validating the session; surface
+	//                  as 500 (do not silently degrade).
+	AdminChecker func(r *http.Request) (isAdmin bool, err error)
 }
 
 // OIDCConfigHandler groups the three endpoints (/status, /confirm,
@@ -272,10 +277,24 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.authorizeConfirm(r, req.SetupToken) {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or missing setup token")
+	authorized, err := h.authorizeConfirm(r, req.SetupToken)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "oidc confirm: admin check failed", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to authorize request")
 		return
 	}
+	if !authorized {
+		server.Error(w, http.StatusUnauthorized, "unauthorized", "setup token or admin session required")
+		return
+	}
+
+	// Admin reconfigure edge case: if an authenticated admin re-confirms
+	// with a selection that still has a broken provider, the handler
+	// returns 200 with the recomputed status payload but the new state
+	// flips to InitFailed (strict, Phase 9.10a). The admin's current
+	// session remains valid for the process, but RequireOIDCConfirmed
+	// will 503 their next /v1/* request. Recovery requires a process
+	// restart so EnsureSetupToken can mint a fresh banner token.
 
 	// Compute the provider_enabled override map. If the caller submits
 	// an empty enabled_providers array we honor opt_out semantics — all
@@ -335,25 +354,32 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	h.Status(w, r)
 }
 
-// authorizeConfirm validates either the setup token OR an admin
-// session. Exactly one path needs to succeed; the order minimizes DB
-// reads for the common (token) path.
-func (h *OIDCConfigHandler) authorizeConfirm(r *http.Request, submitted string) bool {
+// authorizeConfirm validates either an authenticated admin session OR
+// a valid setup token. Admin path is checked first so admins doing a
+// routine reconfigure don't have to fetch a fresh setup token.
+// Returns:
+//   - (true, nil)  — authorized; proceed.
+//   - (false, nil) — neither path succeeded; 401.
+//   - (_,    err)  — AdminChecker had an internal fault; 500.
+func (h *OIDCConfigHandler) authorizeConfirm(r *http.Request, submitted string) (bool, error) {
+	if h.deps.AdminChecker != nil {
+		isAdmin, err := h.deps.AdminChecker(r)
+		if err != nil {
+			return false, err
+		}
+		if isAdmin {
+			return true, nil
+		}
+	}
 	if submitted != "" {
 		h.mu.RLock()
 		hash := h.cachedDB.SetupTokenHash
 		h.mu.RUnlock()
 		if hash.Valid && auth.VerifySetupToken(submitted, hash.String) {
-			return true
+			return true, nil
 		}
 	}
-	if h.deps.AdminChecker != nil {
-		isAdmin, ok := h.deps.AdminChecker(r)
-		if ok && isAdmin {
-			return true
-		}
-	}
-	return false
+	return false, nil
 }
 
 // ----- GET /v1/oidc-config/saved ---------------------------------

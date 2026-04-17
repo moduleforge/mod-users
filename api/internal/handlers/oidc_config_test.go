@@ -317,6 +317,96 @@ func TestConfirm_OptOut(t *testing.T) {
 	}
 }
 
+// newHandlerWithAdmin is a variant of newHandler that wires an
+// AdminChecker closure for tests covering the admin re-confirm path.
+func newHandlerWithAdmin(t *testing.T, checker func(r *http.Request) (bool, error)) (*OIDCConfigHandler, *fakeQuerier) {
+	t.Helper()
+	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	h := NewOIDCConfigHandler(OIDCConfigDeps{
+		Queries:      fq,
+		OAuth:        newEmptyOAuth(t),
+		EnvRegistry:  config.ProviderRegistry{},
+		EnvNoOIDCEnv: false,
+		TokenDisplay: config.TokenDisplayBoth,
+		AdminChecker: checker,
+	})
+	if err := h.RefreshState(context.Background()); err != nil {
+		t.Fatalf("RefreshState: %v", err)
+	}
+	return h, fq
+}
+
+// TestConfirm_AdminPath_SuccessNoToken — authenticated admin can
+// re-confirm without presenting a setup token.
+func TestConfirm_AdminPath_SuccessNoToken(t *testing.T) {
+	h, fq := newHandlerWithAdmin(t, func(r *http.Request) (bool, error) {
+		return true, nil
+	})
+
+	body := confirmRequest{EnabledProviders: nil, OptOut: false}
+	buf, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/v1/oidc-config/confirm", strings.NewReader(string(buf)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Confirm(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200, body=%s", rr.Code, rr.Body.String())
+	}
+	if !fq.row.OptOut {
+		t.Errorf("opt_out: got false, want true (empty enabled_providers → opt-out)")
+	}
+}
+
+// TestConfirm_AdminPath_AdminCheckerError — AdminChecker internal
+// fault surfaces as 500, no DB mutation.
+func TestConfirm_AdminPath_AdminCheckerError(t *testing.T) {
+	h, fq := newHandlerWithAdmin(t, func(r *http.Request) (bool, error) {
+		return false, errors.New("simulated auth backend down")
+	})
+	originalOptOut := fq.row.OptOut
+
+	body := confirmRequest{EnabledProviders: nil, OptOut: true}
+	buf, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/v1/oidc-config/confirm", strings.NewReader(string(buf)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Confirm(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status: got %d, want 500", rr.Code)
+	}
+	if fq.row.OptOut != originalOptOut {
+		t.Errorf("opt_out changed despite 500 response")
+	}
+}
+
+// TestConfirm_NoAdmin_FallsThroughToToken — AdminChecker says "not
+// admin"; handler falls through and accepts the valid setup token.
+func TestConfirm_NoAdmin_FallsThroughToToken(t *testing.T) {
+	h, fq := newHandlerWithAdmin(t, func(r *http.Request) (bool, error) {
+		return false, nil
+	})
+	token, err := h.EnsureSetupToken(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureSetupToken: %v", err)
+	}
+
+	body := confirmRequest{SetupToken: token, EnabledProviders: nil, OptOut: false}
+	buf, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/v1/oidc-config/confirm", strings.NewReader(string(buf)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Confirm(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200, body=%s", rr.Code, rr.Body.String())
+	}
+	if !fq.row.OptOut {
+		t.Errorf("opt_out: got false, want true")
+	}
+}
+
 // TestConfirm_InvalidToken verifies that an invalid setup token is
 // rejected with 401 and nothing is persisted.
 func TestConfirm_InvalidToken(t *testing.T) {
