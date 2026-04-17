@@ -65,12 +65,15 @@ type providerEntry struct {
 
 // ListProviders handles GET /v1/auth/providers. It is unauthenticated so the
 // login page can render provider buttons before the user has a session.
-// Never include client_secret, issuer_url, or scopes in the response.
+// Only successfully-initialized providers are returned; a provider whose
+// discovery document failed at boot is silently omitted so the GUI only
+// offers buttons that actually work. Never include client_secret, issuer_url,
+// or scopes in the response.
 func (h *OIDCHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
-	out := make([]providerEntry, 0, len(h.oauth.Registry))
-	for _, id := range h.oauth.Registry.IDs() {
-		p := h.oauth.Registry[id]
-		out = append(out, providerEntry{ID: p.ID, DisplayName: p.DisplayName})
+	enabled := h.oauth.EnabledProviders()
+	out := make([]providerEntry, 0, len(enabled))
+	for _, s := range enabled {
+		out = append(out, providerEntry{ID: s.Provider.ID, DisplayName: s.Provider.DisplayName})
 	}
 	server.JSON(w, http.StatusOK, out)
 }
@@ -80,15 +83,14 @@ func (h *OIDCHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
 // to the provider's authorization URL.
 func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 	providerID := normalizeProviderID(r)
-	if _, ok := h.oauth.Registry[providerID]; !ok {
-		server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
-		return
-	}
 
 	returnPath := r.URL.Query().Get("return")
 	authURL, state, err := h.oauth.AuthorizeURL(providerID, returnPath)
 	if err != nil {
-		if errors.Is(err, localauth.ErrUnknownProvider) {
+		// Unknown IDs and init-failed providers both surface as 404 — an
+		// operator-observable failure (slog.Warn at boot) that the user has
+		// no agency to fix mid-request.
+		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
 			server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
 			return
 		}
@@ -107,13 +109,19 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 // URL fragment so it never hits any server log.
 func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	providerID := normalizeProviderID(r)
-	if _, ok := h.oauth.Registry[providerID]; !ok {
-		server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
-		return
-	}
 
 	// Clear the state cookie regardless of outcome — one-shot usage.
 	h.clearStateCookie(w, r)
+
+	// Short-circuit on an unknown or init-failed provider so the browser
+	// sees a 404 rather than a confusing "missing state cookie" 400 that it
+	// cannot remediate. Enabled providers fall through to the full flow
+	// below; init-failed providers are indistinguishable from unknown at
+	// the wire.
+	if !h.oauth.ProviderAvailable(providerID) {
+		server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
+		return
+	}
 
 	q := r.URL.Query()
 	if providerErr := q.Get("error"); providerErr != "" {
@@ -137,6 +145,11 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	principal, statePayload, err := h.oauth.Exchange(r.Context(), providerID, code, rawState, cookie.Value)
 	if err != nil {
 		slog.WarnContext(r.Context(), "oidc callback: exchange failed", "error", err, "provider", providerID)
+		// Unknown ID or init-failed provider → 404, same policy as /start.
+		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
+			server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
+			return
+		}
 		// State/cookie problems are client-fixable → 400. Everything downstream
 		// (token endpoint, id_token verify) reports a generic error via redirect
 		// so the GUI can surface it and the operator can inspect logs.

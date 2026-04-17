@@ -15,19 +15,27 @@ import (
 )
 
 // newTestOAuth stands up a minimal OAuth struct suitable for handler-level
-// tests. No real provider discovery happens — Verifiers/OAuthConfigs are left
-// empty because these tests never exercise Exchange's network path.
+// tests. The States map carries a ProviderState for each registry entry,
+// marked InitOK=true so ProviderAvailable() reports the provider as usable,
+// but with nil Verifier/OAuthCfg/Mapper — these tests never exercise
+// Exchange's network path, and the branches they cover short-circuit before
+// any of those are dereferenced.
 func newTestOAuth(t *testing.T, registry config.ProviderRegistry) *localauth.OAuth {
 	t.Helper()
 	signer, err := localauth.NewStateSigner([]byte("test-secret-at-least-32-bytes-xx"))
 	if err != nil {
 		t.Fatalf("NewStateSigner: %v", err)
 	}
+	states := make(map[string]*localauth.ProviderState, len(registry))
+	for id, p := range registry {
+		states[id] = &localauth.ProviderState{
+			ID:       id,
+			Provider: p,
+			InitOK:   true,
+		}
+	}
 	return &localauth.OAuth{
-		Registry:          registry,
-		Verifiers:         nil,
-		OAuthConfigs:      nil,
-		Mappers:           nil,
+		States:            states,
 		StateSigner:       signer,
 		RedirectBase:      "http://api.test",
 		FrontendReturnURL: "http://gui.test/auth/oidc/return",
@@ -205,7 +213,7 @@ func TestCallback_MissingStateCookie_ClearsCookie(t *testing.T) {
 // and Callback so a URL like /v1/auth/oidc/Google/start still hits the
 // "google" registry entry. Exercising the helper directly keeps this test
 // decoupled from the full Start/Callback plumbing, which would otherwise
-// 404 for unrelated reasons (empty OAuthConfigs in the handler-level stub).
+// fail for unrelated reasons (nil OAuthCfg in the handler-level stub).
 func TestNormalizeProviderID(t *testing.T) {
 	cases := map[string]string{
 		"Google":    "google",

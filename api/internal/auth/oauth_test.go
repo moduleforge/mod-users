@@ -510,3 +510,171 @@ func signIDToken(key *rsa.PrivateKey, kid string, claims jwt.MapClaims) (string,
 	tok.Header["kid"] = kid
 	return tok.SignedString(key)
 }
+
+// TestNewOAuth_PartialInitFailure pins down the phase-9.8 contract: one bad
+// provider must not take down the whole registry. NewOAuth returns nil error,
+// the good provider lands in EnabledProviders(), the bad one is listed only
+// by AllProviders() with InitOK=false, and Exchange on the bad one returns
+// ErrProviderNotAvailable so the handler can 404 it.
+func TestNewOAuth_PartialInitFailure(t *testing.T) {
+	// Stand up a real discovery endpoint for the "good" provider. The "bad"
+	// provider points at a URL that will fail discovery (the path exists but
+	// returns 404), so oidc.NewProvider errors during init.
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w,
+			`{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q,"response_types_supported":["code"],"subject_types_supported":["public"],"id_token_signing_alg_values_supported":["RS256"]}`,
+			srv.URL, srv.URL+"/authorize", srv.URL+"/token", srv.URL+"/jwks")
+	})
+
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			AdminRole:            "admin",
+			FrontendReturnURL:    "http://gui.test/return",
+			OAuthRedirectBaseURL: "http://api.test",
+		},
+		LocalAuth: config.LocalAuthConfig{JWTSecret: "test-secret"},
+		Providers: config.ProviderRegistry{
+			"google": config.Provider{
+				ID:           "google",
+				DisplayName:  "Google",
+				IssuerURL:    srv.URL,
+				ClientID:     "good-client",
+				ClientSecret: "good-secret",
+				ClaimStyle:   "google",
+				Scopes:       []string{"openid", "email", "profile"},
+			},
+			"microsoft": config.Provider{
+				ID:           "microsoft",
+				DisplayName:  "Microsoft",
+				IssuerURL:    srv.URL + "/nonexistent-issuer",
+				ClientID:     "bad-client",
+				ClientSecret: "bad-secret",
+				ClaimStyle:   "microsoft",
+				Scopes:       []string{"openid", "email", "profile"},
+			},
+		},
+	}
+
+	oauth, err := NewOAuth(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("NewOAuth should not fail on per-provider init: %v", err)
+	}
+	if oauth == nil {
+		t.Fatal("NewOAuth returned nil OAuth")
+	}
+
+	enabled := oauth.EnabledProviders()
+	if len(enabled) != 1 {
+		t.Fatalf("EnabledProviders() len = %d, want 1; got %v", len(enabled), enabled)
+	}
+	if enabled[0].ID != "google" {
+		t.Errorf("EnabledProviders()[0].ID = %q, want google", enabled[0].ID)
+	}
+
+	all := oauth.AllProviders()
+	if len(all) != 2 {
+		t.Fatalf("AllProviders() len = %d, want 2", len(all))
+	}
+	// Sorted by ID → google, microsoft.
+	if all[0].ID != "google" || !all[0].InitOK {
+		t.Errorf("AllProviders()[0] = %+v, want google InitOK=true", all[0])
+	}
+	if all[1].ID != "microsoft" || all[1].InitOK {
+		t.Errorf("AllProviders()[1] = %+v, want microsoft InitOK=false", all[1])
+	}
+	if all[1].Err == nil {
+		t.Error("bad provider should carry a non-nil Err")
+	}
+
+	if got, want := oauth.Status(), StatusOK; got != want {
+		t.Errorf("Status() = %q, want %q", got, want)
+	}
+
+	// Exchange on the bad provider must surface ErrProviderNotAvailable so the
+	// handler can respond 404 — never a confusing "cookie mismatch" 400 or a
+	// real token-endpoint call.
+	_, _, err = oauth.Exchange(context.Background(), "microsoft", "code", "state", "state")
+	if err == nil {
+		t.Fatal("Exchange on bad provider: expected error, got nil")
+	}
+	if !errors.Is(err, ErrProviderNotAvailable) {
+		t.Errorf("Exchange error = %v, want errors.Is ErrProviderNotAvailable", err)
+	}
+
+	// AuthorizeURL likewise should refuse to build an auth URL for the bad
+	// provider — otherwise we'd redirect the browser to a broken flow.
+	_, _, err = oauth.AuthorizeURL("microsoft", "/")
+	if err == nil {
+		t.Fatal("AuthorizeURL on bad provider: expected error, got nil")
+	}
+	if !errors.Is(err, ErrProviderNotAvailable) {
+		t.Errorf("AuthorizeURL error = %v, want errors.Is ErrProviderNotAvailable", err)
+	}
+}
+
+// TestOAuth_Status covers the three oauth-only states NewOAuth can put the
+// registry in. The fourth (empty_no_consent) requires NO_OIDC_ACCOUNTS=1 in
+// env; we exercise it with t.Setenv.
+func TestOAuth_Status(t *testing.T) {
+	baseCfg := func() *config.Config {
+		return &config.Config{
+			Auth: config.AuthConfig{
+				AdminRole:            "admin",
+				FrontendReturnURL:    "http://gui.test/return",
+				OAuthRedirectBaseURL: "http://api.test",
+			},
+			LocalAuth: config.LocalAuthConfig{JWTSecret: "test-secret"},
+			Providers: config.ProviderRegistry{},
+		}
+	}
+
+	t.Run("no_env_no_flag when empty and flag unset", func(t *testing.T) {
+		t.Setenv("NO_OIDC_ACCOUNTS", "")
+		oauth, err := NewOAuth(context.Background(), baseCfg())
+		if err != nil {
+			t.Fatalf("NewOAuth: %v", err)
+		}
+		if got, want := oauth.Status(), StatusNoEnvNoFlag; got != want {
+			t.Errorf("Status() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("empty_no_consent when empty and flag set", func(t *testing.T) {
+		t.Setenv("NO_OIDC_ACCOUNTS", "1")
+		oauth, err := NewOAuth(context.Background(), baseCfg())
+		if err != nil {
+			t.Fatalf("NewOAuth: %v", err)
+		}
+		if got, want := oauth.Status(), StatusEmptyNoConsent; got != want {
+			t.Errorf("Status() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("init_failed when every provider fails", func(t *testing.T) {
+		t.Setenv("NO_OIDC_ACCOUNTS", "")
+		cfg := baseCfg()
+		cfg.Providers = config.ProviderRegistry{
+			"bogus": config.Provider{
+				ID:           "bogus",
+				DisplayName:  "Bogus",
+				IssuerURL:    "http://127.0.0.1:1/definitely-not-listening",
+				ClientID:     "c",
+				ClientSecret: "s",
+				ClaimStyle:   "generic",
+				Scopes:       []string{"openid"},
+			},
+		}
+		oauth, err := NewOAuth(context.Background(), cfg)
+		if err != nil {
+			t.Fatalf("NewOAuth: %v", err)
+		}
+		if got, want := oauth.Status(), StatusInitFailed; got != want {
+			t.Errorf("Status() = %q, want %q", got, want)
+		}
+	})
+}
