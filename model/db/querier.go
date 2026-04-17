@@ -13,12 +13,11 @@ import (
 
 type Querier interface {
 	ArchiveApp(ctx context.Context, id int64) error
-	ClearSetupTokenHash(ctx context.Context) error
-	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
-	SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error
-	UpdateOIDCConfig(ctx context.Context, arg UpdateOIDCConfigParams) error
 	ArchiveEntity(ctx context.Context, argUuid uuid.UUID) error
 	AssignUserToApp(ctx context.Context, arg AssignUserToAppParams) error
+	// Clear the setup token once the operator has confirmed configuration.
+	// Idempotent — safe to call on every confirmed boot.
+	ClearSetupTokenHash(ctx context.Context) error
 	ConsumeEmailCode(ctx context.Context, id int64) error
 	ConsumePasswordReset(ctx context.Context, id int64) error
 	CreateApp(ctx context.Context, arg CreateAppParams) (App, error)
@@ -40,6 +39,7 @@ type Querier interface {
 	GetEntityByUUID(ctx context.Context, argUuid uuid.UUID) (Entity, error)
 	GetLegalEntityByEntityID(ctx context.Context, entityID int64) (LegalEntity, error)
 	GetNaturalPersonByLegalEntityID(ctx context.Context, legalEntityID int64) (NaturalPerson, error)
+	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
 	GetServiceAccountByEntityID(ctx context.Context, entityID int64) (ServiceAccount, error)
 	GetUserByAuth(ctx context.Context, arg GetUserByAuthParams) (User, error)
 	GetUserByEmail(ctx context.Context, lower string) (User, error)
@@ -56,10 +56,17 @@ type Querier interface {
 	SetAdmin(ctx context.Context, arg SetAdminParams) error
 	SetAppUserRoles(ctx context.Context, arg SetAppUserRolesParams) error
 	SetDefaultApp(ctx context.Context, arg SetDefaultAppParams) error
+	// Install or refresh the active setup-token hash; called once per boot
+	// when the state is unconfirmed and no hash is already present.
+	SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error
 	UnarchiveEntity(ctx context.Context, argUuid uuid.UUID) error
 	UpdateApp(ctx context.Context, arg UpdateAppParams) error
 	UpdateCorporation(ctx context.Context, arg UpdateCorporationParams) error
 	UpdateNaturalPerson(ctx context.Context, arg UpdateNaturalPersonParams) error
+	// Persist the operator's choices (called from POST /v1/oidc-config/confirm).
+	// The singleton row is guaranteed to exist via the migration's seed INSERT,
+	// so a plain UPDATE is sufficient — no UPSERT logic required.
+	UpdateOIDCConfig(ctx context.Context, arg UpdateOIDCConfigParams) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 	UpsertAuthLocal(ctx context.Context, arg UpsertAuthLocalParams) error
 	WriteAudit(ctx context.Context, arg WriteAuditParams) error

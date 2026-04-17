@@ -84,15 +84,6 @@ type LegalEntity struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-type OidcConfig struct {
-	ID                  int32              `json:"id"`
-	ProviderEnabled     []byte             `json:"provider_enabled"`
-	OptOut              bool               `json:"opt_out"`
-	SetupTokenHash      pgtype.Text        `json:"setup_token_hash"`
-	SetupTokenCreatedAt *time.Time         `json:"setup_token_created_at"`
-	SavedAt             pgtype.Timestamptz `json:"saved_at"`
-}
-
 type NaturalPerson struct {
 	ID            int64              `json:"id"`
 	LegalEntityID int64              `json:"legal_entity_id"`
@@ -100,6 +91,15 @@ type NaturalPerson struct {
 	FamilyName    pgtype.Text        `json:"family_name"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OidcConfig struct {
+	ID                  int32              `json:"id"`
+	ProviderEnabled     []byte             `json:"provider_enabled"`
+	OptOut              bool               `json:"opt_out"`
+	SetupTokenHash      pgtype.Text        `json:"setup_token_hash"`
+	SetupTokenCreatedAt *time.Time         `json:"setup_token_created_at"`
+	SavedAt             pgtype.Timestamptz `json:"saved_at"`
 }
 
 type PasswordReset struct {

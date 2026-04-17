@@ -18,6 +18,8 @@ SET setup_token_hash = NULL,
 WHERE id = 1
 `
 
+// Clear the setup token once the operator has confirmed configuration.
+// Idempotent — safe to call on every confirmed boot.
 func (q *Queries) ClearSetupTokenHash(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, clearSetupTokenHash)
 	return err
@@ -50,6 +52,8 @@ SET setup_token_hash = $1,
 WHERE id = 1
 `
 
+// Install or refresh the active setup-token hash; called once per boot
+// when the state is unconfirmed and no hash is already present.
 func (q *Queries) SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error {
 	_, err := q.db.Exec(ctx, setSetupTokenHash, setupTokenHash)
 	return err
@@ -68,6 +72,9 @@ type UpdateOIDCConfigParams struct {
 	OptOut          bool   `json:"opt_out"`
 }
 
+// Persist the operator's choices (called from POST /v1/oidc-config/confirm).
+// The singleton row is guaranteed to exist via the migration's seed INSERT,
+// so a plain UPDATE is sufficient — no UPSERT logic required.
 func (q *Queries) UpdateOIDCConfig(ctx context.Context, arg UpdateOIDCConfigParams) error {
 	_, err := q.db.Exec(ctx, updateOIDCConfig, arg.ProviderEnabled, arg.OptOut)
 	return err
