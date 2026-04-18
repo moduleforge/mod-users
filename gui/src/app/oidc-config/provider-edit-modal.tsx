@@ -7,6 +7,7 @@ import {
   fetchOIDCProvider,
   revertOIDCProvider,
   updateOIDCProvider,
+  type OIDCFieldSource,
   type OIDCProviderAuth,
   type OIDCProviderView,
   type OIDCProviderWriteBody,
@@ -116,6 +117,36 @@ function buildWriteBody(form: FormState): OIDCProviderWriteBody {
     body.client_secret = '';
   }
   return body;
+}
+
+/**
+ * Converts a source enum + provider ID + field key into the small-text
+ * label the modal renders under each input. Env sources include the
+ * computed env-var name so the operator knows exactly which variable
+ * to edit if they want the default back.
+ */
+function sourceLabel(
+  source: OIDCFieldSource,
+  providerID: string,
+  field: string,
+): string {
+  switch (source) {
+    case 'db':
+      return 'Source: DB override';
+    case 'env':
+      return `Source: env var (${envVarName(providerID, field)})`;
+    case 'well_known':
+      return 'Source: well-known default';
+    case 'fallback':
+      return 'Source: fallback';
+    case 'none':
+      return 'Source: not set';
+  }
+}
+
+/** Reconstructs the env var name pattern the config loader recognizes. */
+function envVarName(providerID: string, field: string): string {
+  return `AUTH_PROVIDER_${providerID.toUpperCase()}_${field.toUpperCase()}`;
 }
 
 export function ProviderEditModal({
@@ -268,6 +299,7 @@ export function ProviderEditModal({
               value={form.displayName}
               placeholder={view.display_name_default ?? ''}
               onChange={(v) => setForm((f) => ({ ...f, displayName: v }))}
+              sourceText={sourceLabel(view.display_name_source, view.id, 'display_name')}
             />
 
             <FieldRow
@@ -276,6 +308,7 @@ export function ProviderEditModal({
               value={form.issuerUrl}
               placeholder={view.issuer_url_default ?? ''}
               onChange={(v) => setForm((f) => ({ ...f, issuerUrl: v }))}
+              sourceText={sourceLabel(view.issuer_url_source, view.id, 'issuer_url')}
             />
 
             <FieldRow
@@ -284,6 +317,7 @@ export function ProviderEditModal({
               value={form.clientId}
               placeholder={view.client_id_default ?? ''}
               onChange={(v) => setForm((f) => ({ ...f, clientId: v }))}
+              sourceText={sourceLabel(view.client_id_source, view.id, 'client_id')}
             />
 
             <div className="flex flex-col gap-1.5">
@@ -352,6 +386,9 @@ export function ProviderEditModal({
                   The stored secret will be cleared on save.
                 </p>
               )}
+              <p className="text-xs italic text-muted-foreground">
+                {sourceLabel(view.client_secret_source, view.id, 'client_secret')}
+              </p>
             </div>
 
             <FieldRow
@@ -360,6 +397,7 @@ export function ProviderEditModal({
               value={form.claimStyle}
               placeholder={view.claim_style_default ?? ''}
               onChange={(v) => setForm((f) => ({ ...f, claimStyle: v }))}
+              sourceText={sourceLabel(view.claim_style_source, view.id, 'claim_style')}
             />
 
             <FieldRow
@@ -369,6 +407,7 @@ export function ProviderEditModal({
               placeholder={view.scopes_default.join(', ')}
               onChange={(v) => setForm((f) => ({ ...f, scopes: v }))}
               helpText="Comma-separated (e.g. openid, email, profile)."
+              sourceText={sourceLabel(view.scopes_source, view.id, 'scopes')}
             />
 
             <div className="flex items-center justify-between gap-2 py-1">
@@ -448,6 +487,12 @@ interface FieldRowProps {
   value: string;
   placeholder: string;
   helpText?: string;
+  /**
+   * Small italic line rendered under the input describing which
+   * configuration layer provides the currently-effective value.
+   * Caller typically builds this via `sourceLabel(...)`.
+   */
+  sourceText?: string;
   onChange: (next: string) => void;
 }
 
@@ -457,6 +502,7 @@ function FieldRow({
   value,
   placeholder,
   helpText,
+  sourceText,
   onChange,
 }: FieldRowProps) {
   return (
@@ -480,6 +526,9 @@ function FieldRow({
       />
       {helpText && (
         <p className="text-xs text-muted-foreground">{helpText}</p>
+      )}
+      {sourceText && (
+        <p className="text-xs italic text-muted-foreground">{sourceText}</p>
       )}
     </div>
   );

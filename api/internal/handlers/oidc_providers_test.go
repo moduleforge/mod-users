@@ -195,6 +195,110 @@ func TestProviders_Get_EnvOnlyReturnsDefaults(t *testing.T) {
 	if strings.Contains(strings.ToLower(rr.Body.String()), "\"client_secret\"") {
 		t.Errorf("GET response must not contain a client_secret field at all")
 	}
+	// Source attribution: this fixture has a fully-populated env row,
+	// so every source resolves to "env". A separate test below covers
+	// the realistic google case where only client_id/secret are in
+	// env and the rest fall through to well-known defaults.
+	for name, got := range map[string]string{
+		"display_name":   view.DisplayNameSource,
+		"issuer_url":     view.IssuerURLSource,
+		"client_id":      view.ClientIDSource,
+		"client_secret":  view.ClientSecretSource,
+		"claim_style":    view.ClaimStyleSource,
+		"scopes":         view.ScopesSource,
+	} {
+		if got != "env" {
+			t.Errorf("%s_source = %q, want env (env registry fully populated)", name, got)
+		}
+	}
+}
+
+// TestProviders_Get_SparseEnvFallsThroughToWellKnown — when env only
+// provides client_id/client_secret (the realistic google setup),
+// other fields should report their well-known source.
+func TestProviders_Get_SparseEnvFallsThroughToWellKnown(t *testing.T) {
+	env := config.ProviderRegistry{
+		"google": config.Provider{
+			ID:           "google",
+			ClientID:     "env-gid",
+			ClientSecret: "env-gsecret",
+			// DisplayName / IssuerURL / ClaimStyle / Scopes omitted —
+			// the merge layer will fill them from well-known defaults.
+		},
+	}
+	h, _, _, _ := newProvidersHandlerForTest(t, env)
+
+	rr := routeRequest(h, http.MethodGet, "/v1/oidc-config/providers/google", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200, body=%s", rr.Code, rr.Body.String())
+	}
+	var view providerView
+	if err := json.Unmarshal(rr.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if view.DisplayNameSource != "well_known" {
+		t.Errorf("display_name_source = %q, want well_known", view.DisplayNameSource)
+	}
+	if view.IssuerURLSource != "well_known" {
+		t.Errorf("issuer_url_source = %q, want well_known", view.IssuerURLSource)
+	}
+	if view.ClientIDSource != "env" {
+		t.Errorf("client_id_source = %q, want env", view.ClientIDSource)
+	}
+	if view.ClientSecretSource != "env" {
+		t.Errorf("client_secret_source = %q, want env", view.ClientSecretSource)
+	}
+	if view.ClaimStyleSource != "well_known" {
+		t.Errorf("claim_style_source = %q, want well_known", view.ClaimStyleSource)
+	}
+	if view.ScopesSource != "well_known" {
+		t.Errorf("scopes_source = %q, want well_known", view.ScopesSource)
+	}
+}
+
+// TestProviders_Get_DBOverrideReportsDBSource — when a DB row
+// overrides a subset of fields, the source labels for those fields
+// are "db" while untouched fields retain their env/well-known source.
+func TestProviders_Get_DBOverrideReportsDBSource(t *testing.T) {
+	env := config.ProviderRegistry{
+		"google": config.Provider{
+			ID:           "google",
+			DisplayName:  "Google",
+			IssuerURL:    "https://accounts.google.com",
+			ClientID:     "env-gid",
+			ClientSecret: "env-gsecret",
+			ClaimStyle:   "google",
+			Scopes:       []string{"openid", "email", "profile"},
+		},
+	}
+	h, _, fp, _ := newProvidersHandlerForTest(t, env)
+	// DB overrides just the client_id.
+	fp.rows["google"] = db.OidcProvider{
+		ID:       "google",
+		ClientID: pgtype.Text{String: "db-gid", Valid: true},
+		Enabled:  true,
+	}
+
+	rr := routeRequest(h, http.MethodGet, "/v1/oidc-config/providers/google", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200, body=%s", rr.Code, rr.Body.String())
+	}
+	var view providerView
+	if err := json.Unmarshal(rr.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if view.ClientIDSource != "db" {
+		t.Errorf("client_id_source = %q, want db (override set)", view.ClientIDSource)
+	}
+	// display_name has no DB override here; env has DisplayName="Google"
+	// in this fixture, so the source is "env" — not well-known.
+	if view.DisplayNameSource != "env" {
+		t.Errorf("display_name_source = %q, want env (env set, no DB override)", view.DisplayNameSource)
+	}
+	// Secret is still env-sourced because the DB row didn't set one.
+	if view.ClientSecretSource != "env" {
+		t.Errorf("client_secret_source = %q, want env", view.ClientSecretSource)
+	}
 }
 
 // TestProviders_Get_UnknownID_404 — GET for an ID not in env, DB, or

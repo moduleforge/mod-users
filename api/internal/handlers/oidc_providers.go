@@ -75,28 +75,41 @@ func NewProvidersHandler(deps ProvidersDeps) *ProvidersHandler {
 // ----- Response shapes -------------------------------------------------
 
 // providerView is the GET-shape. Each field surfaces the DB override
-// (nullable) and a *_default companion holding the env-or-well-known
-// fallback; the GUI uses these to render grey placeholders when the
-// override is cleared.
+// (nullable), a *_default companion holding the env-or-well-known
+// fallback (for grey placeholders when the override is cleared), and
+// a *_source label so the GUI can tell the operator exactly where the
+// currently-effective value came from. Source values:
+//
+//	"db"         — DB override is the effective value
+//	"env"        — env var provides the effective value
+//	"well_known" — hardcoded well-known default (e.g. google/microsoft)
+//	"fallback"   — last-resort (e.g. title-cased id for display_name)
+//	"none"       — no value available from any layer (e.g. missing client_id)
 type providerView struct {
 	ID string `json:"id"`
 
 	DisplayName        *string `json:"display_name"`
 	DisplayNameDefault *string `json:"display_name_default"`
+	DisplayNameSource  string  `json:"display_name_source"`
 
 	IssuerURL        *string `json:"issuer_url"`
 	IssuerURLDefault *string `json:"issuer_url_default"`
+	IssuerURLSource  string  `json:"issuer_url_source"`
 
 	ClientID        *string `json:"client_id"`
 	ClientIDDefault *string `json:"client_id_default"`
+	ClientIDSource  string  `json:"client_id_source"`
 
-	HasClientSecret bool `json:"has_client_secret"`
+	HasClientSecret    bool   `json:"has_client_secret"`
+	ClientSecretSource string `json:"client_secret_source"`
 
 	ClaimStyle        *string `json:"claim_style"`
 	ClaimStyleDefault *string `json:"claim_style_default"`
+	ClaimStyleSource  string  `json:"claim_style_source"`
 
 	Scopes        []string `json:"scopes"`
 	ScopesDefault []string `json:"scopes_default"`
+	ScopesSource  string   `json:"scopes_source"`
 
 	Enabled bool `json:"enabled"`
 
@@ -336,15 +349,23 @@ func (h *ProvidersHandler) buildView(ctx context.Context, id string) (providerVi
 	}
 	view.DisplayName = overrideTextPointer(m.DBOverride, func(r *config.DBProviderRow) pgtype.Text { return r.DisplayName })
 	view.DisplayNameDefault = nonEmptyPointer(defaultDisplayName(m))
+	view.DisplayNameSource = displayNameSource(m)
 
 	view.IssuerURL = overrideTextPointer(m.DBOverride, func(r *config.DBProviderRow) pgtype.Text { return r.IssuerURL })
 	view.IssuerURLDefault = nonEmptyPointer(defaultIssuerURL(m))
+	view.IssuerURLSource = issuerURLSource(m)
 
 	view.ClientID = overrideTextPointer(m.DBOverride, func(r *config.DBProviderRow) pgtype.Text { return r.ClientID })
 	view.ClientIDDefault = nonEmptyPointer(defaultClientID(m))
+	view.ClientIDSource = clientIDSource(m)
+
+	view.ClientSecretSource = clientSecretSource(m)
 
 	view.ClaimStyle = overrideTextPointer(m.DBOverride, func(r *config.DBProviderRow) pgtype.Text { return r.ClaimStyle })
 	view.ClaimStyleDefault = nonEmptyPointer(defaultClaimStyle(m))
+	view.ClaimStyleSource = claimStyleSource(m)
+
+	view.ScopesSource = scopesSource(m)
 
 	// Per-provider InitOK + Err from OAuth registry. A provider not
 	// present in OAuth (e.g. new DB row not yet rebuilt) reads InitOK
@@ -635,6 +656,100 @@ func nonEmptyPointer(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// Source-attribution helpers. Each reports which configuration layer
+// provides the currently-effective value for a field, using the same
+// priority cascade the merge layer applies (DB → env → well-known →
+// fallback/none). The strings are a closed vocabulary consumed by the
+// GUI; see providerView.*Source documentation.
+
+const (
+	sourceDB        = "db"
+	sourceEnv       = "env"
+	sourceWellKnown = "well_known"
+	sourceFallback  = "fallback"
+	sourceNone      = "none"
+)
+
+func dbTextSet(t pgtype.Text) bool {
+	return t.Valid && t.String != ""
+}
+
+func displayNameSource(m *config.MergedProvider) string {
+	if m.DBOverride != nil && dbTextSet(m.DBOverride.DisplayName) {
+		return sourceDB
+	}
+	if m.EnvValues != nil && m.EnvValues.DisplayName != "" {
+		return sourceEnv
+	}
+	if m.WellKnownDefaults != nil && m.WellKnownDefaults.DisplayName != "" {
+		return sourceWellKnown
+	}
+	// defaultDisplayName falls back to the title-cased id, which we
+	// label "fallback" rather than pretending no value exists.
+	return sourceFallback
+}
+
+func issuerURLSource(m *config.MergedProvider) string {
+	if m.DBOverride != nil && dbTextSet(m.DBOverride.IssuerURL) {
+		return sourceDB
+	}
+	if m.EnvValues != nil && m.EnvValues.IssuerURL != "" {
+		return sourceEnv
+	}
+	if m.WellKnownDefaults != nil && m.WellKnownDefaults.IssuerURL != "" {
+		return sourceWellKnown
+	}
+	return sourceNone
+}
+
+func clientIDSource(m *config.MergedProvider) string {
+	if m.DBOverride != nil && dbTextSet(m.DBOverride.ClientID) {
+		return sourceDB
+	}
+	if m.EnvValues != nil && m.EnvValues.ClientID != "" {
+		return sourceEnv
+	}
+	return sourceNone
+}
+
+func clientSecretSource(m *config.MergedProvider) string {
+	if m.DBOverride != nil && dbTextSet(m.DBOverride.ClientSecret) {
+		return sourceDB
+	}
+	if m.EnvValues != nil && m.EnvValues.ClientSecret != "" {
+		return sourceEnv
+	}
+	return sourceNone
+}
+
+func claimStyleSource(m *config.MergedProvider) string {
+	if m.DBOverride != nil && dbTextSet(m.DBOverride.ClaimStyle) {
+		return sourceDB
+	}
+	if m.EnvValues != nil && m.EnvValues.ClaimStyle != "" {
+		return sourceEnv
+	}
+	if m.WellKnownDefaults != nil && m.WellKnownDefaults.ClaimStyle != "" {
+		return sourceWellKnown
+	}
+	return sourceNone
+}
+
+func scopesSource(m *config.MergedProvider) string {
+	if m.DBOverride != nil && len(m.DBOverride.Scopes) > 0 {
+		return sourceDB
+	}
+	if m.EnvValues != nil && len(m.EnvValues.Scopes) > 0 {
+		return sourceEnv
+	}
+	// Every provider gets the built-in "openid email profile" default
+	// from the merge layer when no explicit value is set. We label that
+	// "well_known" to keep the vocabulary closed and the GUI display
+	// simple — the operator sees "Source: well-known default" which is
+	// accurate.
+	return sourceWellKnown
 }
 
 // buildCallbackURL is the public-facing callback URL for one provider.
