@@ -19,21 +19,34 @@ export interface OIDCProviderView {
   id: string;
   display_name: string | null;
   display_name_default: string | null;
+  display_name_source: OIDCFieldSource;
   issuer_url: string | null;
   issuer_url_default: string | null;
+  issuer_url_source: OIDCFieldSource;
   client_id: string | null;
   client_id_default: string | null;
+  client_id_source: OIDCFieldSource;
   has_client_secret: boolean;
+  client_secret_source: OIDCFieldSource;
   claim_style: string | null;
   claim_style_default: string | null;
+  claim_style_source: OIDCFieldSource;
   scopes: string[] | null;
   scopes_default: string[];
+  scopes_source: OIDCFieldSource;
   enabled: boolean;
   init_ok: boolean;
   error?: string;
   callback_url: string;
   well_known: boolean;
 }
+
+/**
+ * Which configuration layer provides the currently-effective value
+ * for a given field. Returned per-field by the API so the modal can
+ * show the operator exactly where a value came from.
+ */
+export type OIDCFieldSource = 'db' | 'env' | 'well_known' | 'fallback' | 'none';
 
 /**
  * Fields that can be sent on a PUT or POST. Use these sentinels:
