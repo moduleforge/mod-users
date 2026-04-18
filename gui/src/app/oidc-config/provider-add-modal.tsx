@@ -164,10 +164,31 @@ export function ProviderAddModal({
         <div className="flex flex-col gap-3">
           <ErrorMessage message={formError} />
 
+          {/* Decoy inputs — see provider-edit-modal for the rationale. */}
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+            readOnly
+          />
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+            readOnly
+          />
+
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="add-id">ID (slug)</Label>
             <Input
               id="add-id"
+              name="oidc_provider_id"
               type="text"
               autoComplete="off"
               spellCheck={false}
@@ -193,6 +214,7 @@ export function ProviderAddModal({
 
           <FieldRow
             id="add-display-name"
+            name="oidc_provider_display_name"
             label="Display name"
             value={form.displayName}
             placeholder={hint?.display_name ?? ''}
@@ -201,6 +223,7 @@ export function ProviderAddModal({
 
           <FieldRow
             id="add-issuer-url"
+            name="oidc_provider_issuer_url"
             label="Issuer URL"
             value={form.issuerUrl}
             placeholder={hint?.issuer_url ?? ''}
@@ -209,6 +232,7 @@ export function ProviderAddModal({
 
           <FieldRow
             id="add-client-id"
+            name="oidc_provider_client_id"
             label="Client ID"
             value={form.clientId}
             placeholder=""
@@ -220,6 +244,7 @@ export function ProviderAddModal({
             <div className="flex items-center gap-2">
               <Input
                 id="add-client-secret"
+                name="oidc_provider_client_secret"
                 type={showSecret ? 'text' : 'password'}
                 autoComplete="new-password"
                 spellCheck={false}
@@ -247,6 +272,7 @@ export function ProviderAddModal({
 
           <FieldRow
             id="add-claim-style"
+            name="oidc_provider_claim_style"
             label="Claim style"
             value={form.claimStyle}
             placeholder={hint?.claim_style ?? ''}
@@ -255,6 +281,7 @@ export function ProviderAddModal({
 
           <FieldRow
             id="add-scopes"
+            name="oidc_provider_scopes"
             label="Scopes"
             value={form.scopes}
             placeholder={
@@ -302,6 +329,8 @@ export function ProviderAddModal({
 
 interface FieldRowProps {
   id: string;
+  /** Non-credential name attribute — see provider-edit-modal note. */
+  name: string;
   label: string;
   value: string;
   placeholder: string;
@@ -311,6 +340,7 @@ interface FieldRowProps {
 
 function FieldRow({
   id,
+  name,
   label,
   value,
   placeholder,
@@ -322,6 +352,7 @@ function FieldRow({
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
+        name={name}
         type="text"
         autoComplete="off"
         spellCheck={false}

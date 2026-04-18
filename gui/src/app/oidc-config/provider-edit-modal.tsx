@@ -293,8 +293,38 @@ export function ProviderEditModal({
           <div className="flex flex-col gap-3">
             <ErrorMessage message={formError} />
 
+            {/*
+              Decoy inputs: LastPass (and to a lesser extent other
+              password managers) attach to the first "username +
+              password" pair they find inside a form. Presenting
+              invisible decoys first diverts the attachment off our
+              real fields. Combined with data-lpignore (which newer
+              LastPass versions sometimes ignore) this is the most
+              reliable way to keep the autofill icon off the
+              real inputs.
+            */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+              readOnly
+            />
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+              readOnly
+            />
+
             <FieldRow
               id="display-name"
+              name="oidc_provider_display_name"
               label="Display name"
               value={form.displayName}
               placeholder={view.display_name_default ?? ''}
@@ -304,6 +334,7 @@ export function ProviderEditModal({
 
             <FieldRow
               id="issuer-url"
+              name="oidc_provider_issuer_url"
               label="Issuer URL"
               value={form.issuerUrl}
               placeholder={view.issuer_url_default ?? ''}
@@ -313,6 +344,7 @@ export function ProviderEditModal({
 
             <FieldRow
               id="client-id"
+              name="oidc_provider_client_id"
               label="Client ID"
               value={form.clientId}
               placeholder={view.client_id_default ?? ''}
@@ -325,6 +357,7 @@ export function ProviderEditModal({
               <div className="flex items-center gap-2">
                 <Input
                   id="client-secret"
+                  name="oidc_provider_client_secret"
                   type={showSecret ? 'text' : 'password'}
                   // "new-password" is the one autocomplete value that
                   // reliably suppresses autofill on password fields;
@@ -393,6 +426,7 @@ export function ProviderEditModal({
 
             <FieldRow
               id="claim-style"
+              name="oidc_provider_claim_style"
               label="Claim style"
               value={form.claimStyle}
               placeholder={view.claim_style_default ?? ''}
@@ -402,6 +436,7 @@ export function ProviderEditModal({
 
             <FieldRow
               id="scopes"
+              name="oidc_provider_scopes"
               label="Scopes"
               value={form.scopes}
               placeholder={view.scopes_default.join(', ')}
@@ -483,6 +518,13 @@ export function ProviderEditModal({
 
 interface FieldRowProps {
   id: string;
+  /**
+   * Explicit non-credential `name` so password managers don't
+   * heuristically classify this as a login field. We use a
+   * `oidc_provider_*` prefix so the semantics are clear and nothing
+   * looks like `username` / `password` / `email`.
+   */
+  name: string;
   label: string;
   value: string;
   placeholder: string;
@@ -498,6 +540,7 @@ interface FieldRowProps {
 
 function FieldRow({
   id,
+  name,
   label,
   value,
   placeholder,
@@ -510,6 +553,7 @@ function FieldRow({
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
+        name={name}
         type="text"
         autoComplete="off"
         spellCheck={false}
