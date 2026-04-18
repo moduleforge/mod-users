@@ -62,14 +62,22 @@ function emptyForm(): FormState {
 }
 
 function viewToForm(view: OIDCProviderView): FormState {
+  // Populate each field with the current effective value so the admin
+  // sees what's actually in use (env values, well-known defaults, or DB
+  // overrides — whichever wins). Clearing a field and saving writes
+  // null for that key, which drops the DB override and lets env /
+  // well-known take over again; at that point the grey placeholder
+  // shows what will resolve on save.
   return {
-    displayName: view.display_name ?? '',
-    issuerUrl: view.issuer_url ?? '',
-    clientId: view.client_id ?? '',
+    displayName: view.display_name ?? view.display_name_default ?? '',
+    issuerUrl: view.issuer_url ?? view.issuer_url_default ?? '',
+    clientId: view.client_id ?? view.client_id_default ?? '',
     clientSecret: '',
     clearSecret: false,
-    claimStyle: view.claim_style ?? '',
-    scopes: view.scopes ? view.scopes.join(', ') : '',
+    claimStyle: view.claim_style ?? view.claim_style_default ?? '',
+    scopes: view.scopes
+      ? view.scopes.join(', ')
+      : (view.scopes_default ?? []).join(', '),
     enabled: view.enabled,
   };
 }
@@ -284,8 +292,17 @@ export function ProviderEditModal({
                 <Input
                   id="client-secret"
                   type={showSecret ? 'text' : 'password'}
-                  autoComplete="off"
+                  // "new-password" is the one autocomplete value that
+                  // reliably suppresses autofill on password fields;
+                  // combined with vendor-ignore attrs it also keeps
+                  // LastPass/1Password/Bitwarden from offering to
+                  // save "this password" for the server URL.
+                  autoComplete="new-password"
                   spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   value={form.clientSecret}
                   placeholder={secretPlaceholder}
                   onChange={(e) =>
@@ -450,6 +467,13 @@ function FieldRow({
         type="text"
         autoComplete="off"
         spellCheck={false}
+        // Autofill managers (LastPass, 1Password, Bitwarden) ignore
+        // plain `autoComplete="off"` on text inputs; these
+        // vendor-specific attributes are the only reliable opt-out.
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-bwignore="true"
+        data-form-type="other"
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
