@@ -30,6 +30,11 @@ type Querier interface {
 	CreateServiceAccount(ctx context.Context, arg CreateServiceAccountParams) (ServiceAccount, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAuthLocal(ctx context.Context, userID int64) error
+	// Remove a provider override row. Used by the "revert" endpoint — after
+	// deletion the merge layer falls back to env + well-known defaults.
+	// Returns the number of rows deleted so the handler can distinguish
+	// 204 (deleted) from 404 (never existed).
+	DeleteOIDCProvider(ctx context.Context, id string) (int64, error)
 	GetActiveEmailCode(ctx context.Context, arg GetActiveEmailCodeParams) (EmailCode, error)
 	GetActivePasswordReset(ctx context.Context, tokenHash string) (PasswordReset, error)
 	GetAppBySlug(ctx context.Context, slug string) (App, error)
@@ -40,6 +45,8 @@ type Querier interface {
 	GetLegalEntityByEntityID(ctx context.Context, entityID int64) (LegalEntity, error)
 	GetNaturalPersonByLegalEntityID(ctx context.Context, legalEntityID int64) (NaturalPerson, error)
 	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
+	// Fetch one provider override row by id.
+	GetOIDCProvider(ctx context.Context, id string) (OidcProvider, error)
 	GetServiceAccountByEntityID(ctx context.Context, entityID int64) (ServiceAccount, error)
 	GetUserByAuth(ctx context.Context, arg GetUserByAuthParams) (User, error)
 	GetUserByEmail(ctx context.Context, lower string) (User, error)
@@ -49,6 +56,8 @@ type Querier interface {
 	ListApps(ctx context.Context) ([]App, error)
 	ListAuditByActor(ctx context.Context, arg ListAuditByActorParams) ([]AuditLog, error)
 	ListAuditByTarget(ctx context.Context, arg ListAuditByTargetParams) ([]AuditLog, error)
+	// Return every provider override row, sorted by id for stable output.
+	ListOIDCProviders(ctx context.Context) ([]OidcProvider, error)
 	ListRecentAudit(ctx context.Context, arg ListRecentAuditParams) ([]AuditLog, error)
 	ListUserApps(ctx context.Context, userID int64) ([]AppsUser, error)
 	RemoveUserFromApp(ctx context.Context, arg RemoveUserFromAppParams) error
@@ -69,6 +78,16 @@ type Querier interface {
 	UpdateOIDCConfig(ctx context.Context, arg UpdateOIDCConfigParams) error
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 	UpsertAuthLocal(ctx context.Context, arg UpsertAuthLocalParams) error
+	// Insert or replace a provider override row. NULL override fields mean
+	// "no opinion at this layer"; the merge code treats NULL as pass-through
+	// to env / well-known defaults.
+	//
+	// The handler is responsible for computing the merged row before
+	// calling: partial PATCH semantics (e.g. "keep existing client_secret
+	// when field is omitted") must be resolved in Go code, because SQL
+	// NULL doesn't distinguish "field absent" from "explicit null". This
+	// keeps the query trivial and the semantics readable.
+	UpsertOIDCProvider(ctx context.Context, arg UpsertOIDCProviderParams) (OidcProvider, error)
 	WriteAudit(ctx context.Context, arg WriteAuditParams) error
 }
 

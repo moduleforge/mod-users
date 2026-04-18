@@ -102,6 +102,19 @@ type OidcConfig struct {
 	SavedAt             pgtype.Timestamptz `json:"saved_at"`
 }
 
+type OidcProvider struct {
+	ID           string             `json:"id"`
+	DisplayName  pgtype.Text        `json:"display_name"`
+	IssuerUrl    pgtype.Text        `json:"issuer_url"`
+	ClientID     pgtype.Text        `json:"client_id"`
+	ClientSecret pgtype.Text        `json:"client_secret"`
+	ClaimStyle   pgtype.Text        `json:"claim_style"`
+	Scopes       []string           `json:"scopes"`
+	Enabled      bool               `json:"enabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type PasswordReset struct {
 	ID         int64              `json:"id"`
 	UserID     int64              `json:"user_id"`
