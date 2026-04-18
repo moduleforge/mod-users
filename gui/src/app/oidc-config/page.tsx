@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Pencil, Plus } from 'lucide-react';
 import { ApiRequestError } from '@/lib/api';
 import { useOptionalAuth } from '@/lib/auth-context';
 import {
@@ -11,6 +11,7 @@ import {
   type OIDCProviderStatus,
   type OIDCStatus,
 } from '@/lib/oidc-config';
+import type { OIDCProviderAuth } from '@/lib/oidc-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { ErrorMessage } from '@/components/error-message';
+import { ProviderEditModal } from './provider-edit-modal';
+import { ProviderAddModal } from './provider-add-modal';
 
 const REDIRECT_DELAY_MS = 2000;
 
@@ -60,6 +63,12 @@ export default function OIDCConfigPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReverting, setIsReverting] = useState(false);
   const [isTokenSuccess, setIsTokenSuccess] = useState(false);
+  // Per-provider edit modal + add modal state. We keep them at the page
+  // level so a successful save can trigger the shared status refresh.
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(
+    null,
+  );
+  const [isAddOpen, setIsAddOpen] = useState(false);
 
   function applyStatus(s: OIDCStatus) {
     setStatus(s);
@@ -67,6 +76,32 @@ export default function OIDCConfigPage() {
       Object.fromEntries(s.providers.map((p) => [p.id, p.enabled])),
     );
   }
+
+  // Build the auth object the per-provider helpers expect. Admin mode
+  // wins when both paths are technically available (admin can still paste
+  // a setup token but we prefer the session). Null means "no auth" and
+  // must disable the modal triggers.
+  const providerAuth: OIDCProviderAuth | null = useMemo(() => {
+    if (isAdminMode && auth?.token) return { adminBearer: auth.token };
+    const trimmed = setupToken.trim();
+    if (trimmed !== '') return { setupToken: trimmed };
+    return null;
+  }, [isAdminMode, auth?.token, setupToken]);
+
+  // Reload status after a modal save so the OK/Failed badges and the
+  // current enabled set match the newly-persisted DB state.
+  const refreshStatus = useCallback(async () => {
+    try {
+      const next = await fetchOIDCStatus();
+      applyStatus(next);
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setFormError(err.message);
+      } else {
+        setFormError('Could not refresh status.');
+      }
+    }
+  }, []);
 
   // Initial status fetch.
   useEffect(() => {
@@ -289,7 +324,24 @@ export default function OIDCConfigPage() {
               providers={status.providers}
               toggles={toggles}
               onToggle={handleToggle}
+              onEdit={
+                providerAuth
+                  ? (id) => setEditingProviderId(id)
+                  : undefined
+              }
             />
+
+            <div className="flex items-center justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!providerAuth}
+                onClick={() => setIsAddOpen(true)}
+              >
+                <Plus /> Add provider
+              </Button>
+            </div>
 
             {revertMessage && (
               <p className="text-xs text-muted-foreground">{revertMessage}</p>
@@ -323,6 +375,20 @@ export default function OIDCConfigPage() {
           </p>
         </CardFooter>
       </Card>
+
+      <ProviderEditModal
+        providerId={editingProviderId}
+        auth={editingProviderId ? providerAuth : null}
+        onClose={() => setEditingProviderId(null)}
+        onSaved={refreshStatus}
+      />
+
+      <ProviderAddModal
+        open={isAddOpen}
+        auth={isAddOpen ? providerAuth : null}
+        onClose={() => setIsAddOpen(false)}
+        onCreated={refreshStatus}
+      />
     </PageShell>
   );
 }
@@ -339,9 +405,20 @@ interface ProviderListProps {
   providers: OIDCProviderStatus[];
   toggles: Record<string, boolean>;
   onToggle: (id: string, next: boolean) => void;
+  /**
+   * When provided, each row renders an Edit pencil that invokes this
+   * callback with the provider id. Omit to hide the affordance (e.g. when
+   * no auth path is available yet).
+   */
+  onEdit?: (id: string) => void;
 }
 
-function ProviderList({ providers, toggles, onToggle }: ProviderListProps) {
+function ProviderList({
+  providers,
+  toggles,
+  onToggle,
+  onEdit,
+}: ProviderListProps) {
   if (providers.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -359,6 +436,7 @@ function ProviderList({ providers, toggles, onToggle }: ProviderListProps) {
             provider={p}
             checked={toggles[p.id] ?? false}
             onToggle={(next) => onToggle(p.id, next)}
+            onEdit={onEdit ? () => onEdit(p.id) : undefined}
           />
         ))}
       </div>
@@ -370,9 +448,15 @@ interface ProviderRowProps {
   provider: OIDCProviderStatus;
   checked: boolean;
   onToggle: (next: boolean) => void;
+  onEdit?: () => void;
 }
 
-function ProviderRow({ provider, checked, onToggle }: ProviderRowProps) {
+function ProviderRow({
+  provider,
+  checked,
+  onToggle,
+  onEdit,
+}: ProviderRowProps) {
   const disabled = !provider.configured;
   const switchId = `provider-${provider.id}`;
   const statusBadge = useMemo(() => {
@@ -392,12 +476,25 @@ function ProviderRow({ provider, checked, onToggle }: ProviderRowProps) {
           </Label>
           {statusBadge}
         </div>
-        <Switch
-          id={switchId}
-          checked={checked}
-          onCheckedChange={onToggle}
-          disabled={disabled}
-        />
+        <div className="flex items-center gap-1">
+          <Switch
+            id={switchId}
+            checked={checked}
+            onCheckedChange={onToggle}
+            disabled={disabled}
+          />
+          {onEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onEdit}
+              aria-label={`Edit ${provider.display_name}`}
+            >
+              <Pencil />
+            </Button>
+          )}
+        </div>
       </div>
       {!provider.configured && (
         <p className="text-xs text-muted-foreground">
