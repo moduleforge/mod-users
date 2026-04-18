@@ -171,6 +171,10 @@ export function ProviderAddModal({
               type="text"
               autoComplete="off"
               spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
               value={form.id}
               placeholder="e.g. google, microsoft, authelia"
               onChange={(e) => {
@@ -217,8 +221,12 @@ export function ProviderAddModal({
               <Input
                 id="add-client-secret"
                 type={showSecret ? 'text' : 'password'}
-                autoComplete="off"
+                autoComplete="new-password"
                 spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
                 value={form.clientSecret}
                 placeholder="(not set)"
                 onChange={(e) =>
@@ -317,6 +325,10 @@ function FieldRow({
         type="text"
         autoComplete="off"
         spellCheck={false}
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-bwignore="true"
+        data-form-type="other"
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
