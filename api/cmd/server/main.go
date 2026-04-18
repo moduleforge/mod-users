@@ -80,6 +80,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Merge env-declared providers with the DB-persisted override layer
+	// (phase 9.11a) so a prior admin edit sticks across restarts.
+	// LoadMergedProviders is idempotent with no DB rows — boots without
+	// oidc_providers entries produce a registry identical to env.
+	merged, err := config.LoadMergedProviders(ctx, cfg.Providers, queries)
+	if err != nil {
+		slog.ErrorContext(ctx, "oidc provider merge failed", "error", err)
+		os.Exit(1)
+	}
+	cfg.Providers = config.MergedRegistry(merged)
+
 	// Build the OAuth orchestrator. Per-provider discovery failures are
 	// captured in ProviderState.Err and logged; the bad provider is simply
 	// omitted from EnabledProviders(). Only construction-level problems
@@ -221,6 +232,14 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(queries)
 	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
 
+	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
+		Queries:      queries,
+		EnvRegistry:  cfg.Providers,
+		OAuth:        oauth,
+		RedirectBase: cfg.Auth.OAuthRedirectBaseURL,
+		Confirmer:    onboarding,
+	})
+
 	// Onboarding endpoints. Mounted only when TOKEN_DISPLAY != none.
 	// They must be reachable even when state is unconfirmed (the whole
 	// point), so they sit OUTSIDE the RequireOIDCConfirmed gate.
@@ -229,6 +248,12 @@ func main() {
 			r.Get("/status", onboarding.Status)
 			r.Post("/confirm", onboarding.Confirm)
 			r.Get("/saved", onboarding.Saved)
+			// Per-provider CRUD (phase 9.11a). All writes require admin
+			// OR setup token; reads require the same (no public info).
+			r.Post("/providers", providersHandler.Create)
+			r.Get("/providers/{id}", providersHandler.Get)
+			r.Put("/providers/{id}", providersHandler.Update)
+			r.Delete("/providers/{id}", providersHandler.Revert)
 			if cfg.Onboarding.TokenDisplay == config.TokenDisplayLocalhost ||
 				cfg.Onboarding.TokenDisplay == config.TokenDisplayBoth {
 				r.Get("/setup-token", onboarding.SetupToken)

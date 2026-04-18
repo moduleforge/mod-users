@@ -164,6 +164,11 @@ type statusProvider struct {
 	Enabled     bool   `json:"enabled"`
 	InitOK      bool   `json:"init_ok"`
 	Error       string `json:"error,omitempty"`
+	// CallbackURL is the public-facing OIDC callback for this provider,
+	// useful to the admin UI so it can display the value an operator
+	// must register at their IdP. Empty when OAuthRedirectBaseURL is
+	// unset (OIDC disabled).
+	CallbackURL string `json:"callback_url,omitempty"`
 }
 
 // Status handles GET /v1/oidc-config/status. It is deliberately
@@ -605,6 +610,9 @@ func (h *OIDCConfigHandler) buildStatusProviders(overrides map[string]bool) []st
 			DisplayName: p.DisplayName,
 			Configured:  true,
 			Enabled:     enabled,
+		}
+		if h.deps.OAuth != nil && h.deps.OAuth.RedirectBase != "" {
+			sp.CallbackURL = strings.TrimRight(h.deps.OAuth.RedirectBase, "/") + "/v1/auth/oidc/" + id + "/callback"
 		}
 		if state := byID[id]; state != nil {
 			sp.InitOK = state.InitOK
