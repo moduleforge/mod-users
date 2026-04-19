@@ -193,7 +193,7 @@ func TestOAuth_EndToEnd(t *testing.T) {
 
 	// 4. Drive AuthorizeURL → capture the nonce and state for the mock token
 	//    endpoint to echo back.
-	authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile")
+	authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile", false)
 	if err != nil {
 		t.Fatalf("AuthorizeURL: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestOAuth_Exchange_StateCookieMismatch(t *testing.T) {
 	oauth := newOAuthForStateOnlyTest(t)
 
 	// Generate a valid state token for one return path.
-	authURL, state, err := oauth.AuthorizeURL("google", "/profile")
+	authURL, state, err := oauth.AuthorizeURL("google", "/profile", false)
 	if err != nil {
 		t.Fatalf("AuthorizeURL: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestOAuth_Exchange_MissingState(t *testing.T) {
 
 func TestOAuth_AuthorizeURL_UnknownProvider(t *testing.T) {
 	oauth := newOAuthForStateOnlyTest(t)
-	_, _, err := oauth.AuthorizeURL("unknown", "/")
+	_, _, err := oauth.AuthorizeURL("unknown", "/", false)
 	if err == nil {
 		t.Fatal("expected ErrUnknownProvider")
 	}
@@ -315,7 +315,7 @@ func TestOAuth_Exchange_IDTokenTampering(t *testing.T) {
 				t.Fatalf("NewOAuth: %v", err)
 			}
 
-			authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile")
+			authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile", false)
 			if err != nil {
 				t.Fatalf("AuthorizeURL: %v", err)
 			}
@@ -610,7 +610,7 @@ func TestNewOAuth_PartialInitFailure(t *testing.T) {
 
 	// AuthorizeURL likewise should refuse to build an auth URL for the bad
 	// provider — otherwise we'd redirect the browser to a broken flow.
-	_, _, err = oauth.AuthorizeURL("microsoft", "/")
+	_, _, err = oauth.AuthorizeURL("microsoft", "/", false)
 	if err == nil {
 		t.Fatal("AuthorizeURL on bad provider: expected error, got nil")
 	}
@@ -869,7 +869,7 @@ func runMultiTenantExchange(t *testing.T, h *fakeMultiTenantHarness) (Principal,
 		t.Fatalf("NewOAuth: %v", err)
 	}
 
-	authURL, stateToken, err := oauth.AuthorizeURL("microsoft", "/profile")
+	authURL, stateToken, err := oauth.AuthorizeURL("microsoft", "/profile", false)
 	if err != nil {
 		t.Fatalf("AuthorizeURL: %v", err)
 	}
