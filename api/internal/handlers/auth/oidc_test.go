@@ -209,6 +209,61 @@ func TestCallback_MissingStateCookie_ClearsCookie(t *testing.T) {
 	assertStateCookieDeleted(t, rec)
 }
 
+// TestRedirectToTestResult_URLShape pins the query-param shape consumed
+// by the /oidc-config banner: success carries email/sub/issuer,
+// failure carries test_error, both carry test_provider + test_result.
+func TestRedirectToTestResult_URLShape(t *testing.T) {
+	registry := config.ProviderRegistry{"google": config.Provider{ID: "google"}}
+	h := newTestHandler(t, registry)
+
+	t.Run("success", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/oidc/google/callback", nil)
+		h.redirectToTestResult(rec, req, "google", "zane@example.test", "abc-123", "https://accounts.google.com", "")
+		if rec.Code != http.StatusFound {
+			t.Fatalf("status = %d, want 302", rec.Code)
+		}
+		loc := rec.Header().Get("Location")
+		for _, want := range []string{
+			"/oidc-config",
+			"test_result=ok",
+			"test_provider=google",
+			"test_email=zane%40example.test",
+			"test_sub=abc-123",
+			"test_issuer=https%3A%2F%2Faccounts.google.com",
+		} {
+			if !strings.Contains(loc, want) {
+				t.Errorf("Location missing %q: %s", want, loc)
+			}
+		}
+		if strings.Contains(loc, "test_error") {
+			t.Errorf("success should not include test_error: %s", loc)
+		}
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/oidc/google/callback", nil)
+		h.redirectToTestResult(rec, req, "microsoft", "", "", "", "issuer mismatch: got X, want Y")
+		loc := rec.Header().Get("Location")
+		for _, want := range []string{
+			"/oidc-config",
+			"test_result=fail",
+			"test_provider=microsoft",
+			"test_error=issuer+mismatch",
+		} {
+			if !strings.Contains(loc, want) {
+				t.Errorf("Location missing %q: %s", want, loc)
+			}
+		}
+		for _, absent := range []string{"test_email=", "test_sub=", "test_issuer="} {
+			if strings.Contains(loc, absent) {
+				t.Errorf("failure should not include %q: %s", absent, loc)
+			}
+		}
+	})
+}
+
 // TestNormalizeProviderID verifies the path-param lowercasing used by Start
 // and Callback so a URL like /v1/auth/oidc/Google/start still hits the
 // "google" registry entry. Exercising the helper directly keeps this test

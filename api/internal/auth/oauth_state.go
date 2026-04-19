@@ -18,6 +18,12 @@ type StatePayload struct {
 	ReturnPath string `json:"r"`
 	Nonce      string `json:"n"` // base64 nonce used as the OIDC nonce claim
 	Expires    int64  `json:"e"` // unix seconds
+	// TestMode is set when the flow was initiated via /start?mode=test.
+	// The callback handler branches on this to skip UserResolver and
+	// IssueLocalJWT — no session is created — and redirect to a
+	// test-result URL instead. Zero-value (false) keeps back-compat
+	// with state cookies minted before 9.18.
+	TestMode bool `json:"t,omitempty"`
 }
 
 // Expired reports whether the payload's expiry is in the past.

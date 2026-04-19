@@ -41,6 +41,32 @@ func TestStateSigner_RoundTrip(t *testing.T) {
 	if got.Expires != original.Expires {
 		t.Errorf("Expires round-trip: got %d, want %d", got.Expires, original.Expires)
 	}
+	if got.TestMode {
+		t.Errorf("TestMode: got true, want false (zero value)")
+	}
+}
+
+func TestStateSigner_TestModeRoundTrip(t *testing.T) {
+	signer, err := NewStateSigner([]byte("test-secret-key-32-bytes-minimum!"))
+	if err != nil {
+		t.Fatalf("NewStateSigner: %v", err)
+	}
+	token, err := signer.Sign(StatePayload{
+		Provider: "microsoft",
+		Nonce:    "n",
+		Expires:  time.Now().Add(time.Minute).Unix(),
+		TestMode: true,
+	})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	got, err := signer.Verify(token)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !got.TestMode {
+		t.Errorf("TestMode: got false, want true")
+	}
 }
 
 func TestStateSigner_TamperedMACRejected(t *testing.T) {

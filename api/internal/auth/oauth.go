@@ -394,8 +394,12 @@ var ErrStateValidation = errors.New("oauth: state validation failed")
 
 // AuthorizeURL builds the OIDC authorization URL the browser should be
 // redirected to, along with the signed state token that must be stored in
-// the oidc_state cookie so the callback can verify it.
-func (o *OAuth) AuthorizeURL(providerID, returnPath string) (authorizeURL, stateToken string, err error) {
+// the oidc_state cookie so the callback can verify it. testMode is
+// passed through to the StatePayload so the callback knows to skip
+// UserResolver + JWT issuance and redirect to a test-result URL; the
+// authorize URL itself is identical for test vs real (the IdP has no
+// notion of "test me").
+func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool) (authorizeURL, stateToken string, err error) {
 	s, err := o.stateByID(providerID)
 	if err != nil {
 		return "", "", err
@@ -416,6 +420,7 @@ func (o *OAuth) AuthorizeURL(providerID, returnPath string) (authorizeURL, state
 		ReturnPath: returnPath,
 		Nonce:      nonce,
 		Expires:    time.Now().Add(stateTTL).Unix(),
+		TestMode:   testMode,
 	}
 	token, err := o.StateSigner.Sign(payload)
 	if err != nil {

@@ -6,6 +6,7 @@ import { ApiRequestError } from '@/lib/api';
 import {
   fetchOIDCProvider,
   revertOIDCProvider,
+  testProviderURL,
   updateOIDCProvider,
   type OIDCFieldSource,
   type OIDCProviderAuth,
@@ -494,6 +495,23 @@ export function ProviderEditModal({
             {isReverting ? 'Reverting...' : 'Revert'}
           </Button>
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                if (!providerId) return;
+                // New tab: the auth flow navigates away from this page,
+                // and we want the modal + admin session preserved in
+                // the original tab. After the round-trip the banner on
+                // /oidc-config (same origin) shows the result — and
+                // reminds the admin which tab it is.
+                window.open(testProviderURL(providerId), '_blank');
+              }}
+              disabled={isLoading || isSaving || isReverting || !view || !providerId}
+              title="Exercises the full OIDC round-trip in a new tab and reports success/failure without changing your session. Save your changes first if you've edited this config."
+            >
+              Test configuration
+            </Button>
             <Button
               type="button"
               variant="outline"

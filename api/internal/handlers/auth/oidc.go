@@ -85,7 +85,14 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 	providerID := normalizeProviderID(r)
 
 	returnPath := r.URL.Query().Get("return")
-	authURL, state, err := h.oauth.AuthorizeURL(providerID, returnPath)
+	// ?mode=test is the "Test configuration" affordance from the Edit
+	// modal — the browser runs the full authorize/callback loop but
+	// the callback skips resolver + JWT so the admin's session is
+	// untouched. Any other mode value is ignored (fall through to
+	// normal login), matching the "be generous in what you accept"
+	// spirit of OAuth start.
+	testMode := r.URL.Query().Get("mode") == "test"
+	authURL, state, err := h.oauth.AuthorizeURL(providerID, returnPath, testMode)
 	if err != nil {
 		// Unknown IDs and init-failed providers both surface as 404 — an
 		// operator-observable failure (slog.Warn at boot) that the user has
@@ -157,7 +164,28 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			server.Error(w, http.StatusBadRequest, "bad_request", "invalid or expired state")
 			return
 		}
+		// Test mode: surface the exchange/verify error directly on the
+		// /oidc-config banner instead of the generic "authentication_failed"
+		// redirect, since diagnosing the IdP config is the entire point.
+		if statePayload.TestMode {
+			h.redirectToTestResult(w, r, providerID, "", "", "", err.Error())
+			return
+		}
 		h.redirectToFrontendError(w, r, "authentication_failed")
+		return
+	}
+
+	// Test path: id_token verified cleanly. Skip resolver + JWT
+	// (no session mutation) and bounce back to /oidc-config with the
+	// verified identity details so the admin can confirm what the IdP
+	// asserted.
+	if statePayload.TestMode {
+		slog.InfoContext(r.Context(), "oidc test succeeded",
+			"provider", providerID,
+			"email", principal.Email,
+			"subject", principal.Subject,
+		)
+		h.redirectToTestResult(w, r, providerID, principal.Email, principal.Subject, principal.Issuer, "")
 		return
 	}
 
@@ -226,6 +254,40 @@ func (h *OIDCHandler) redirectToFrontendError(w http.ResponseWriter, r *http.Req
 	}
 	q := u.Query()
 	q.Set("error", code)
+	u.RawQuery = q.Encode()
+	http.Redirect(w, r, u.String(), http.StatusFound)
+}
+
+// redirectToTestResult 302s back to /oidc-config (same origin as the
+// configured FrontendReturnURL) with the test outcome as query params.
+// Unlike the real-login path we send result fields in the QUERY string,
+// not the fragment — there's no secret to hide and the GUI reads them
+// via useSearchParams. testErr is the human-readable error when the
+// test failed; pass "" on success.
+func (h *OIDCHandler) redirectToTestResult(
+	w http.ResponseWriter, r *http.Request,
+	providerID, email, subject, issuer, testErr string,
+) {
+	u, err := url.Parse(h.oauth.FrontendReturnURL)
+	if err != nil {
+		server.Error(w, http.StatusInternalServerError, "internal_error", "test configuration failed")
+		return
+	}
+	// FrontendReturnURL points at /auth/oidc/return; the test banner
+	// lives on /oidc-config (same origin) so swap the path.
+	u.Path = "/oidc-config"
+	u.Fragment = ""
+	q := url.Values{}
+	if testErr != "" {
+		q.Set("test_result", "fail")
+		q.Set("test_error", testErr)
+	} else {
+		q.Set("test_result", "ok")
+		q.Set("test_email", email)
+		q.Set("test_sub", subject)
+		q.Set("test_issuer", issuer)
+	}
+	q.Set("test_provider", providerID)
 	u.RawQuery = q.Encode()
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }

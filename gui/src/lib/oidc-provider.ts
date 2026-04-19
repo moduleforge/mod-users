@@ -277,3 +277,13 @@ export const WELL_KNOWN_HINTS: Record<string, WellKnownHint> = {
     scopes: ['openid', 'email', 'profile'],
   },
 };
+
+/**
+ * URL the "Test configuration" button navigates to. The /start endpoint
+ * handler reads `?mode=test` and carries the marker through the state
+ * cookie to the callback, which redirects back to /oidc-config with a
+ * `test_result=…` query string instead of minting a session.
+ */
+export function testProviderURL(id: string): string {
+  return `${API_BASE_URL}/v1/auth/oidc/${encodeURIComponent(id)}/start?mode=test`;
+}

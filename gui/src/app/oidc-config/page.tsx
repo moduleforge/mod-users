@@ -31,6 +31,39 @@ import { ProviderAddModal } from './provider-add-modal';
 
 const REDIRECT_DELAY_MS = 2000;
 
+interface TestResult {
+  provider: string;
+  ok: boolean;
+  email?: string;
+  sub?: string;
+  issuer?: string;
+  error?: string;
+}
+
+/**
+ * Read the test-configuration result out of the URL query string and
+ * strip it so a refresh doesn't re-surface the banner. Returns null
+ * when no test params are present.
+ */
+function extractTestResultFromLocation(): TestResult | null {
+  if (typeof window === 'undefined') return null;
+  const qp = new URLSearchParams(window.location.search);
+  const result = qp.get('test_result');
+  if (result !== 'ok' && result !== 'fail') return null;
+  const provider = qp.get('test_provider') ?? '';
+  const out: TestResult = { provider, ok: result === 'ok' };
+  if (result === 'ok') {
+    out.email = qp.get('test_email') ?? undefined;
+    out.sub = qp.get('test_sub') ?? undefined;
+    out.issuer = qp.get('test_issuer') ?? undefined;
+  } else {
+    out.error = qp.get('test_error') ?? undefined;
+  }
+  // Clean the URL so refreshes don't re-surface the banner.
+  window.history.replaceState(null, '', window.location.pathname);
+  return out;
+}
+
 /**
  * `/oidc-config` — dual-mode setup + reconfigure page.
  *
@@ -69,6 +102,11 @@ export default function OIDCConfigPage() {
     null,
   );
   const [isAddOpen, setIsAddOpen] = useState(false);
+  // Test-configuration result banner (9.18). Populated from query
+  // params the API appended when redirecting back from a /start?mode=test
+  // round-trip. Parsed from window.location on mount to avoid pulling
+  // useSearchParams (which requires Suspense to work under SSR).
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   function applyStatus(s: OIDCStatus) {
     setStatus(s);
@@ -101,6 +139,14 @@ export default function OIDCConfigPage() {
         setFormError('Could not refresh status.');
       }
     }
+  }, []);
+
+  // Parse any ?test_result=… query params on first mount. This runs
+  // once per page load; the extract helper strips the params from the
+  // URL after reading so a refresh shows a clean page.
+  useEffect(() => {
+    const tr = extractTestResultFromLocation();
+    if (tr) setTestResult(tr);
   }, []);
 
   // Initial status fetch.
@@ -296,6 +342,12 @@ export default function OIDCConfigPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleConfirm} className="flex flex-col gap-5">
+            {testResult && (
+              <TestResultBanner
+                result={testResult}
+                onDismiss={() => setTestResult(null)}
+              />
+            )}
             <ErrorMessage message={formError} />
             {successMessage && (
               <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
@@ -506,6 +558,68 @@ function ProviderRow({
           Init error: {provider.error}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Green or red banner summarizing the outcome of a "Test configuration"
+ * round-trip. Shown above the form after the API redirects back from a
+ * /start?mode=test flow. Dismissible; also auto-cleared from the URL
+ * by extractTestResultFromLocation.
+ */
+function TestResultBanner({
+  result,
+  onDismiss,
+}: {
+  result: TestResult;
+  onDismiss: () => void;
+}) {
+  const provider = result.provider || 'provider';
+  if (result.ok) {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
+        <div className="flex-1">
+          <p className="font-medium">Test succeeded for {provider}.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Verified identity from the provider:
+            {result.email ? ` ${result.email}` : ''}
+            {result.sub ? ` (sub ${result.sub})` : ''}
+            {result.issuer ? ` via ${result.issuer}` : ''}.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onDismiss}
+          className="h-6 px-2 text-xs"
+        >
+          Dismiss
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
+      <div className="flex-1">
+        <p className="font-medium text-destructive">
+          Test failed for {provider}.
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {result.error ?? 'The provider rejected the sign-in attempt.'}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onDismiss}
+        className="h-6 px-2 text-xs"
+      >
+        Dismiss
+      </Button>
     </div>
   );
 }
