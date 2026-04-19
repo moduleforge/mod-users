@@ -90,6 +90,14 @@ export default function OIDCConfigPage() {
 
   const [setupToken, setSetupToken] = useState('');
   const [toggles, setToggles] = useState<Record<string, boolean>>({});
+  // baselineToggles snapshots the persisted enabled state. Dirty
+  // detection compares `toggles` to this; Save is disabled when they
+  // match. Updated on a fresh /status fetch and on successful confirm
+  // — but NOT on a failed confirm, so the admin can retry without
+  // losing unsaved toggles.
+  const [baselineToggles, setBaselineToggles] = useState<
+    Record<string, boolean>
+  >({});
   const [formError, setFormError] = useState<string | null>(null);
   const [revertMessage, setRevertMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -110,10 +118,27 @@ export default function OIDCConfigPage() {
 
   function applyStatus(s: OIDCStatus) {
     setStatus(s);
-    setToggles(
-      Object.fromEntries(s.providers.map((p) => [p.id, p.enabled])),
+    const next = Object.fromEntries(
+      s.providers.map((p) => [p.id, p.enabled]),
     );
+    setToggles(next);
+    setBaselineToggles(next);
   }
+
+  // Dirty iff any toggle differs from the snapshot of what the server
+  // currently persists. Drives the Save button's disabled state;
+  // matches the modal's baselineForm pattern so both screens feel the
+  // same.
+  const isDirty = useMemo(() => {
+    const keys = new Set([
+      ...Object.keys(toggles),
+      ...Object.keys(baselineToggles),
+    ]);
+    for (const k of keys) {
+      if ((toggles[k] ?? false) !== (baselineToggles[k] ?? false)) return true;
+    }
+    return false;
+  }, [toggles, baselineToggles]);
 
   // Build the auth object the per-provider helpers expect. Admin mode
   // wins when both paths are technically available (admin can still paste
@@ -410,12 +435,18 @@ export default function OIDCConfigPage() {
               </Button>
               <Button
                 type="submit"
+                // Save disabled when nothing changed (matches the
+                // modal's dirty-detection UX). Token-mode admins still
+                // need a token pasted. A failed save leaves Save
+                // enabled because baselineToggles only advances on
+                // success.
                 disabled={
                   isSubmitting ||
+                  !isDirty ||
                   (!isAdminMode && setupToken.trim() === '')
                 }
               >
-                {isSubmitting ? 'Confirming...' : 'Confirm'}
+                {isSubmitting ? 'Saving...' : 'Save'}
               </Button>
             </div>
           </form>

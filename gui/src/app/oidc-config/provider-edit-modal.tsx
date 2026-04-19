@@ -13,6 +13,7 @@ import {
   type OIDCProviderView,
   type OIDCProviderWriteBody,
 } from '@/lib/oidc-provider';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -97,19 +98,26 @@ function parseScopes(input: string): string[] | null {
 }
 
 /**
- * Emits the JSON body for PUT:
+ * Emits the JSON body for PUT. For each field:
  *  - empty text → `null` (clear override)
- *  - non-empty  → that value
+ *  - value matches the effective default (env value or well-known) →
+ *    `null` so the override doesn't needlessly displace whatever layer
+ *    is currently the source. Before this rule a Save on an unchanged
+ *    env-sourced field flipped every field's Source label to "DB
+ *    override"; now env / well-known keep their source as long as the
+ *    admin didn't actually type anything different.
+ *  - non-empty and different from default → the override value.
+ *
  * Secret is handled separately because the "absent" case must suppress
  * the field entirely (can't express with null/"" which both mean clear).
  */
-function buildWriteBody(form: FormState): OIDCProviderWriteBody {
+function buildWriteBody(form: FormState, view: OIDCProviderView): OIDCProviderWriteBody {
   const body: OIDCProviderWriteBody = {
-    display_name: form.displayName.trim() === '' ? null : form.displayName.trim(),
-    issuer_url: form.issuerUrl.trim() === '' ? null : form.issuerUrl.trim(),
-    client_id: form.clientId.trim() === '' ? null : form.clientId.trim(),
-    claim_style: form.claimStyle.trim() === '' ? null : form.claimStyle.trim(),
-    scopes: parseScopes(form.scopes),
+    display_name: resolveOverride(form.displayName, view.display_name_default),
+    issuer_url: resolveOverride(form.issuerUrl, view.issuer_url_default),
+    client_id: resolveOverride(form.clientId, view.client_id_default),
+    claim_style: resolveOverride(form.claimStyle, view.claim_style_default),
+    scopes: resolveScopesOverride(form.scopes, view.scopes_default),
     enabled: form.enabled,
   };
   if (form.clientSecret !== '') {
@@ -118,6 +126,48 @@ function buildWriteBody(form: FormState): OIDCProviderWriteBody {
     body.client_secret = '';
   }
   return body;
+}
+
+function resolveOverride(
+  formValue: string,
+  defaultValue: string | null,
+): string | null {
+  const trimmed = formValue.trim();
+  const def = (defaultValue ?? '').trim();
+  if (trimmed === '' || trimmed === def) return null;
+  return trimmed;
+}
+
+function resolveScopesOverride(
+  formValue: string,
+  defaultScopes: string[],
+): string[] | null {
+  const parsed = parseScopes(formValue);
+  if (parsed === null) return null;
+  if (
+    defaultScopes.length === parsed.length &&
+    defaultScopes.every((s, i) => s === parsed[i])
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+/**
+ * Deep-equal for FormState. All primitive fields, so a field-by-field
+ * check is straightforward and doesn't depend on object-key ordering.
+ */
+function formsEqual(a: FormState, b: FormState): boolean {
+  return (
+    a.displayName === b.displayName &&
+    a.issuerUrl === b.issuerUrl &&
+    a.clientId === b.clientId &&
+    a.clientSecret === b.clientSecret &&
+    a.clearSecret === b.clearSecret &&
+    a.claimStyle === b.claimStyle &&
+    a.scopes === b.scopes &&
+    a.enabled === b.enabled
+  );
 }
 
 /**
@@ -160,6 +210,12 @@ export function ProviderEditModal({
 
   const [view, setView] = useState<OIDCProviderView | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  // baselineForm is the last-persisted view of the form. Dirty detection
+  // compares `form` to this; Save + Test buttons branch on the result.
+  // Updated only on a successful load or a successful save — NOT on a
+  // failed save, so the admin can resubmit without the canonical DB
+  // state having changed.
+  const [baselineForm, setBaselineForm] = useState<FormState>(emptyForm);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -168,11 +224,17 @@ export function ProviderEditModal({
   const [showSecret, setShowSecret] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const isDirty = useMemo(
+    () => !formsEqual(form, baselineForm),
+    [form, baselineForm],
+  );
+
   // Load the provider view whenever the modal opens for a new provider.
   useEffect(() => {
     if (!open || !providerId || !auth) {
       setView(null);
       setForm(emptyForm());
+      setBaselineForm(emptyForm());
       setLoadError(null);
       setFormError(null);
       setShowSecret(false);
@@ -187,7 +249,9 @@ export function ProviderEditModal({
       .then((v) => {
         if (cancelled) return;
         setView(v);
-        setForm(viewToForm(v));
+        const next = viewToForm(v);
+        setForm(next);
+        setBaselineForm(next);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -206,25 +270,37 @@ export function ProviderEditModal({
     };
   }, [open, providerId, auth]);
 
+  // Blank placeholder on the secret field so "leave blank to keep"
+  // instructions below actually match what the admin sees. The
+  // dot-pattern the field used to show read as "there's already a
+  // value here" — which is technically accurate (has_client_secret is
+  // true) but visually inconsistent with the "type to replace" UX.
   const secretPlaceholder = useMemo(() => {
     if (!view) return '';
-    return view.has_client_secret ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '(not set)';
+    return view.has_client_secret ? '' : '(not set)';
   }, [view]);
 
   const handleSave = useCallback(async () => {
-    if (!providerId || !auth) return;
+    if (!providerId || !auth || !view) return;
     setFormError(null);
     setIsSaving(true);
     try {
       const updated = await updateOIDCProvider(
         providerId,
-        buildWriteBody(form),
+        buildWriteBody(form, view),
         auth,
       );
       setView(updated);
-      setForm(viewToForm(updated));
+      const next = viewToForm(updated);
+      setForm(next);
+      // Update baseline ONLY on success — a failed save leaves the
+      // admin's in-flight edits on screen and the DB unchanged, so the
+      // form IS still dirty against what's persisted.
+      setBaselineForm(next);
       onSaved();
-      onClose();
+      // Don't close the modal — admin usually wants to click "Test
+      // configuration" right after saving to verify the new values.
+      // Modal stays open until admin hits Cancel / X.
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setFormError(err.message);
@@ -234,7 +310,7 @@ export function ProviderEditModal({
     } finally {
       setIsSaving(false);
     }
-  }, [providerId, auth, form, onSaved, onClose]);
+  }, [providerId, auth, form, view, onSaved]);
 
   const handleRevert = useCallback(async () => {
     if (!providerId || !auth) return;
@@ -276,12 +352,16 @@ export function ProviderEditModal({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            Edit provider{view?.id ? `: ${view.id}` : ''}
-          </DialogTitle>
+          <div className="flex items-center justify-between gap-2">
+            <DialogTitle>
+              Edit provider{view?.id ? `: ${view.id}` : ''}
+            </DialogTitle>
+            {view ? <StatusBadge view={view} /> : null}
+          </div>
           <DialogDescription>
-            Values you enter become overrides. Leaving a field blank falls
-            back to the environment or well-known default shown as a hint.
+            Values you enter become overrides. Leaving a field blank (or
+            typing a value that matches the default) falls back to the
+            environment variable or well-known default.
           </DialogDescription>
         </DialogHeader>
 
@@ -322,6 +402,19 @@ export function ProviderEditModal({
               style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
               readOnly
             />
+
+            <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
+              <Label htmlFor="provider-enabled" className="text-sm font-medium">
+                Enabled
+              </Label>
+              <Switch
+                id="provider-enabled"
+                checked={form.enabled}
+                onCheckedChange={(next) =>
+                  setForm((f) => ({ ...f, enabled: next }))
+                }
+              />
+            </div>
 
             <FieldRow
               id="display-name"
@@ -446,19 +539,6 @@ export function ProviderEditModal({
               sourceText={sourceLabel(view.scopes_source, view.id, 'scopes')}
             />
 
-            <div className="flex items-center justify-between gap-2 py-1">
-              <Label htmlFor="provider-enabled" className="text-sm">
-                Enabled
-              </Label>
-              <Switch
-                id="provider-enabled"
-                checked={form.enabled}
-                onCheckedChange={(next) =>
-                  setForm((f) => ({ ...f, enabled: next }))
-                }
-              />
-            </div>
-
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="callback-url">Callback URL</Label>
               <div className="flex items-center gap-2">
@@ -507,8 +587,16 @@ export function ProviderEditModal({
                 // reminds the admin which tab it is.
                 window.open(testProviderURL(providerId), '_blank');
               }}
-              disabled={isLoading || isSaving || isReverting || !view || !providerId}
-              title="Exercises the full OIDC round-trip in a new tab and reports success/failure without changing your session. Save your changes first if you've edited this config."
+              // Test exercises what's PERSISTED, so we disable it while
+              // there are unsaved edits — otherwise the admin would
+              // test the old config despite seeing new values in the
+              // form. Save the changes, then Test.
+              disabled={isLoading || isSaving || isReverting || !view || !providerId || isDirty}
+              title={
+                isDirty
+                  ? 'Save your changes first — Test uses the persisted configuration.'
+                  : 'Exercises the full OIDC round-trip in a new tab and reports success/failure without changing your session.'
+              }
             >
               Test configuration
             </Button>
@@ -523,7 +611,11 @@ export function ProviderEditModal({
             <Button
               type="button"
               onClick={handleSave}
-              disabled={isLoading || isSaving || isReverting || !view}
+              // Save disabled when clean: nothing to persist. Dirty
+              // detection compares the live form to baselineForm, and
+              // baselineForm only advances on successful save — so a
+              // failed save leaves Save enabled for a retry.
+              disabled={isLoading || isSaving || isReverting || !view || !isDirty}
             >
               {isSaving ? 'Saving...' : 'Save'}
             </Button>
@@ -594,4 +686,17 @@ function FieldRow({
       )}
     </div>
   );
+}
+
+/**
+ * Small badge next to the DialogTitle echoing the per-provider status
+ * already shown on /oidc-config. Gives the admin an at-a-glance "this
+ * provider currently inits OK / currently fails" indicator without
+ * having to close the modal to check.
+ */
+function StatusBadge({ view }: { view: OIDCProviderView }) {
+  if (view.init_ok) {
+    return <Badge variant="default">OK</Badge>;
+  }
+  return <Badge variant="destructive">Failed</Badge>;
 }
