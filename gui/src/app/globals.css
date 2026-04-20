@@ -132,6 +132,16 @@
   html {
     @apply font-sans;
   }
+
+  /* Tailwind v4 dropped preflight's default cursor:pointer on <button>.
+     Restore the manicule for anything clickable — buttons (unless
+     disabled), ARIA buttons, anchor tags with an href. Disabled styles
+     win via specificity / :disabled / aria-disabled selectors. */
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href] {
+    cursor: pointer;
+  }
 }
 
 /* Hide LastPass's injected icon/overlay on opted-out inputs.
