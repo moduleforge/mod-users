@@ -2,7 +2,7 @@ version: "2"
 sql:
   - engine: "postgresql"
     queries: "./queries"
-    schema: "./migrations"
+    schema: "./schema/migrations"
     gen:
       go:
         package: "db"
@@ -10,6 +10,7 @@ sql:
         sql_package: "pgx/v5"
         emit_interface: true
         emit_json_tags: true
+        omit_unused_structs: true
         overrides:
           - db_type: "uuid"
             go_type:

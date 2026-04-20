@@ -6,18 +6,18 @@
 #   dev   — used as Atlas shadow DB for diff/lint (ephemeral)
 
 env "local" {
-  src = "file://migrations"
+  src = "file://schema/migrations"
   url = getenv("DATABASE_URL")
   dev = "docker://postgres/16/dev?search_path=public"
   migration {
-    dir = "file://migrations"
+    dir = "file://schema/migrations"
   }
 }
 
 env "ci" {
-  src = "file://migrations"
+  src = "file://schema/migrations"
   url = getenv("DATABASE_URL")
   migration {
-    dir = "file://migrations"
+    dir = "file://schema/migrations"
   }
 }

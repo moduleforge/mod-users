@@ -2,10 +2,31 @@
 
 DATABASE_URL ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 
+# Locate core-model migrations via go list, falling back to a relative path
+# for fresh clones before go work sync has run.
+CORE_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/core-model 2>/dev/null || echo ../../core-module/model)
+
 # Set by preflight if sqlc is available.
 SQLC ?=
 
 .DEFAULT_GOAL := build
+
+# ---------------------------------------------------------------------------
+# Compose — assemble core + users-module migrations into schema/migrations/
+# ---------------------------------------------------------------------------
+
+.PHONY: compose
+compose: ## Assemble composed migrations dir from core-model + users-module
+	@rm -rf schema/migrations
+	@mkdir -p schema/migrations
+	@cp $(CORE_DIR)/migrations/*.sql schema/migrations/
+	@cp migrations/*.sql schema/migrations/
+	@atlas migrate hash --dir file://schema/migrations > /dev/null
+
+build: compose
+migrate.up: compose
+migrate.status: compose
+migrate.hash: compose
 
 # ---------------------------------------------------------------------------
 # Preflight — verify tools, set vars
