@@ -245,6 +245,7 @@ export function ProviderAddModal({
             label="Client ID"
             value={form.clientId}
             placeholder=""
+            inputClassName="no-lastpass"
             onChange={(v) => setForm((f) => ({ ...f, clientId: v }))}
           />
 
@@ -261,6 +262,7 @@ export function ProviderAddModal({
                 data-1p-ignore="true"
                 data-bwignore="true"
                 data-form-type="other"
+                className="no-lastpass"
                 value={form.clientSecret}
                 placeholder="(not set)"
                 onChange={(e) =>
@@ -285,6 +287,7 @@ export function ProviderAddModal({
             label="Claim style"
             value={form.claimStyle}
             placeholder={hint?.claim_style ?? ''}
+            inputClassName="no-lastpass"
             onChange={(v) => setForm((f) => ({ ...f, claimStyle: v }))}
           />
 
@@ -344,6 +347,8 @@ interface FieldRowProps {
   value: string;
   placeholder: string;
   helpText?: string;
+  /** Extra className passed to the inner Input (see provider-edit-modal). */
+  inputClassName?: string;
   onChange: (next: string) => void;
 }
 
@@ -354,6 +359,7 @@ function FieldRow({
   value,
   placeholder,
   helpText,
+  inputClassName,
   onChange,
 }: FieldRowProps) {
   return (
@@ -369,6 +375,7 @@ function FieldRow({
         data-1p-ignore="true"
         data-bwignore="true"
         data-form-type="other"
+        className={inputClassName}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}

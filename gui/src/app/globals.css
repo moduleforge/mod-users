@@ -1,7 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@source "../../.yalc/@moduleforge/core-gui/dist";
+/* Scan core-gui's built JS so Tailwind emits CSS for classes used inside
+   its components (via cva). node_modules path works for both yalc-linked
+   native dev and Dockerfile-injected installs; .yalc/ is present only in
+   the former. */
+@source "../../node_modules/@moduleforge/core-gui/dist";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -128,4 +132,15 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Hide LastPass's injected icon/overlay on opted-out inputs.
+   Applied by adding `className="no-lastpass"` to inputs that should
+   not receive the password-manager affordance (e.g. OIDC client id,
+   client secret, claim style — which are config, not credentials). */
+input.no-lastpass ~ div[data-lastpass-icon-root],
+input.no-lastpass ~ div[data-lastpass-infield],
+input.no-lastpass ~ svg[data-lastpass-icon] {
+  display: none !important;
+  visibility: hidden !important;
 }

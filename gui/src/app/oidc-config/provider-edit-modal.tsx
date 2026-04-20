@@ -456,6 +456,7 @@ export function ProviderEditModal({
               label="Client ID"
               value={form.clientId}
               placeholder={view.client_id_default ?? ''}
+              inputClassName="no-lastpass"
               onChange={(v) => setForm((f) => ({ ...f, clientId: v }))}
               sourceText={sourceLabel(view.client_id_source, view.id, 'client_id')}
             />
@@ -478,6 +479,7 @@ export function ProviderEditModal({
                   data-1p-ignore="true"
                   data-bwignore="true"
                   data-form-type="other"
+                  className="no-lastpass"
                   value={form.clientSecret}
                   placeholder={secretPlaceholder}
                   onChange={(e) =>
@@ -538,6 +540,7 @@ export function ProviderEditModal({
               label="Claim style"
               value={form.claimStyle}
               placeholder={view.claim_style_default ?? ''}
+              inputClassName="no-lastpass"
               onChange={(v) => setForm((f) => ({ ...f, claimStyle: v }))}
               sourceText={sourceLabel(view.claim_style_source, view.id, 'claim_style')}
             />
@@ -659,6 +662,12 @@ interface FieldRowProps {
    * Caller typically builds this via `sourceLabel(...)`.
    */
   sourceText?: string;
+  /**
+   * Extra className passed through to the inner Input. Used to apply
+   * `no-lastpass` on config-only fields so the injected LastPass icon
+   * is hidden via globals.css.
+   */
+  inputClassName?: string;
   onChange: (next: string) => void;
 }
 
@@ -670,6 +679,7 @@ function FieldRow({
   placeholder,
   helpText,
   sourceText,
+  inputClassName,
   onChange,
 }: FieldRowProps) {
   return (
@@ -688,6 +698,7 @@ function FieldRow({
         data-1p-ignore="true"
         data-bwignore="true"
         data-form-type="other"
+        className={inputClassName}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
