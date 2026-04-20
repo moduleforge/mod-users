@@ -2,9 +2,11 @@
 set -e
 
 # Run database migrations if DB_URL is set and atlas is available.
-if [ -n "$DB_URL" ] && command -v atlas >/dev/null 2>&1 && [ -d /migrations ]; then
+# Migrations are assembled at build time into /app/schema/migrations/
+# (core-model 0000-0005 + users-module 0100-0109).
+if [ -n "$DB_URL" ] && command -v atlas >/dev/null 2>&1 && [ -d /app/schema/migrations ]; then
     echo "==> Running database migrations..."
-    atlas migrate apply --dir "file:///migrations" --url "$DB_URL" 2>&1 || \
+    atlas migrate apply --dir "file:///app/schema/migrations" --url "$DB_URL" 2>&1 || \
         echo "    (migrations already applied or failed — continuing)"
 fi
 
