@@ -33,7 +33,7 @@ import (
 
 // providerIDPattern matches the slug form required by both the env-var
 // convention and the migration CHECK constraint. Must stay in sync with
-// model/migrations/0014_oidc_providers.sql.
+// model/migrations/0108_oidc_providers.sql.
 var providerIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}[a-z0-9]$`)
 
 // OIDCProvidersQuerier is the narrow subset of db.Querier the provider
