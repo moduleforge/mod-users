@@ -13,7 +13,6 @@ import (
 
 type Querier interface {
 	ArchiveApp(ctx context.Context, id int64) error
-	ArchiveEntity(ctx context.Context, argUuid uuid.UUID) error
 	AssignUserToApp(ctx context.Context, arg AssignUserToAppParams) error
 	// Clear the setup token once the operator has confirmed configuration.
 	// Idempotent — safe to call on every confirmed boot.
@@ -21,13 +20,8 @@ type Querier interface {
 	ConsumeEmailCode(ctx context.Context, id int64) error
 	ConsumePasswordReset(ctx context.Context, id int64) error
 	CreateApp(ctx context.Context, arg CreateAppParams) (App, error)
-	CreateCorporation(ctx context.Context, arg CreateCorporationParams) (Corporation, error)
 	CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams) (EmailCode, error)
-	CreateEntity(ctx context.Context, kind string) (Entity, error)
-	CreateLegalEntity(ctx context.Context, arg CreateLegalEntityParams) (LegalEntity, error)
-	CreateNaturalPerson(ctx context.Context, arg CreateNaturalPersonParams) (NaturalPerson, error)
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
-	CreateServiceAccount(ctx context.Context, arg CreateServiceAccountParams) (ServiceAccount, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteAuthLocal(ctx context.Context, userID int64) error
 	// Remove a provider override row. Used by the "revert" endpoint — after
@@ -40,14 +34,9 @@ type Querier interface {
 	GetAppBySlug(ctx context.Context, slug string) (App, error)
 	GetAppByUUID(ctx context.Context, argUuid uuid.UUID) (App, error)
 	GetAuthLocal(ctx context.Context, userID int64) (AuthLocal, error)
-	GetCorporationByLegalEntityID(ctx context.Context, legalEntityID int64) (Corporation, error)
-	GetEntityByUUID(ctx context.Context, argUuid uuid.UUID) (Entity, error)
-	GetLegalEntityByEntityID(ctx context.Context, entityID int64) (LegalEntity, error)
-	GetNaturalPersonByLegalEntityID(ctx context.Context, legalEntityID int64) (NaturalPerson, error)
 	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
 	// Fetch one provider override row by id.
 	GetOIDCProvider(ctx context.Context, id string) (OidcProvider, error)
-	GetServiceAccountByEntityID(ctx context.Context, entityID int64) (ServiceAccount, error)
 	GetUserByAuth(ctx context.Context, arg GetUserByAuthParams) (User, error)
 	GetUserByEmail(ctx context.Context, lower string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -74,10 +63,7 @@ type Querier interface {
 	// Install or refresh the active setup-token hash; called once per boot
 	// when the state is unconfirmed and no hash is already present.
 	SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error
-	UnarchiveEntity(ctx context.Context, argUuid uuid.UUID) error
 	UpdateApp(ctx context.Context, arg UpdateAppParams) error
-	UpdateCorporation(ctx context.Context, arg UpdateCorporationParams) error
-	UpdateNaturalPerson(ctx context.Context, arg UpdateNaturalPersonParams) error
 	// Persist the operator's opt-out choice (called from POST /v1/oidc-config/confirm).
 	// Per-provider enable flags live in the oidc_providers table and are
 	// upserted directly — no JSONB column on this singleton since 9.16.

@@ -47,15 +47,6 @@ type AuthLocal struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
-type Corporation struct {
-	ID            int64              `json:"id"`
-	LegalEntityID int64              `json:"legal_entity_id"`
-	LegalName     string             `json:"legal_name"`
-	Jurisdiction  pgtype.Text        `json:"jurisdiction"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-}
-
 type EmailCode struct {
 	ID         int64              `json:"id"`
 	UserID     int64              `json:"user_id"`
@@ -64,33 +55,6 @@ type EmailCode struct {
 	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
 	ConsumedAt *time.Time         `json:"consumed_at"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-}
-
-type Entity struct {
-	ID         int64              `json:"id"`
-	Uuid       uuid.UUID          `json:"uuid"`
-	Kind       string             `json:"kind"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	ArchivedAt *time.Time         `json:"archived_at"`
-}
-
-type LegalEntity struct {
-	ID          int64              `json:"id"`
-	EntityID    int64              `json:"entity_id"`
-	Kind        string             `json:"kind"`
-	DisplayName string             `json:"display_name"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-type NaturalPerson struct {
-	ID            int64              `json:"id"`
-	LegalEntityID int64              `json:"legal_entity_id"`
-	GivenName     pgtype.Text        `json:"given_name"`
-	FamilyName    pgtype.Text        `json:"family_name"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
 type OidcConfig struct {
@@ -121,14 +85,6 @@ type PasswordReset struct {
 	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
 	ConsumedAt *time.Time         `json:"consumed_at"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-}
-
-type ServiceAccount struct {
-	ID        int64              `json:"id"`
-	EntityID  int64              `json:"entity_id"`
-	Label     string             `json:"label"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 type User struct {
