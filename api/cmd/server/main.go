@@ -12,6 +12,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	corehttpapi "github.com/moduleforge/core-api/httpapi"
+	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/users-module/api/internal/audit"
 	"github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/config"
@@ -198,6 +200,17 @@ func main() {
 
 	auditWriter := audit.New(queries)
 
+	// Build core services and router. coreSvcs delegates entity CRUD to the
+	// service layer; coreRouter mounts /entities/* routes (including /self).
+	coreSvcs := coreservice.New(coredb.New(pool), auditWriter)
+	coreRouter := corehttpapi.NewRouter(corehttpapi.Deps{
+		Pool:      pool,
+		Services:  coreSvcs,
+		Audit:     auditWriter,
+		Principal: auth.CorePrincipalAdapter{},
+		Logger:    logger,
+	})
+
 	// Build email sender.
 	emailSender := email.NewSMTPSender(
 		cfg.SMTP.Host,
@@ -229,8 +242,8 @@ func main() {
 	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
 
 	// Handlers for authenticated routes.
-	selfHandler := handlers.NewSelfHandler(queries, coreQueries, auditWriter)
-	usersHandler := handlers.NewUsersHandler(pool, queries, coreQueries, auditWriter)
+	// selfHandler removed — /entities/self is now served by coreRouter.
+	usersHandler := handlers.NewUsersHandler(pool, queries, coreQueries, coreSvcs, auditWriter)
 	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	auditHandler := handlers.NewAuditHandler(queries, coreQueries)
 	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
@@ -292,9 +305,10 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth(verifier, localMapper, resolver))
 
-			// Self endpoints (any authenticated user).
-			r.Get("/self", selfHandler.Get)
-			r.Put("/self", selfHandler.Put)
+			// Core entity routes: GET/PUT /v1/entities/self,
+			// CRUD /v1/entities/natural-persons, /corporations, /service-accounts, etc.
+			// Mounted at / so core's /entities/* paths become /v1/entities/*.
+			r.Mount("/", coreRouter)
 
 			// Assume identity (admin).
 			r.Delete("/assume", assumeHandler.EndAssume)

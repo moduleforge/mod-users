@@ -18,19 +18,21 @@ import (
 	localauth "github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
+	coreservice "github.com/moduleforge/core-api/service"
 )
 
 // UsersHandler serves the /v1/users endpoints.
 type UsersHandler struct {
-	pool  *pgxpool.Pool
-	q     *db.Queries
-	coreQ *coredb.Queries
-	audit audit.Writer
+	pool     *pgxpool.Pool
+	q        *db.Queries
+	coreQ    *coredb.Queries
+	coreSvcs *coreservice.Services
+	audit    audit.Writer
 }
 
 // NewUsersHandler creates a UsersHandler.
-func NewUsersHandler(pool *pgxpool.Pool, q *db.Queries, coreQ *coredb.Queries, aw audit.Writer) *UsersHandler {
-	return &UsersHandler{pool: pool, q: q, coreQ: coreQ, audit: aw}
+func NewUsersHandler(pool *pgxpool.Pool, q *db.Queries, coreQ *coredb.Queries, coreSvcs *coreservice.Services, aw audit.Writer) *UsersHandler {
+	return &UsersHandler{pool: pool, q: q, coreQ: coreQ, coreSvcs: coreSvcs, audit: aw}
 }
 
 // createUserRequest is the body for POST /v1/users (admin).
