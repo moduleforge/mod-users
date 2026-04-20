@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@source "../../.yalc/@moduleforge/core-gui/dist";
 
 @custom-variant dark (&:is(.dark *));
 
