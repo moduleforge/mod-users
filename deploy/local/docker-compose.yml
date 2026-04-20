@@ -134,8 +134,8 @@ services:
 
   api:
     build:
-      context: ../..
-      dockerfile: api/Dockerfile
+      context: ../../..
+      dockerfile: users-module/api/Dockerfile
     container_name: users-module-api
     restart: unless-stopped
     env_file:
