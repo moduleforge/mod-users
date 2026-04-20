@@ -1,28 +1,48 @@
 # Dev-mode Dockerfile for the GUI.
+#
 # Source is mounted as a volume for hot-reload; this image just provides
 # the Node runtime and installs dependencies.
 #
-# Build context: monorepo root (users-module/) — needed because pnpm
-# workspace hoists deps to the root node_modules. The gui/.yalc/ dir
-# (gitignored, populated by `make link-core` at the repo root) must
-# also be present so pnpm can resolve @moduleforge/core-gui via the
-# file: spec in gui/package.json.
+# Build context: user-components/ root (not users-module/). Compose sets
+# `context: ../../..` so both the api and gui builds share one context
+# rooted at the outer repo. This also lets us build core-module/gui as
+# a self-contained Docker stage and consume it here, instead of relying
+# on a host-side `make link-core` having populated users-module/gui/.yalc.
 
+# ---- Stage 1: build core-module/gui ----
+FROM node:24-alpine AS core-gui-builder
+
+WORKDIR /build
+
+COPY core-module/gui/package.json core-module/gui/package-lock.json ./
+RUN npm ci
+
+COPY core-module/gui/tsconfig.json core-module/gui/tsup.config.ts ./
+COPY core-module/gui/src ./src
+RUN npm run build
+
+# ---- Stage 2: users-module/gui dev runtime ----
 FROM node:24-alpine
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy workspace config + lockfile for dependency install.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY gui/package.json ./gui/
-# Yalc-linked local packages (e.g. @moduleforge/core-gui) — populated by
-# `make link-core` from the repo root. The dir must exist; fail loudly
-# at build time if not, rather than silently fall back to a stale cache.
-COPY gui/.yalc ./gui/.yalc
+# Copy users-module pnpm workspace + gui package manifest.
+COPY users-module/package.json users-module/pnpm-lock.yaml users-module/pnpm-workspace.yaml ./
+COPY users-module/gui/package.json ./gui/
 
-RUN pnpm install --frozen-lockfile
+# Drop in the core-gui package built in stage 1.
+COPY --from=core-gui-builder /build /opt/core-gui
+
+# Rewrite gui/package.json so pnpm resolves @moduleforge/core-gui from
+# the built package at /opt/core-gui instead of the host-side .yalc/
+# directory (which isn't guaranteed to exist in the build context).
+# --no-frozen-lockfile because we modified package.json — the dev image
+# recomputes the graph; the host lockfile stays authoritative for native
+# dev via pnpm.
+RUN sed -i 's|"file:\.yalc/@moduleforge/core-gui"|"file:/opt/core-gui"|' gui/package.json \
+    && pnpm install --no-frozen-lockfile
 
 WORKDIR /app/gui
 

@@ -182,8 +182,8 @@ services:
 
   gui:
     build:
-      context: ../..
-      dockerfile: gui/Dockerfile.dev
+      context: ../../..
+      dockerfile: users-module/gui/Dockerfile.dev
     container_name: users-module-gui
     restart: unless-stopped
     environment:
