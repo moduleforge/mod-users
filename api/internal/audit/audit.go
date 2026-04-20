@@ -10,9 +10,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	coreaudit "github.com/moduleforge/core-api/audit"
 	"github.com/moduleforge/users-module/api/internal/auth"
 	db "github.com/moduleforge/users-module/model/db"
 )
+
+// Compile-time assertion: pgWriter satisfies core's audit.Writer interface.
+// This catches signature drift between users-module and core-module at build time.
+var _ coreaudit.Writer = (*pgWriter)(nil)
 
 // Writer records audit events.
 type Writer interface {
