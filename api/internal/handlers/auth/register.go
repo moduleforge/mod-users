@@ -112,19 +112,23 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	isFirst := userCount == 0
 
-	entity, err := coreQtx.CreateEntity(r.Context(), "legal_entity")
+	// Resolve the natural_person type ID from the types registry.
+	npType, err := coreQtx.GetTypeBySlug(r.Context(), "natural_person")
+	if err != nil {
+		slog.ErrorContext(r.Context(), "register: resolve natural_person type", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve entity type")
+		return
+	}
+
+	entity, err := coreQtx.CreateEntity(r.Context(), npType.ID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: create entity", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create entity")
 		return
 	}
 
-	displayName := req.GivenName + " " + req.FamilyName
-	le, err := coreQtx.CreateLegalEntity(r.Context(), coredb.CreateLegalEntityParams{
-		EntityID:    entity.ID,
-		Kind:        "natural_person",
-		DisplayName: displayName,
-	})
+	// Create legal entity (pure FK anchor — no kind/display_name).
+	_, err = coreQtx.CreateLegalEntity(r.Context(), entity.ID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: create legal entity", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create legal entity")
@@ -132,9 +136,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = coreQtx.CreateNaturalPerson(r.Context(), coredb.CreateNaturalPersonParams{
-		LegalEntityID: le.ID,
-		GivenName:     pgtype.Text{String: req.GivenName, Valid: true},
-		FamilyName:    pgtype.Text{String: req.FamilyName, Valid: true},
+		EntityID:   entity.ID,
+		GivenName:  pgtype.Text{String: req.GivenName, Valid: true},
+		FamilyName: pgtype.Text{String: req.FamilyName, Valid: true},
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: create natural person", "error", err)
