@@ -1,5 +1,5 @@
 import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '@moduleforge/core-gui';
 
 interface ErrorMessageProps {
   message: string | null;

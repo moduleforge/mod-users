@@ -4,11 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { api, ApiRequestError, type User } from '@/lib/api';
 import { RequireAuth } from '@/components/require-auth';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ErrorMessage } from '@/components/error-message';
 import { Search } from 'lucide-react';
+import { Input, Badge } from '@moduleforge/core-gui';
 
 function UserListContent() {
   const [users, setUsers] = useState<User[]>([]);

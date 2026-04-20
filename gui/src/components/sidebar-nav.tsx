@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
-import { Button } from '@/components/ui/button';
+import { Button } from '@moduleforge/core-gui';
 
 interface NavItem {
   label: string;

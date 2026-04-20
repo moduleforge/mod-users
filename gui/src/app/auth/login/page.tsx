@@ -10,11 +10,8 @@ import {
   fetchProviders,
   type OIDCProvider,
 } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorMessage } from '@/components/error-message';
+import { Button, Input, Label, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@moduleforge/core-gui';
 
 // Inline brand glyphs keep the bundle small and avoid pulling in an icon
 // package for two logos. Colors are the brand-correct Google/Microsoft marks.

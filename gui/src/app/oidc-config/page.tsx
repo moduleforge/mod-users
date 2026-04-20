@@ -12,22 +12,11 @@ import {
   type OIDCStatus,
 } from '@/lib/oidc-config';
 import type { OIDCProviderAuth } from '@/lib/oidc-provider';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { ErrorMessage } from '@/components/error-message';
 import { ProviderEditModal } from './provider-edit-modal';
 import { ProviderAddModal } from './provider-add-modal';
+import { Badge, Button, Input, Label, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@moduleforge/core-gui';
 
 const REDIRECT_DELAY_MS = 2000;
 
