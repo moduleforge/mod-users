@@ -48,6 +48,7 @@ RUN curl -sSf https://atlasgo.sh | sh
 
 COPY --from=builder /server /server
 COPY --from=builder /app/schema/migrations /app/schema/migrations
+RUN atlas migrate hash --dir file:///app/schema/migrations
 COPY users-module/api/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
