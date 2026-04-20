@@ -245,7 +245,7 @@ func main() {
 	// selfHandler removed — /entities/self is now served by coreRouter.
 	usersHandler := handlers.NewUsersHandler(pool, queries, coreQueries, coreSvcs, auditWriter)
 	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
-	auditHandler := handlers.NewAuditHandler(queries, coreQueries)
+	auditHandler := handlers.NewAuditHandler(queries, coreQueries, coreSvcs)
 	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
 
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
