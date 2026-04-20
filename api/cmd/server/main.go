@@ -242,7 +242,7 @@ func main() {
 	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
 
 	// Handlers for authenticated routes.
-	// selfHandler removed — /entities/self is now served by coreRouter.
+	// selfHandler removed — /self is now served by coreRouter (top-level route, siblings to /entities/*).
 	usersHandler := handlers.NewUsersHandler(pool, queries, coreQueries, coreSvcs, auditWriter)
 	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	auditHandler := handlers.NewAuditHandler(queries, coreQueries, coreSvcs)
@@ -305,9 +305,9 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth(verifier, localMapper, resolver))
 
-			// Core entity routes: GET/PUT /v1/entities/self,
+			// Core identity + entity routes: GET/PUT /v1/self (top-level),
 			// CRUD /v1/entities/natural-persons, /corporations, /service-accounts, etc.
-			// Mounted at / so core's /entities/* paths become /v1/entities/*.
+			// Mounted at / so core's /self and /entities/* paths are served under /v1.
 			r.Mount("/", coreRouter)
 
 			// Assume identity (admin).

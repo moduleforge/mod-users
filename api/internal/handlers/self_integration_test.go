@@ -134,13 +134,13 @@ func noopLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 }
 
-// TestPutEntitiesSelf_MountedInUsersModule verifies that:
-//  1. The core router mounted at /v1 in users-module handles PUT /v1/entities/self.
+// TestPutSelf_MountedInUsersModule verifies that:
+//  1. The core router mounted at /v1 in users-module handles PUT /v1/self.
 //  2. The CorePrincipalAdapter correctly lifts the users-module UserContext into
 //     a core service.Principal that the handler can act on.
 //  3. The NaturalPerson.UpdateByEntityUUID service method is called exactly once
 //     with the caller's entity UUID.
-func TestPutEntitiesSelf_MountedInUsersModule(t *testing.T) {
+func TestPutSelf_MountedInUsersModule(t *testing.T) {
 	entityUUID := uuid.New()
 	testPrincipal := &coreservice.Principal{UserID: 42, EntityID: 7, IsAdmin: false}
 	testProfile := coreservice.Profile{
@@ -185,7 +185,7 @@ func TestPutEntitiesSelf_MountedInUsersModule(t *testing.T) {
 	})
 
 	body := bytes.NewBufferString(`{"given_name":"Updated"}`)
-	req := httptest.NewRequest(http.MethodPut, "/v1/entities/self", body)
+	req := httptest.NewRequest(http.MethodPut, "/v1/self", body)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Inject UserContext matching testPrincipal so CorePrincipalAdapter can
