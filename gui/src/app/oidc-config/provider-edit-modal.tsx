@@ -371,7 +371,24 @@ export function ProviderEditModal({
         {loadError && <ErrorMessage message={loadError} />}
 
         {view && !loadError && (
-          <div className="flex flex-col gap-3">
+          <form
+            className="flex flex-col gap-3"
+            autoComplete="off"
+            onSubmit={(e) => {
+              e.preventDefault();
+              // Mirror the Save button's disabled conditions — Enter
+              // should only fire Save when Save itself is clickable.
+              if (
+                !isLoading &&
+                !isSaving &&
+                !isReverting &&
+                view &&
+                isDirty
+              ) {
+                void handleSave();
+              }
+            }}
+          >
             <ErrorMessage message={formError} />
 
             {/*
@@ -562,7 +579,7 @@ export function ProviderEditModal({
                 <p className="text-xs text-muted-foreground">Copied.</p>
               )}
             </div>
-          </div>
+          </form>
         )}
 
         <DialogFooter className="sm:justify-between">

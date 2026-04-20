@@ -161,7 +161,18 @@ export function ProviderAddModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3">
+        <form
+          className="flex flex-col gap-3"
+          autoComplete="off"
+          onSubmit={(e) => {
+            e.preventDefault();
+            // Mirror the Create button's disabled conditions so Enter
+            // only fires when the button itself is clickable.
+            if (!isSaving && form.id.trim() !== '') {
+              void handleSave();
+            }
+          }}
+        >
           <ErrorMessage message={formError} />
 
           {/* Decoy inputs — see provider-edit-modal for the rationale. */}
@@ -303,7 +314,7 @@ export function ProviderAddModal({
               }
             />
           </div>
-        </div>
+        </form>
 
         <DialogFooter>
           <Button
