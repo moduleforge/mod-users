@@ -60,7 +60,7 @@ lint: lint.model lint.api lint.gui ## Lint all sub-projects (read-only)
 lint-fix: lint-fix.model lint-fix.api lint-fix.gui ## Apply lint fixes across all sub-projects
 
 .PHONY: clean
-clean: clean.model clean.api clean.gui ## Remove build artifacts (preserves generated SQL/code)
+clean: clean.images clean.data clean.build ## Remove build artifacts, DB data, and locally-built images
 
 .PHONY: test.all
 test.all: test.unit test.integration ## Run all tests (unit + integration)
@@ -148,12 +148,11 @@ endif
 		psql -U $${POSTGRES_USER:-users} -d $${POSTGRES_DB:-users}
 
 .PHONY: dev.stop
-dev.stop: ## Tear down all dev containers
+dev.stop: ## Tear down all dev containers (preserves images and DB data)
 ifeq ($(DOCKER_COMPOSE),)
 	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
 endif
 	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down --remove-orphans
-	@docker rm -f users-module-postgres users-module-pgadmin users-module-authelia users-module-mailpit users-module-mailhog users-module-api users-module-gui 2>/dev/null || true
 
 .PHONY: dev.restart
 dev.restart: dev.stop dev.start ## Stop then re-bring up the full stack
@@ -192,10 +191,33 @@ lint-fix.model: ; @$(MAKE) -C model lint-fix
 lint-fix.api:   ; @$(MAKE) -C api   lint-fix
 lint-fix.gui:   ; @$(MAKE) -C gui   lint-fix
 
-.PHONY: clean.model clean.api clean.gui
-clean.model: ; @$(MAKE) -C model clean
-clean.api:   ; @$(MAKE) -C api   clean
-clean.gui:   ; @$(MAKE) -C gui   clean
+.PHONY: clean.build clean.build.model clean.build.api clean.build.gui
+clean.build: clean.build.model clean.build.api clean.build.gui ## Remove build artifacts across all sub-projects
+clean.build.model: ; @$(MAKE) -C model clean
+clean.build.api:   ; @$(MAKE) -C api   clean
+clean.build.gui:   ; @$(MAKE) -C gui   clean
+
+# ---------------------------------------------------------------------------
+# Data + image cleanup (compose-scoped, not owned by any sub-project)
+# ---------------------------------------------------------------------------
+# `clean.data` removes the Postgres volume — next `dev.start` reinitializes
+# from scratch (migrations run on an empty DB).
+# `clean.images` removes only images built locally by this compose project
+# (--rmi local) — upstream images (postgres, authelia, etc.) are preserved.
+
+.PHONY: clean.data
+clean.data: ## Remove the Postgres volume (clears all DB entries)
+ifeq ($(DOCKER_COMPOSE),)
+	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
+endif
+	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down -v --remove-orphans
+
+.PHONY: clean.images
+clean.images: ## Remove images built locally by compose (keeps upstream pulls)
+ifeq ($(DOCKER_COMPOSE),)
+	$(error docker compose (v2 plugin) or docker-compose (v1) is required but neither was found)
+endif
+	@$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down --rmi local --remove-orphans
 
 # ---------------------------------------------------------------------------
 # Container image
@@ -263,5 +285,5 @@ help: ## Show this help
 		$(MAKEFILE_LIST) | sort
 	@echo ""
 	@echo "Per-sub-project targets follow the pattern <target>.<subproject>"
-	@echo "  e.g. build.api, test.gui, lint-fix.model, clean.api"
+	@echo "  e.g. build.api, test.gui, lint-fix.model, clean.build.api"
 	@echo "  sub-projects: $(SUBPROJECTS)"
