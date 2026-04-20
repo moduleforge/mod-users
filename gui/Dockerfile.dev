@@ -3,7 +3,10 @@
 # the Node runtime and installs dependencies.
 #
 # Build context: monorepo root (users-module/) — needed because pnpm
-# workspace hoists deps to the root node_modules.
+# workspace hoists deps to the root node_modules. The gui/.yalc/ dir
+# (gitignored, populated by `make link-core` at the repo root) must
+# also be present so pnpm can resolve @moduleforge/core-gui via the
+# file: spec in gui/package.json.
 
 FROM node:24-alpine
 
@@ -14,6 +17,10 @@ WORKDIR /app
 # Copy workspace config + lockfile for dependency install.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY gui/package.json ./gui/
+# Yalc-linked local packages (e.g. @moduleforge/core-gui) — populated by
+# `make link-core` from the repo root. The dir must exist; fail loudly
+# at build time if not, rather than silently fall back to a stale cache.
+COPY gui/.yalc ./gui/.yalc
 
 RUN pnpm install --frozen-lockfile
 
