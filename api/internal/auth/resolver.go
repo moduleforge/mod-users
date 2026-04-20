@@ -149,34 +149,35 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.User, er
 	}
 	isFirstUser := userCount == 0
 
+	// Resolve the natural_person type ID from the types registry.
+	npType, err := coreQtx.GetTypeBySlug(ctx, "natural_person")
+	if err != nil {
+		return user, fmt.Errorf("resolve natural_person type: %w", err)
+	}
+
 	// Create entity.
-	entity, err := coreQtx.CreateEntity(ctx, "legal_entity")
+	entity, err := coreQtx.CreateEntity(ctx, npType.ID)
 	if err != nil {
 		return user, fmt.Errorf("create entity: %w", err)
 	}
 
-	// Derive display name from email.
-	displayName := p.Email
-	if idx := strings.Index(p.Email, "@"); idx > 0 {
-		displayName = p.Email[:idx]
-	}
-
-	// Create legal entity.
-	legalEntity, err := coreQtx.CreateLegalEntity(ctx, coredb.CreateLegalEntityParams{
-		EntityID:    entity.ID,
-		Kind:        "natural_person",
-		DisplayName: displayName,
-	})
+	// Create legal entity (pure FK anchor — no kind/display_name).
+	_, err = coreQtx.CreateLegalEntity(ctx, entity.ID)
 	if err != nil {
 		return user, fmt.Errorf("create legal entity: %w", err)
 	}
 
+	// Derive given_name from email local-part for auto-created accounts.
+	givenName := p.Email
+	if idx := strings.Index(p.Email, "@"); idx > 0 {
+		givenName = p.Email[:idx]
+	}
+
 	// Create natural person.
-	givenName := pgtype.Text{String: displayName, Valid: true}
 	_, err = coreQtx.CreateNaturalPerson(ctx, coredb.CreateNaturalPersonParams{
-		LegalEntityID: legalEntity.ID,
-		GivenName:     givenName,
-		FamilyName:    pgtype.Text{},
+		EntityID:   entity.ID,
+		GivenName:  pgtype.Text{String: givenName, Valid: true},
+		FamilyName: pgtype.Text{},
 	})
 	if err != nil {
 		return user, fmt.Errorf("create natural person: %w", err)

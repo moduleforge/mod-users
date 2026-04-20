@@ -217,15 +217,13 @@ func (h *UsersHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Enrich with entity info.
 	detail := userResponse(user)
-	if le, err := h.coreQ.GetLegalEntityByEntityID(r.Context(), user.EntityID); err == nil {
-		detail["display_name"] = le.DisplayName
-		detail["entity_kind"] = le.Kind
-		if le.Kind == "natural_person" {
-			if np, err := h.coreQ.GetNaturalPersonByLegalEntityID(r.Context(), le.ID); err == nil {
-				detail["given_name"] = np.GivenName.String
-				detail["family_name"] = np.FamilyName.String
-			}
-		}
+	// natural_persons now FK directly to entity_id — skip the legal_entity hop.
+	// TODO: migrate to display.Registry for display_name rendering.
+	if np, err := h.coreQ.GetNaturalPersonByEntityID(r.Context(), user.EntityID); err == nil {
+		detail["given_name"] = np.GivenName.String
+		detail["family_name"] = np.FamilyName.String
+		detail["entity_kind"] = "natural_person"
+		detail["display_name"] = strings.TrimSpace(np.GivenName.String + " " + np.FamilyName.String)
 	}
 
 	server.JSON(w, http.StatusOK, detail)
@@ -283,23 +281,22 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update natural person fields.
+	// natural_persons now FK directly to entity_id — no legal_entity hop needed.
 	if req.GivenName != nil || req.FamilyName != nil {
-		if le, err := h.coreQ.GetLegalEntityByEntityID(r.Context(), user.EntityID); err == nil && le.Kind == "natural_person" {
-			if np, err := h.coreQ.GetNaturalPersonByLegalEntityID(r.Context(), le.ID); err == nil {
-				gn := np.GivenName
-				fn := np.FamilyName
-				if req.GivenName != nil {
-					gn = pgtype.Text{String: *req.GivenName, Valid: true}
-				}
-				if req.FamilyName != nil {
-					fn = pgtype.Text{String: *req.FamilyName, Valid: true}
-				}
-				_ = h.coreQ.UpdateNaturalPerson(r.Context(), coredb.UpdateNaturalPersonParams{
-					LegalEntityID: le.ID,
-					GivenName:     gn,
-					FamilyName:    fn,
-				})
+		if np, err := h.coreQ.GetNaturalPersonByEntityID(r.Context(), user.EntityID); err == nil {
+			gn := np.GivenName
+			fn := np.FamilyName
+			if req.GivenName != nil {
+				gn = pgtype.Text{String: *req.GivenName, Valid: true}
 			}
+			if req.FamilyName != nil {
+				fn = pgtype.Text{String: *req.FamilyName, Valid: true}
+			}
+			_ = h.coreQ.UpdateNaturalPerson(r.Context(), coredb.UpdateNaturalPersonParams{
+				EntityID:   user.EntityID,
+				GivenName:  gn,
+				FamilyName: fn,
+			})
 		}
 	}
 
