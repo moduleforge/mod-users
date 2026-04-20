@@ -34,6 +34,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.9.1
+	github.com/moduleforge/core-api v0.0.0
 	github.com/moduleforge/core-model v0.0.0
 	github.com/moduleforge/users-module/model v0.0.0
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -51,3 +52,5 @@ require (
 replace github.com/moduleforge/core-model v0.0.0 => ../../core-module/model
 
 replace github.com/moduleforge/users-module/model => ../model
+
+replace github.com/moduleforge/core-api v0.0.0 => ../../core-module/api

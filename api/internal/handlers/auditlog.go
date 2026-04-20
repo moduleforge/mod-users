@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	coreservice "github.com/moduleforge/core-api/service"
 	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
@@ -17,13 +19,14 @@ import (
 
 // AuditHandler serves audit log endpoints.
 type AuditHandler struct {
-	q     *db.Queries
-	coreQ *coredb.Queries
+	q        *db.Queries
+	coreQ    *coredb.Queries
+	coreSvcs *coreservice.Services
 }
 
 // NewAuditHandler creates an AuditHandler.
-func NewAuditHandler(q *db.Queries, coreQ *coredb.Queries) *AuditHandler {
-	return &AuditHandler{q: q, coreQ: coreQ}
+func NewAuditHandler(q *db.Queries, coreQ *coredb.Queries, coreSvcs *coreservice.Services) *AuditHandler {
+	return &AuditHandler{q: q, coreQ: coreQ, coreSvcs: coreSvcs}
 }
 
 // ByUser handles GET /v1/users/{uuid}/audit (admin).
@@ -76,8 +79,8 @@ func (h *AuditHandler) ByEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entity, err := h.coreQ.GetEntityByUUID(r.Context(), parsed)
-	if err == pgx.ErrNoRows {
+	entity, err := h.coreSvcs.Entity.GetByUUID(r.Context(), h.coreQ, parsed)
+	if errors.Is(err, coreservice.ErrNotFound) {
 		server.Error(w, http.StatusNotFound, "not_found", "entity not found")
 		return
 	}
