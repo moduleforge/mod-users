@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/users-module/api/internal/audit"
 	localauth "github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
@@ -27,6 +28,7 @@ type Sender interface {
 type Handler struct {
 	pool      *pgxpool.Pool
 	queries   *db.Queries
+	coreQ     *coredb.Queries
 	audit     audit.Writer
 	jwtSecret string
 	issuer    string
@@ -35,10 +37,11 @@ type Handler struct {
 }
 
 // New constructs a Handler.
-func New(pool *pgxpool.Pool, queries *db.Queries, aw audit.Writer, jwtSecret, issuer string, sender Sender, guiBase string) *Handler {
+func New(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, aw audit.Writer, jwtSecret, issuer string, sender Sender, guiBase string) *Handler {
 	return &Handler{
 		pool:      pool,
 		queries:   queries,
+		coreQ:     coreQ,
 		audit:     aw,
 		jwtSecret: jwtSecret,
 		issuer:    issuer,
@@ -98,6 +101,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 
 	qtx := h.queries.WithTx(tx)
+	coreQtx := h.coreQ.WithTx(tx)
 
 	// Determine first-user bootstrap.
 	var userCount int64
@@ -108,7 +112,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	isFirst := userCount == 0
 
-	entity, err := qtx.CreateEntity(r.Context(), "legal_entity")
+	entity, err := coreQtx.CreateEntity(r.Context(), "legal_entity")
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: create entity", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create entity")
@@ -116,7 +120,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	displayName := req.GivenName + " " + req.FamilyName
-	le, err := qtx.CreateLegalEntity(r.Context(), db.CreateLegalEntityParams{
+	le, err := coreQtx.CreateLegalEntity(r.Context(), coredb.CreateLegalEntityParams{
 		EntityID:    entity.ID,
 		Kind:        "natural_person",
 		DisplayName: displayName,
@@ -127,7 +131,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = qtx.CreateNaturalPerson(r.Context(), db.CreateNaturalPersonParams{
+	_, err = coreQtx.CreateNaturalPerson(r.Context(), coredb.CreateNaturalPersonParams{
 		LegalEntityID: le.ID,
 		GivenName:     pgtype.Text{String: req.GivenName, Valid: true},
 		FamilyName:    pgtype.Text{String: req.FamilyName, Valid: true},

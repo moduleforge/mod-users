@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/users-module/api/internal/audit"
 	localauth "github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
@@ -23,12 +24,13 @@ import (
 type UsersHandler struct {
 	pool  *pgxpool.Pool
 	q     *db.Queries
+	coreQ *coredb.Queries
 	audit audit.Writer
 }
 
 // NewUsersHandler creates a UsersHandler.
-func NewUsersHandler(pool *pgxpool.Pool, q *db.Queries, aw audit.Writer) *UsersHandler {
-	return &UsersHandler{pool: pool, q: q, audit: aw}
+func NewUsersHandler(pool *pgxpool.Pool, q *db.Queries, coreQ *coredb.Queries, aw audit.Writer) *UsersHandler {
+	return &UsersHandler{pool: pool, q: q, coreQ: coreQ, audit: aw}
 }
 
 // createUserRequest is the body for POST /v1/users (admin).
@@ -75,8 +77,9 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 
 	qtx := h.q.WithTx(tx)
+	coreQtx := h.coreQ.WithTx(tx)
 
-	entity, err := qtx.CreateEntity(r.Context(), "legal_entity")
+	entity, err := coreQtx.CreateEntity(r.Context(), "legal_entity")
 	if err != nil {
 		slog.ErrorContext(r.Context(), "users.create: create entity", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create entity")
@@ -84,7 +87,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	displayName := req.GivenName + " " + req.FamilyName
-	le, err := qtx.CreateLegalEntity(r.Context(), db.CreateLegalEntityParams{
+	le, err := coreQtx.CreateLegalEntity(r.Context(), coredb.CreateLegalEntityParams{
 		EntityID:    entity.ID,
 		Kind:        "natural_person",
 		DisplayName: displayName,
@@ -95,7 +98,7 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = qtx.CreateNaturalPerson(r.Context(), db.CreateNaturalPersonParams{
+	_, err = coreQtx.CreateNaturalPerson(r.Context(), coredb.CreateNaturalPersonParams{
 		LegalEntityID: le.ID,
 		GivenName:     pgtype.Text{String: req.GivenName, Valid: true},
 		FamilyName:    pgtype.Text{String: req.FamilyName, Valid: true},
@@ -209,11 +212,11 @@ func (h *UsersHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Enrich with entity info.
 	detail := userResponse(user)
-	if le, err := h.q.GetLegalEntityByEntityID(r.Context(), user.EntityID); err == nil {
+	if le, err := h.coreQ.GetLegalEntityByEntityID(r.Context(), user.EntityID); err == nil {
 		detail["display_name"] = le.DisplayName
 		detail["entity_kind"] = le.Kind
 		if le.Kind == "natural_person" {
-			if np, err := h.q.GetNaturalPersonByLegalEntityID(r.Context(), le.ID); err == nil {
+			if np, err := h.coreQ.GetNaturalPersonByLegalEntityID(r.Context(), le.ID); err == nil {
 				detail["given_name"] = np.GivenName.String
 				detail["family_name"] = np.FamilyName.String
 			}
@@ -276,8 +279,8 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Update natural person fields.
 	if req.GivenName != nil || req.FamilyName != nil {
-		if le, err := h.q.GetLegalEntityByEntityID(r.Context(), user.EntityID); err == nil && le.Kind == "natural_person" {
-			if np, err := h.q.GetNaturalPersonByLegalEntityID(r.Context(), le.ID); err == nil {
+		if le, err := h.coreQ.GetLegalEntityByEntityID(r.Context(), user.EntityID); err == nil && le.Kind == "natural_person" {
+			if np, err := h.coreQ.GetNaturalPersonByLegalEntityID(r.Context(), le.ID); err == nil {
 				gn := np.GivenName
 				fn := np.FamilyName
 				if req.GivenName != nil {
@@ -286,7 +289,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 				if req.FamilyName != nil {
 					fn = pgtype.Text{String: *req.FamilyName, Valid: true}
 				}
-				_ = h.q.UpdateNaturalPerson(r.Context(), db.UpdateNaturalPersonParams{
+				_ = h.coreQ.UpdateNaturalPerson(r.Context(), coredb.UpdateNaturalPersonParams{
 					LegalEntityID: le.ID,
 					GivenName:     gn,
 					FamilyName:    fn,
@@ -316,7 +319,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch entity UUID for archive.
-	entity, err := h.q.GetEntityByUUID(r.Context(), user.Uuid)
+	entity, err := h.coreQ.GetEntityByUUID(r.Context(), user.Uuid)
 	if err != nil {
 		// entity UUID is on entity row, not user. Use a raw lookup by entity ID.
 		// We need entity.uuid — use a pool query.
@@ -329,7 +332,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		entity.Uuid = entityUUID
 	}
 
-	if err := h.q.ArchiveEntity(r.Context(), entity.Uuid); err != nil {
+	if err := h.coreQ.ArchiveEntity(r.Context(), entity.Uuid); err != nil {
 		slog.ErrorContext(r.Context(), "users.delete: archive entity", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to archive user")
 		return

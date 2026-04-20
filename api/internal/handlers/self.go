@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/users-module/api/internal/audit"
 	"github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
@@ -15,13 +16,14 @@ import (
 
 // SelfHandler serves the /v1/self endpoints.
 type SelfHandler struct {
-	q *db.Queries
-	a audit.Writer
+	q     *db.Queries
+	coreQ *coredb.Queries
+	a     audit.Writer
 }
 
 // NewSelfHandler creates a handler for the /v1/self endpoints.
-func NewSelfHandler(q *db.Queries, a audit.Writer) *SelfHandler {
-	return &SelfHandler{q: q, a: a}
+func NewSelfHandler(q *db.Queries, coreQ *coredb.Queries, a audit.Writer) *SelfHandler {
+	return &SelfHandler{q: q, coreQ: coreQ, a: a}
 }
 
 // Get returns the caller's profile.
@@ -71,10 +73,10 @@ func (h *SelfHandler) buildEntityInfo(r *http.Request, entityID int64) (map[stri
 	// For now, build a simplified response using the user's entity_id.
 
 	// Get legal entity info.
-	le, err := h.q.GetLegalEntityByEntityID(r.Context(), entityID)
+	le, err := h.coreQ.GetLegalEntityByEntityID(r.Context(), entityID)
 	if err != nil {
 		// Might be a service account.
-		sa, err2 := h.q.GetServiceAccountByEntityID(r.Context(), entityID)
+		sa, err2 := h.coreQ.GetServiceAccountByEntityID(r.Context(), entityID)
 		if err2 != nil {
 			return nil, err
 		}
@@ -91,13 +93,13 @@ func (h *SelfHandler) buildEntityInfo(r *http.Request, entityID int64) (map[stri
 
 	switch le.Kind {
 	case "natural_person":
-		np, err := h.q.GetNaturalPersonByLegalEntityID(r.Context(), le.ID)
+		np, err := h.coreQ.GetNaturalPersonByLegalEntityID(r.Context(), le.ID)
 		if err == nil {
 			info["given_name"] = np.GivenName.String
 			info["family_name"] = np.FamilyName.String
 		}
 	case "corporation":
-		corp, err := h.q.GetCorporationByLegalEntityID(r.Context(), le.ID)
+		corp, err := h.coreQ.GetCorporationByLegalEntityID(r.Context(), le.ID)
 		if err == nil {
 			info["legal_name"] = corp.LegalName
 			info["jurisdiction"] = corp.Jurisdiction.String
@@ -137,9 +139,9 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 
 	// Update natural person fields if this is a natural person.
 	if req.GivenName != nil || req.FamilyName != nil {
-		le, err := h.q.GetLegalEntityByEntityID(r.Context(), user.EntityID)
+		le, err := h.coreQ.GetLegalEntityByEntityID(r.Context(), user.EntityID)
 		if err == nil && le.Kind == "natural_person" {
-			np, err := h.q.GetNaturalPersonByLegalEntityID(r.Context(), le.ID)
+			np, err := h.coreQ.GetNaturalPersonByLegalEntityID(r.Context(), le.ID)
 			if err == nil {
 				beforeSnapshot["given_name"] = np.GivenName.String
 				beforeSnapshot["family_name"] = np.FamilyName.String
@@ -153,7 +155,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 					fn = pgtype.Text{String: *req.FamilyName, Valid: true}
 				}
 
-				_ = h.q.UpdateNaturalPerson(r.Context(), db.UpdateNaturalPersonParams{
+				_ = h.coreQ.UpdateNaturalPerson(r.Context(), coredb.UpdateNaturalPersonParams{
 					LegalEntityID: le.ID,
 					GivenName:     gn,
 					FamilyName:    fn,

@@ -15,6 +15,7 @@ import (
 	"github.com/moduleforge/users-module/api/internal/audit"
 	"github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/config"
+	coredb "github.com/moduleforge/core-model/db"
 	localdb "github.com/moduleforge/users-module/api/internal/db"
 	"github.com/moduleforge/users-module/api/internal/email"
 	"github.com/moduleforge/users-module/api/internal/handlers"
@@ -53,6 +54,7 @@ func main() {
 
 	// Build query layer.
 	queries := db.New(pool)
+	coreQueries := coredb.New(pool)
 
 	// Build auth components. The Verifier is used by RequireAuth to validate
 	// incoming Bearer tokens — post-Phase 9 those are always the local JWTs
@@ -109,7 +111,7 @@ func main() {
 
 	// Build the UserResolver up-front — both the onboarding
 	// AdminChecker and the post-auth /v1/* handlers need it.
-	resolver := auth.NewUserResolver(pool, queries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
+	resolver := auth.NewUserResolver(pool, queries, coreQueries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
 
 	// Build the onboarding handler + state cache. The handler owns the
 	// oidc_config row and the derived BootState; RequireOIDCConfirmed
@@ -216,6 +218,7 @@ func main() {
 	authHandler := authhandlers.New(
 		pool,
 		queries,
+		coreQueries,
 		auditWriter,
 		cfg.LocalAuth.JWTSecret,
 		cfg.LocalAuth.LocalIssuer,
@@ -226,10 +229,10 @@ func main() {
 	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
 
 	// Handlers for authenticated routes.
-	selfHandler := handlers.NewSelfHandler(queries, auditWriter)
-	usersHandler := handlers.NewUsersHandler(pool, queries, auditWriter)
+	selfHandler := handlers.NewSelfHandler(queries, coreQueries, auditWriter)
+	usersHandler := handlers.NewUsersHandler(pool, queries, coreQueries, auditWriter)
 	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
-	auditHandler := handlers.NewAuditHandler(queries)
+	auditHandler := handlers.NewAuditHandler(queries, coreQueries)
 	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
 
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{

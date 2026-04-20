@@ -10,18 +10,20 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
 // AuditHandler serves audit log endpoints.
 type AuditHandler struct {
-	q *db.Queries
+	q     *db.Queries
+	coreQ *coredb.Queries
 }
 
 // NewAuditHandler creates an AuditHandler.
-func NewAuditHandler(q *db.Queries) *AuditHandler {
-	return &AuditHandler{q: q}
+func NewAuditHandler(q *db.Queries, coreQ *coredb.Queries) *AuditHandler {
+	return &AuditHandler{q: q, coreQ: coreQ}
 }
 
 // ByUser handles GET /v1/users/{uuid}/audit (admin).
@@ -74,7 +76,7 @@ func (h *AuditHandler) ByEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entity, err := h.q.GetEntityByUUID(r.Context(), parsed)
+	entity, err := h.coreQ.GetEntityByUUID(r.Context(), parsed)
 	if err == pgx.ErrNoRows {
 		server.Error(w, http.StatusNotFound, "not_found", "entity not found")
 		return

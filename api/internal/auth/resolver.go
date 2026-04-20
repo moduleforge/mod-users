@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	coredb "github.com/moduleforge/core-model/db"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
@@ -34,6 +35,7 @@ type uuidLookupFn func(ctx context.Context, u uuid.UUID) (db.User, error)
 type UserResolver struct {
 	pool        *pgxpool.Pool
 	queries     *db.Queries
+	coreQ       *coredb.Queries
 	adminRole   string
 	localIssuer string
 	uuidLookup  uuidLookupFn
@@ -42,13 +44,14 @@ type UserResolver struct {
 // NewUserResolver creates a resolver. localIssuer is the value written into
 // the "iss" claim by IssueLocalJWT — when Resolve sees a Principal with this
 // issuer, it skips the OIDC auto-create path and looks up the user by UUID.
-func NewUserResolver(pool *pgxpool.Pool, queries *db.Queries, adminRole, localIssuer string) *UserResolver {
+func NewUserResolver(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, adminRole, localIssuer string) *UserResolver {
 	if adminRole == "" {
 		adminRole = "admin"
 	}
 	r := &UserResolver{
 		pool:        pool,
 		queries:     queries,
+		coreQ:       coreQ,
 		adminRole:   adminRole,
 		localIssuer: localIssuer,
 	}
@@ -136,6 +139,7 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.User, er
 	defer tx.Rollback(ctx)
 
 	qtx := r.queries.WithTx(tx)
+	coreQtx := r.coreQ.WithTx(tx)
 
 	// Check if this is the first user (root bootstrap).
 	var userCount int64
@@ -146,7 +150,7 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.User, er
 	isFirstUser := userCount == 0
 
 	// Create entity.
-	entity, err := qtx.CreateEntity(ctx, "legal_entity")
+	entity, err := coreQtx.CreateEntity(ctx, "legal_entity")
 	if err != nil {
 		return user, fmt.Errorf("create entity: %w", err)
 	}
@@ -158,7 +162,7 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.User, er
 	}
 
 	// Create legal entity.
-	legalEntity, err := qtx.CreateLegalEntity(ctx, db.CreateLegalEntityParams{
+	legalEntity, err := coreQtx.CreateLegalEntity(ctx, coredb.CreateLegalEntityParams{
 		EntityID:    entity.ID,
 		Kind:        "natural_person",
 		DisplayName: displayName,
@@ -169,7 +173,7 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.User, er
 
 	// Create natural person.
 	givenName := pgtype.Text{String: displayName, Valid: true}
-	_, err = qtx.CreateNaturalPerson(ctx, db.CreateNaturalPersonParams{
+	_, err = coreQtx.CreateNaturalPerson(ctx, coredb.CreateNaturalPersonParams{
 		LegalEntityID: legalEntity.ID,
 		GivenName:     givenName,
 		FamilyName:    pgtype.Text{},
