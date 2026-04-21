@@ -393,8 +393,8 @@ func TestClaimMapper(t *testing.T) {
 // TestContextRoundTrip verifies the principal context helpers.
 func TestContextRoundTrip(t *testing.T) {
 	uc := &UserContext{
-		UserID:   42,
-		UserUUID: "uuid-abc",
+		UserAccountID: 42,
+		UserUUID:      "uuid-abc",
 		Email:    "user@example.com",
 		IsAdmin:  true,
 	}
@@ -411,7 +411,7 @@ func TestContextRoundTrip(t *testing.T) {
 }
 
 func TestMustFromContext_Present(t *testing.T) {
-	uc := &UserContext{UserID: 1}
+	uc := &UserContext{UserAccountID: 1}
 	ctx := WithUserContext(context.Background(), uc)
 	got := MustFromContext(ctx)
 	if got != uc {
