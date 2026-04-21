@@ -1,0 +1,18 @@
+go 1.26.2
+
+use (
+	./api
+	./model
+	../../../../core-module/api
+	../../../../core-module/model
+	../../../../tags-module/api
+	../../../../tags-module/model
+)
+
+replace github.com/moduleforge/core-api v0.0.0 => ../../../../core-module/api
+
+replace github.com/moduleforge/core-model v0.0.0 => ../../../../core-module/model
+
+replace github.com/moduleforge/tags-api v0.0.0 => ../../../../tags-module/api
+
+replace github.com/moduleforge/tags-model v0.0.0 => ../../../../tags-module/model
