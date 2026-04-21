@@ -124,6 +124,11 @@ type OAuth struct {
 	// construction time so Status() returns a stable answer without
 	// re-reading os.Environ() on every call.
 	envNoOIDCAccounts bool
+
+	// ExchangeFn, when non-nil, replaces the real token-exchange logic.
+	// Used only in tests to simulate a successful provider exchange without
+	// a live IdP. Production code must leave this nil.
+	ExchangeFn func(ctx context.Context, providerID, code, rawState, cookieState string) (Principal, StatePayload, error)
 }
 
 // NewOAuth builds an OAuth for every provider in cfg.Providers. Unlike the
@@ -437,6 +442,10 @@ func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool) (auth
 // and returns a normalized Principal plus the recovered state payload (so
 // the caller can redirect to the return path).
 func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookieState string) (Principal, StatePayload, error) {
+	if o.ExchangeFn != nil {
+		return o.ExchangeFn(ctx, providerID, code, rawState, cookieState)
+	}
+
 	var empty Principal
 	var emptyPayload StatePayload
 
