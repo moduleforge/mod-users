@@ -7,7 +7,7 @@ DATABASE_URL ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 CORE_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/core-model 2>/dev/null || echo ../../core-module/model)
 
 # Locate tags-model migrations via go list, falling back to a relative path.
-TAGS_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/tags-model 2>/dev/null || echo ../../../../../tags-module/model)
+TAGS_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/tags-model 2>/dev/null || echo ../../tags-module/model)
 
 # Set by preflight if sqlc is available.
 SQLC ?=
