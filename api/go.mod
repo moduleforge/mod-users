@@ -36,6 +36,8 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/moduleforge/core-api v0.0.0
 	github.com/moduleforge/core-model v0.0.0
+	github.com/moduleforge/tags-api v0.0.0
+	github.com/moduleforge/tags-model v0.0.0
 	github.com/moduleforge/users-module/model v0.0.0
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0 // indirect
@@ -54,3 +56,7 @@ replace github.com/moduleforge/core-model v0.0.0 => ../../core-module/model
 replace github.com/moduleforge/users-module/model => ../model
 
 replace github.com/moduleforge/core-api v0.0.0 => ../../core-module/api
+
+replace github.com/moduleforge/tags-api v0.0.0 => ../../tags-module/api
+
+replace github.com/moduleforge/tags-model v0.0.0 => ../../tags-module/model
