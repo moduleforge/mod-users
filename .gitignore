@@ -5,3 +5,8 @@ node_modules/
 worktree/
 .env
 deploy/local/authelia/certs/
+
+# Worktree-local go.work files for isolated builds (authoritative workspace
+# file lives at user-components/go.work).
+/go.work
+/go.work.sum
