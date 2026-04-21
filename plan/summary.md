@@ -21,6 +21,16 @@ As of the core-module extraction (see `../../core-module/plan/summary.md`):
 
 Local dev: top-level `go.work` at `user-components/` stitches Go modules; `make link-core` from the repo root rebuilds core-gui and refreshes the yalc link.
 
+## Dependencies on tags-module
+
+As of the tags-module integration (see `../../tags-module/plan/summary.md`):
+
+- **`model/`** — compose target also pulls `tags-module/model/migrations/0200–0299` into `schema/migrations/`. users-module does not emit sqlc types for tag tables (tags-api owns those queries via `github.com/moduleforge/tags-model/db`). Apply order is filename-sorted: 0000–0011 (core) → 0100–0109 (users) → 0200–0201 (tags).
+- **`api/`** — requires `github.com/moduleforge/tags-api`. Constructs `tagsSvcs := tagsservice.New(tagsdb.New(pool), auditWriter)` and mounts `tagsapi.NewRouter(...)` inside the same authenticated `/v1` group as core's router. Serves `/v1/tags/*` and `/v1/entities/{uuid}/tags`. Tags' display renderer is registered into the shared `display.Registry` alongside core's builtins. The same `auth.CorePrincipalAdapter` and `audit.Writer` satisfy both modules.
+- **`gui/`** — consumes `@moduleforge/tags-gui` via yalc. Components `<TagChip>`, `<TagList>`, `<TagEditor>` and the `createTagsClient` factory are available for any page that needs to render or edit tags on an entity.
+
+Local dev: `make link-tags` from the repo root rebuilds tags-gui and refreshes the yalc link. `make link-all` covers both core and tags.
+
 ## End-user features (from CLAUDE.md)
 
 - Self-service account creation, profile edit, "forgot password"
