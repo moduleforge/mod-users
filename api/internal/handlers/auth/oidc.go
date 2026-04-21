@@ -36,19 +36,26 @@ const stateCookiePath = "/v1/auth/oidc/"
 // stateCookieMaxAge mirrors the TTL baked into the state token itself.
 const stateCookieMaxAge = 300
 
+// userResolver is the interface the OIDC handler uses to look up or create a
+// user from a verified OIDC principal. Defined here (at the point of use) so
+// tests can inject a stub without importing the concrete resolver type.
+type userResolver interface {
+	Resolve(ctx context.Context, p localauth.Principal) (*localauth.UserContext, error)
+}
+
 // OIDCHandler serves the provider discovery endpoint and the authorization
 // code start/callback round trip. It holds its own copies of the resolver
 // and the OAuth orchestrator so the main router wiring stays simple.
 type OIDCHandler struct {
 	queries  *db.Queries
 	oauth    *localauth.OAuth
-	resolver *localauth.UserResolver
+	resolver userResolver
 	cfg      *config.Config
 }
 
 // NewOIDCHandler wires up the handler with everything it needs. All fields
 // must be non-nil (except oauth, which may be a shell with zero providers).
-func NewOIDCHandler(queries *db.Queries, oauth *localauth.OAuth, resolver *localauth.UserResolver, cfg *config.Config) *OIDCHandler {
+func NewOIDCHandler(queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, cfg *config.Config) *OIDCHandler {
 	return &OIDCHandler{
 		queries:  queries,
 		oauth:    oauth,
@@ -199,22 +206,27 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	uc, err := h.resolver.Resolve(r.Context(), principal)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc callback: resolve user", "error", err, "provider", providerID)
-		h.redirectToFrontendError(w, r, "authentication_failed")
+		if errors.Is(err, localauth.ErrUserGone) {
+			slog.WarnContext(r.Context(), "oidc callback: user gone", "error", err, "provider", providerID)
+			h.redirectToFrontendError(w, r, "authentication_failed")
+			return
+		}
+		slog.ErrorContext(r.Context(), "oidc callback: resolve user internal error", "error", err, "provider", providerID)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "user resolution failed")
 		return
 	}
 
 	user, err := h.queries.GetUserByID(r.Context(), uc.UserID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: reload user", "error", err)
-		h.redirectToFrontendError(w, r, "authentication_failed")
+		server.Error(w, http.StatusInternalServerError, "internal_error", "user reload failed")
 		return
 	}
 
 	token, err := localauth.IssueLocalJWT(user, uc.IsAdmin, h.cfg.LocalAuth.JWTSecret, h.cfg.LocalAuth.LocalIssuer)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: issue jwt", "error", err)
-		h.redirectToFrontendError(w, r, "authentication_failed")
+		server.Error(w, http.StatusInternalServerError, "internal_error", "token issuance failed")
 		return
 	}
 
