@@ -30,9 +30,8 @@ type UserAccountsHandler struct {
 	audit    audit.Writer
 }
 
-// NewUsersHandler creates a UserAccountsHandler.
-// Name kept as NewUsersHandler so main.go wiring doesn't change.
-func NewUsersHandler(pool *pgxpool.Pool, q *db.Queries, coreQ *coredb.Queries, coreSvcs *coreservice.Services, aw audit.Writer) *UserAccountsHandler {
+// NewUserAccountsHandler creates a UserAccountsHandler.
+func NewUserAccountsHandler(pool *pgxpool.Pool, q *db.Queries, coreQ *coredb.Queries, coreSvcs *coreservice.Services, aw audit.Writer) *UserAccountsHandler {
 	return &UserAccountsHandler{pool: pool, q: q, coreQ: coreQ, coreSvcs: coreSvcs, audit: aw}
 }
 

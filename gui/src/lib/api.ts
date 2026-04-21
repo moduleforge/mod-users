@@ -353,14 +353,14 @@ export const api = {
     delete: (uuid: string) =>
       request<void>(`/v1/apps/${uuid}`, { method: 'DELETE' }),
     getMembers: (uuid: string) =>
-      request<AppMembersResponse>(`/v1/apps/${uuid}/members`),
+      request<AppMembersResponse>(`/v1/apps/${uuid}/user-accounts`),
     addMember: (uuid: string, data: AddAppMemberRequest) =>
-      request<void>(`/v1/apps/${uuid}/members`, {
+      request<void>(`/v1/apps/${uuid}/user-accounts`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     removeMember: (uuid: string, userUuid: string) =>
-      request<void>(`/v1/apps/${uuid}/members/${userUuid}`, {
+      request<void>(`/v1/apps/${uuid}/user-accounts/${userUuid}`, {
         method: 'DELETE',
       }),
   },

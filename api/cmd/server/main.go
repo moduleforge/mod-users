@@ -243,7 +243,7 @@ func main() {
 
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs, auditWriter)
-	usersHandler := handlers.NewUsersHandler(pool, queries, coreQueries, coreSvcs, auditWriter)
+	usersHandler := handlers.NewUserAccountsHandler(pool, queries, coreQueries, coreSvcs, auditWriter)
 	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	auditHandler := handlers.NewAuditHandler(queries, coreQueries, coreSvcs)
 	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
@@ -341,11 +341,11 @@ func main() {
 				r.Put("/apps/{uuid}", appsHandler.UpdateApp)
 				r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
 
-				// Apps users.
-				r.Post("/apps/{uuid}/users", appsHandler.AssignUser)
-				r.Get("/apps/{uuid}/users", appsHandler.ListAppUsers)
-				r.Delete("/apps/{uuid}/users/{user_uuid}", appsHandler.RemoveUser)
-				r.Put("/apps/{uuid}/users/{user_uuid}/roles", appsHandler.UpdateUserRoles)
+				// Apps user-accounts.
+				r.Post("/apps/{uuid}/user-accounts", appsHandler.AssignUser)
+				r.Get("/apps/{uuid}/user-accounts", appsHandler.ListAppUsers)
+				r.Delete("/apps/{uuid}/user-accounts/{user_account_uuid}", appsHandler.RemoveUser)
+				r.Put("/apps/{uuid}/user-accounts/{user_account_uuid}/roles", appsHandler.UpdateUserRoles)
 			})
 		})
 	})

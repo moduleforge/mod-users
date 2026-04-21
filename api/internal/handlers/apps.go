@@ -168,7 +168,7 @@ type assignUserRequest struct {
 	Roles    []string `json:"roles"`
 }
 
-// AssignUser handles POST /v1/apps/{uuid}/users (admin).
+// AssignUser handles POST /v1/apps/{uuid}/user-accounts (admin).
 func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
@@ -224,7 +224,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ListAppUsers handles GET /v1/apps/{uuid}/users (admin).
+// ListAppUsers handles GET /v1/apps/{uuid}/user-accounts (admin).
 func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
@@ -245,17 +245,17 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 			"roles":           m.Roles,
 		})
 	}
-	server.JSON(w, http.StatusOK, map[string]any{"users": resp})
+	server.JSON(w, http.StatusOK, map[string]any{"user_accounts": resp})
 }
 
-// RemoveUser handles DELETE /v1/apps/{uuid}/users/{user_uuid} (admin).
+// RemoveUser handles DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid} (admin).
 func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
 		return
 	}
 
-	rawUserUUID := chi.URLParam(r, "user_uuid")
+	rawUserUUID := chi.URLParam(r, "user_account_uuid")
 	userUUID, err := uuid.Parse(rawUserUUID)
 	if err != nil {
 		server.Error(w, http.StatusBadRequest, "bad_request", "invalid user uuid")
@@ -289,14 +289,14 @@ type updateRolesRequest struct {
 	Roles []string `json:"roles"`
 }
 
-// UpdateUserRoles handles PUT /v1/apps/{uuid}/users/{user_uuid}/roles (admin).
+// UpdateUserRoles handles PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles (admin).
 func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
 		return
 	}
 
-	rawUserUUID := chi.URLParam(r, "user_uuid")
+	rawUserUUID := chi.URLParam(r, "user_account_uuid")
 	userUUID, err := uuid.Parse(rawUserUUID)
 	if err != nil {
 		server.Error(w, http.StatusBadRequest, "bad_request", "invalid user uuid")

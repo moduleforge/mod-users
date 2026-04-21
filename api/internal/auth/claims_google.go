@@ -4,7 +4,7 @@ package auth
 //
 // Google JWTs carry end-user identity but do not include application-level roles.
 // Role assignment for Google-authenticated users must be managed within the application
-// (e.g., via the users table is_admin flag) rather than in the token itself.
+// (e.g., via the user_accounts table is_admin flag) rather than in the token itself.
 type googleMapper struct {
 	opts MapperOptions
 }
