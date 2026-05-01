@@ -30,6 +30,10 @@ import (
 	tagsapi "github.com/moduleforge/tags-api/httpapi"
 	tagsservice "github.com/moduleforge/tags-api/service"
 	tagsdb "github.com/moduleforge/tags-model/db"
+
+	contactsapi "github.com/moduleforge/contacts-api/httpapi"
+	contactsservice "github.com/moduleforge/contacts-api/service"
+	contactsdb "github.com/moduleforge/contacts-model/db"
 )
 
 func main() {
@@ -242,6 +246,20 @@ func main() {
 		Logger:      logger,
 	})
 
+	// Build contacts services and router. contactsRouter mounts /contacts/* and
+	// /legal-entities/{uuid}/contacts routes alongside coreRouter and tagsRouter
+	// inside the /v1 authed group.
+	contactsSvcs := contactsservice.New(contactsdb.New(pool), coredb.New(pool), auditWriter)
+	contactsRouter := contactsapi.NewRouter(contactsapi.Deps{
+		Pool:           pool,
+		CoreQuerier:    coredb.New(pool),
+		ContactQuerier: contactsdb.New(pool),
+		Services:       contactsSvcs,
+		Audit:          auditWriter,
+		Principal:      auth.CorePrincipalAdapter{},
+		Logger:         logger,
+	})
+
 	// Build email sender.
 	emailSender := email.NewSMTPSender(
 		cfg.SMTP.Host,
@@ -346,6 +364,9 @@ func main() {
 
 			// Tags CRUD: /v1/tags/* and /v1/entities/{uuid}/tags.
 			r.Mount("/", tagsRouter)
+
+			// Contacts CRUD: /v1/contacts/* and /v1/legal-entities/{uuid}/contacts.
+			r.Mount("/", contactsRouter)
 
 			// Assume identity (admin).
 			r.Delete("/assume", assumeHandler.EndAssume)
