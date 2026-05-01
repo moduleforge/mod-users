@@ -9,7 +9,7 @@ CREATE TABLE user_accounts (
   email             TEXT NOT NULL UNIQUE,
   email_verified_at TIMESTAMPTZ,
   is_admin          BOOLEAN NOT NULL DEFAULT FALSE,
-  default_app_id    BIGINT, -- FK added in 0104_apps.sql after apps table exists
+  default_app_id    BIGINT CONSTRAINT user_accounts_default_app_fk REFERENCES apps(id) ON DELETE SET NULL,
   auth_issuer       TEXT,
   auth_id           TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),

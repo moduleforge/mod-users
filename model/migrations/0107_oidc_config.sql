@@ -1,13 +1,11 @@
 -- oidc_config holds the singleton row that captures the operator's
--- confirmed choices for the OIDC onboarding flow (phase 9.9a). Only one
--- row ever exists (id = 1, enforced by CHECK); the design choice is
--- deliberate — "current configuration" is a singleton, and keeping the
--- table shape trivial simplifies the upsert + query layer.
+-- confirmed choices for the OIDC onboarding flow. Only one row ever
+-- exists (id = 1, enforced by CHECK); the design choice is deliberate —
+-- "current configuration" is a singleton, and keeping the table shape
+-- trivial simplifies the upsert + query layer. Per-provider on/off state
+-- is owned by oidc_providers.enabled, not this table.
 --
 -- Columns:
---   provider_enabled : per-provider on/off map, e.g. '{"google": true,
---                      "microsoft": false}'. Empty JSON object means "no
---                      DB override — fall back to env-derived defaults".
 --   opt_out          : persists a "local-auth only" choice made through
 --                      the confirm UI. Equivalent in effect to the
 --                      NO_OIDC_ACCOUNTS env flag but survives env-var
@@ -21,7 +19,6 @@
 --                      "last saved" label and the revert button.
 CREATE TABLE oidc_config (
     id                     INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    provider_enabled       JSONB NOT NULL DEFAULT '{}'::jsonb,
     opt_out                BOOLEAN NOT NULL DEFAULT FALSE,
     setup_token_hash       TEXT,
     setup_token_created_at TIMESTAMPTZ,

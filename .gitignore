@@ -1,10 +1,14 @@
-node_modules/
+# dirs
 .pnpm-store/
+deploy/local/authelia/certs/
+node_modules/
+worktree/
+
+# files
 *.tsbuildinfo
 .DS_Store
-worktree/
 .env
-deploy/local/authelia/certs/
+CLAUDE.md
 
 # Worktree-local go.work files for isolated builds (authoritative workspace
 # file lives at user-components/go.work).

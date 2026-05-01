@@ -11,8 +11,3 @@ CREATE TABLE apps (
 CREATE TRIGGER apps_set_updated_at
   BEFORE UPDATE ON apps
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
--- Now that the apps table exists, add the deferred FK from user_accounts.default_app_id.
-ALTER TABLE user_accounts
-  ADD CONSTRAINT user_accounts_default_app_fk
-  FOREIGN KEY (default_app_id) REFERENCES apps(id) ON DELETE SET NULL;
