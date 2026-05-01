@@ -53,7 +53,11 @@ preflight: ## Check required tools for model
 		echo "  Install: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0"; \
 		exit 1; \
 	fi
-
+	@if ! command -v atlas >/dev/null 2>&1; then \
+		curl -sSf https://atlasgo.sh | sh; \
+	fi
+	# we wanted to use 'go install', but as of 2026.05.01 it pins a broken tool version
+	# go install ariga.io/atlas/cmd/atlas@latest
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
