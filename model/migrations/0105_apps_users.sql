@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE apps_user_accounts (
   app_id          BIGINT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
   user_account_id BIGINT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,

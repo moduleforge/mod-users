@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE auth_local (
   user_account_id     BIGINT PRIMARY KEY REFERENCES user_accounts(id) ON DELETE CASCADE,
   password_hash       TEXT NOT NULL,            -- argon2id encoded string

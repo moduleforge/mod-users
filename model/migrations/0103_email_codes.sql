@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE email_codes (
   id              BIGSERIAL PRIMARY KEY,
   user_account_id BIGINT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,

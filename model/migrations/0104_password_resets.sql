@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE password_resets (
   id              BIGSERIAL PRIMARY KEY,
   user_account_id BIGINT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,

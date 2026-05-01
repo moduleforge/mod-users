@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- user_accounts: an interactive login identity tied to a Legal Entity.
 -- account_holder references legal_entities(entity_id), NOT entities(id), because
 -- only legal entities (natural_person, corporation) can hold user accounts.

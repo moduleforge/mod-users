@@ -1,12 +1,12 @@
 #!/bin/sh
 set -e
 
-# Run database migrations if DB_URL is set and atlas is available.
+# Run database migrations if DB_URL is set and goose is available.
 # Migrations are assembled at build time into /app/schema/migrations/
-# (core-model 0000-0005 + users-module 0100-0109).
-if [ -n "$DB_URL" ] && command -v atlas >/dev/null 2>&1 && [ -d /app/schema/migrations ]; then
+# (core-model 0001-0012 + users-module 0100-0108).
+if [ -n "$DB_URL" ] && command -v goose >/dev/null 2>&1 && [ -d /app/schema/migrations ]; then
     echo "==> Running database migrations..."
-    atlas migrate apply --dir "file:///app/schema/migrations" --url "$DB_URL" 2>&1 || \
+    goose -dir /app/schema/migrations postgres "$DB_URL" up 2>&1 || \
         echo "    (migrations already applied or failed — continuing)"
 fi
 

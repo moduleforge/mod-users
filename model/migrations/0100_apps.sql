@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE apps (
   id          BIGSERIAL PRIMARY KEY,
   uuid        UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),

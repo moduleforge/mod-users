@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- oidc_providers stores per-provider DB overrides for the OIDC provider
 -- registry (phase 9.11a). A row here means "the operator edited this
 -- provider via the admin GUI"; any NULL column means "no override — use
@@ -20,7 +22,7 @@
 --     never reads this back — a has_client_secret boolean is surfaced
 --     instead.
 --   * updated_at is maintained by the shared set_updated_at() trigger
---     defined in 0000_helpers.sql.
+--     defined in 0001_helpers.sql.
 CREATE TABLE oidc_providers (
     id TEXT PRIMARY KEY
         CHECK (id ~ '^[a-z][a-z0-9-]{0,30}[a-z0-9]$'),

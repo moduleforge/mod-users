@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE audit_log (
   id                      BIGSERIAL PRIMARY KEY,
   actor_user_account_id   BIGINT NOT NULL REFERENCES user_accounts(id) ON DELETE RESTRICT,

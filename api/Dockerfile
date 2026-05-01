@@ -5,8 +5,8 @@
 # ../../core-module/{model,api}. Docker compose sets context: ../../..
 # which from users-module/deploy/local/ resolves to user-components/.
 #
-# Composed migrations: core-module/model (0000–0005) + users-module/model
-# (0100–0109) are concatenated at build time into /app/schema/migrations/.
+# Composed migrations: core-module/model (0001–0012) + users-module/model
+# (0100–0108) are concatenated at build time into /app/schema/migrations/.
 
 FROM golang:1.26-alpine AS builder
 
@@ -33,6 +33,10 @@ COPY users-module/api/ ./users-module/api/
 
 RUN cd users-module/api && CGO_ENABLED=0 go build -o /server ./cmd/server
 
+# Build the goose CLI from source so we can run it in the runtime image
+# without needing curl-based installers.
+RUN CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@latest
+
 # Assemble composed migrations directly from the local source paths.
 RUN mkdir -p /app/schema/migrations \
     && cp /src/core-module/model/migrations/*.sql /app/schema/migrations/ \
@@ -41,14 +45,11 @@ RUN mkdir -p /app/schema/migrations \
 # --- Runtime stage ---
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata curl
-
-# Install atlas CLI for migrations.
-RUN curl -sSf https://atlasgo.sh | sh
+RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /server /server
+COPY --from=builder /go/bin/goose /usr/local/bin/goose
 COPY --from=builder /app/schema/migrations /app/schema/migrations
-RUN atlas migrate hash --dir file:///app/schema/migrations
 COPY users-module/api/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

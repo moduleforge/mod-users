@@ -1,3 +1,5 @@
+-- +goose Up
+
 -- oidc_config holds the singleton row that captures the operator's
 -- confirmed choices for the OIDC onboarding flow. Only one row ever
 -- exists (id = 1, enforced by CHECK); the design choice is deliberate —
