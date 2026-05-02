@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "packages": {
+    "@moduleforge/users-gui": {
+      "signature": "744683d7a7da04e49ba08645eb3318b7",
+      "file": true
+    },
+    "@moduleforge/core-gui": {
+      "signature": "4ed17c03e8ce3b8b33f0e7124100272b",
+      "file": true
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiRequestError, type ApiErrorResponse } from '@/lib/api';
+import { API_BASE_URL, ApiRequestError, type ApiErrorResponse } from './api';
 
 /**
  * Per-provider OIDC override CRUD helpers (phase 9.11b). These wrap the

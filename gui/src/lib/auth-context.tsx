@@ -7,8 +7,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { useRouter } from 'next/navigation';
-import { api, ApiRequestError, type UserAccountSelf } from '@/lib/api';
+import { api, ApiRequestError, type UserAccountSelf } from './api';
 
 const TOKEN_KEY = 'auth_token';
 
@@ -37,8 +36,19 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+interface AuthProviderProps {
+  children: React.ReactNode;
+  /**
+   * Called by the provider when it needs to navigate (e.g., after logout).
+   * The consumer (Next.js app, React Router app, etc.) injects framework-
+   * specific navigation here. Defaults to a no-op so the provider is usable
+   * in isolation (stories, tests).
+   */
+  onNavigate?: (path: string) => void;
+}
+
+export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
+  const navigate = onNavigate ?? (() => {});
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserAccountSelf | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,8 +63,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
-    router.push('/auth/login');
-  }, [router]);
+    navigate('/auth/login');
+  }, [navigate]);
 
   const refreshUser = useCallback(async () => {
     try {

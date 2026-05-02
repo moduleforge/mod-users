@@ -1,23 +1,20 @@
-# gui/ sub-project Makefile (@moduleforge/users-gui pure component library).
+# example/ sub-project Makefile (Next.js example app consuming @moduleforge/users-gui).
 # Self-contained: implements the canonical target contract used by the root
-# Makefile so it can be invoked standalone or via `make -C gui <target>`.
-# Build: tsup (JS/TS) + @tailwindcss/cli (CSS). Preview: ladle on port 61002.
+# Makefile so it can be invoked standalone or via `make -C example <target>`.
 
 .DEFAULT_GOAL := build
 
-# Detect current platform (e.g. "Darwin" on macOS, "Linux" in containers).
+# Detect current platform.
 CURRENT_OS := $(shell uname -s)
 
 # Auto-detect package manager: pnpm > npm.
 PM := $(shell if command -v pnpm >/dev/null 2>&1; then echo pnpm; else echo npm; fi)
 NPX := npx
 
-# pnpm hoists deps to the workspace root. We need to track platform there too.
-# Resolve root: walk up looking for pnpm-workspace.yaml.
+# Workspace root resolution (same logic as gui/Makefile).
 WORKSPACE_ROOT := $(shell d=$$PWD; while [ "$$d" != "/" ]; do \
 	if [ -f "$$d/pnpm-workspace.yaml" ]; then echo "$$d"; break; fi; \
 	d=$$(dirname "$$d"); done)
-# Fall back to just this directory if not in a workspace.
 ifeq ($(WORKSPACE_ROOT),)
 WORKSPACE_ROOT := .
 endif
@@ -25,12 +22,12 @@ endif
 PLATFORM_STAMP := $(WORKSPACE_ROOT)/node_modules/.platform
 
 # ---------------------------------------------------------------------------
-# Preflight — verify tools, fix cross-platform node_modules
+# Preflight
 # ---------------------------------------------------------------------------
 
 .PHONY: preflight
 preflight: ## Check tools + fix stale node_modules
-	@printf "  gui preflight: "
+	@printf "  example preflight: "
 	@if ! command -v node >/dev/null 2>&1; then \
 		echo "FAIL"; \
 		echo "ERROR: node is not installed."; \
@@ -66,39 +63,39 @@ preflight: ## Check tools + fix stale node_modules
 # ---------------------------------------------------------------------------
 
 .PHONY: build
-build: preflight ## Build the component library (tsup JS/TS + CSS via tailwindcss-cli)
-	$(PM) run build
+build: preflight ## Build the Next.js production bundle
+	$(NPX) next build
 
 .PHONY: test
 test: test.unit ## Alias for test.unit
 
 .PHONY: test.unit
 test.unit: preflight ## Run unit tests (none yet — placeholder passes)
-	@echo "gui: no unit tests configured yet"
+	@echo "example: no unit tests configured yet"
 
 .PHONY: test.integration
 test.integration: ## Run integration tests (none yet)
-	@echo "gui: no integration tests yet"
+	@echo "example: no integration tests yet"
 
 .PHONY: lint
-lint: preflight ## Run tsc typecheck (library has no eslint config)
-	$(NPX) tsc --noEmit
+lint: preflight ## Run next lint
+	$(NPX) next lint
 
 .PHONY: lint-fix
-lint-fix: lint ## No autofix for tsc; delegate to lint
-	@echo "gui: lint-fix same as lint for this project"
+lint-fix: preflight ## Run next lint --fix
+	$(NPX) next lint --fix
 
 .PHONY: dev.start
-dev.start: preflight ## Run ladle component preview on port 61002
-	$(PM) run dev
+dev.start: preflight ## Run Next.js dev server in foreground (requires library published via yalc)
+	$(NPX) next dev
 
 .PHONY: dev.stop
 dev.stop: ## No-op (dev.start runs in foreground)
-	@echo "gui: dev.start runs in foreground; nothing to stop"
+	@echo "example: dev.start runs in foreground; nothing to stop"
 
 .PHONY: clean
-clean: ## Remove build artifacts (dist/)
-	rm -rf dist .next build
+clean: ## Remove build artifacts
+	rm -rf .next
 
 .PHONY: help
 help: ## Show this help
