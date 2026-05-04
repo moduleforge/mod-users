@@ -1,6 +1,12 @@
 // Package audit provides a context-threaded writer for the audit_log table.
 // Handlers call Write explicitly after each mutation so before/after snapshots
-// are precise — no magical interceptor.
+// are precise — the design is explicit calls with no magic interception.
+//
+// This package is the current (Phase 2-era) implementation of audit writing,
+// scoped to users-module. The project-wide pattern — Authorizer +
+// MutationObserver interfaces defined in core-module — is described in
+// core-module/docs/architecture/cross-cutting-design.md. Phase 3 will
+// extract audit into a standalone audit-module conforming to that framework.
 package audit
 
 import (
