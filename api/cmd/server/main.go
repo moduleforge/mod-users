@@ -242,7 +242,6 @@ func main() {
 	// service layer; coreRouter mounts /entities/* routes (including /self).
 	coreSvcs := coreservice.New(coredb.New(pool), pool, az, observerGroup, fieldCipher)
 	coreRouter := corehttpapi.NewRouter(corehttpapi.Deps{
-		Pool:      pool,
 		Services:  coreSvcs,
 		Principal: auth.CorePrincipalAdapter{},
 		Logger:    logger,
