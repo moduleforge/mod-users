@@ -243,7 +243,7 @@ func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 		"slug": updated.Slug,
 		"name": updated.Name,
 	}
-	h.observers.ObserveAfterCommit(r.Context(), "update", "app", nil, before, after)
+	h.observers.ObserveAfterCommit(r.Context(), "update", "app", nil, nil, after)
 	server.JSON(w, http.StatusOK, appResponse(updated))
 }
 
@@ -279,7 +279,7 @@ func (h *AppsHandler) DeleteApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.observers.ObserveAfterCommit(r.Context(), "delete", "app", nil, before, nil)
+	h.observers.ObserveAfterCommit(r.Context(), "delete", "app", nil, nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 

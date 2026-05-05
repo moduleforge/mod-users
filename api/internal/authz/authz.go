@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/opctx"
@@ -102,9 +103,17 @@ func effectiveActor(ctx context.Context) (int64, bool) {
 
 // isAdmin queries the user_account by account_holder (entity_id) to determine
 // whether the actor has admin privileges.
+//
+// When the account_holder has no user_account row (deleted account, service
+// account, or corporation with no user_account), the lookup returns ErrNoRows.
+// This is a forbidden state, not a server fault: the actor cannot be
+// authenticated as a user with any privileges.
 func (a *Authorizer) isAdmin(ctx context.Context, entityID int64) (bool, error) {
 	ua, err := a.q.GetUserAccountByAccountHolder(ctx, entityID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, ErrForbidden
+		}
 		return false, err
 	}
 	return ua.IsAdmin, nil

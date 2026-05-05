@@ -316,9 +316,13 @@ func TestAuthorize_AssumedActor_PolicyApplied(t *testing.T) {
 	}
 }
 
-// TestAuthorize_DBError_PropagatesAsInternalError verifies that a DB lookup failure
-// is returned as-is (not wrapped as ErrForbidden or ErrUnauthenticated).
-func TestAuthorize_DBError_PropagatesAsInternalError(t *testing.T) {
+// TestAuthorize_MissingUserAccount_MapsToForbidden verifies that an actor whose
+// entity has no corresponding user_account row (deleted account, service-account
+// actor, corporation actor, or data inconsistency) is treated as a forbidden
+// state — not an internal fault. Per Phase 5 review (code-reviewer H4): the
+// actor's identity is set, but it does not resolve to a privileged user, so
+// 403 is the correct outcome rather than 500.
+func TestAuthorize_MissingUserAccount_MapsToForbidden(t *testing.T) {
 	q := newStubQuerier()
 	// Do NOT seed entity 99 — GetUserAccountByAccountHolder will return pgx.ErrNoRows.
 	az := authz.New(q)
@@ -327,15 +331,8 @@ func TestAuthorize_DBError_PropagatesAsInternalError(t *testing.T) {
 	target := stubEntity{"user_account", ptr(int64(99))}
 
 	err := az.Authorize(ctx, "read", target)
-	if err == nil {
-		t.Error("expected error for missing user account, got nil")
-	}
-	// The error should NOT be ErrForbidden or ErrUnauthenticated — it's an internal fault.
-	if errors.Is(err, authz.ErrForbidden) {
-		t.Error("DB lookup error should not surface as ErrForbidden")
-	}
-	if errors.Is(err, authz.ErrUnauthenticated) {
-		t.Error("DB lookup error should not surface as ErrUnauthenticated")
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("expected ErrForbidden for missing user_account, got %v", err)
 	}
 }
 
