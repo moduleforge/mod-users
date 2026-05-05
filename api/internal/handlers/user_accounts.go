@@ -351,7 +351,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 				ID:      ua.ID,
 				IsAdmin: *req.IsAdmin,
 			}); err != nil {
-				slog.ErrorContext(ctx, "user_accounts.update: set admin", "error", err)
+				return err
 			}
 		}
 
@@ -450,7 +450,7 @@ func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.observers.ObserveAfterCommit(r.Context(), "delete", "user_account", &eid, before, nil)
+	h.observers.ObserveAfterCommit(r.Context(), "delete", "user_account", &eid, nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -496,7 +496,7 @@ func (h *UserAccountsHandler) setAdmin(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	h.observers.ObserveAfterCommit(r.Context(), op, "user_account", &eid, before, after)
+	h.observers.ObserveAfterCommit(r.Context(), op, "user_account", &eid, nil, after)
 
 	server.JSON(w, http.StatusOK, map[string]any{
 		"uuid":     ua.Uuid.String(),

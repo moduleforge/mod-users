@@ -53,7 +53,7 @@ require (
 
 replace github.com/moduleforge/core-model v0.0.0 => ../../core-module/model
 
-replace github.com/moduleforge/users-module/model => ../model
+replace github.com/moduleforge/users-module/model v0.0.0 => ../model
 
 replace github.com/moduleforge/core-api v0.0.0 => ../../core-module/api
 
