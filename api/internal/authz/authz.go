@@ -19,7 +19,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	coreAuthz "github.com/moduleforge/core-api/authz"
-	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/opctx"
 	usersdb "github.com/moduleforge/users-module/model/db"
 )
@@ -56,9 +55,9 @@ func New(q usersdb.Querier) *Authorizer {
 //     acting as the assumed user; the assumed user's permissions apply).
 //   - Otherwise ActorEntityID is the actor.
 //
-// Actions on resources with no entity ID (create, list) are always denied for
+// Operations with a nil target (create, list) are always denied for
 // non-admin actors.
-func (a *Authorizer) Authorize(ctx context.Context, action string, target entity.Entity) error {
+func (a *Authorizer) Authorize(ctx context.Context, operation string, target *int64) error {
 	// Resolve effective actor. Assumed actor takes priority over real actor.
 	actorEntityID, ok := effectiveActor(ctx)
 	if !ok {
@@ -78,13 +77,12 @@ func (a *Authorizer) Authorize(ctx context.Context, action string, target entity
 	}
 
 	// Non-admin: only allowed to act on their own entity.
-	targetID := target.EntityID()
-	if targetID == nil {
+	if target == nil {
 		// No entity ID means this is a create or list operation — admin only.
 		return ErrForbidden
 	}
 
-	if *targetID == actorEntityID {
+	if *target == actorEntityID {
 		return nil // own data
 	}
 

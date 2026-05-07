@@ -27,7 +27,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	coreAuthz "github.com/moduleforge/core-api/authz"
-	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/core-api/txhelper"
@@ -43,7 +42,7 @@ import (
 // allowAllAuthzStub permits every operation.
 type allowAllAuthzStub struct{}
 
-func (allowAllAuthzStub) Authorize(_ context.Context, _ string, _ entity.Entity) error {
+func (allowAllAuthzStub) Authorize(_ context.Context, _ string, _ *int64) error {
 	return nil
 }
 
@@ -52,7 +51,7 @@ var _ coreAuthz.Authorizer = allowAllAuthzStub{}
 // denyAuthzStub always returns the configured error.
 type denyAuthzStub struct{ err error }
 
-func (d denyAuthzStub) Authorize(_ context.Context, _ string, _ entity.Entity) error {
+func (d denyAuthzStub) Authorize(_ context.Context, _ string, _ *int64) error {
 	return d.err
 }
 
