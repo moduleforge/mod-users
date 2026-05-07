@@ -11,32 +11,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	coreAuthz "github.com/moduleforge/core-api/authz"
-	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/txhelper"
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
 )
-
-// appEntity is a minimal entity.Entity stub for app resources.
-// Apps do not have an entity_id in the core entity hierarchy (they are not
-// entities in the core sense), so EntityID always returns nil except for
-// specific-app operations.
-//
-// Note: apps are not in the core entity table, so the entity_id here is the
-// apps.id cast as *int64 for observer targeting purposes only. The authorizer
-// treats nil entity ID as "admin-only" and a non-nil ID as "own or admin".
-// Since apps are always admin-managed, we pass nil for list/create and the
-// app.ID for specific app operations.
-type appEntity struct {
-	id *int64
-}
-
-func (e appEntity) Resource() string { return "app" }
-func (e appEntity) EntityID() *int64 { return e.id }
-
-// Compile-time: appEntity satisfies entity.Entity.
-var _ entity.Entity = appEntity{}
 
 // AppsHandler serves /v1/apps endpoints.
 type AppsHandler struct {
@@ -87,7 +66,7 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Authorize: create is admin-only.
-	if err := h.az.Authorize(r.Context(), "create", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "create", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -131,7 +110,7 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // List handles GET /v1/apps (admin).
 func (h *AppsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Authorize: list is admin-only.
-	if err := h.az.Authorize(r.Context(), "list", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "list", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -158,7 +137,7 @@ func (h *AppsHandler) GetApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authorize: read — admin only for apps.
-	if err := h.az.Authorize(r.Context(), "read", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -179,7 +158,7 @@ func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authorize: update — admin only for apps.
-	if err := h.az.Authorize(r.Context(), "update", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -255,7 +234,7 @@ func (h *AppsHandler) DeleteApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authorize: delete — admin only for apps.
-	if err := h.az.Authorize(r.Context(), "delete", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "delete", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -301,7 +280,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authorize: update (assigning a user to an app is an app mutation).
-	if err := h.az.Authorize(r.Context(), "update", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -363,7 +342,7 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authorize: read (listing app members).
-	if err := h.az.Authorize(r.Context(), "read", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -393,7 +372,7 @@ func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authorize: update (removing a user from an app is an app mutation).
-	if err := h.az.Authorize(r.Context(), "update", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -440,7 +419,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Authorize: update (changing roles is an app mutation).
-	if err := h.az.Authorize(r.Context(), "update", appEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}

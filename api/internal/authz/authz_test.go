@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/users-module/api/internal/authz"
 	db "github.com/moduleforge/users-module/model/db"
@@ -172,15 +171,6 @@ func ctxWithAssumedActor(actorID, assumedID int64) context.Context {
 	return opctx.WithAssumedActor(ctx, assumedID)
 }
 
-// stubEntity is a minimal entity.Entity used in tests.
-type stubEntity struct {
-	resource string
-	id       *int64
-}
-
-func (s stubEntity) Resource() string { return s.resource }
-func (s stubEntity) EntityID() *int64 { return s.id }
-
 // --- tests ---
 
 // TestAuthorize_NoActor verifies that an unauthenticated context returns ErrUnauthenticated.
@@ -188,7 +178,7 @@ func TestAuthorize_NoActor(t *testing.T) {
 	q := newStubQuerier()
 	az := authz.New(q)
 
-	err := az.Authorize(context.Background(), "read", stubEntity{resource: "user_account", id: ptr(int64(1))})
+	err := az.Authorize(context.Background(), "read", ptr(int64(1)))
 	if !errors.Is(err, authz.ErrUnauthenticated) {
 		t.Errorf("expected ErrUnauthenticated, got: %v", err)
 	}
@@ -203,20 +193,20 @@ func TestAuthorize_Admin_AllowsAnything(t *testing.T) {
 	ctx := ctxWithActor(1)
 
 	tests := []struct {
-		action string
-		target entity.Entity
+		operation string
+		target    *int64
 	}{
-		{"read", stubEntity{"user_account", ptr(int64(99))}},   // other user
-		{"create", stubEntity{"user_account", nil}},             // pre-create (no ID)
-		{"list", stubEntity{"user_account", nil}},               // list
-		{"delete", stubEntity{"user_account", ptr(int64(42))}},  // any entity
-		{"update", stubEntity{"user_account", ptr(int64(1))}},   // own entity
+		{"read", ptr(int64(99))},   // other user
+		{"create", nil},             // pre-create (no ID)
+		{"list", nil},               // list
+		{"delete", ptr(int64(42))},  // any entity
+		{"update", ptr(int64(1))},   // own entity
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.action, func(t *testing.T) {
-			if err := az.Authorize(ctx, tc.action, tc.target); err != nil {
-				t.Errorf("admin should be allowed for action=%q: got %v", tc.action, err)
+		t.Run(tc.operation, func(t *testing.T) {
+			if err := az.Authorize(ctx, tc.operation, tc.target); err != nil {
+				t.Errorf("admin should be allowed for operation=%q: got %v", tc.operation, err)
 			}
 		})
 	}
@@ -229,7 +219,7 @@ func TestAuthorize_NonAdmin_OwnData(t *testing.T) {
 	az := authz.New(q)
 
 	ctx := ctxWithActor(7)
-	target := stubEntity{"user_account", ptr(int64(7))} // own entity
+	target := ptr(int64(7)) // own entity
 
 	if err := az.Authorize(ctx, "read", target); err != nil {
 		t.Errorf("non-admin should be allowed to read own data: got %v", err)
@@ -246,7 +236,7 @@ func TestAuthorize_NonAdmin_OtherUser(t *testing.T) {
 	az := authz.New(q)
 
 	ctx := ctxWithActor(7)
-	target := stubEntity{"user_account", ptr(int64(99))} // other user
+	target := ptr(int64(99)) // other user
 
 	err := az.Authorize(ctx, "read", target)
 	if !errors.Is(err, authz.ErrForbidden) {
@@ -261,9 +251,8 @@ func TestAuthorize_NonAdmin_CreateDenied(t *testing.T) {
 	az := authz.New(q)
 
 	ctx := ctxWithActor(7)
-	target := stubEntity{"user_account", nil} // no entity ID: pre-create
 
-	err := az.Authorize(ctx, "create", target)
+	err := az.Authorize(ctx, "create", nil) // nil target: pre-create
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for non-admin create, got: %v", err)
 	}
@@ -276,9 +265,8 @@ func TestAuthorize_NonAdmin_ListDenied(t *testing.T) {
 	az := authz.New(q)
 
 	ctx := ctxWithActor(7)
-	target := stubEntity{"user_account", nil} // no entity ID: list stub
 
-	err := az.Authorize(ctx, "list", target)
+	err := az.Authorize(ctx, "list", nil) // nil target: list
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for non-admin list, got: %v", err)
 	}
@@ -296,21 +284,18 @@ func TestAuthorize_AssumedActor_PolicyApplied(t *testing.T) {
 	ctx := ctxWithAssumedActor(1, 50)
 
 	// Assumed user can access their own data.
-	ownTarget := stubEntity{"user_account", ptr(int64(50))}
-	if err := az.Authorize(ctx, "read", ownTarget); err != nil {
+	if err := az.Authorize(ctx, "read", ptr(int64(50))); err != nil {
 		t.Errorf("assumed user should be allowed to read own data: got %v", err)
 	}
 
 	// Assumed user CANNOT access someone else's data (policy is the assumed user's policy).
-	otherTarget := stubEntity{"user_account", ptr(int64(99))}
-	err := az.Authorize(ctx, "read", otherTarget)
+	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("assumed user should be forbidden from accessing other's data: got %v", err)
 	}
 
 	// Assumed user CANNOT create (admin-only operation for non-admins).
-	noIDTarget := stubEntity{"user_account", nil}
-	err = az.Authorize(ctx, "create", noIDTarget)
+	err = az.Authorize(ctx, "create", nil) // nil target: pre-create
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("assumed user (non-admin) should be forbidden from create: got %v", err)
 	}
@@ -328,9 +313,8 @@ func TestAuthorize_MissingUserAccount_MapsToForbidden(t *testing.T) {
 	az := authz.New(q)
 
 	ctx := ctxWithActor(99)
-	target := stubEntity{"user_account", ptr(int64(99))}
 
-	err := az.Authorize(ctx, "read", target)
+	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for missing user_account, got %v", err)
 	}

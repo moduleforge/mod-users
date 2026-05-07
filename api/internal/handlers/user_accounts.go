@@ -16,7 +16,6 @@ import (
 
 	coredb "github.com/moduleforge/core-model/db"
 	coreAuthz "github.com/moduleforge/core-api/authz"
-	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/txhelper"
 	coreservice "github.com/moduleforge/core-api/service"
@@ -25,19 +24,6 @@ import (
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
 )
-
-// userAccountEntity is a minimal entity.Entity stub for user_account resources.
-// The EntityID is the entity_id (account_holder) of the user account, not the
-// user_account.id.
-type userAccountEntity struct {
-	id *int64
-}
-
-func (e userAccountEntity) Resource() string { return "user_account" }
-func (e userAccountEntity) EntityID() *int64 { return e.id }
-
-// Compile-time: userAccountEntity satisfies entity.Entity.
-var _ entity.Entity = userAccountEntity{}
 
 // UserAccountsHandler serves the /v1/user-accounts endpoints.
 type UserAccountsHandler struct {
@@ -120,8 +106,8 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Authorize: create is admin-only; target has no entity ID yet.
-	if err := h.az.Authorize(r.Context(), "create", userAccountEntity{}); err != nil {
+	// 1. Authorize: create is admin-only; no target entity ID yet.
+	if err := h.az.Authorize(r.Context(), "create", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -218,7 +204,7 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // List handles GET /v1/user-accounts (admin).
 func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Authorize: list is admin-only; no target entity ID.
-	if err := h.az.Authorize(r.Context(), "list", userAccountEntity{}); err != nil {
+	if err := h.az.Authorize(r.Context(), "list", nil); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -275,7 +261,7 @@ func (h *UserAccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: read — use account_holder as the entity ID.
 	eid := ua.AccountHolder
-	if err := h.az.Authorize(r.Context(), "read", userAccountEntity{id: &eid}); err != nil {
+	if err := h.az.Authorize(r.Context(), "read", &eid); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -309,7 +295,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: update — use account_holder as the entity ID.
 	eid := ua.AccountHolder
-	if err := h.az.Authorize(r.Context(), "update", userAccountEntity{id: &eid}); err != nil {
+	if err := h.az.Authorize(r.Context(), "update", &eid); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -418,7 +404,7 @@ func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: delete — use account_holder as the entity ID.
 	eid := ua.AccountHolder
-	if err := h.az.Authorize(r.Context(), "delete", userAccountEntity{id: &eid}); err != nil {
+	if err := h.az.Authorize(r.Context(), "delete", &eid); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
@@ -472,7 +458,7 @@ func (h *UserAccountsHandler) setAdmin(w http.ResponseWriter, r *http.Request, i
 
 	// Authorize: grant/revoke — admin action on a target entity.
 	eid := ua.AccountHolder
-	if err := h.az.Authorize(r.Context(), op, userAccountEntity{id: &eid}); err != nil {
+	if err := h.az.Authorize(r.Context(), op, &eid); err != nil {
 		writeAuthzError(w, err)
 		return
 	}
