@@ -192,9 +192,9 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		"email":    out.Email,
 		"is_admin": out.IsAdmin,
 	}
-	s.obs.ObserveAfterCommit(ctx, "create", "user_account", &out.AccountHolder, nil, after)
+	s.obs.ObserveAfterCommit(ctx, "create", "user_account", &out.AccountHolder, after)
 	// Also fire the natural_person post-commit observer.
-	s.obs.ObserveAfterCommit(ctx, "create", "natural_person", &out.AccountHolder, nil, map[string]any{
+	s.obs.ObserveAfterCommit(ctx, "create", "natural_person", &out.AccountHolder, map[string]any{
 		"given_name":  in.GivenName,
 		"family_name": in.FamilyName,
 	})
@@ -349,7 +349,7 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 		return UserAccount{}, err
 	}
 
-	s.obs.ObserveAfterCommit(ctx, "update", "user_account", &eid, nil, after)
+	s.obs.ObserveAfterCommit(ctx, "update", "user_account", &eid, after)
 
 	out := toUserAccount(updated, "", "")
 	return out, nil
@@ -391,7 +391,7 @@ func (s *UserAccountService) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	s.obs.ObserveAfterCommit(ctx, "delete", "user_account", &eid, nil, nil)
+	s.obs.ObserveAfterCommit(ctx, "delete", "user_account", &eid, nil)
 	return nil
 }
 
@@ -429,7 +429,7 @@ func (s *UserAccountService) SetAdmin(ctx context.Context, id uuid.UUID, isAdmin
 		return err
 	}
 
-	s.obs.ObserveAfterCommit(ctx, op, "user_account", &eid, nil, after)
+	s.obs.ObserveAfterCommit(ctx, op, "user_account", &eid, after)
 	return nil
 }
 
@@ -470,7 +470,7 @@ func (s *UserAccountService) RecordLogin(ctx context.Context, accountID int64, p
 		return fmt.Errorf("user_accounts.RecordLogin observe: %w", txErr)
 	}
 
-	s.obs.ObserveAfterCommit(ctx, "login", "user_account", &entityID, nil, detail)
+	s.obs.ObserveAfterCommit(ctx, "login", "user_account", &entityID, detail)
 	return nil
 }
 
@@ -517,7 +517,7 @@ func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (
 		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume observe: %w", txErr)
 	}
 
-	s.obs.ObserveAfterCommit(ctx, "assume", "user_account", &assumedEntityID, nil, detail)
+	s.obs.ObserveAfterCommit(ctx, "assume", "user_account", &assumedEntityID, detail)
 	return adminUA, assumedUA, nil
 }
 
