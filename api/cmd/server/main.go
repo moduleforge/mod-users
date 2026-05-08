@@ -17,10 +17,12 @@ import (
 	audithttpapi "github.com/moduleforge/audit-api/httpapi"
 	auditservice "github.com/moduleforge/audit-api/service"
 	corehttpapi "github.com/moduleforge/core-api/httpapi"
+	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/fieldcrypto"
 	"github.com/moduleforge/core-api/observer"
 	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/core-api/display"
+	"github.com/moduleforge/core-api/types"
 	"github.com/moduleforge/users-module/api/internal/auth"
 	localAuthz "github.com/moduleforge/users-module/api/internal/authz"
 	"github.com/moduleforge/users-module/api/internal/config"
@@ -31,6 +33,7 @@ import (
 	authhandlers "github.com/moduleforge/users-module/api/internal/handlers/auth"
 	"github.com/moduleforge/users-module/api/internal/observability"
 	"github.com/moduleforge/users-module/api/internal/server"
+	usersservice "github.com/moduleforge/users-module/api/internal/service"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
@@ -238,9 +241,19 @@ func main() {
 	auditSvcs := auditservice.NewServices(auditdb.New(pool), coredb.New(pool), az)
 	auditHandler := audithttpapi.NewAuditHandler(auditSvcs.Audit)
 
+	// Build the TypeResolver (startup-time slug→typeID cache) and EntityResolver
+	// (UUID→internal ID lookup with 403-on-missing policy). Both are required by
+	// coreservice.New after Phase E.
+	typeResolver, err := types.New(ctx, coredb.New(pool))
+	if err != nil {
+		slog.ErrorContext(ctx, "type resolver init failed", "error", err)
+		os.Exit(1)
+	}
+	entityResolver := entity.NewResolver()
+
 	// Build core services and router. coreSvcs delegates entity CRUD to the
 	// service layer; coreRouter mounts /entities/* routes (including /self).
-	coreSvcs := coreservice.New(coredb.New(pool), pool, az, observerGroup, fieldCipher)
+	coreSvcs := coreservice.New(coredb.New(pool), pool, az, observerGroup, fieldCipher, entityResolver, typeResolver)
 	coreRouter := corehttpapi.NewRouter(corehttpapi.Deps{
 		Services:  coreSvcs,
 		Principal: auth.CorePrincipalAdapter{},
@@ -276,9 +289,21 @@ func main() {
 
 	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
 
+	// Build UserAccountService (service-layer logic extracted from handler in Phase F).
+	uaSvc := usersservice.NewUserAccountService(
+		pool,
+		db.New(pool),
+		coredb.New(pool),
+		az,
+		observerGroup,
+		coreSvcs.NaturalPerson,
+		typeResolver,
+		auth.HashPassword,
+	)
+
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
-	usersHandler := handlers.NewUserAccountsHandler(pool, queries, coreQueries, coreSvcs, az, observerGroup)
+	usersHandler := handlers.NewUserAccountsHandler(uaSvc)
 	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup)
 
