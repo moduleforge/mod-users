@@ -36,6 +36,8 @@ require (
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/moduleforge/audit-api v0.0.0
 	github.com/moduleforge/audit-model v0.0.0
+	github.com/moduleforge/authz-api v0.0.0
+	github.com/moduleforge/authz-model v0.0.0
 	github.com/moduleforge/core-api v0.0.0
 	github.com/moduleforge/core-model v0.0.0
 	github.com/moduleforge/users-module/model v0.0.0
@@ -60,3 +62,7 @@ replace github.com/moduleforge/core-api v0.0.0 => ../../core-module/api
 replace github.com/moduleforge/audit-model v0.0.0 => ../../audit-module/model
 
 replace github.com/moduleforge/audit-api v0.0.0 => ../../audit-module/api
+
+replace github.com/moduleforge/authz-model v0.0.0 => ../../authz-module/model
+
+replace github.com/moduleforge/authz-api v0.0.0 => ../../authz-module/api

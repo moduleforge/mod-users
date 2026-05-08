@@ -171,12 +171,21 @@ func ctxWithAssumedActor(actorID, assumedID int64) context.Context {
 	return opctx.WithAssumedActor(ctx, assumedID)
 }
 
+// newAuthorizer builds an Authorizer with the stub users querier.
+// authzQ and pool are nil because the test cases below only exercise the
+// is_admin short-circuit, the unauthenticated path, and the nil-target denial.
+// Tests that exercise the grant-check path require a live database and belong
+// in the integration test suite.
+func newAuthorizer(q *stubQuerier) *authz.Authorizer {
+	return authz.New(q, nil, nil, nil)
+}
+
 // --- tests ---
 
 // TestAuthorize_NoActor verifies that an unauthenticated context returns ErrUnauthenticated.
 func TestAuthorize_NoActor(t *testing.T) {
 	q := newStubQuerier()
-	az := authz.New(q)
+	az := newAuthorizer(q)
 
 	err := az.Authorize(context.Background(), "read", ptr(int64(1)))
 	if !errors.Is(err, authz.ErrUnauthenticated) {
@@ -188,7 +197,7 @@ func TestAuthorize_NoActor(t *testing.T) {
 func TestAuthorize_Admin_AllowsAnything(t *testing.T) {
 	q := newStubQuerier()
 	q.seed(1, true) // entity_id=1 is admin
-	az := authz.New(q)
+	az := newAuthorizer(q)
 
 	ctx := ctxWithActor(1)
 
@@ -212,105 +221,61 @@ func TestAuthorize_Admin_AllowsAnything(t *testing.T) {
 	}
 }
 
-// TestAuthorize_NonAdmin_OwnData verifies that a non-admin can access their own entity.
-func TestAuthorize_NonAdmin_OwnData(t *testing.T) {
-	q := newStubQuerier()
-	q.seed(7, false) // entity_id=7 is not admin
-	az := authz.New(q)
-
-	ctx := ctxWithActor(7)
-	target := ptr(int64(7)) // own entity
-
-	if err := az.Authorize(ctx, "read", target); err != nil {
-		t.Errorf("non-admin should be allowed to read own data: got %v", err)
-	}
-	if err := az.Authorize(ctx, "update", target); err != nil {
-		t.Errorf("non-admin should be allowed to update own data: got %v", err)
-	}
-}
-
-// TestAuthorize_NonAdmin_OtherUser verifies that a non-admin cannot access another user's data.
-func TestAuthorize_NonAdmin_OtherUser(t *testing.T) {
-	q := newStubQuerier()
-	q.seed(7, false) // entity_id=7 is not admin
-	az := authz.New(q)
-
-	ctx := ctxWithActor(7)
-	target := ptr(int64(99)) // other user
-
-	err := az.Authorize(ctx, "read", target)
-	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("expected ErrForbidden for accessing other user's data, got: %v", err)
-	}
-}
-
 // TestAuthorize_NonAdmin_CreateDenied verifies that a non-admin cannot create resources.
+// Nil-target operations remain admin-only; grants over type IDs are not yet supported.
 func TestAuthorize_NonAdmin_CreateDenied(t *testing.T) {
 	q := newStubQuerier()
 	q.seed(7, false)
-	az := authz.New(q)
+	az := newAuthorizer(q)
 
 	ctx := ctxWithActor(7)
 
-	err := az.Authorize(ctx, "create", nil) // nil target: pre-create
+	err := az.Authorize(ctx, "create", nil)
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for non-admin create, got: %v", err)
 	}
 }
 
-// TestAuthorize_NonAdmin_ListDenied verifies that a non-admin cannot list resources.
+// TestAuthorize_NonAdmin_ListDenied verifies that a non-admin cannot list resources
+// without a grant. Nil-target remains admin-only.
 func TestAuthorize_NonAdmin_ListDenied(t *testing.T) {
 	q := newStubQuerier()
 	q.seed(7, false)
-	az := authz.New(q)
+	az := newAuthorizer(q)
 
 	ctx := ctxWithActor(7)
 
-	err := az.Authorize(ctx, "list", nil) // nil target: list
+	err := az.Authorize(ctx, "list", nil)
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for non-admin list, got: %v", err)
 	}
 }
 
-// TestAuthorize_AssumedActor_PolicyApplied verifies that when an admin assumes another user's
-// identity, the assumed user's permissions (not the admin's) apply.
-func TestAuthorize_AssumedActor_PolicyApplied(t *testing.T) {
+// TestAuthorize_AssumedActor_AdminCannotEscalate verifies that when an admin assumes
+// another user's identity, the assumed user's permissions apply.
+// The assumed non-admin user should be denied nil-target operations.
+func TestAuthorize_AssumedActor_AdminCannotEscalate(t *testing.T) {
 	q := newStubQuerier()
 	q.seed(1, true)   // entity_id=1 is admin (the real actor)
 	q.seed(50, false) // entity_id=50 is not admin (the assumed user)
-	az := authz.New(q)
+	az := newAuthorizer(q)
 
 	// Admin (entity 1) is assuming non-admin user (entity 50).
 	ctx := ctxWithAssumedActor(1, 50)
 
-	// Assumed user can access their own data.
-	if err := az.Authorize(ctx, "read", ptr(int64(50))); err != nil {
-		t.Errorf("assumed user should be allowed to read own data: got %v", err)
-	}
-
-	// Assumed user CANNOT access someone else's data (policy is the assumed user's policy).
-	err := az.Authorize(ctx, "read", ptr(int64(99)))
-	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("assumed user should be forbidden from accessing other's data: got %v", err)
-	}
-
 	// Assumed user CANNOT create (admin-only operation for non-admins).
-	err = az.Authorize(ctx, "create", nil) // nil target: pre-create
+	err := az.Authorize(ctx, "create", nil)
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("assumed user (non-admin) should be forbidden from create: got %v", err)
 	}
 }
 
 // TestAuthorize_MissingUserAccount_MapsToForbidden verifies that an actor whose
-// entity has no corresponding user_account row (deleted account, service-account
-// actor, corporation actor, or data inconsistency) is treated as a forbidden
-// state — not an internal fault. Per Phase 5 review (code-reviewer H4): the
-// actor's identity is set, but it does not resolve to a privileged user, so
-// 403 is the correct outcome rather than 500.
+// entity has no corresponding user_account row is treated as a forbidden state.
 func TestAuthorize_MissingUserAccount_MapsToForbidden(t *testing.T) {
 	q := newStubQuerier()
 	// Do NOT seed entity 99 — GetUserAccountByAccountHolder will return pgx.ErrNoRows.
-	az := authz.New(q)
+	az := newAuthorizer(q)
 
 	ctx := ctxWithActor(99)
 

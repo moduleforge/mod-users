@@ -16,6 +16,8 @@ import (
 	audithttpapi "github.com/moduleforge/audit-api/httpapi"
 	auditservice "github.com/moduleforge/audit-api/service"
 	auditdb "github.com/moduleforge/audit-model/db"
+	authzapi "github.com/moduleforge/authz-api/authz"
+	authzdb "github.com/moduleforge/authz-model/db"
 	"github.com/moduleforge/core-api/authz/setup"
 	"github.com/moduleforge/core-api/display"
 	"github.com/moduleforge/core-api/entity"
@@ -223,10 +225,55 @@ func main() {
 	displayReg := display.NewRegistry(coredb.New(pool))
 	coreservice.RegisterBuiltins(displayReg, coredb.New(pool))
 
-	// Build the Authorizer. Users-module's implementation enforces the policy:
-	// admins can do anything; non-admins can only access their own data.
-	// It reads is_admin via the users-module Querier (lookup by account_holder = entity_id).
-	az := localAuthz.New(db.New(pool))
+	// Build the TypeResolver (startup-time slug→typeID cache) and EntityResolver
+	// (UUID→internal ID lookup with 403-on-missing policy). Both are required by
+	// coreservice.New after Phase E.
+	typeResolver, err := types.New(ctx, coredb.New(pool))
+	if err != nil {
+		slog.ErrorContext(ctx, "type resolver init failed", "error", err)
+		os.Exit(1)
+	}
+	entityResolver := entity.NewResolver()
+
+	// Load the OperationRegistry from the authz_operations table. This must run
+	// after migrations (which seed the operations rows) and before ApplyFuncs
+	// (which uses the registry to build GrantTableGenerator bodies). The registry
+	// caches the SatisfiedBy closure; it is also injected into services that
+	// issue list queries so they can compute op_ids slices at call time.
+	opReg, err := authzapi.NewOperationRegistry(ctx, authzdb.New(pool))
+	if err != nil {
+		slog.ErrorContext(ctx, "authz operation registry load failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Apply access-function bodies for row-level scoping. Each peer module
+	// ships stub functions in its migrations; here we replace those stubs
+	// with the policy bodies from the GrantTableGenerator (Phase 2.2).
+	// The DDL is idempotent; safe to run on every startup.
+	//
+	// The slug list must match all resources that have a list query JOINing
+	// an access function. legal_entity composes natural_person + corporation;
+	// contacts list queries JOIN accessible_legal_entity_ids_for_actor.
+	//
+	// See core-module/docs/architecture/authorization-design.md "Row-level
+	// scoping" for the architectural rationale.
+	authzSlugs := []string{
+		"natural_person",
+		"corporation",
+		"service_account",
+		"legal_entity",
+		"tag",
+	}
+	if err := setup.ApplyFuncs(ctx, pool, setup.NewGrantTableGenerator(), authzSlugs); err != nil {
+		slog.ErrorContext(ctx, "authz access-function setup failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Build the Authorizer. The new grants-driven Authorizer (Phase 2.2) uses
+	// the OperationRegistry and a recursive-CTE grant check. Admins are still
+	// short-circuited via the is_admin flag (Q8-A); non-admins require an
+	// explicit grant OR satisfy the per-resource own predicate.
+	az := localAuthz.New(db.New(pool), authzdb.New(pool), opReg, pool)
 
 	// Build the audit-module Observer and compose it into an ObserverGroup.
 	// The audit Observer writes one audit_log row inside the operation's transaction,
@@ -241,36 +288,6 @@ func main() {
 	// GET /v1/audit, /v1/audit/by-actor/{uuid}, /v1/audit/by-entity/{entity_uuid}.
 	auditSvcs := auditservice.NewServices(auditdb.New(pool), coredb.New(pool), az)
 	auditHandler := audithttpapi.NewAuditHandler(auditSvcs.Audit)
-
-	// Build the TypeResolver (startup-time slug→typeID cache) and EntityResolver
-	// (UUID→internal ID lookup with 403-on-missing policy). Both are required by
-	// coreservice.New after Phase E.
-	typeResolver, err := types.New(ctx, coredb.New(pool))
-	if err != nil {
-		slog.ErrorContext(ctx, "type resolver init failed", "error", err)
-		os.Exit(1)
-	}
-	entityResolver := entity.NewResolver()
-
-	// Apply access-function bodies for row-level scoping. Each peer module
-	// ships stub functions in its migrations; here we replace those stubs
-	// with the policy bodies from the chosen Authorizer implementation
-	// (admin-or-own for Phase 1). The DDL is idempotent; safe to run on
-	// every startup.
-	//
-	// See core-module/docs/architecture/authorization-design.md "Row-level
-	// scoping" for the architectural rationale.
-	authzSlugs := []string{
-		"natural_person",
-		"corporation",
-		"service_account",
-		"legal_entity",
-		"tag",
-	}
-	if err := setup.ApplyFuncs(ctx, pool, setup.NewAdminOrOwnGenerator(), authzSlugs); err != nil {
-		slog.ErrorContext(ctx, "authz access-function setup failed", "error", err)
-		os.Exit(1)
-	}
 
 	// Build core services and router. coreSvcs delegates entity CRUD to the
 	// service layer; coreRouter mounts /entities/* routes (including /self).
