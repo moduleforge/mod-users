@@ -289,6 +289,7 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 	}
 
 	var updated db.UserAccount
+	var after map[string]any
 	err = txhelper.Run(ctx, s.db, func(ctx context.Context, tx pgx.Tx) error {
 		qtx := db.New(tx)
 
@@ -340,14 +341,14 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 			updated.Email = newEmail
 		}
 
-		after := uaSnapshot(updated)
+		// Compute snapshot once; reused by ObserveAfterCommit below.
+		after = uaSnapshot(updated)
 		return s.obs.Observe(ctx, tx, "update", "user_account", &eid, before, after)
 	})
 	if err != nil {
 		return UserAccount{}, err
 	}
 
-	after := uaSnapshot(updated)
 	s.obs.ObserveAfterCommit(ctx, "update", "user_account", &eid, nil, after)
 
 	out := toUserAccount(updated, "", "")
