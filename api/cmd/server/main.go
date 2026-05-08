@@ -17,6 +17,7 @@ import (
 	audithttpapi "github.com/moduleforge/audit-api/httpapi"
 	auditservice "github.com/moduleforge/audit-api/service"
 	corehttpapi "github.com/moduleforge/core-api/httpapi"
+	"github.com/moduleforge/core-api/authz/setup"
 	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/fieldcrypto"
 	"github.com/moduleforge/core-api/observer"
@@ -250,6 +251,26 @@ func main() {
 		os.Exit(1)
 	}
 	entityResolver := entity.NewResolver()
+
+	// Apply access-function bodies for row-level scoping. Each peer module
+	// ships stub functions in its migrations; here we replace those stubs
+	// with the policy bodies from the chosen Authorizer implementation
+	// (admin-or-own for Phase 1). The DDL is idempotent; safe to run on
+	// every startup.
+	//
+	// See core-module/docs/architecture/authorization-design.md "Row-level
+	// scoping" for the architectural rationale.
+	authzSlugs := []string{
+		"natural_person",
+		"corporation",
+		"service_account",
+		"legal_entity",
+		"tag",
+	}
+	if err := setup.ApplyFuncs(ctx, pool, setup.NewAdminOrOwnGenerator(), authzSlugs); err != nil {
+		slog.ErrorContext(ctx, "authz access-function setup failed", "error", err)
+		os.Exit(1)
+	}
 
 	// Build core services and router. coreSvcs delegates entity CRUD to the
 	// service layer; coreRouter mounts /entities/* routes (including /self).
