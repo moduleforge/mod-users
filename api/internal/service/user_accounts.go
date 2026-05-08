@@ -432,6 +432,47 @@ func (s *UserAccountService) SetAdmin(ctx context.Context, id uuid.UUID, isAdmin
 	return nil
 }
 
+// RecordLogin records a successful login event in the audit log.
+// It loads the user_account for accountID, sets the opctx actor to that
+// account's entity so the Authorizer sees the right subject, and then
+// wraps an Observe call in a transaction for atomicity.
+//
+// This method is called by the OIDC callback after the user has been resolved
+// and before the JWT is issued. It is intentionally not called for the local
+// auth (POST /v1/auth/login) path — that path historically did not write login
+// audit rows and is not in scope here.
+func (s *UserAccountService) RecordLogin(ctx context.Context, accountID int64, provider string) error {
+	ua, err := s.q.GetUserAccountByID(ctx, accountID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return coreservice.ErrNotFound
+		}
+		return fmt.Errorf("user_accounts.RecordLogin load: %w", err)
+	}
+
+	entityID := ua.AccountHolder
+	// Set the actor to the logging-in user so Authorize sees the correct subject.
+	ctx = opctx.WithActor(ctx, entityID)
+
+	if err := s.az.Authorize(ctx, "login", &entityID); err != nil {
+		return err
+	}
+
+	detail := map[string]any{
+		"provider": provider,
+		"linked":   true,
+	}
+	txErr := txhelper.Run(ctx, s.db, func(ctx context.Context, tx pgx.Tx) error {
+		return s.obs.Observe(ctx, tx, "login", "user_account", &entityID, nil, detail)
+	})
+	if txErr != nil {
+		return fmt.Errorf("user_accounts.RecordLogin observe: %w", txErr)
+	}
+
+	s.obs.ObserveAfterCommit(ctx, "login", "user_account", &entityID, nil, detail)
+	return nil
+}
+
 // Assume records an admin identity-assumption event in the audit log and
 // returns both the admin and assumed user accounts. No DB row is mutated;
 // the Observe call participates in a transaction solely for audit-row atomicity.

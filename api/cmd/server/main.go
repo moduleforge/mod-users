@@ -308,8 +308,6 @@ func main() {
 		cfg.Server.GUIBaseURL,
 	)
 
-	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
-
 	// Build UserAccountService (service-layer logic extracted from handler in Phase F).
 	uaSvc := usersservice.NewUserAccountService(
 		pool,
@@ -321,6 +319,8 @@ func main() {
 		typeResolver,
 		auth.HashPassword,
 	)
+
+	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, uaSvc, cfg)
 
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)

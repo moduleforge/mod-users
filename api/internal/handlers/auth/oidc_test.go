@@ -59,7 +59,7 @@ func newTestHandler(t *testing.T, registry config.ProviderRegistry) *OIDCHandler
 			OAuthRedirectBaseURL: "http://api.test",
 		},
 	}
-	return NewOIDCHandler(nil, newTestOAuth(t, registry), nil, cfg)
+	return NewOIDCHandler(nil, newTestOAuth(t, registry), nil, noopLoginRecorder{}, cfg)
 }
 
 func TestListProviders(t *testing.T) {
@@ -358,6 +358,13 @@ func (s *stubResolver) Resolve(_ context.Context, _ localauth.Principal) (*local
 	return s.uc, s.err
 }
 
+// noopLoginRecorder is a test double for loginRecorder that always succeeds
+// and records nothing. Used in tests that exercise paths before or after
+// the RecordLogin call, or where the login audit is not the focus.
+type noopLoginRecorder struct{}
+
+func (noopLoginRecorder) RecordLogin(_ context.Context, _ int64, _ string) error { return nil }
+
 // TestOIDC_Callback_ResolverDBError_Returns500 verifies that a non-auth error
 // from the resolver (e.g., a DB failure during auto-create) surfaces as an
 // HTTP 500 with "internal_error" rather than being silently mapped to a
@@ -412,7 +419,7 @@ func TestOIDC_Callback_ResolverDBError_Returns500(t *testing.T) {
 			OAuthRedirectBaseURL: "http://api.test",
 		},
 	}
-	h := NewOIDCHandler(nil, oauth, resolver, cfg)
+	h := NewOIDCHandler(nil, oauth, resolver, noopLoginRecorder{}, cfg)
 
 	// Build the callback request with matching state in both query and cookie.
 	target := "/v1/auth/oidc/" + providerID + "/callback?code=testcode&state=" + stateToken

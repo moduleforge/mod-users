@@ -41,6 +41,13 @@ type userResolver interface {
 	Resolve(ctx context.Context, p localauth.Principal) (*localauth.UserContext, error)
 }
 
+// loginRecorder is the interface the OIDC handler uses to emit a login audit
+// row after a successful OIDC authentication. Defined here (at the point of
+// use) so tests can inject a stub without importing the concrete service type.
+type loginRecorder interface {
+	RecordLogin(ctx context.Context, accountID int64, provider string) error
+}
+
 // OIDCHandler serves the provider discovery endpoint and the authorization
 // code start/callback round trip. It holds its own copies of the resolver
 // and the OAuth orchestrator so the main router wiring stays simple.
@@ -48,16 +55,18 @@ type OIDCHandler struct {
 	queries  *db.Queries
 	oauth    *localauth.OAuth
 	resolver userResolver
+	userSvc  loginRecorder
 	cfg      *config.Config
 }
 
 // NewOIDCHandler wires up the handler with everything it needs. All fields
 // must be non-nil (except oauth, which may be a shell with zero providers).
-func NewOIDCHandler(queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, cfg *config.Config) *OIDCHandler {
+func NewOIDCHandler(queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, userSvc loginRecorder, cfg *config.Config) *OIDCHandler {
 	return &OIDCHandler{
 		queries:  queries,
 		oauth:    oauth,
 		resolver: resolver,
+		userSvc:  userSvc,
 		cfg:      cfg,
 	}
 }
@@ -116,8 +125,8 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 }
 
 // Callback handles GET /v1/auth/oidc/{provider}/callback. It trades the
-// authorization code for an id_token, resolves the user, mints a local JWT,
-// writes an audit row, and 302s to the GUI return page with the JWT in the
+// authorization code for an id_token, resolves the user, emits a login audit
+// row, mints a local JWT, and 302s to the GUI return page with the JWT in the
 // URL fragment so it never hits any server log.
 func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	providerID := normalizeProviderID(r)
@@ -218,6 +227,14 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: reload user account", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "user account reload failed")
+		return
+	}
+
+	// Emit a login audit row before issuing the JWT. RecordLogin sets the
+	// opctx actor internally so the Authorizer sees the logging-in user.
+	if err := h.userSvc.RecordLogin(r.Context(), ua.ID, providerID); err != nil {
+		slog.ErrorContext(r.Context(), "oidc callback: record login audit", "error", err, "provider", providerID)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "login audit failed")
 		return
 	}
 
@@ -331,4 +348,3 @@ func requestIsHTTPS(r *http.Request) bool {
 	}
 	return false
 }
-
