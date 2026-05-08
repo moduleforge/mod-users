@@ -88,7 +88,7 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			"slug": app.Slug,
 			"name": app.Name,
 		}
-		// Apps don't have a core entity_id; pass nil.
+		// Apps are not registered in core's entities table, so target_entity_id is nil.
 		return h.observers.Observe(ctx, tx, "create", "app", nil, nil, after)
 	})
 	if txErr != nil {
@@ -97,6 +97,12 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit limitation: apps are not core entities (no row in core's entities table),
+	// so audit_log.target_entity_id is nil for all app events. As a result,
+	// audit-module's AuditService.ListByEntity cannot return app events; callers
+	// must use ListRecent and filter by resource = "app" instead.
+	// Future fix: register apps as entities, or add app_uuid/subject_uuid to
+	// audit_log (decision deferred; see users-module/next-steps.md).
 	after := map[string]any{
 		"uuid": app.Uuid.String(),
 		"slug": app.Slug,
