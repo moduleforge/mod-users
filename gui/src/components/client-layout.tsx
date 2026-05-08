@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { AuthProvider } from '@/lib/auth-context';
-import { SidebarNav } from '@/components/sidebar-nav';
-import { fetchOIDCStatus } from '@/lib/oidc-config';
+import React, { useEffect, useState } from 'react';
+import { AuthProvider } from '../lib/auth-context';
+import { SidebarNav, type SidebarNavProps } from './sidebar-nav';
+import { fetchOIDCStatus } from '../lib/oidc-config';
 
 /**
  * Tri-state for the OIDC onboarding gate:
@@ -25,9 +24,37 @@ function LoadingScreen() {
   );
 }
 
-export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
+export interface ClientLayoutProps {
+  children: React.ReactNode;
+  /**
+   * The current pathname. Inject from the router (e.g. Next.js
+   * `usePathname()`, React Router `useLocation().pathname`).
+   */
+  currentPath: string;
+  /**
+   * Called when OIDC is unconfirmed and the user is not already on
+   * `/oidc-config`. The consumer (Next.js app, etc.) performs the actual
+   * navigation. Defaults to a no-op so the layout is usable in stories/tests.
+   */
+  onNavigateToConfig?: () => void;
+  /**
+   * Called by `AuthProvider` when it needs to navigate (e.g., after logout).
+   * The consumer injects framework-specific navigation.
+   */
+  onNavigate?: (path: string) => void;
+  /**
+   * Link component passed through to `SidebarNav`. See `SidebarNavProps`.
+   */
+  LinkComponent: SidebarNavProps['LinkComponent'];
+}
+
+export function ClientLayout({
+  children,
+  currentPath,
+  onNavigateToConfig,
+  onNavigate,
+  LinkComponent,
+}: ClientLayoutProps) {
   const [oidcReady, setOidcReady] = useState<OIDCReady>('loading');
 
   // Probe OIDC status exactly once on mount. Any failure (network error,
@@ -52,10 +79,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   // Redirect to /oidc-config whenever the API says we're unconfirmed and
   // we're not already there. Runs on status change or route change.
   useEffect(() => {
-    if (oidcReady === 'needs-setup' && pathname !== CONFIG_PATH) {
-      router.replace(CONFIG_PATH);
+    if (oidcReady === 'needs-setup' && currentPath !== CONFIG_PATH) {
+      onNavigateToConfig?.();
     }
-  }, [oidcReady, pathname, router]);
+  }, [oidcReady, currentPath, onNavigateToConfig]);
 
   if (oidcReady === 'loading') {
     return <LoadingScreen />;
@@ -66,7 +93,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   // above dispatches — this guarantees the AuthProvider never mounts and
   // therefore never fires `/v1/self` (which would 503 under unconfirmed).
   if (oidcReady === 'needs-setup') {
-    if (pathname !== CONFIG_PATH) {
+    if (currentPath !== CONFIG_PATH) {
       return <LoadingScreen />;
     }
     // On the setup page itself, render children without an AuthProvider.
@@ -76,9 +103,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthProvider>
+    <AuthProvider onNavigate={onNavigate}>
       <div className="flex h-screen overflow-hidden">
-        <SidebarNav />
+        <SidebarNav currentPath={currentPath} LinkComponent={LinkComponent} />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </AuthProvider>

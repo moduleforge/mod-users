@@ -55,6 +55,32 @@ func (q *Queries) CreateUserAccount(ctx context.Context, arg CreateUserAccountPa
 	return i, err
 }
 
+const getUserAccountByAccountHolder = `-- name: GetUserAccountByAccountHolder :one
+SELECT id, uuid, account_holder, email, email_verified_at, is_admin, default_app_id,
+       auth_issuer, auth_id, created_at, updated_at
+FROM user_accounts
+WHERE account_holder = $1
+`
+
+func (q *Queries) GetUserAccountByAccountHolder(ctx context.Context, accountHolder int64) (UserAccount, error) {
+	row := q.db.QueryRow(ctx, getUserAccountByAccountHolder, accountHolder)
+	var i UserAccount
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.AccountHolder,
+		&i.Email,
+		&i.EmailVerifiedAt,
+		&i.IsAdmin,
+		&i.DefaultAppID,
+		&i.AuthIssuer,
+		&i.AuthID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserAccountByAuth = `-- name: GetUserAccountByAuth :one
 SELECT id, uuid, account_holder, email, email_verified_at, is_admin, default_app_id,
        auth_issuer, auth_id, created_at, updated_at

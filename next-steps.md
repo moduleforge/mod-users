@@ -2,6 +2,8 @@
 
 All 9 planned phases (foundation → data model → API core → local auth → user mgmt → multi-tenancy → GUI → deploy/CI → Google SSO) have been implemented. Items below are pending manual verification or deferred work that surfaced during implementation. Original phase reports were in `plan/` (now removed); this file is the forward-looking residue.
 
+The assume/login audit gap identified in the post-Phase-5 review was closed on 2026-05-08 (see commits f3214b9, 3b4baa7, 71a8e34 on gui-library-split).
+
 Related docs:
 - `docs/oidc-troubleshooting.md` — step-by-step checklist for IdP-side login rejection (Microsoft signInAudience matrix, redirect URI exact match, stale `oidc_providers` overrides, etc.).
 
@@ -21,4 +23,8 @@ Related docs:
 - **Account-merging (`MERGE-V2`).** Merging duplicate OIDC+local accounts by verified email is not implemented. Out of scope for Phase 4 / 9.
 - **Session storage.** Still localStorage + Bearer. Cookie-based sessions are a future consideration.
 - **`refreshUser` 401 handling.** The auth-context's `refreshUser` still routes through the shared `request()` helper and triggers a hard redirect on 401; its local `logout()` call becomes redundant. Same category as the return-page bug fixed in Phase 9.2, just not touched.
-- **`gofmt -l` offenders on `main`** (pre-date Phase 9): `claims_test.go`, `local_jwt.go`, `password.go`, `principal.go`, `resolver.go`, `handlers/auditlog.go`, `handlers/self.go`. Worth a one-commit cleanup.
+
+## Cross-cutting framework — deferred from Phase 5 review
+
+- **`apps` events have nil `target_entity_id`** — documented in `api/internal/handlers/apps.go`. Apps are not core entities; `audit_log.target_entity_id` is NULL for app events, so `AuditService.ListByEntity` never returns them. Future fix: register apps as entities, or add `app_uuid`/`subject_uuid` to `audit_log`.
+- **`actor coreservice.Principal` parameter cleanup** — handlers still construct `Principal` and pass to service calls for inline ownership checks. Removing requires either an `IsAdmin` opctx key or moving ownership checks into the Authorizer. Defer until pressing.

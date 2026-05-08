@@ -1,28 +1,42 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
+import { useAuth } from '../lib/auth-context';
 
 interface RequireAuthProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  /**
+   * Called when the user is not authenticated. The consumer injects
+   * framework-specific navigation. Defaults to a no-op so the component
+   * is usable in stories/tests without a router.
+   */
+  onUnauthenticated?: () => void;
+  /**
+   * Called when the user is authenticated but lacks admin access and
+   * `requireAdmin` is true. Defaults to a no-op.
+   */
+  onUnauthorized?: () => void;
 }
 
-export function RequireAuth({ children, requireAdmin = false }: RequireAuthProps) {
+export function RequireAuth({
+  children,
+  requireAdmin = false,
+  onUnauthenticated,
+  onUnauthorized,
+}: RequireAuthProps) {
   const { user, isLoading, isAdmin } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      router.replace('/auth/login');
+      onUnauthenticated?.();
       return;
     }
     if (requireAdmin && !isAdmin) {
-      router.replace('/profile');
+      onUnauthorized?.();
     }
-  }, [user, isLoading, isAdmin, requireAdmin, router]);
+  }, [user, isLoading, isAdmin, requireAdmin, onUnauthenticated, onUnauthorized]);
 
   if (isLoading) {
     return (

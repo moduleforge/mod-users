@@ -1,6 +1,7 @@
-# gui/ sub-project Makefile (Next.js).
+# gui/ sub-project Makefile (@moduleforge/users-gui pure component library).
 # Self-contained: implements the canonical target contract used by the root
 # Makefile so it can be invoked standalone or via `make -C gui <target>`.
+# Build: tsup (JS/TS) + @tailwindcss/cli (CSS). Preview: ladle on port 61002.
 
 .DEFAULT_GOAL := build
 
@@ -65,8 +66,8 @@ preflight: ## Check tools + fix stale node_modules
 # ---------------------------------------------------------------------------
 
 .PHONY: build
-build: preflight ## Build the Next.js production bundle
-	$(NPX) next build
+build: preflight ## Build the component library (tsup JS/TS + CSS via tailwindcss-cli)
+	$(PM) run build
 
 .PHONY: test
 test: test.unit ## Alias for test.unit
@@ -80,24 +81,24 @@ test.integration: ## Run integration tests (none yet)
 	@echo "gui: no integration tests yet"
 
 .PHONY: lint
-lint: preflight ## Run next lint
-	$(NPX) next lint
+lint: preflight ## Run tsc typecheck (library has no eslint config)
+	$(NPX) tsc --noEmit
 
 .PHONY: lint-fix
-lint-fix: preflight ## Run next lint --fix
-	$(NPX) next lint --fix
+lint-fix: lint ## No autofix for tsc; delegate to lint
+	@echo "gui: lint-fix same as lint for this project"
 
 .PHONY: dev.start
-dev.start: preflight ## Run Next.js dev server in foreground
-	$(NPX) next dev
+dev.start: preflight ## Run ladle component preview on port 61002
+	$(PM) run dev
 
 .PHONY: dev.stop
-dev.stop: ## No-op (gui dev.start runs in foreground)
+dev.stop: ## No-op (dev.start runs in foreground)
 	@echo "gui: dev.start runs in foreground; nothing to stop"
 
 .PHONY: clean
-clean: ## Remove build artifacts (preserves source/generated code)
-	rm -rf .next
+clean: ## Remove build artifacts (dist/)
+	rm -rf dist .next build
 
 .PHONY: help
 help: ## Show this help

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -9,30 +10,38 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	coredb "github.com/moduleforge/core-model/db"
-	coreservice "github.com/moduleforge/core-api/service"
-	"github.com/moduleforge/users-module/api/internal/audit"
-	localauth "github.com/moduleforge/users-module/api/internal/auth"
+	localAuthz "github.com/moduleforge/users-module/api/internal/authz"
 	"github.com/moduleforge/users-module/api/internal/server"
-	db "github.com/moduleforge/users-module/model/db"
+	svc "github.com/moduleforge/users-module/api/internal/service"
 )
 
 // UserAccountsHandler serves the /v1/user-accounts endpoints.
+// It is a thin parse-call-render layer; all authorization, transaction
+// management, and observer dispatch live in UserAccountService.
 type UserAccountsHandler struct {
-	pool     *pgxpool.Pool
-	q        *db.Queries
-	coreQ    *coredb.Queries
-	coreSvcs *coreservice.Services
-	audit    audit.Writer
+	svc *svc.UserAccountService
 }
 
-// NewUserAccountsHandler creates a UserAccountsHandler.
-func NewUserAccountsHandler(pool *pgxpool.Pool, q *db.Queries, coreQ *coredb.Queries, coreSvcs *coreservice.Services, aw audit.Writer) *UserAccountsHandler {
-	return &UserAccountsHandler{pool: pool, q: q, coreQ: coreQ, coreSvcs: coreSvcs, audit: aw}
+// NewUserAccountsHandler creates a UserAccountsHandler backed by the given service.
+func NewUserAccountsHandler(service *svc.UserAccountService) *UserAccountsHandler {
+	return &UserAccountsHandler{svc: service}
+}
+
+// writeServiceError maps a service error to the appropriate HTTP response.
+func writeServiceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, localAuthz.ErrUnauthenticated):
+		server.Error(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+	case errors.Is(err, localAuthz.ErrForbidden):
+		server.Error(w, http.StatusForbidden, "forbidden", "access denied")
+	case errors.Is(err, svc.ErrEmailTaken):
+		server.Error(w, http.StatusConflict, "email_taken", "an account with that email already exists")
+	case errors.Is(err, svc.ErrInvalidInput):
+		server.Error(w, http.StatusBadRequest, "validation_error", err.Error())
+	default:
+		server.Error(w, http.StatusInternalServerError, "internal_error", "an unexpected error occurred")
+	}
 }
 
 // createUserAccountRequest is the body for POST /v1/user-accounts (admin).
@@ -52,117 +61,20 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-	if req.Email == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "email is required")
-		return
-	}
-	if strings.TrimSpace(req.GivenName) == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "given_name is required")
-		return
-	}
-	if strings.TrimSpace(req.FamilyName) == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "family_name is required")
-		return
-	}
-	if req.Password != nil && len(*req.Password) < 12 {
-		server.Error(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
-		return
-	}
-
-	tx, err := h.pool.Begin(r.Context())
-	if err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.create: begin tx", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to begin transaction")
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	actor := localauth.MustFromContext(r.Context())
-	corePrin := coreservice.Principal{
-		UserID:   actor.UserAccountID, // Principal.UserID is core-owned generic field
-		EntityID: actor.EntityID,
-		IsAdmin:  actor.IsAdmin,
-	}
-
-	coreQtx := coredb.New(tx)
-
-	// Delegate entity -> legal_entity -> natural_person creation to core service.
-	// The tx-scoped querier keeps all inserts in the same transaction.
-	_, entityUUID, err := h.coreSvcs.NaturalPerson.Create(
-		r.Context(),
-		coreQtx,
-		corePrin,
-		coreservice.CreateNaturalPersonInput{
-			GivenName:  req.GivenName,
-			FamilyName: req.FamilyName,
-		},
-	)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.create: create natural person chain", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create entity")
-		return
-	}
-
-	// Resolve the entity internal ID needed for the user_accounts row foreign key.
-	entity, err := coreQtx.GetEntityByUUID(r.Context(), entityUUID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.create: resolve entity", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve entity")
-		return
-	}
-
-	qtx := h.q.WithTx(tx)
-
-	// account_holder references legal_entities(entity_id); entity.ID is valid
-	// here because core service created the legal_entity row above (only
-	// natural_persons and corporations — legal entity subtypes — can be
-	// account holders; service_accounts cannot).
-	ua, err := qtx.CreateUserAccount(r.Context(), db.CreateUserAccountParams{
-		AccountHolder: entity.ID,
-		Email:         req.Email,
-		IsAdmin:       req.IsAdmin,
+	ua, err := h.svc.Create(r.Context(), svc.CreateUserAccountInput{
+		Email:      req.Email,
+		Password:   req.Password,
+		GivenName:  req.GivenName,
+		FamilyName: req.FamilyName,
+		IsAdmin:    req.IsAdmin,
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if userAccountsPgError(err, &pgErr) && pgErr.Code == "23505" {
-			server.Error(w, http.StatusConflict, "email_taken", "an account with that email already exists")
-			return
+		if !errors.Is(err, svc.ErrInvalidInput) {
+			slog.ErrorContext(r.Context(), "user_accounts.create", "error", err)
 		}
-		slog.ErrorContext(r.Context(), "user_accounts.create: create user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create user account")
+		writeServiceError(w, err)
 		return
 	}
-
-	if req.Password != nil {
-		hash, err := localauth.HashPassword(*req.Password)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "user_accounts.create: hash password", "error", err)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process password")
-			return
-		}
-		if err := qtx.UpsertAuthLocal(r.Context(), db.UpsertAuthLocalParams{
-			UserAccountID: ua.ID,
-			PasswordHash:  hash,
-		}); err != nil {
-			slog.ErrorContext(r.Context(), "user_accounts.create: upsert auth_local", "error", err)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to save credentials")
-			return
-		}
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.create: commit", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to commit transaction")
-		return
-	}
-
-	accountHolder := ua.AccountHolder
-	_ = h.audit.Write(r.Context(), "create", "user_account", &accountHolder, nil, map[string]any{
-		"uuid":     ua.Uuid.String(),
-		"email":    ua.Email,
-		"is_admin": ua.IsAdmin,
-	})
 
 	server.JSON(w, http.StatusCreated, userAccountResponse(ua))
 }
@@ -179,7 +91,7 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 	offset := int32(0)
 	if l := q.Get("limit"); l != "" {
 		v, err := strconv.ParseInt(l, 10, 32)
-		if err == nil && v > 0 && v <= 200 {
+		if err == nil && v > 0 {
 			limit = int32(v)
 		}
 	}
@@ -190,14 +102,14 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	accounts, err := h.q.SearchUserAccounts(r.Context(), db.SearchUserAccountsParams{
-		Column1: search,
-		Limit:   limit,
-		Offset:  offset,
+	accounts, err := h.svc.List(r.Context(), svc.ListUserAccountsInput{
+		Search: search,
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.list: search", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to list user accounts")
+		slog.ErrorContext(r.Context(), "user_accounts.list", "error", err)
+		writeServiceError(w, err)
 		return
 	}
 
@@ -214,18 +126,28 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /v1/user-accounts/{uuid} (admin).
 func (h *UserAccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	ua, ok := h.loadUserAccountByUUIDParam(w, r)
+	id, ok := parseUUIDParam(w, r)
 	if !ok {
 		return
 	}
 
-	// Enrich with entity info. account_holder = entity_id.
+	ua, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			server.Error(w, http.StatusNotFound, "not_found", "user account not found")
+			return
+		}
+		slog.ErrorContext(r.Context(), "user_accounts.get", "error", err)
+		writeServiceError(w, err)
+		return
+	}
+
 	detail := userAccountResponse(ua)
-	if np, err := h.coreQ.GetNaturalPersonByEntityID(r.Context(), ua.AccountHolder); err == nil {
-		detail["given_name"] = np.GivenName.String
-		detail["family_name"] = np.FamilyName.String
-		detail["entity_kind"] = "natural_person"
-		detail["display_name"] = strings.TrimSpace(np.GivenName.String + " " + np.FamilyName.String)
+	if ua.GivenName != "" || ua.FamilyName != "" {
+		detail["given_name"] = ua.GivenName
+		detail["family_name"] = ua.FamilyName
+		detail["entity_kind"] = ua.EntityKind
+		detail["display_name"] = strings.TrimSpace(ua.GivenName + " " + ua.FamilyName)
 	}
 
 	server.JSON(w, http.StatusOK, detail)
@@ -241,7 +163,7 @@ type updateUserAccountRequest struct {
 
 // Update handles PUT /v1/user-accounts/{uuid} (admin).
 func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	ua, ok := h.loadUserAccountByUUIDParam(w, r)
+	id, ok := parseUUIDParam(w, r)
 	if !ok {
 		return
 	}
@@ -252,93 +174,33 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	before := userAccountResponse(ua)
-
-	newEmail := ua.Email
-	if req.Email != nil {
-		newEmail = strings.TrimSpace(strings.ToLower(*req.Email))
-	}
-
-	if err := h.q.UpdateUserAccount(r.Context(), db.UpdateUserAccountParams{
-		ID:              ua.ID,
-		Email:           newEmail,
-		EmailVerifiedAt: ua.EmailVerifiedAt,
-		AuthIssuer:      ua.AuthIssuer,
-		AuthID:          ua.AuthID,
-	}); err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.update: update user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to update user account")
+	ua, err := h.svc.Update(r.Context(), id, svc.UpdateUserAccountInput{
+		Email:      req.Email,
+		GivenName:  req.GivenName,
+		FamilyName: req.FamilyName,
+		IsAdmin:    req.IsAdmin,
+	})
+	if err != nil {
+		slog.ErrorContext(r.Context(), "user_accounts.update", "error", err)
+		writeServiceError(w, err)
 		return
 	}
 
-	if req.IsAdmin != nil {
-		if err := h.q.SetAdmin(r.Context(), db.SetAdminParams{
-			ID:      ua.ID,
-			IsAdmin: *req.IsAdmin,
-		}); err != nil {
-			slog.ErrorContext(r.Context(), "user_accounts.update: set admin", "error", err)
-		}
-	}
-
-	// Update natural person fields. account_holder = entity_id.
-	if req.GivenName != nil || req.FamilyName != nil {
-		if np, err := h.coreQ.GetNaturalPersonByEntityID(r.Context(), ua.AccountHolder); err == nil {
-			gn := np.GivenName
-			fn := np.FamilyName
-			if req.GivenName != nil {
-				gn = pgtype.Text{String: *req.GivenName, Valid: true}
-			}
-			if req.FamilyName != nil {
-				fn = pgtype.Text{String: *req.FamilyName, Valid: true}
-			}
-			_ = h.coreQ.UpdateNaturalPerson(r.Context(), coredb.UpdateNaturalPersonParams{
-				EntityID:   ua.AccountHolder,
-				GivenName:  gn,
-				FamilyName: fn,
-			})
-		}
-	}
-
-	// Reload for after snapshot.
-	updated, err := h.q.GetUserAccountByID(r.Context(), ua.ID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.update: reload user account", "error", err)
-	}
-	after := userAccountResponse(updated)
-
-	accountHolder := ua.AccountHolder
-	_ = h.audit.Write(r.Context(), "update", "user_account", &accountHolder, before, after)
-
-	server.JSON(w, http.StatusOK, after)
+	server.JSON(w, http.StatusOK, userAccountResponse(ua))
 }
 
 // Delete handles DELETE /v1/user-accounts/{uuid} (admin) — soft-deletes by archiving the entity.
 func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	ua, ok := h.loadUserAccountByUUIDParam(w, r)
+	id, ok := parseUUIDParam(w, r)
 	if !ok {
 		return
 	}
 
-	// Fetch entity UUID for archive. account_holder is the entity_id.
-	entity, err := h.coreQ.GetEntityByUUID(r.Context(), ua.Uuid)
-	if err != nil {
-		var entityUUID uuid.UUID
-		if err2 := h.pool.QueryRow(r.Context(), "SELECT uuid FROM entities WHERE id = $1", ua.AccountHolder).Scan(&entityUUID); err2 != nil {
-			slog.ErrorContext(r.Context(), "user_accounts.delete: get entity uuid", "error", err2)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to find entity")
-			return
-		}
-		entity.Uuid = entityUUID
-	}
-
-	if err := h.coreQ.ArchiveEntity(r.Context(), entity.Uuid); err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.delete: archive entity", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to archive user account")
+	if err := h.svc.Delete(r.Context(), id); err != nil {
+		slog.ErrorContext(r.Context(), "user_accounts.delete", "error", err)
+		writeServiceError(w, err)
 		return
 	}
-
-	accountHolder := ua.AccountHolder
-	_ = h.audit.Write(r.Context(), "delete", "user_account", &accountHolder, userAccountResponse(ua), nil)
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -354,25 +216,24 @@ func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request
 }
 
 func (h *UserAccountsHandler) setAdmin(w http.ResponseWriter, r *http.Request, isAdmin bool, op string) {
-	ua, ok := h.loadUserAccountByUUIDParam(w, r)
+	id, ok := parseUUIDParam(w, r)
 	if !ok {
 		return
 	}
 
-	if err := h.q.SetAdmin(r.Context(), db.SetAdminParams{
-		ID:      ua.ID,
-		IsAdmin: isAdmin,
-	}); err != nil {
+	if err := h.svc.SetAdmin(r.Context(), id, isAdmin, op); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.setAdmin", "error", err, "op", op)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to update admin status")
+		writeServiceError(w, err)
 		return
 	}
 
-	accountHolder := ua.AccountHolder
-	_ = h.audit.Write(r.Context(), op, "user_account", &accountHolder,
-		map[string]any{"is_admin": !isAdmin},
-		map[string]any{"is_admin": isAdmin},
-	)
+	// Load the account to get its UUID for the response.
+	ua, err := h.svc.LoadByUUID(r.Context(), id)
+	if err != nil {
+		// Non-fatal: we already committed; just return minimal response.
+		server.JSON(w, http.StatusOK, map[string]any{"is_admin": isAdmin})
+		return
+	}
 
 	server.JSON(w, http.StatusOK, map[string]any{
 		"uuid":     ua.Uuid.String(),
@@ -380,43 +241,27 @@ func (h *UserAccountsHandler) setAdmin(w http.ResponseWriter, r *http.Request, i
 	})
 }
 
-// loadUserAccountByUUIDParam extracts the {uuid} chi param and loads the user account.
-func (h *UserAccountsHandler) loadUserAccountByUUIDParam(w http.ResponseWriter, r *http.Request) (db.UserAccount, bool) {
-	rawUUID := chi.URLParam(r, "uuid")
-	parsed, err := uuid.Parse(rawUUID)
+// parseUUIDParam extracts the {uuid} chi URL parameter, writing a 400 on parse failure.
+func parseUUIDParam(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	raw := chi.URLParam(r, "uuid")
+	id, err := uuid.Parse(raw)
 	if err != nil {
 		server.Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
-		return db.UserAccount{}, false
+		return uuid.UUID{}, false
 	}
-	ua, err := h.q.GetUserAccountByUUID(r.Context(), parsed)
-	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusNotFound, "not_found", "user account not found")
-		return db.UserAccount{}, false
-	}
-	if err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts: load by uuid", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
-		return db.UserAccount{}, false
-	}
-	return ua, true
+	return id, true
 }
 
-// userAccountResponse builds a public-facing map from a db.UserAccount.
-func userAccountResponse(ua db.UserAccount) map[string]any {
-	return map[string]any{
-		"uuid":           ua.Uuid.String(),
+// userAccountResponse builds a public-facing map from a service UserAccount.
+func userAccountResponse(ua svc.UserAccount) map[string]any {
+	resp := map[string]any{
+		"uuid":           ua.UUID.String(),
 		"email":          ua.Email,
 		"is_admin":       ua.IsAdmin,
-		"email_verified": ua.EmailVerifiedAt != nil,
-		"created_at":     ua.CreatedAt.Time,
+		"email_verified": ua.EmailVerified,
 	}
-}
-
-// userAccountsPgError tests whether err is a *pgconn.PgError.
-func userAccountsPgError(err error, target **pgconn.PgError) bool {
-	if pgErr, ok := err.(*pgconn.PgError); ok {
-		*target = pgErr
-		return true
+	if ua.CreatedAt.Valid {
+		resp["created_at"] = ua.CreatedAt.Time
 	}
-	return false
+	return resp
 }

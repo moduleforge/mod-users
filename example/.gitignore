@@ -1,0 +1,21 @@
+# Next.js
+.next/
+out/
+
+# node_modules
+node_modules/
+
+# yalc local package store (developer-local, not checked in)
+.yalc/
+yalc.lock
+
+# build artifacts
+dist/
+
+# env files
+.env
+.env.local
+.env.*.local
+
+# misc
+*.tsbuildinfo

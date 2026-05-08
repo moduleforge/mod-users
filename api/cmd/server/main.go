@@ -11,21 +11,30 @@ import (
 	"syscall"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
-	corehttpapi "github.com/moduleforge/core-api/httpapi"
-	"github.com/moduleforge/core-api/fieldcrypto"
-	coreservice "github.com/moduleforge/core-api/service"
+	audithttpapi "github.com/moduleforge/audit-api/httpapi"
+	auditservice "github.com/moduleforge/audit-api/service"
+	auditdb "github.com/moduleforge/audit-model/db"
+	"github.com/moduleforge/core-api/authz/setup"
 	"github.com/moduleforge/core-api/display"
-	"github.com/moduleforge/users-module/api/internal/audit"
-	"github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/config"
+	"github.com/moduleforge/core-api/entity"
+	"github.com/moduleforge/core-api/fieldcrypto"
+	corehttpapi "github.com/moduleforge/core-api/httpapi"
+	"github.com/moduleforge/core-api/observer"
+	coreservice "github.com/moduleforge/core-api/service"
+	"github.com/moduleforge/core-api/types"
 	coredb "github.com/moduleforge/core-model/db"
+	"github.com/moduleforge/users-module/api/internal/auth"
+	localAuthz "github.com/moduleforge/users-module/api/internal/authz"
+	"github.com/moduleforge/users-module/api/internal/config"
 	localdb "github.com/moduleforge/users-module/api/internal/db"
 	"github.com/moduleforge/users-module/api/internal/email"
 	"github.com/moduleforge/users-module/api/internal/handlers"
 	authhandlers "github.com/moduleforge/users-module/api/internal/handlers/auth"
 	"github.com/moduleforge/users-module/api/internal/observability"
 	"github.com/moduleforge/users-module/api/internal/server"
+	usersservice "github.com/moduleforge/users-module/api/internal/service"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
@@ -208,21 +217,66 @@ func main() {
 		os.Exit(1)
 	}
 
-	auditWriter := audit.New(queries)
-
 	// Build display renderer registry. Only core builtins are registered here;
 	// peer modules (tags, contacts, etc.) are composed at the application layer,
 	// not from inside users-module.
 	displayReg := display.NewRegistry(coredb.New(pool))
 	coreservice.RegisterBuiltins(displayReg, coredb.New(pool))
 
+	// Build the Authorizer. Users-module's implementation enforces the policy:
+	// admins can do anything; non-admins can only access their own data.
+	// It reads is_admin via the users-module Querier (lookup by account_holder = entity_id).
+	az := localAuthz.New(db.New(pool))
+
+	// Build the audit-module Observer and compose it into an ObserverGroup.
+	// The audit Observer writes one audit_log row inside the operation's transaction,
+	// providing transactional consistency. This is the only place in users-module
+	// that imports audit-module; service code in internal/ remains agnostic.
+	auditObserver := auditservice.New(func(tx pgx.Tx) *auditdb.Queries {
+		return auditdb.New(tx)
+	})
+	observerGroup := observer.NewObserverGroup(auditObserver)
+
+	// Build audit-module's read service and HTTP handler. These serve
+	// GET /v1/audit, /v1/audit/by-actor/{uuid}, /v1/audit/by-entity/{entity_uuid}.
+	auditSvcs := auditservice.NewServices(auditdb.New(pool), coredb.New(pool), az)
+	auditHandler := audithttpapi.NewAuditHandler(auditSvcs.Audit)
+
+	// Build the TypeResolver (startup-time slug→typeID cache) and EntityResolver
+	// (UUID→internal ID lookup with 403-on-missing policy). Both are required by
+	// coreservice.New after Phase E.
+	typeResolver, err := types.New(ctx, coredb.New(pool))
+	if err != nil {
+		slog.ErrorContext(ctx, "type resolver init failed", "error", err)
+		os.Exit(1)
+	}
+	entityResolver := entity.NewResolver()
+
+	// Apply access-function bodies for row-level scoping. Each peer module
+	// ships stub functions in its migrations; here we replace those stubs
+	// with the policy bodies from the chosen Authorizer implementation
+	// (admin-or-own for Phase 1). The DDL is idempotent; safe to run on
+	// every startup.
+	//
+	// See core-module/docs/architecture/authorization-design.md "Row-level
+	// scoping" for the architectural rationale.
+	authzSlugs := []string{
+		"natural_person",
+		"corporation",
+		"service_account",
+		"legal_entity",
+		"tag",
+	}
+	if err := setup.ApplyFuncs(ctx, pool, setup.NewAdminOrOwnGenerator(), authzSlugs); err != nil {
+		slog.ErrorContext(ctx, "authz access-function setup failed", "error", err)
+		os.Exit(1)
+	}
+
 	// Build core services and router. coreSvcs delegates entity CRUD to the
 	// service layer; coreRouter mounts /entities/* routes (including /self).
-	coreSvcs := coreservice.New(coredb.New(pool), auditWriter, fieldCipher)
+	coreSvcs := coreservice.New(coredb.New(pool), pool, az, observerGroup, fieldCipher, entityResolver, typeResolver)
 	coreRouter := corehttpapi.NewRouter(corehttpapi.Deps{
-		Pool:      pool,
 		Services:  coreSvcs,
-		Audit:     auditWriter,
 		Principal: auth.CorePrincipalAdapter{},
 		Logger:    logger,
 	})
@@ -248,21 +302,31 @@ func main() {
 		pool,
 		queries,
 		coreQueries,
-		auditWriter,
 		cfg.LocalAuth.JWTSecret,
 		cfg.LocalAuth.LocalIssuer,
 		emailSender,
 		cfg.Server.GUIBaseURL,
 	)
 
-	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, cfg)
+	// Build UserAccountService (service-layer logic extracted from handler in Phase F).
+	uaSvc := usersservice.NewUserAccountService(
+		pool,
+		db.New(pool),
+		coredb.New(pool),
+		az,
+		observerGroup,
+		coreSvcs.NaturalPerson,
+		typeResolver,
+		auth.HashPassword,
+	)
+
+	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, uaSvc, cfg)
 
 	// Handlers for authenticated routes.
-	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs, auditWriter)
-	usersHandler := handlers.NewUserAccountsHandler(pool, queries, coreQueries, coreSvcs, auditWriter)
-	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
-	auditHandler := handlers.NewAuditHandler(queries, coreQueries, coreSvcs)
-	appsHandler := handlers.NewAppsHandler(queries, auditWriter)
+	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
+	usersHandler := handlers.NewUserAccountsHandler(uaSvc)
+	assumeHandler := handlers.NewAssumeHandler(uaSvc, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup)
 
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
 		Queries:      queries,
@@ -332,6 +396,16 @@ func main() {
 			// Assume identity (admin).
 			r.Delete("/assume", assumeHandler.EndAssume)
 
+			// Audit log endpoints (admin-only). Authorization is enforced at the
+			// service layer by the Authorizer. URL change from the deprecated
+			// /v1/user-accounts/{uuid}/audit to audit-module's canonical shape:
+			//   GET /v1/audit                        — ListRecent (admin)
+			//   GET /v1/audit/by-actor/{uuid}        — entries where uuid is the actor
+			//   GET /v1/audit/by-entity/{entity_uuid} — entries where uuid is the target
+			r.Route("/audit", func(r chi.Router) {
+				audithttpapi.RegisterRoutes(r, auditHandler)
+			})
+
 			// Admin-only routes.
 			r.Group(func(r chi.Router) {
 				r.Use(auth.RequireAdmin)
@@ -345,10 +419,6 @@ func main() {
 				r.Post("/user-accounts/{uuid}/grant-admin", usersHandler.GrantAdmin)
 				r.Post("/user-accounts/{uuid}/revoke-admin", usersHandler.RevokeAdmin)
 				r.Post("/user-accounts/{uuid}/assume", assumeHandler.Assume)
-
-				// Audit log.
-				r.Get("/user-accounts/{uuid}/audit", auditHandler.ByUser)
-				r.Get("/audit/{entity_uuid}", auditHandler.ByEntity)
 
 				// Apps (multi-tenancy).
 				r.Post("/apps", appsHandler.Create)

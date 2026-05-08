@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiRequestError, type ApiErrorResponse } from '@/lib/api';
+import { API_BASE_URL, ApiRequestError, type ApiErrorResponse } from './api';
 
 /**
  * OIDC onboarding API helpers. These endpoints are unauthenticated

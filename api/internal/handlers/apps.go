@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -9,20 +10,36 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/moduleforge/users-module/api/internal/audit"
+	coreAuthz "github.com/moduleforge/core-api/authz"
+	"github.com/moduleforge/core-api/observer"
+	"github.com/moduleforge/core-api/txhelper"
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
 // AppsHandler serves /v1/apps endpoints.
 type AppsHandler struct {
-	q     *db.Queries
-	audit audit.Writer
+	pool       txhelper.DB
+	q          db.Querier
+	newQuerier func(pgx.Tx) db.Querier // factory for tx-scoped querier; defaults to db.New
+	az         coreAuthz.Authorizer
+	observers  *observer.ObserverGroup
 }
 
 // NewAppsHandler creates an AppsHandler.
-func NewAppsHandler(q *db.Queries, aw audit.Writer) *AppsHandler {
-	return &AppsHandler{q: q, audit: aw}
+func NewAppsHandler(
+	pool txhelper.DB,
+	q *db.Queries,
+	az coreAuthz.Authorizer,
+	observers *observer.ObserverGroup,
+) *AppsHandler {
+	return &AppsHandler{
+		pool:       pool,
+		q:          q,
+		newQuerier: func(tx pgx.Tx) db.Querier { return db.New(tx) },
+		az:         az,
+		observers:  observers,
+	}
 }
 
 type createAppRequest struct {
@@ -48,23 +65,62 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app, err := h.q.CreateApp(r.Context(), db.CreateAppParams{
-		Slug: req.Slug,
-		Name: req.Name,
+	// 1. Authorize: create is admin-only.
+	if err := h.az.Authorize(r.Context(), "create", nil); err != nil {
+		writeAuthzError(w, err)
+		return
+	}
+
+	var app db.App
+	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
+		qtx := h.newQuerier(tx)
+		var err error
+		app, err = qtx.CreateApp(ctx, db.CreateAppParams{
+			Slug: req.Slug,
+			Name: req.Name,
+		})
+		if err != nil {
+			return err
+		}
+
+		after := map[string]any{
+			"uuid": app.Uuid.String(),
+			"slug": app.Slug,
+			"name": app.Name,
+		}
+		// Apps are not registered in core's entities table, so target_entity_id is nil.
+		return h.observers.Observe(ctx, tx, "create", "app", nil, nil, after)
 	})
-	if err != nil {
-		slog.ErrorContext(r.Context(), "apps.create", "error", err)
+	if txErr != nil {
+		slog.ErrorContext(r.Context(), "apps.create", "error", txErr)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create app")
 		return
 	}
 
-	_ = h.audit.Write(r.Context(), "create", "apps", nil, nil, appResponse(app))
+	// Audit limitation: apps are not core entities (no row in core's entities table),
+	// so audit_log.target_entity_id is nil for all app events. As a result,
+	// audit-module's AuditService.ListByEntity cannot return app events; callers
+	// must use ListRecent and filter by resource = "app" instead.
+	// Future fix: register apps as entities, or add app_uuid/subject_uuid to
+	// audit_log (decision deferred; see users-module/next-steps.md).
+	after := map[string]any{
+		"uuid": app.Uuid.String(),
+		"slug": app.Slug,
+		"name": app.Name,
+	}
+	h.observers.ObserveAfterCommit(r.Context(), "create", "app", nil, after)
 
 	server.JSON(w, http.StatusCreated, appResponse(app))
 }
 
 // List handles GET /v1/apps (admin).
 func (h *AppsHandler) List(w http.ResponseWriter, r *http.Request) {
+	// Authorize: list is admin-only.
+	if err := h.az.Authorize(r.Context(), "list", nil); err != nil {
+		writeAuthzError(w, err)
+		return
+	}
+
 	apps, err := h.q.ListApps(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "apps.list", "error", err)
@@ -85,6 +141,13 @@ func (h *AppsHandler) GetApp(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+
+	// Authorize: read — admin only for apps.
+	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
+		writeAuthzError(w, err)
+		return
+	}
+
 	server.JSON(w, http.StatusOK, appResponse(app))
 }
 
@@ -97,6 +160,12 @@ type updateAppRequest struct {
 func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
+		return
+	}
+
+	// Authorize: update — admin only for apps.
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
+		writeAuthzError(w, err)
 		return
 	}
 
@@ -115,31 +184,51 @@ func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 		newName = strings.TrimSpace(req.Name)
 	}
 
-	before := appResponse(app)
+	before := map[string]any{
+		"uuid": app.Uuid.String(),
+		"slug": app.Slug,
+		"name": app.Name,
+	}
 
-	if err := h.q.UpdateApp(r.Context(), db.UpdateAppParams{
-		ID:   app.ID,
-		Slug: newSlug,
-		Name: newName,
-	}); err != nil {
-		slog.ErrorContext(r.Context(), "apps.update", "error", err)
+	var updated db.App
+	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
+		qtx := h.newQuerier(tx)
+		if err := qtx.UpdateApp(ctx, db.UpdateAppParams{
+			ID:   app.ID,
+			Slug: newSlug,
+			Name: newName,
+		}); err != nil {
+			return err
+		}
+
+		var err error
+		updated, err = qtx.GetAppByUUID(ctx, app.Uuid)
+		if err != nil {
+			// Best-effort: use computed values.
+			updated = app
+			updated.Slug = newSlug
+			updated.Name = newName
+		}
+
+		after := map[string]any{
+			"uuid": updated.Uuid.String(),
+			"slug": updated.Slug,
+			"name": updated.Name,
+		}
+		return h.observers.Observe(ctx, tx, "update", "app", nil, before, after)
+	})
+	if txErr != nil {
+		slog.ErrorContext(r.Context(), "apps.update", "error", txErr)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to update app")
 		return
 	}
 
 	after := map[string]any{
-		"uuid": app.Uuid.String(),
-		"slug": newSlug,
-		"name": newName,
+		"uuid": updated.Uuid.String(),
+		"slug": updated.Slug,
+		"name": updated.Name,
 	}
-	_ = h.audit.Write(r.Context(), "update", "apps", nil, before, after)
-
-	// Return refreshed record.
-	updated, err := h.q.GetAppByUUID(r.Context(), app.Uuid)
-	if err != nil {
-		server.JSON(w, http.StatusOK, after)
-		return
-	}
+	h.observers.ObserveAfterCommit(r.Context(), "update", "app", nil, after)
 	server.JSON(w, http.StatusOK, appResponse(updated))
 }
 
@@ -150,18 +239,39 @@ func (h *AppsHandler) DeleteApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.q.ArchiveApp(r.Context(), app.ID); err != nil {
-		slog.ErrorContext(r.Context(), "apps.delete", "error", err)
+	// Authorize: delete — admin only for apps.
+	if err := h.az.Authorize(r.Context(), "delete", nil); err != nil {
+		writeAuthzError(w, err)
+		return
+	}
+
+	before := map[string]any{
+		"uuid": app.Uuid.String(),
+		"slug": app.Slug,
+		"name": app.Name,
+	}
+
+	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
+		qtx := h.newQuerier(tx)
+		if err := qtx.ArchiveApp(ctx, app.ID); err != nil {
+			return err
+		}
+		return h.observers.Observe(ctx, tx, "delete", "app", nil, before, nil)
+	})
+	if txErr != nil {
+		slog.ErrorContext(r.Context(), "apps.delete", "error", txErr)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to archive app")
 		return
 	}
 
-	_ = h.audit.Write(r.Context(), "delete", "apps", nil, appResponse(app), nil)
-
+	h.observers.ObserveAfterCommit(r.Context(), "delete", "app", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- apps_users endpoints ---
+// These endpoints are admin-only management operations. They do not emit
+// audit events (no equivalent in the original audit gap report) but they
+// do require authorization.
 
 type assignUserRequest struct {
 	UserUUID string   `json:"user_uuid"`
@@ -172,6 +282,12 @@ type assignUserRequest struct {
 func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
+		return
+	}
+
+	// Authorize: update (assigning a user to an app is an app mutation).
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
+		writeAuthzError(w, err)
 		return
 	}
 
@@ -231,6 +347,12 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Authorize: read (listing app members).
+	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
+		writeAuthzError(w, err)
+		return
+	}
+
 	members, err := h.q.ListAppUserAccounts(r.Context(), app.ID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "apps.list_users", "error", err)
@@ -252,6 +374,12 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
+		return
+	}
+
+	// Authorize: update (removing a user from an app is an app mutation).
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
+		writeAuthzError(w, err)
 		return
 	}
 
@@ -293,6 +421,12 @@ type updateRolesRequest struct {
 func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
+		return
+	}
+
+	// Authorize: update (changing roles is an app mutation).
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
+		writeAuthzError(w, err)
 		return
 	}
 

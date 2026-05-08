@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import React from 'react';
 import {
   ClipboardList,
   LayoutGrid,
@@ -11,8 +10,8 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/lib/auth-context';
+import { cn } from '../lib/utils';
+import { useAuth } from '../lib/auth-context';
 import { Button } from '@moduleforge/core-gui';
 
 interface NavItem {
@@ -50,8 +49,26 @@ const navItems: NavItem[] = [
   },
 ];
 
-export function SidebarNav() {
-  const pathname = usePathname();
+export interface SidebarNavProps {
+  /**
+   * The current pathname, used to highlight the active nav item.
+   * Inject from the router (e.g. Next.js `usePathname()`, React Router
+   * `useLocation().pathname`).
+   */
+  currentPath: string;
+  /**
+   * A React component used to render navigation links. Must accept
+   * `href`, `className`, and `children`. Pass Next.js `Link`, React Router
+   * `NavLink`, or a plain `<a>` wrapper.
+   */
+  LinkComponent: React.ComponentType<{
+    href: string;
+    className?: string;
+    children: React.ReactNode;
+  }>;
+}
+
+export function SidebarNav({ currentPath, LinkComponent }: SidebarNavProps) {
   const { user, isAdmin, logout } = useAuth();
 
   return (
@@ -67,36 +84,36 @@ export function SidebarNav() {
 
       <nav className="flex flex-1 flex-col gap-1 p-2">
         {!user && (
-          <Link
+          <LinkComponent
             href="/auth/login"
             className={cn(
               'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              pathname === '/auth/login'
+              currentPath === '/auth/login'
                 ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                 : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
             )}
           >
             <LogIn className="size-4" />
             Login
-          </Link>
+          </LinkComponent>
         )}
 
         {navItems
           .filter((item) => !item.adminOnly || isAdmin)
           .map((item) => (
-            <Link
+            <LinkComponent
               key={item.href}
               href={item.href}
               className={cn(
                 'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                pathname === item.href || pathname.startsWith(item.href + '/')
+                currentPath === item.href || currentPath.startsWith(item.href + '/')
                   ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                   : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
               )}
             >
               {item.icon}
               {item.label}
-            </Link>
+            </LinkComponent>
           ))}
       </nav>
 
