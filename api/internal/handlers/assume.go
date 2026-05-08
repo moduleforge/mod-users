@@ -1,28 +1,37 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
+	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
+// assumeServicer is the narrow interface AssumeHandler requires from
+// UserAccountService. Using an interface here (rather than the concrete type)
+// keeps the handler testable without wiring a full service.
+type assumeServicer interface {
+	Assume(ctx context.Context, targetUUID uuid.UUID) (adminUA db.UserAccount, assumedUA db.UserAccount, err error)
+}
+
 // AssumeHandler handles identity assumption for admins.
 type AssumeHandler struct {
-	q         *db.Queries
+	svc       assumeServicer
 	jwtSecret string
 	issuer    string
 }
 
 // NewAssumeHandler creates an AssumeHandler.
-func NewAssumeHandler(q *db.Queries, jwtSecret, issuer string) *AssumeHandler {
-	return &AssumeHandler{q: q, jwtSecret: jwtSecret, issuer: issuer}
+func NewAssumeHandler(svc assumeServicer, jwtSecret, issuer string) *AssumeHandler {
+	return &AssumeHandler{svc: svc, jwtSecret: jwtSecret, issuer: issuer}
 }
 
 // Assume handles POST /v1/user-accounts/{uuid}/assume (admin).
@@ -36,24 +45,14 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assumedUA, err := h.q.GetUserAccountByUUID(r.Context(), parsed)
-	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusNotFound, "not_found", "user account not found")
-		return
-	}
+	adminUA, assumedUA, err := h.svc.Assume(r.Context(), parsed)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "assume: get target user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load target user account")
-		return
-	}
-
-	uc := auth.MustFromContext(r.Context())
-
-	// Load the admin's own user account record to include in the JWT.
-	adminUA, err := h.q.GetUserAccountByID(r.Context(), uc.UserAccountID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "assume: get admin user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load admin user account")
+		if errors.Is(err, coreservice.ErrNotFound) {
+			server.Error(w, http.StatusNotFound, "not_found", "user account not found")
+			return
+		}
+		slog.ErrorContext(r.Context(), "assume: service error", "error", err)
+		writeServiceError(w, err)
 		return
 	}
 

@@ -13,21 +13,21 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
-	auditdb "github.com/moduleforge/audit-model/db"
 	audithttpapi "github.com/moduleforge/audit-api/httpapi"
 	auditservice "github.com/moduleforge/audit-api/service"
-	corehttpapi "github.com/moduleforge/core-api/httpapi"
+	auditdb "github.com/moduleforge/audit-model/db"
 	"github.com/moduleforge/core-api/authz/setup"
+	"github.com/moduleforge/core-api/display"
 	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/fieldcrypto"
+	corehttpapi "github.com/moduleforge/core-api/httpapi"
 	"github.com/moduleforge/core-api/observer"
 	coreservice "github.com/moduleforge/core-api/service"
-	"github.com/moduleforge/core-api/display"
 	"github.com/moduleforge/core-api/types"
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/users-module/api/internal/auth"
 	localAuthz "github.com/moduleforge/users-module/api/internal/authz"
 	"github.com/moduleforge/users-module/api/internal/config"
-	coredb "github.com/moduleforge/core-model/db"
 	localdb "github.com/moduleforge/users-module/api/internal/db"
 	"github.com/moduleforge/users-module/api/internal/email"
 	"github.com/moduleforge/users-module/api/internal/handlers"
@@ -325,7 +325,7 @@ func main() {
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
 	usersHandler := handlers.NewUserAccountsHandler(uaSvc)
-	assumeHandler := handlers.NewAssumeHandler(queries, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	assumeHandler := handlers.NewAssumeHandler(uaSvc, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup)
 
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{

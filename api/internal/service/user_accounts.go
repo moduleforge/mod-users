@@ -19,6 +19,7 @@ import (
 
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
+	"github.com/moduleforge/core-api/opctx"
 	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/core-api/txhelper"
 	"github.com/moduleforge/core-api/types"
@@ -56,7 +57,7 @@ type ListUserAccountsInput struct {
 type UserAccount struct {
 	ID            int64
 	UUID          uuid.UUID
-	AccountHolder int64  // entity internal ID
+	AccountHolder int64 // entity internal ID
 	Email         string
 	IsAdmin       bool
 	EmailVerified bool
@@ -431,6 +432,53 @@ func (s *UserAccountService) SetAdmin(ctx context.Context, id uuid.UUID, isAdmin
 	return nil
 }
 
+// Assume records an admin identity-assumption event in the audit log and
+// returns both the admin and assumed user accounts. No DB row is mutated;
+// the Observe call participates in a transaction solely for audit-row atomicity.
+//
+// Returns coreservice.ErrNotFound when the target UUID does not exist.
+// Returns an authz error when the actor is not permitted to assume the target.
+func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (adminUA db.UserAccount, assumedUA db.UserAccount, err error) {
+	assumedUA, err = s.q.GetUserAccountByUUID(ctx, targetUUID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
+		}
+		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume load target: %w", err)
+	}
+
+	actorEntityID, ok := opctx.ActorEntityID(ctx)
+	if !ok {
+		return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
+	}
+	adminUA, err = s.q.GetUserAccountByAccountHolder(ctx, actorEntityID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
+		}
+		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume load admin: %w", err)
+	}
+
+	assumedEntityID := assumedUA.AccountHolder
+	if err := s.az.Authorize(ctx, "assume", &assumedEntityID); err != nil {
+		return db.UserAccount{}, db.UserAccount{}, err
+	}
+
+	detail := map[string]any{
+		"admin_uuid":   adminUA.Uuid.String(),
+		"assumed_uuid": assumedUA.Uuid.String(),
+	}
+	txErr := txhelper.Run(ctx, s.db, func(ctx context.Context, tx pgx.Tx) error {
+		return s.obs.Observe(ctx, tx, "assume", "user_account", &assumedEntityID, nil, detail)
+	})
+	if txErr != nil {
+		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume observe: %w", txErr)
+	}
+
+	s.obs.ObserveAfterCommit(ctx, "assume", "user_account", &assumedEntityID, nil, detail)
+	return adminUA, assumedUA, nil
+}
+
 // LoadByUUID loads a user account by its public UUID without performing
 // authorization. Used by the handler's thin loadUserAccountByUUIDParam helper.
 func (s *UserAccountService) LoadByUUID(ctx context.Context, id uuid.UUID) (db.UserAccount, error) {
@@ -486,4 +534,3 @@ func extractPgError(err error, target **pgconn.PgError) bool {
 func WithHashPassword(hashPw func(plain string) (string, error)) func(*UserAccountService) {
 	return func(s *UserAccountService) { s.hashPw = hashPw }
 }
-
