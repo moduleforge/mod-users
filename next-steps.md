@@ -23,11 +23,8 @@ Related docs:
 - **Account-merging (`MERGE-V2`).** Merging duplicate OIDC+local accounts by verified email is not implemented. Out of scope for Phase 4 / 9.
 - **Session storage.** Still localStorage + Bearer. Cookie-based sessions are a future consideration.
 - **`refreshUser` 401 handling.** The auth-context's `refreshUser` still routes through the shared `request()` helper and triggers a hard redirect on 401; its local `logout()` call becomes redundant. Same category as the return-page bug fixed in Phase 9.2, just not touched.
-- **`gofmt -l` offenders** (as of 2026-05-08): `api/internal/config/oidc_state.go`, `api/internal/auth/principal.go`, `api/internal/auth/claims_test.go`, `api/internal/auth/local_jwt.go`, `api/internal/auth/password.go`, `api/internal/authz/authz_test.go`, `api/internal/handlers/oidc_providers_test.go`. Worth a one-commit cleanup.
 
 ## Cross-cutting framework — deferred from Phase 5 review
 
-- **`apps` events have nil `target_entity_id`** (architect M2). Apps are not core entities; `audit_log.target_entity_id` is NULL for app events, so `ListByEntity` queries never return them. Either (a) register apps in core's `entities` table, or (b) add an `app_uuid` (or generic `subject_uuid`) column to `audit_log`. Document the limitation in `apps.go` for now.
+- **`apps` events have nil `target_entity_id`** — documented in `api/internal/handlers/apps.go`. Apps are not core entities; `audit_log.target_entity_id` is NULL for app events, so `AuditService.ListByEntity` never returns them. Future fix: register apps as entities, or add `app_uuid`/`subject_uuid` to `audit_log`.
 - **`actor coreservice.Principal` parameter cleanup** — handlers still construct `Principal` and pass to service calls for inline ownership checks. Removing requires either an `IsAdmin` opctx key or moving ownership checks into the Authorizer. Defer until pressing.
-- **sqlc regenerate verification for `GetUserAccountByAccountHolder`** — query was manually added to `model/db/` during Phase 4.1 because sqlc wasn't available in the worktree. Re-run `sqlc generate` to confirm canonical output matches.
-
