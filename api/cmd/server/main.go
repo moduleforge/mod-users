@@ -310,9 +310,8 @@ func main() {
 	// service layer; coreRouter mounts /entities/* routes (including /self).
 	coreSvcs := coreservice.New(coredb.New(pool), pool, az, observerGroup, fieldCipher, entityResolver, typeResolver)
 	coreRouter := corehttpapi.NewRouter(corehttpapi.Deps{
-		Services:  coreSvcs,
-		Principal: auth.CorePrincipalAdapter{},
-		Logger:    logger,
+		Services: coreSvcs,
+		Logger:   logger,
 	})
 
 	// Build email sender.

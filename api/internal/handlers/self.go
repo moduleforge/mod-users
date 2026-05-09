@@ -36,8 +36,7 @@ func (h *SelfHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	principal := coreservice.Principal{UserID: uc.UserAccountID, EntityID: uc.EntityID, IsAdmin: uc.IsAdmin}
-	profile, err := h.coreSvcs.Entity.GetSelf(r.Context(), h.coreQ, principal)
+	profile, err := h.coreSvcs.Entity.GetSelf(r.Context(), h.coreQ)
 	if err != nil {
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load entity")
 		return
@@ -69,8 +68,6 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	principal := coreservice.Principal{UserID: uc.UserAccountID, EntityID: uc.EntityID, IsAdmin: uc.IsAdmin}
-
 	if req.GivenName != nil || req.FamilyName != nil {
 		// account_holder = entity_id on the legal_entities/natural_persons chain.
 		entity, err := h.coreQ.GetEntityByID(r.Context(), ua.AccountHolder)
@@ -83,7 +80,6 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 			h.coreQ,
 			entity.Uuid,
 			coreservice.UpdateNaturalPersonInput{GivenName: req.GivenName, FamilyName: req.FamilyName},
-			principal,
 		)
 		if err != nil {
 			writeCoreServiceErr(w, err)
@@ -92,7 +88,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Re-fetch the now-updated profile.
-	profile, err := h.coreSvcs.Entity.GetSelf(r.Context(), h.coreQ, principal)
+	profile, err := h.coreSvcs.Entity.GetSelf(r.Context(), h.coreQ)
 	if err != nil {
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to reload entity")
 		return
