@@ -49,7 +49,6 @@ type stubUserAccountService struct {
 	updateResult svc.UserAccount
 	updateErr    error
 	deleteErr    error
-	setAdminErr  error
 	loadResult   db.UserAccount
 	loadErr      error
 }
@@ -74,10 +73,6 @@ func (s *stubUserAccountService) Delete(_ context.Context, _ uuid.UUID) error {
 	return s.deleteErr
 }
 
-func (s *stubUserAccountService) SetAdmin(_ context.Context, _ uuid.UUID, _ bool, _ string) error {
-	return s.setAdminErr
-}
-
 func (s *stubUserAccountService) LoadByUUID(_ context.Context, _ uuid.UUID) (db.UserAccount, error) {
 	return s.loadResult, s.loadErr
 }
@@ -90,7 +85,6 @@ type userAccountServicer interface {
 	Get(ctx context.Context, id uuid.UUID) (svc.UserAccount, error)
 	Update(ctx context.Context, id uuid.UUID, in svc.UpdateUserAccountInput) (svc.UserAccount, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	SetAdmin(ctx context.Context, id uuid.UUID, isAdmin bool, op string) error
 	LoadByUUID(ctx context.Context, id uuid.UUID) (db.UserAccount, error)
 }
 
@@ -121,7 +115,9 @@ func newHandlerWithStub(stub *stubUserAccountService) *UserAccountsHandler {
 // This is valid because shim.List etc. are byte-for-byte identical to
 // UserAccountsHandler.List — the only difference is the type of svc.
 type shim struct {
-	svc userAccountServicer
+	svc         userAccountServicer
+	grantAdmin  func(ctx context.Context, id uuid.UUID) error
+	revokeAdmin func(ctx context.Context, id uuid.UUID) error
 }
 
 func (h *shim) List(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +151,6 @@ func (h *shim) Create(w http.ResponseWriter, r *http.Request) {
 		Password:   req.Password,
 		GivenName:  req.GivenName,
 		FamilyName: req.FamilyName,
-		IsAdmin:    req.IsAdmin,
 	})
 	if err != nil {
 		writeServiceError(w, err)
@@ -193,28 +188,36 @@ func (h *shim) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *shim) GrantAdmin(w http.ResponseWriter, r *http.Request) { h.setAdmin(w, r, true, "grant") }
-func (h *shim) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
-	h.setAdmin(w, r, false, "revoke")
-}
-
-func (h *shim) setAdmin(w http.ResponseWriter, r *http.Request, isAdmin bool, op string) {
+func (h *shim) GrantAdmin(w http.ResponseWriter, r *http.Request) {
 	raw := chi.URLParam(r, "uuid")
 	id, err := uuid.Parse(raw)
 	if err != nil {
 		server_Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
 		return
 	}
-	if err := h.svc.SetAdmin(r.Context(), id, isAdmin, op); err != nil {
-		writeServiceError(w, err)
-		return
+	if h.grantAdmin != nil {
+		if err := h.grantAdmin(r.Context(), id); err != nil {
+			writeServiceError(w, err)
+			return
+		}
 	}
-	ua, err := h.svc.LoadByUUID(r.Context(), id)
+	server_JSON(w, http.StatusOK, map[string]any{"uuid": id.String()})
+}
+
+func (h *shim) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
+	raw := chi.URLParam(r, "uuid")
+	id, err := uuid.Parse(raw)
 	if err != nil {
-		server_JSON(w, http.StatusOK, map[string]any{"is_admin": isAdmin})
+		server_Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
 		return
 	}
-	server_JSON(w, http.StatusOK, map[string]any{"uuid": ua.Uuid.String(), "is_admin": isAdmin})
+	if h.revokeAdmin != nil {
+		if err := h.revokeAdmin(r.Context(), id); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+	}
+	server_JSON(w, http.StatusOK, map[string]any{"uuid": id.String()})
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +248,6 @@ func adminContext(entityID int64) context.Context {
 		UserUUID:      uuid.New().String(),
 		EntityID:      entityID,
 		Email:         "admin@example.com",
-		IsAdmin:       true,
 	}
 	ctx := localAuth.WithUserContext(context.Background(), uc)
 	ctx = opctx.WithActor(ctx, entityID)
@@ -266,7 +268,6 @@ func newUA() svc.UserAccount {
 		UUID:          uuid.New(),
 		AccountHolder: 42,
 		Email:         "user@example.com",
-		IsAdmin:       false,
 		EmailVerified: false,
 	}
 }
@@ -277,7 +278,6 @@ func newDBUA() db.UserAccount {
 		Uuid:          uuid.New(),
 		AccountHolder: 42,
 		Email:         "user@example.com",
-		IsAdmin:       false,
 		CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 }
@@ -500,8 +500,11 @@ func TestShim_Delete_OK(t *testing.T) {
 
 func TestShim_GrantAdmin_OK(t *testing.T) {
 	dbUA := newDBUA()
-	stub := &stubUserAccountService{loadResult: dbUA}
-	h := &shim{svc: stub}
+	stub := &stubUserAccountService{}
+	h := &shim{
+		svc:        stub,
+		grantAdmin: func(_ context.Context, _ uuid.UUID) error { return nil },
+	}
 
 	chiCtx := chi.NewRouteContext()
 	chiCtx.URLParams.Add("uuid", dbUA.Uuid.String())
@@ -517,10 +520,13 @@ func TestShim_GrantAdmin_OK(t *testing.T) {
 }
 
 func TestShim_RevokeAdmin_Forbidden(t *testing.T) {
-	stub := &stubUserAccountService{setAdminErr: localAuthz.ErrForbidden}
-	h := &shim{svc: stub}
-
+	stub := &stubUserAccountService{}
 	id := uuid.New()
+	h := &shim{
+		svc:         stub,
+		revokeAdmin: func(_ context.Context, _ uuid.UUID) error { return localAuthz.ErrForbidden },
+	}
+
 	chiCtx := chi.NewRouteContext()
 	chiCtx.URLParams.Add("uuid", id.String())
 	ctx := context.WithValue(adminContext(42), chi.RouteCtxKey, chiCtx)

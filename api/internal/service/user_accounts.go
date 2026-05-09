@@ -34,7 +34,6 @@ type CreateUserAccountInput struct {
 	Password   *string // optional; hashed before storage
 	GivenName  string
 	FamilyName string
-	IsAdmin    bool
 }
 
 // UpdateUserAccountInput carries the fields that may be updated on a user account.
@@ -43,7 +42,6 @@ type UpdateUserAccountInput struct {
 	Email      *string
 	GivenName  *string
 	FamilyName *string
-	IsAdmin    *bool
 }
 
 // ListUserAccountsInput carries pagination + optional filter parameters.
@@ -59,7 +57,6 @@ type UserAccount struct {
 	UUID          uuid.UUID
 	AccountHolder int64 // entity internal ID
 	Email         string
-	IsAdmin       bool
 	EmailVerified bool
 	GivenName     string
 	FamilyName    string
@@ -150,7 +147,6 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		ua, err := db.New(tx).CreateUserAccount(ctx, db.CreateUserAccountParams{
 			AccountHolder: np.EntityID,
 			Email:         in.Email,
-			IsAdmin:       in.IsAdmin,
 		})
 		if err != nil {
 			return fmt.Errorf("user_accounts.Create user_account: %w", err)
@@ -188,9 +184,8 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 
 	// Post-commit observer.
 	after := map[string]any{
-		"uuid":     out.UUID.String(),
-		"email":    out.Email,
-		"is_admin": out.IsAdmin,
+		"uuid":  out.UUID.String(),
+		"email": out.Email,
 	}
 	s.obs.ObserveAfterCommit(ctx, "create", "user_account", &out.AccountHolder, after)
 	// Also fire the natural_person post-commit observer.
@@ -303,15 +298,6 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 			return fmt.Errorf("user_accounts.Update update: %w", err)
 		}
 
-		if in.IsAdmin != nil {
-			if err := qtx.SetAdmin(ctx, db.SetAdminParams{
-				ID:      ua.ID,
-				IsAdmin: *in.IsAdmin,
-			}); err != nil {
-				return fmt.Errorf("user_accounts.Update set_admin: %w", err)
-			}
-		}
-
 		// Update natural person name fields in the same tx.
 		if in.GivenName != nil || in.FamilyName != nil {
 			coreQtx := coredb.New(tx)
@@ -395,43 +381,6 @@ func (s *UserAccountService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// SetAdmin grants or revokes admin privileges on the user account identified
-// by UUID. The op string is "grant" or "revoke" and is used for audit logging.
-// Requires authorization against the account_holder entity.
-func (s *UserAccountService) SetAdmin(ctx context.Context, id uuid.UUID, isAdmin bool, op string) error {
-	ua, err := s.q.GetUserAccountByUUID(ctx, id)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return coreservice.ErrNotFound
-		}
-		return fmt.Errorf("user_accounts.SetAdmin load: %w", err)
-	}
-
-	eid := ua.AccountHolder
-	if err := s.az.Authorize(ctx, op, &eid); err != nil {
-		return err
-	}
-
-	before := map[string]any{"is_admin": !isAdmin}
-	after := map[string]any{"is_admin": isAdmin}
-
-	err = txhelper.Run(ctx, s.db, func(ctx context.Context, tx pgx.Tx) error {
-		qtx := db.New(tx)
-		if err := qtx.SetAdmin(ctx, db.SetAdminParams{
-			ID:      ua.ID,
-			IsAdmin: isAdmin,
-		}); err != nil {
-			return fmt.Errorf("user_accounts.SetAdmin: %w", err)
-		}
-		return s.obs.Observe(ctx, tx, op, "user_account", &eid, before, after)
-	})
-	if err != nil {
-		return err
-	}
-
-	s.obs.ObserveAfterCommit(ctx, op, "user_account", &eid, after)
-	return nil
-}
 
 // RecordLogin records a successful login event in the audit log.
 // It loads the user_account for accountID, sets the opctx actor to that
@@ -539,7 +488,6 @@ func toUserAccount(ua db.UserAccount, givenName, familyName string) UserAccount 
 		UUID:          ua.Uuid,
 		AccountHolder: ua.AccountHolder,
 		Email:         ua.Email,
-		IsAdmin:       ua.IsAdmin,
 		EmailVerified: ua.EmailVerifiedAt != nil,
 		GivenName:     givenName,
 		FamilyName:    familyName,
@@ -550,9 +498,8 @@ func toUserAccount(ua db.UserAccount, givenName, familyName string) UserAccount 
 // uaSnapshot builds an audit-log-friendly map from a db.UserAccount.
 func uaSnapshot(ua db.UserAccount) map[string]any {
 	return map[string]any{
-		"uuid":     ua.Uuid.String(),
-		"email":    ua.Email,
-		"is_admin": ua.IsAdmin,
+		"uuid":  ua.Uuid.String(),
+		"email": ua.Email,
 	}
 }
 

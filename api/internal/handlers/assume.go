@@ -71,9 +71,8 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 	server.JSON(w, http.StatusOK, map[string]any{
 		"token": token,
 		"user": map[string]any{
-			"uuid":     actorUA.Uuid.String(),
-			"email":    actorUA.Email,
-			"is_admin": actorUA.IsAdmin,
+			"uuid":  actorUA.Uuid.String(),
+			"email": actorUA.Email,
 		},
 	})
 }

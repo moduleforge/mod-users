@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	audithttpapi "github.com/moduleforge/audit-api/httpapi"
@@ -27,6 +28,7 @@ import (
 	"github.com/moduleforge/core-api/fieldcrypto"
 	corehttpapi "github.com/moduleforge/core-api/httpapi"
 	"github.com/moduleforge/core-api/observer"
+	"github.com/moduleforge/core-api/opctx"
 	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/core-api/types"
 	coredb "github.com/moduleforge/core-model/db"
@@ -131,6 +133,12 @@ func main() {
 	// AdminChecker and the post-auth /v1/* handlers need it.
 	resolver := auth.NewUserResolver(pool, queries, coreQueries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
 
+	// az is declared here so the AdminChecker closure can close over it. It is
+	// assigned after opReg is built (further below). The closure only runs at
+	// HTTP request time, well after all initialization completes, so az is
+	// always non-nil when the closure executes.
+	var az *localAuthz.Authorizer
+
 	// Build the onboarding handler + state cache. The handler owns the
 	// oidc_config row and the derived BootState; RequireOIDCConfirmed
 	// reads its CurrentState closure on every /v1/* request.
@@ -145,6 +153,9 @@ func main() {
 		// (false, nil) on missing/invalid auth so /confirm falls
 		// through to the setup-token check; surfaces internal faults
 		// as errors so they become 500 instead of being masked.
+		//
+		// Admin status is now determined by a wildcard manage grant in the
+		// grants table rather than the removed is_admin column.
 		AdminChecker: func(r *http.Request) (bool, error) {
 			uc, err := auth.AuthenticateRequest(r, verifier, localMapper, resolver)
 			if err != nil {
@@ -155,7 +166,12 @@ func main() {
 				}
 				return false, err
 			}
-			return uc.IsAdmin, nil
+			// Check wildcard manage grant — this is the sole admin gate now
+			// that is_admin has been removed. az is always non-nil here
+			// because HTTP serving starts after all initialization completes.
+			adminCtx := opctx.WithActor(r.Context(), uc.EntityID)
+			authErr := az.Authorize(adminCtx, "manage", nil)
+			return authErr == nil, nil
 		},
 	})
 	if err := onboarding.RefreshState(ctx); err != nil {
@@ -280,7 +296,7 @@ func main() {
 	// grants (target_id IS NULL in the grants table) allow an actor to pass any
 	// authorization check. The first user's wildcard grant is bootstrapped below
 	// after first-account creation.
-	az := localAuthz.New(authzdb.New(pool), opReg, pool)
+	az = localAuthz.New(authzdb.New(pool), opReg, pool)
 
 	// Build the audit-module Observer and compose it into an ObserverGroup.
 	// The audit Observer writes one audit_log row inside the operation's transaction,
@@ -380,9 +396,47 @@ func main() {
 
 	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, uaSvc, cfg)
 
+	// grantAdmin creates a wildcard manage grant for a user account, checked and
+	// issued at the composition root to avoid a direct peer dependency in handlers/.
+	// Authorization (actor must have wildcard manage grant) is enforced before the
+	// grant write. If the user account UUID is unknown, ErrNotFound is returned.
+	grantAdminFn := handlers.GrantAdminFn(func(ctx context.Context, userAccountUUID uuid.UUID) error {
+		if err := az.Authorize(ctx, "manage", nil); err != nil {
+			return err
+		}
+		ua, err := db.New(pool).GetUserAccountByUUID(ctx, userAccountUUID)
+		if err != nil {
+			return coreservice.ErrNotFound
+		}
+		ent, err := coredb.New(pool).GetEntityByID(ctx, ua.AccountHolder)
+		if err != nil {
+			return fmt.Errorf("grant-admin: resolve entity: %w", err)
+		}
+		_, err = authzSvcs.Grant.CreateWildcardGrant(ctx, ent.Uuid, "manage")
+		return err
+	})
+
+	// revokeAdmin removes the wildcard manage grant for a user account.
+	// Authorization is enforced before the revocation. ErrNotFound is returned
+	// if the user account UUID is unknown.
+	revokeAdminFn := handlers.GrantAdminFn(func(ctx context.Context, userAccountUUID uuid.UUID) error {
+		if err := az.Authorize(ctx, "manage", nil); err != nil {
+			return err
+		}
+		ua, err := db.New(pool).GetUserAccountByUUID(ctx, userAccountUUID)
+		if err != nil {
+			return coreservice.ErrNotFound
+		}
+		ent, err := coredb.New(pool).GetEntityByID(ctx, ua.AccountHolder)
+		if err != nil {
+			return fmt.Errorf("revoke-admin: resolve entity: %w", err)
+		}
+		return authzSvcs.Grant.DeleteWildcardGrant(ctx, ent.Uuid, "manage")
+	})
+
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
-	usersHandler := handlers.NewUserAccountsHandler(uaSvc)
+	usersHandler := handlers.NewUserAccountsHandler(uaSvc, grantAdminFn, revokeAdminFn)
 	assumeHandler := handlers.NewAssumeHandler(uaSvc, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup)
 
@@ -464,7 +518,7 @@ func main() {
 				audithttpapi.RegisterRoutes(r, auditHandler)
 			})
 
-			// Authz management endpoints (admin-only). Authorization is enforced at the
+			// Authz management endpoints. Authorization is enforced at the
 			// service layer via Authorize("manage", nil). Routes:
 			//   /v1/authz/operations — CRUD for operation definitions
 			//   /v1/authz/actor-groups — CRUD + member management for actor groups
@@ -474,33 +528,32 @@ func main() {
 				authzhttpapi.RegisterRoutes(r, authzSvcs)
 			})
 
-			// Admin-only routes.
-			r.Group(func(r chi.Router) {
-				r.Use(auth.RequireAdmin)
+			// User account management. Authorization is enforced at the service
+			// layer: list/create require wildcard admin; get/update/delete enforce
+			// per-entity authorization. RequireAdmin middleware has been removed;
+			// the Authorizer is the sole gate.
+			r.Get("/user-accounts", usersHandler.List)
+			r.Post("/user-accounts", usersHandler.Create)
+			r.Get("/user-accounts/{uuid}", usersHandler.Get)
+			r.Put("/user-accounts/{uuid}", usersHandler.Update)
+			r.Delete("/user-accounts/{uuid}", usersHandler.Delete)
+			r.Post("/user-accounts/{uuid}/grant-admin", usersHandler.GrantAdmin)
+			r.Post("/user-accounts/{uuid}/revoke-admin", usersHandler.RevokeAdmin)
+			r.Post("/user-accounts/{uuid}/assume", assumeHandler.Assume)
 
-				// User account management.
-				r.Get("/user-accounts", usersHandler.List)
-				r.Post("/user-accounts", usersHandler.Create)
-				r.Get("/user-accounts/{uuid}", usersHandler.Get)
-				r.Put("/user-accounts/{uuid}", usersHandler.Update)
-				r.Delete("/user-accounts/{uuid}", usersHandler.Delete)
-				r.Post("/user-accounts/{uuid}/grant-admin", usersHandler.GrantAdmin)
-				r.Post("/user-accounts/{uuid}/revoke-admin", usersHandler.RevokeAdmin)
-				r.Post("/user-accounts/{uuid}/assume", assumeHandler.Assume)
+			// Apps (multi-tenancy). Authorization is enforced at the handler layer
+			// via Authorize calls; RequireAdmin middleware has been removed.
+			r.Post("/apps", appsHandler.Create)
+			r.Get("/apps", appsHandler.List)
+			r.Get("/apps/{uuid}", appsHandler.GetApp)
+			r.Put("/apps/{uuid}", appsHandler.UpdateApp)
+			r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
 
-				// Apps (multi-tenancy).
-				r.Post("/apps", appsHandler.Create)
-				r.Get("/apps", appsHandler.List)
-				r.Get("/apps/{uuid}", appsHandler.GetApp)
-				r.Put("/apps/{uuid}", appsHandler.UpdateApp)
-				r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
-
-				// Apps user-accounts.
-				r.Post("/apps/{uuid}/user-accounts", appsHandler.AssignUser)
-				r.Get("/apps/{uuid}/user-accounts", appsHandler.ListAppUsers)
-				r.Delete("/apps/{uuid}/user-accounts/{user_account_uuid}", appsHandler.RemoveUser)
-				r.Put("/apps/{uuid}/user-accounts/{user_account_uuid}/roles", appsHandler.UpdateUserRoles)
-			})
+			// Apps user-accounts.
+			r.Post("/apps/{uuid}/user-accounts", appsHandler.AssignUser)
+			r.Get("/apps/{uuid}/user-accounts", appsHandler.ListAppUsers)
+			r.Delete("/apps/{uuid}/user-accounts/{user_account_uuid}", appsHandler.RemoveUser)
+			r.Put("/apps/{uuid}/user-accounts/{user_account_uuid}/roles", appsHandler.UpdateUserRoles)
 		})
 	})
 

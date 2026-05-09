@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -16,16 +17,25 @@ import (
 	svc "github.com/moduleforge/users-module/api/internal/service"
 )
 
+// GrantAdminFn creates or removes a wildcard manage grant for the given user account UUID.
+// It is injected from the composition root to avoid a direct peer dependency on authz-module.
+// The function is responsible for both authorization and the grant write/delete.
+type GrantAdminFn func(ctx context.Context, userAccountUUID uuid.UUID) error
+
 // UserAccountsHandler serves the /v1/user-accounts endpoints.
 // It is a thin parse-call-render layer; all authorization, transaction
 // management, and observer dispatch live in UserAccountService.
 type UserAccountsHandler struct {
-	svc *svc.UserAccountService
+	svc         *svc.UserAccountService
+	grantAdmin  GrantAdminFn // creates wildcard manage grant
+	revokeAdmin GrantAdminFn // deletes wildcard manage grant
 }
 
 // NewUserAccountsHandler creates a UserAccountsHandler backed by the given service.
-func NewUserAccountsHandler(service *svc.UserAccountService) *UserAccountsHandler {
-	return &UserAccountsHandler{svc: service}
+// grantAdmin and revokeAdmin are injected from the composition root to call
+// authz-module's CreateWildcardGrant / DeleteWildcardGrant without a direct peer import.
+func NewUserAccountsHandler(service *svc.UserAccountService, grantAdmin, revokeAdmin GrantAdminFn) *UserAccountsHandler {
+	return &UserAccountsHandler{svc: service, grantAdmin: grantAdmin, revokeAdmin: revokeAdmin}
 }
 
 // writeServiceError maps a service error to the appropriate HTTP response.
@@ -50,7 +60,6 @@ type createUserAccountRequest struct {
 	Password   *string `json:"password"`
 	GivenName  string  `json:"given_name"`
 	FamilyName string  `json:"family_name"`
-	IsAdmin    bool    `json:"is_admin"`
 }
 
 // Create handles POST /v1/user-accounts (admin).
@@ -66,7 +75,6 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Password:   req.Password,
 		GivenName:  req.GivenName,
 		FamilyName: req.FamilyName,
-		IsAdmin:    req.IsAdmin,
 	})
 	if err != nil {
 		if !errors.Is(err, svc.ErrInvalidInput) {
@@ -158,7 +166,6 @@ type updateUserAccountRequest struct {
 	Email      *string `json:"email"`
 	GivenName  *string `json:"given_name"`
 	FamilyName *string `json:"family_name"`
-	IsAdmin    *bool   `json:"is_admin"`
 }
 
 // Update handles PUT /v1/user-accounts/{uuid} (admin).
@@ -178,7 +185,6 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Email:      req.Email,
 		GivenName:  req.GivenName,
 		FamilyName: req.FamilyName,
-		IsAdmin:    req.IsAdmin,
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.update", "error", err)
@@ -206,39 +212,39 @@ func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // GrantAdmin handles POST /v1/user-accounts/{uuid}/grant-admin (admin).
+// Delegates to the injected grantAdmin function, which checks authorization and
+// creates a wildcard manage grant for the target user.
 func (h *UserAccountsHandler) GrantAdmin(w http.ResponseWriter, r *http.Request) {
-	h.setAdmin(w, r, true, "grant")
-}
-
-// RevokeAdmin handles POST /v1/user-accounts/{uuid}/revoke-admin (admin).
-func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
-	h.setAdmin(w, r, false, "revoke")
-}
-
-func (h *UserAccountsHandler) setAdmin(w http.ResponseWriter, r *http.Request, isAdmin bool, op string) {
 	id, ok := parseUUIDParam(w, r)
 	if !ok {
 		return
 	}
 
-	if err := h.svc.SetAdmin(r.Context(), id, isAdmin, op); err != nil {
-		slog.ErrorContext(r.Context(), "user_accounts.setAdmin", "error", err, "op", op)
+	if err := h.grantAdmin(r.Context(), id); err != nil {
+		slog.ErrorContext(r.Context(), "user_accounts.grant-admin", "error", err)
 		writeServiceError(w, err)
 		return
 	}
 
-	// Load the account to get its UUID for the response.
-	ua, err := h.svc.LoadByUUID(r.Context(), id)
-	if err != nil {
-		// Non-fatal: we already committed; just return minimal response.
-		server.JSON(w, http.StatusOK, map[string]any{"is_admin": isAdmin})
+	server.JSON(w, http.StatusOK, map[string]any{"uuid": id.String()})
+}
+
+// RevokeAdmin handles POST /v1/user-accounts/{uuid}/revoke-admin (admin).
+// Delegates to the injected revokeAdmin function, which checks authorization and
+// deletes the wildcard manage grant for the target user.
+func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUIDParam(w, r)
+	if !ok {
 		return
 	}
 
-	server.JSON(w, http.StatusOK, map[string]any{
-		"uuid":     ua.Uuid.String(),
-		"is_admin": isAdmin,
-	})
+	if err := h.revokeAdmin(r.Context(), id); err != nil {
+		slog.ErrorContext(r.Context(), "user_accounts.revoke-admin", "error", err)
+		writeServiceError(w, err)
+		return
+	}
+
+	server.JSON(w, http.StatusOK, map[string]any{"uuid": id.String()})
 }
 
 // parseUUIDParam extracts the {uuid} chi URL parameter, writing a 400 on parse failure.
@@ -257,7 +263,6 @@ func userAccountResponse(ua svc.UserAccount) map[string]any {
 	resp := map[string]any{
 		"uuid":           ua.UUID.String(),
 		"email":          ua.Email,
-		"is_admin":       ua.IsAdmin,
 		"email_verified": ua.EmailVerified,
 	}
 	if ua.CreatedAt.Valid {

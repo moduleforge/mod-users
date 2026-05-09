@@ -19,7 +19,6 @@ func newResolverWithStub(t *testing.T, localIssuer string, lookup uuidLookupFn) 
 	return &UserResolver{
 		pool:        nil,
 		queries:     nil,
-		adminRole:   "admin",
 		localIssuer: localIssuer,
 		uuidLookup:  lookup,
 	}
@@ -32,7 +31,6 @@ func TestResolver_LocalIssuerFastPath_Success(t *testing.T) {
 		Uuid:          wantUUID,
 		AccountHolder: 41,
 		Email:         "alice@example.com",
-		IsAdmin:       false,
 	}
 
 	calls := 0

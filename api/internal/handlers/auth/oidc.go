@@ -238,7 +238,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := localauth.IssueLocalJWT(ua, uc.IsAdmin, h.cfg.LocalAuth.JWTSecret, h.cfg.LocalAuth.LocalIssuer)
+	token, err := localauth.IssueLocalJWT(ua, h.cfg.LocalAuth.JWTSecret, h.cfg.LocalAuth.LocalIssuer)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: issue jwt", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "token issuance failed")

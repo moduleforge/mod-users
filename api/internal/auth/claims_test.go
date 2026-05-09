@@ -396,7 +396,6 @@ func TestContextRoundTrip(t *testing.T) {
 		UserAccountID: 42,
 		UserUUID:      "uuid-abc",
 		Email:         "user@example.com",
-		IsAdmin:       true,
 	}
 
 	ctx := WithUserContext(context.Background(), uc)

@@ -17,12 +17,7 @@ type localClaims struct {
 
 // IssueLocalJWT mints an HS256-signed JWT for a locally-authenticated user account.
 // The token is valid for 24 hours.
-func IssueLocalJWT(ua db.UserAccount, isAdmin bool, secret, issuer string) (string, error) {
-	roles := []string{}
-	if isAdmin {
-		roles = append(roles, "admin")
-	}
-
+func IssueLocalJWT(ua db.UserAccount, secret, issuer string) (string, error) {
 	now := time.Now()
 	claims := localClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -31,7 +26,7 @@ func IssueLocalJWT(ua db.UserAccount, isAdmin bool, secret, issuer string) (stri
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(24 * time.Hour)),
 		},
-		Roles: roles,
+		Roles: []string{},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

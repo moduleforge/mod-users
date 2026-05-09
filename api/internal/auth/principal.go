@@ -19,7 +19,6 @@ type UserContext struct {
 	UserUUID      string
 	EntityID      int64
 	Email         string
-	IsAdmin       bool             // user_accounts.is_admin OR principal has admin role
 	AssumedUser   *AssumedUserInfo // non-nil while admin is assuming another user
 	AppID         *int64           // resolved app context
 	AppRoles      []string

@@ -163,7 +163,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	ua, err := qtx.CreateUserAccount(r.Context(), db.CreateUserAccountParams{
 		AccountHolder: entity.ID,
 		Email:         req.Email,
-		IsAdmin:       isFirst,
 	})
 	if err != nil {
 		// Check for unique violation on email.

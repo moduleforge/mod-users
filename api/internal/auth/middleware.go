@@ -113,14 +113,3 @@ func RequireAuth(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver)
 	}
 }
 
-// RequireAdmin checks that the current user is an admin. 403 otherwise.
-func RequireAdmin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		uc, ok := FromContext(r.Context())
-		if !ok || !uc.IsAdmin {
-			server.Error(w, http.StatusForbidden, "forbidden", "admin access required")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}

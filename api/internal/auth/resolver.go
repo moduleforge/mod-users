@@ -42,7 +42,6 @@ type UserResolver struct {
 	pool          *pgxpool.Pool
 	queries       *db.Queries
 	coreQ         *coredb.Queries
-	adminRole     string
 	localIssuer   string
 	uuidLookup    uuidLookupFn
 	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
@@ -51,15 +50,14 @@ type UserResolver struct {
 // NewUserResolver creates a resolver. localIssuer is the value written into
 // the "iss" claim by IssueLocalJWT — when Resolve sees a Principal with this
 // issuer, it skips the OIDC auto-create path and looks up the user account by UUID.
+// The adminRole parameter is accepted for backwards compatibility but is no
+// longer used; admin privileges are determined solely by the grants table.
 func NewUserResolver(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, adminRole, localIssuer string) *UserResolver {
-	if adminRole == "" {
-		adminRole = "admin"
-	}
+	_ = adminRole // retained in signature for call-site compatibility; no longer used
 	r := &UserResolver{
 		pool:        pool,
 		queries:     queries,
 		coreQ:       coreQ,
-		adminRole:   adminRole,
 		localIssuer: localIssuer,
 	}
 	if queries != nil {
@@ -75,7 +73,6 @@ func (r *UserResolver) SetFirstUserHook(fn FirstUserHookFn) {
 }
 
 // Resolve looks up or creates the user account associated with the given Principal.
-// On first-ever user, sets is_admin = true (root bootstrap).
 func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, error) {
 	// Local-issuer fast path. A principal minted by IssueLocalJWT carries
 	// the user account's own UUID in `sub`; the HS256 signature has already
@@ -209,7 +206,6 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 	ua, err = qtx.CreateUserAccount(ctx, db.CreateUserAccountParams{
 		AccountHolder: entity.ID,
 		Email:         p.Email,
-		IsAdmin:       isFirstUser,
 		AuthIssuer:    authIssuer,
 		AuthID:        authID,
 	})
@@ -248,23 +244,11 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 }
 
 func (r *UserResolver) buildUserContext(ua db.UserAccount, p Principal) *UserContext {
-	// Admin if DB flag is set OR principal has admin role.
-	isAdmin := ua.IsAdmin
-	if !isAdmin {
-		for _, role := range p.Roles {
-			if role == r.adminRole {
-				isAdmin = true
-				break
-			}
-		}
-	}
-
 	uc := &UserContext{
 		UserAccountID: ua.ID,
 		UserUUID:      ua.Uuid.String(),
 		EntityID:      ua.AccountHolder,
 		Email:         ua.Email,
-		IsAdmin:       isAdmin,
 	}
 
 	if ua.DefaultAppID.Valid {

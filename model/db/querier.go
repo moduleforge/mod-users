@@ -49,7 +49,6 @@ type Querier interface {
 	ListUserAccountApps(ctx context.Context, userAccountID int64) ([]AppsUserAccount, error)
 	RemoveUserAccountFromApp(ctx context.Context, arg RemoveUserAccountFromAppParams) error
 	SearchUserAccounts(ctx context.Context, arg SearchUserAccountsParams) ([]UserAccount, error)
-	SetAdmin(ctx context.Context, arg SetAdminParams) error
 	SetAppUserAccountRoles(ctx context.Context, arg SetAppUserAccountRolesParams) error
 	SetDefaultApp(ctx context.Context, arg SetDefaultAppParams) error
 	// Narrow write used by /v1/oidc-config/confirm when the admin toggles a

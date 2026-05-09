@@ -81,7 +81,6 @@ type UserAccount struct {
 	AccountHolder   int64              `json:"account_holder"`
 	Email           string             `json:"email"`
 	EmailVerifiedAt *time.Time         `json:"email_verified_at"`
-	IsAdmin         bool               `json:"is_admin"`
 	DefaultAppID    pgtype.Int8        `json:"default_app_id"`
 	AuthIssuer      pgtype.Text        `json:"auth_issuer"`
 	AuthID          pgtype.Text        `json:"auth_id"`

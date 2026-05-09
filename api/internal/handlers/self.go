@@ -14,7 +14,7 @@ import (
 // SelfHandler serves /v1/self. /self is a composite identity endpoint:
 // core-module owns the entity data (given_name, family_name, etc.) via
 // EntityService.GetSelf, while users-module owns the users-row data
-// (email, is_admin, timestamps, uuid). This handler stitches the two.
+// (email, timestamps, uuid). This handler stitches the two.
 type SelfHandler struct {
 	q        *db.Queries
 	coreQ    *coredb.Queries
@@ -103,7 +103,6 @@ func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[strin
 	resp := map[string]any{
 		"uuid":       ua.Uuid.String(),
 		"email":      ua.Email,
-		"is_admin":   ua.IsAdmin,
 		"created_at": ua.CreatedAt.Time,
 		"updated_at": ua.UpdatedAt.Time,
 	}
