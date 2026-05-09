@@ -6,7 +6,7 @@
 // CTEs, OR satisfy the per-resource "own" predicate (actor IS the entity).
 //
 // The implementation resolves the acting user from ctx via opctx.ActorEntityID
-// (and opctx.AssumedActorEntityID for assume sessions).
+// (and opctx.SudoActorEntityID for assume sessions).
 //
 // Operations with a nil target (create, list, or admin-only operations) are
 // denied for non-admin actors unless they hold an explicit grant over a type-ID
@@ -71,8 +71,8 @@ func New(q usersdb.Querier, authzQ authzdb.Querier, opReg *authzapi.OperationReg
 // Authorize enforces the policy described in the package doc.
 //
 // The effective actor is whichever entity ID is set on ctx:
-//   - When AssumedActorEntityID is set, that is the effective actor (admin is
-//     acting as the assumed user; the assumed user's permissions apply).
+//   - When SudoActorEntityID is set, that is the effective actor (admin is
+//     acting as the sudo user; the sudo user's permissions apply).
 //   - Otherwise ActorEntityID is the actor.
 //
 // Flow:
@@ -160,10 +160,10 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 }
 
 // effectiveActor returns the entity ID that should be used for policy checks.
-// If an assumed actor is set (admin assuming another user's identity), that
-// entity ID is returned, since the admin is acting as the assumed user.
+// If a sudo actor is set (admin assuming another user's identity), that
+// entity ID is returned, since the admin is acting as the sudo user.
 func effectiveActor(ctx context.Context) (int64, bool) {
-	if id, ok := opctx.AssumedActorEntityID(ctx); ok {
+	if id, ok := opctx.SudoActorEntityID(ctx); ok {
 		return id, true
 	}
 	return opctx.ActorEntityID(ctx)

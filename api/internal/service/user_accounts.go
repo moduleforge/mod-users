@@ -475,13 +475,14 @@ func (s *UserAccountService) RecordLogin(ctx context.Context, accountID int64, p
 }
 
 // Assume records an admin identity-assumption event in the audit log and
-// returns both the admin and assumed user accounts. No DB row is mutated;
-// the Observe call participates in a transaction solely for audit-row atomicity.
+// returns both the sudo (admin) and actor (assumed) user accounts. No DB row
+// is mutated; the Observe call participates in a transaction solely for
+// audit-row atomicity.
 //
 // Returns coreservice.ErrNotFound when the target UUID does not exist.
 // Returns an authz error when the actor is not permitted to assume the target.
-func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (adminUA db.UserAccount, assumedUA db.UserAccount, err error) {
-	assumedUA, err = s.q.GetUserAccountByUUID(ctx, targetUUID)
+func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (sudoUA db.UserAccount, actorUA db.UserAccount, err error) {
+	actorUA, err = s.q.GetUserAccountByUUID(ctx, targetUUID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
@@ -493,7 +494,7 @@ func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (
 	if !ok {
 		return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
 	}
-	adminUA, err = s.q.GetUserAccountByAccountHolder(ctx, actorEntityID)
+	sudoUA, err = s.q.GetUserAccountByAccountHolder(ctx, actorEntityID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
@@ -501,24 +502,24 @@ func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (
 		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume load admin: %w", err)
 	}
 
-	assumedEntityID := assumedUA.AccountHolder
-	if err := s.az.Authorize(ctx, "assume", &assumedEntityID); err != nil {
+	targetEntityID := actorUA.AccountHolder
+	if err := s.az.Authorize(ctx, "assume", &targetEntityID); err != nil {
 		return db.UserAccount{}, db.UserAccount{}, err
 	}
 
 	detail := map[string]any{
-		"admin_uuid":   adminUA.Uuid.String(),
-		"assumed_uuid": assumedUA.Uuid.String(),
+		"sudo_uuid":  sudoUA.Uuid.String(),
+		"actor_uuid": actorUA.Uuid.String(),
 	}
 	txErr := txhelper.Run(ctx, s.db, func(ctx context.Context, tx pgx.Tx) error {
-		return s.obs.Observe(ctx, tx, "assume", "user_account", &assumedEntityID, nil, detail)
+		return s.obs.Observe(ctx, tx, "assume", "user_account", &targetEntityID, nil, detail)
 	})
 	if txErr != nil {
 		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume observe: %w", txErr)
 	}
 
-	s.obs.ObserveAfterCommit(ctx, "assume", "user_account", &assumedEntityID, detail)
-	return adminUA, assumedUA, nil
+	s.obs.ObserveAfterCommit(ctx, "assume", "user_account", &targetEntityID, detail)
+	return sudoUA, actorUA, nil
 }
 
 // LoadByUUID loads a user account by its public UUID without performing

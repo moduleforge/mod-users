@@ -106,7 +106,7 @@ func RequireAuth(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver)
 			ctx := WithUserContext(r.Context(), uc)
 			ctx = opctx.WithActor(ctx, uc.EntityID)
 			if uc.AssumedUser != nil {
-				ctx = opctx.WithAssumedActor(ctx, uc.AssumedUser.EntityID)
+				ctx = opctx.WithSudoActor(ctx, uc.AssumedUser.EntityID)
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

@@ -27,14 +27,14 @@ func (m *genericMapper) Map(rawClaims map[string]any) (Principal, error) {
 	email := getStringByPath(rawClaims, m.opts.EmailPath)
 	roles := lowercaseAll(getStringSliceByPath(rawClaims, m.opts.RolesPath))
 
-	// Extract assumed_user_uuid if present (set by IssueAssumeJWT).
-	assumedUserUUID, _ := rawClaims["assumed_user_uuid"].(string)
+	// Extract sudo_user_uuid if present (set by IssueAssumeJWT).
+	sudoUserUUID, _ := rawClaims["sudo_user_uuid"].(string)
 
 	return Principal{
-		Subject:         sub,
-		Issuer:          iss,
-		Email:           email,
-		Roles:           roles,
-		AssumedUserUUID: assumedUserUUID,
+		Subject:      sub,
+		Issuer:       iss,
+		Email:        email,
+		Roles:        roles,
+		SudoUserUUID: sudoUserUUID,
 	}, nil
 }

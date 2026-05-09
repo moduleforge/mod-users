@@ -19,7 +19,7 @@ import (
 // UserAccountService. Using an interface here (rather than the concrete type)
 // keeps the handler testable without wiring a full service.
 type assumeServicer interface {
-	Assume(ctx context.Context, targetUUID uuid.UUID) (adminUA db.UserAccount, assumedUA db.UserAccount, err error)
+	Assume(ctx context.Context, targetUUID uuid.UUID) (sudoUA db.UserAccount, actorUA db.UserAccount, err error)
 }
 
 // AssumeHandler handles identity assumption for admins.
@@ -45,7 +45,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminUA, assumedUA, err := h.svc.Assume(r.Context(), parsed)
+	sudoUA, actorUA, err := h.svc.Assume(r.Context(), parsed)
 	if err != nil {
 		if errors.Is(err, coreservice.ErrNotFound) {
 			server.Error(w, http.StatusNotFound, "not_found", "user account not found")
@@ -56,7 +56,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.IssueAssumeJWT(adminUA, assumedUA, h.jwtSecret, h.issuer)
+	token, err := auth.IssueAssumeJWT(sudoUA, actorUA, h.jwtSecret, h.issuer)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "assume: issue jwt", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
@@ -64,16 +64,16 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.InfoContext(r.Context(), "admin assuming identity",
-		"admin_uuid", adminUA.Uuid.String(),
-		"assumed_uuid", assumedUA.Uuid.String(),
+		"sudo_uuid", sudoUA.Uuid.String(),
+		"actor_uuid", actorUA.Uuid.String(),
 	)
 
 	server.JSON(w, http.StatusOK, map[string]any{
 		"token": token,
 		"user": map[string]any{
-			"uuid":     assumedUA.Uuid.String(),
-			"email":    assumedUA.Email,
-			"is_admin": assumedUA.IsAdmin,
+			"uuid":     actorUA.Uuid.String(),
+			"email":    actorUA.Email,
+			"is_admin": actorUA.IsAdmin,
 		},
 	})
 }

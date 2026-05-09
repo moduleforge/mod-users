@@ -165,10 +165,10 @@ func ctxWithActor(entityID int64) context.Context {
 	return opctx.WithActor(context.Background(), entityID)
 }
 
-// ctxWithAssumedActor returns a context with both actor and assumed actor set.
-func ctxWithAssumedActor(actorID, assumedID int64) context.Context {
+// ctxWithSudoActor returns a context with both actor and sudo actor set.
+func ctxWithSudoActor(actorID, sudoID int64) context.Context {
 	ctx := opctx.WithActor(context.Background(), actorID)
-	return opctx.WithAssumedActor(ctx, assumedID)
+	return opctx.WithSudoActor(ctx, sudoID)
 }
 
 // newAuthorizer builds an Authorizer with the stub users querier.
@@ -251,22 +251,22 @@ func TestAuthorize_NonAdmin_ListDenied(t *testing.T) {
 	}
 }
 
-// TestAuthorize_AssumedActor_AdminCannotEscalate verifies that when an admin assumes
-// another user's identity, the assumed user's permissions apply.
-// The assumed non-admin user should be denied nil-target operations.
-func TestAuthorize_AssumedActor_AdminCannotEscalate(t *testing.T) {
+// TestAuthorize_SudoActor_AdminCannotEscalate verifies that when an admin assumes
+// another user's identity, the sudo user's permissions apply.
+// The sudo non-admin user should be denied nil-target operations.
+func TestAuthorize_SudoActor_AdminCannotEscalate(t *testing.T) {
 	q := newStubQuerier()
 	q.seed(1, true)   // entity_id=1 is admin (the real actor)
-	q.seed(50, false) // entity_id=50 is not admin (the assumed user)
+	q.seed(50, false) // entity_id=50 is not admin (the sudo user)
 	az := newAuthorizer(q)
 
 	// Admin (entity 1) is assuming non-admin user (entity 50).
-	ctx := ctxWithAssumedActor(1, 50)
+	ctx := ctxWithSudoActor(1, 50)
 
-	// Assumed user CANNOT create (admin-only operation for non-admins).
+	// Sudo user CANNOT create (admin-only operation for non-admins).
 	err := az.Authorize(ctx, "create", nil)
 	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("assumed user (non-admin) should be forbidden from create: got %v", err)
+		t.Errorf("sudo user (non-admin) should be forbidden from create: got %v", err)
 	}
 }
 
