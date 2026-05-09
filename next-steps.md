@@ -27,4 +27,3 @@ Related docs:
 ## Cross-cutting framework — deferred from Phase 5 review
 
 - **`apps` events have nil `target_entity_id`** — documented in `api/internal/handlers/apps.go`. Apps are not core entities; `audit_log.target_entity_id` is NULL for app events, so `AuditService.ListByEntity` never returns them. Future fix: register apps as entities, or add `app_uuid`/`subject_uuid` to `audit_log`.
-- **`actor coreservice.Principal` parameter cleanup** — handlers still construct `Principal` and pass to service calls for inline ownership checks. Removing requires either an `IsAdmin` opctx key or moving ownership checks into the Authorizer. Defer until pressing.
