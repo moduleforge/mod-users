@@ -5,156 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/users-module/api/internal/authz"
-	db "github.com/moduleforge/users-module/model/db"
 )
-
-// stubQuerier is a minimal db.Querier that only supports GetUserAccountByAccountHolder.
-// All other methods panic to catch unexpected calls.
-type stubQuerier struct {
-	// accountsByEntityID maps entity_id (account_holder) to UserAccount.
-	accountsByEntityID map[int64]db.UserAccount
-}
-
-func newStubQuerier() *stubQuerier {
-	return &stubQuerier{accountsByEntityID: make(map[int64]db.UserAccount)}
-}
-
-func (q *stubQuerier) seed(entityID int64, isAdmin bool) db.UserAccount {
-	ua := db.UserAccount{
-		ID:            entityID * 10, // arbitrary non-zero ID
-		Uuid:          uuid.New(),
-		AccountHolder: entityID,
-		Email:         "user@example.com",
-		IsAdmin:       isAdmin,
-	}
-	q.accountsByEntityID[entityID] = ua
-	return ua
-}
-
-func (q *stubQuerier) GetUserAccountByAccountHolder(_ context.Context, accountHolder int64) (db.UserAccount, error) {
-	if ua, ok := q.accountsByEntityID[accountHolder]; ok {
-		return ua, nil
-	}
-	return db.UserAccount{}, pgx.ErrNoRows
-}
-
-// --- Implement the rest of db.Querier so stubQuerier satisfies the interface ---
-
-func (q *stubQuerier) ArchiveApp(_ context.Context, _ int64) error { panic("not implemented") }
-func (q *stubQuerier) AssignUserAccountToApp(_ context.Context, _ db.AssignUserAccountToAppParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) ClearSetupTokenHash(_ context.Context) error { panic("not implemented") }
-func (q *stubQuerier) ConsumeEmailCode(_ context.Context, _ int64) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) ConsumePasswordReset(_ context.Context, _ int64) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) CreateApp(_ context.Context, _ db.CreateAppParams) (db.App, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) CreateEmailCode(_ context.Context, _ db.CreateEmailCodeParams) (db.EmailCode, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) CreatePasswordReset(_ context.Context, _ db.CreatePasswordResetParams) (db.PasswordReset, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) CreateUserAccount(_ context.Context, _ db.CreateUserAccountParams) (db.UserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) DeleteAuthLocal(_ context.Context, _ int64) error { panic("not implemented") }
-func (q *stubQuerier) DeleteOIDCProvider(_ context.Context, _ string) (int64, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetActiveEmailCode(_ context.Context, _ db.GetActiveEmailCodeParams) (db.EmailCode, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetActivePasswordReset(_ context.Context, _ string) (db.PasswordReset, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetAppBySlug(_ context.Context, _ string) (db.App, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetAppByUUID(_ context.Context, _ uuid.UUID) (db.App, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetAuthLocal(_ context.Context, _ int64) (db.AuthLocal, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetOIDCConfig(_ context.Context) (db.OidcConfig, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetOIDCProvider(_ context.Context, _ string) (db.OidcProvider, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetUserAccountByAuth(_ context.Context, _ db.GetUserAccountByAuthParams) (db.UserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetUserAccountByEmail(_ context.Context, _ string) (db.UserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetUserAccountByID(_ context.Context, _ int64) (db.UserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) GetUserAccountByUUID(_ context.Context, _ uuid.UUID) (db.UserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) ListAppUserAccounts(_ context.Context, _ int64) ([]db.AppsUserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) ListApps(_ context.Context) ([]db.App, error) { panic("not implemented") }
-func (q *stubQuerier) ListOIDCProviders(_ context.Context) ([]db.OidcProvider, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) ListUserAccountApps(_ context.Context, _ int64) ([]db.AppsUserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) RemoveUserAccountFromApp(_ context.Context, _ db.RemoveUserAccountFromAppParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) SearchUserAccounts(_ context.Context, _ db.SearchUserAccountsParams) ([]db.UserAccount, error) {
-	panic("not implemented")
-}
-func (q *stubQuerier) SetAdmin(_ context.Context, _ db.SetAdminParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) SetAppUserAccountRoles(_ context.Context, _ db.SetAppUserAccountRolesParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) SetDefaultApp(_ context.Context, _ db.SetDefaultAppParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) SetOIDCProviderEnabled(_ context.Context, _ db.SetOIDCProviderEnabledParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) SetSetupTokenHash(_ context.Context, _ pgtype.Text) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) UpdateApp(_ context.Context, _ db.UpdateAppParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) UpdateOIDCConfig(_ context.Context, _ bool) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) UpdateUserAccount(_ context.Context, _ db.UpdateUserAccountParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) UpsertAuthLocal(_ context.Context, _ db.UpsertAuthLocalParams) error {
-	panic("not implemented")
-}
-func (q *stubQuerier) UpsertOIDCProvider(_ context.Context, _ db.UpsertOIDCProviderParams) (db.OidcProvider, error) {
-	panic("not implemented")
-}
-
-// Compile-time: stubQuerier satisfies db.Querier.
-var _ db.Querier = (*stubQuerier)(nil)
 
 // --- helpers ---
 
@@ -171,21 +24,45 @@ func ctxWithSudoActor(actorID, sudoID int64) context.Context {
 	return opctx.WithSudoActor(ctx, sudoID)
 }
 
-// newAuthorizer builds an Authorizer with the stub users querier.
-// authzQ and pool are nil because the test cases below only exercise the
-// is_admin short-circuit, the unauthenticated path, and the nil-target denial.
-// Tests that exercise the grant-check path require a live database and belong
-// in the integration test suite.
-func newAuthorizer(q *stubQuerier) *authz.Authorizer {
-	return authz.New(q, nil, nil, nil)
+// newTestAuthorizer builds an Authorizer suitable for unit tests.
+//
+// The Authorizer's pool and opReg are nil — tests that exercise the database-
+// driven paths (checkGrant, checkTagOwnership) require a live Postgres and belong
+// in the integration test suite. This helper is only for paths that can be
+// exercised without DB access, using wildcardGrantFn to inject outcomes.
+//
+// wildcardFn: controls what checkWildcardGrant returns. Pass nil to simulate
+// "no wildcard grant" (returns false, nil).
+func newTestAuthorizer(wildcardFn func(ctx context.Context, actor int64, opIDs []int32) (bool, error)) *authz.Authorizer {
+	az := authz.New(nil, nil, nil)
+	if wildcardFn != nil {
+		az.SetWildcardGrantFn(wildcardFn)
+	}
+	return az
+}
+
+// wildcardAllowFn is a wildcardGrantFn that always returns true (wildcard admin).
+func wildcardAllowFn(_ context.Context, _ int64, _ []int32) (bool, error) {
+	return true, nil
+}
+
+// wildcardDenyFn is a wildcardGrantFn that always returns false (no wildcard grant).
+func wildcardDenyFn(_ context.Context, _ int64, _ []int32) (bool, error) {
+	return false, nil
+}
+
+// wildcardErrFn is a wildcardGrantFn that returns an error (DB fault).
+func wildcardErrFn(wantErr error) func(context.Context, int64, []int32) (bool, error) {
+	return func(_ context.Context, _ int64, _ []int32) (bool, error) {
+		return false, wantErr
+	}
 }
 
 // --- tests ---
 
 // TestAuthorize_NoActor verifies that an unauthenticated context returns ErrUnauthenticated.
 func TestAuthorize_NoActor(t *testing.T) {
-	q := newStubQuerier()
-	az := newAuthorizer(q)
+	az := newTestAuthorizer(nil)
 
 	err := az.Authorize(context.Background(), "read", ptr(int64(1)))
 	if !errors.Is(err, authz.ErrUnauthenticated) {
@@ -193,94 +70,130 @@ func TestAuthorize_NoActor(t *testing.T) {
 	}
 }
 
-// TestAuthorize_Admin_AllowsAnything verifies that an admin can perform any operation.
-func TestAuthorize_Admin_AllowsAnything(t *testing.T) {
-	q := newStubQuerier()
-	q.seed(1, true) // entity_id=1 is admin
-	az := newAuthorizer(q)
+// TestAuthorize_WildcardAdmin_AllowsAnything verifies that a wildcard-manage-grant
+// actor can perform any operation, including nil-target operations.
+func TestAuthorize_WildcardAdmin_AllowsAnything(t *testing.T) {
+	// opReg is nil here; opReg.SatisfiedBy would panic. We need a stub opReg.
+	// Use the real opReg or a stub that returns a non-error for any slug.
+	// Since opReg is nil, Authorize will return ErrForbidden at opReg.SatisfiedBy.
+	// To test wildcard, we need a real or stubbed opReg. Use a stub via the
+	// wildcard function that is called *after* opReg.SatisfiedBy.
+	//
+	// Problem: the flow is:
+	//   1. effectiveActor
+	//   2. opReg.SatisfiedBy  ← panics if opReg is nil
+	//   3. checkWildcardGrant
+	//
+	// So we cannot test wildcard without opReg. Use a stub opReg.
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
 
 	ctx := ctxWithActor(1)
 
 	tests := []struct {
+		name      string
 		operation string
 		target    *int64
 	}{
-		{"read", ptr(int64(99))},   // other user
-		{"create", nil},            // pre-create (no ID)
-		{"list", nil},              // list
-		{"delete", ptr(int64(42))}, // any entity
-		{"update", ptr(int64(1))},  // own entity
+		{"read other", "read", ptr(int64(99))},
+		{"create nil-target", "create", nil},
+		{"list nil-target", "list", nil},
+		{"delete any", "delete", ptr(int64(42))},
+		{"update own", "update", ptr(int64(1))},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.operation, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			if err := az.Authorize(ctx, tc.operation, tc.target); err != nil {
-				t.Errorf("admin should be allowed for operation=%q: got %v", tc.operation, err)
+				t.Errorf("wildcard admin should be allowed for operation=%q: got %v", tc.operation, err)
 			}
 		})
 	}
 }
 
-// TestAuthorize_NonAdmin_CreateDenied verifies that a non-admin cannot create resources.
-// Nil-target operations remain admin-only; grants over type IDs are not yet supported.
-func TestAuthorize_NonAdmin_CreateDenied(t *testing.T) {
-	q := newStubQuerier()
-	q.seed(7, false)
-	az := newAuthorizer(q)
+// TestAuthorize_NonWildcard_NilTargetDenied verifies that an actor with no wildcard
+// grant is denied for nil-target operations (create, list, admin-only).
+func TestAuthorize_NonWildcard_NilTargetDenied(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardDenyFn)
 
 	ctx := ctxWithActor(7)
 
-	err := az.Authorize(ctx, "create", nil)
-	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("expected ErrForbidden for non-admin create, got: %v", err)
+	for _, op := range []string{"create", "list", "manage"} {
+		t.Run(op, func(t *testing.T) {
+			err := az.Authorize(ctx, op, nil)
+			if !errors.Is(err, authz.ErrForbidden) {
+				t.Errorf("expected ErrForbidden for non-wildcard %q with nil target, got: %v", op, err)
+			}
+		})
 	}
 }
 
-// TestAuthorize_NonAdmin_ListDenied verifies that a non-admin cannot list resources
-// without a grant. Nil-target remains admin-only.
-func TestAuthorize_NonAdmin_ListDenied(t *testing.T) {
-	q := newStubQuerier()
-	q.seed(7, false)
-	az := newAuthorizer(q)
+// TestAuthorize_WildcardDBError propagates a DB error from the wildcard check.
+func TestAuthorize_WildcardDBError(t *testing.T) {
+	dbErr := errors.New("pool connection lost")
+	az := authz.NewWithStubOpReg(wildcardErrFn(dbErr))
 
-	ctx := ctxWithActor(7)
-
-	err := az.Authorize(ctx, "list", nil)
-	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("expected ErrForbidden for non-admin list, got: %v", err)
+	ctx := ctxWithActor(1)
+	err := az.Authorize(ctx, "read", ptr(int64(99)))
+	if !errors.Is(err, dbErr) {
+		t.Errorf("expected DB error to propagate, got: %v", err)
 	}
 }
 
-// TestAuthorize_SudoActor_AdminCannotEscalate verifies that when an admin assumes
-// another user's identity, the sudo user's permissions apply.
-// The sudo non-admin user should be denied nil-target operations.
-func TestAuthorize_SudoActor_AdminCannotEscalate(t *testing.T) {
-	q := newStubQuerier()
-	q.seed(1, true)   // entity_id=1 is admin (the real actor)
-	q.seed(50, false) // entity_id=50 is not admin (the sudo user)
-	az := newAuthorizer(q)
+// TestAuthorize_UnknownOperation_NonAdmin verifies that a non-wildcard actor
+// with an unknown operation slug is denied.
+func TestAuthorize_UnknownOperation_NonAdmin(t *testing.T) {
+	// wildcardDenyFn: actor has no wildcard grant. Unknown op → fallback to
+	// manage opIDs wildcard check → also denied → ErrForbidden.
+	az := authz.NewWithStubOpReg(wildcardDenyFn)
+	ctx := ctxWithActor(1)
 
-	// Admin (entity 1) is assuming non-admin user (entity 50).
+	err := az.Authorize(ctx, "unknown_op", ptr(int64(1)))
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("non-admin with unknown operation should return ErrForbidden, got: %v", err)
+	}
+}
+
+// TestAuthorize_UnknownOperation_WildcardAdmin verifies that a wildcard-manage-grant
+// actor can perform unknown operation slugs (the manage fallback allows it).
+func TestAuthorize_UnknownOperation_WildcardAdmin(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
+	ctx := ctxWithActor(1)
+
+	// Wildcard admin: unknown op → fallback to manage opIDs → wildcard check → allowed.
+	err := az.Authorize(ctx, "unknown_op", ptr(int64(1)))
+	if err != nil {
+		t.Errorf("wildcard admin with unknown operation should be allowed, got: %v", err)
+	}
+}
+
+// TestAuthorize_SudoActor verifies that when an actor assumes another user's
+// identity, the sudo user's permissions apply (not the real actor's).
+//
+// Scenario: real actor (entity 1) is a wildcard admin. Sudo user (entity 50)
+// is NOT a wildcard admin. When real actor assumes entity 50, the effective
+// actor is entity 50, so wildcard admin privileges do NOT apply.
+func TestAuthorize_SudoActor_WildcardDoesNotEscalate(t *testing.T) {
+	// wildcardGrantFn returns true only for actor entity 1 (the real admin),
+	// false for entity 50 (the sudo user). Since the effective actor is the
+	// sudo user, no wildcard grant should be found.
+	az := authz.NewWithStubOpReg(func(_ context.Context, actor int64, _ []int32) (bool, error) {
+		return actor == 1, nil // only entity 1 is wildcard admin
+	})
+
+	// Real actor (1) assumes sudo user (50).
 	ctx := ctxWithSudoActor(1, 50)
 
-	// Sudo user CANNOT create (admin-only operation for non-admins).
+	// The effective actor is 50 (sudo user). Sudo user is NOT wildcard admin,
+	// so nil-target operations must be denied.
 	err := az.Authorize(ctx, "create", nil)
 	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("sudo user (non-admin) should be forbidden from create: got %v", err)
+		t.Errorf("sudo non-admin user should be forbidden from create: got %v", err)
 	}
 }
 
-// TestAuthorize_MissingUserAccount_MapsToForbidden verifies that an actor whose
-// entity has no corresponding user_account row is treated as a forbidden state.
-func TestAuthorize_MissingUserAccount_MapsToForbidden(t *testing.T) {
-	q := newStubQuerier()
-	// Do NOT seed entity 99 — GetUserAccountByAccountHolder will return pgx.ErrNoRows.
-	az := newAuthorizer(q)
-
-	ctx := ctxWithActor(99)
-
-	err := az.Authorize(ctx, "read", ptr(int64(99)))
-	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("expected ErrForbidden for missing user_account, got %v", err)
-	}
+// TestAuthorize_OwnEntity_Allowed is documented as requiring a live Postgres
+// because the own-predicate check (target == actor) runs after checkGrant,
+// which requires the pool. This scenario is covered by the integration test suite.
+func TestAuthorize_OwnEntity_Allowed(t *testing.T) {
+	t.Skip("own-predicate check (target == actor) runs after checkGrant which requires a live pool; covered by integration tests")
 }

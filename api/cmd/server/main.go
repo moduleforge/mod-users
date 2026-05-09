@@ -273,11 +273,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Build the Authorizer. The new grants-driven Authorizer (Phase 2.2) uses
-	// the OperationRegistry and a recursive-CTE grant check. Admins are still
-	// short-circuited via the is_admin flag (Q8-A); non-admins require an
-	// explicit grant OR satisfy the per-resource own predicate.
-	az := localAuthz.New(db.New(pool), authzdb.New(pool), opReg, pool)
+	// Build the Authorizer. The grants-driven Authorizer uses the OperationRegistry,
+	// a wildcard-grant check (checkWildcardGrant, replacing the old is_admin column
+	// short-circuit), and a recursive-CTE grant check for targeted grants. Wildcard
+	// grants (target_id IS NULL in the grants table) allow an actor to pass any
+	// authorization check. The first user's wildcard grant is bootstrapped below
+	// after first-account creation.
+	az := localAuthz.New(authzdb.New(pool), opReg, pool)
 
 	// Build the audit-module Observer and compose it into an ObserverGroup.
 	// The audit Observer writes one audit_log row inside the operation's transaction,
