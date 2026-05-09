@@ -10,7 +10,6 @@ CREATE TABLE user_accounts (
   account_holder    BIGINT NOT NULL UNIQUE REFERENCES legal_entities(entity_id) ON DELETE RESTRICT,
   email             TEXT NOT NULL UNIQUE,
   email_verified_at TIMESTAMPTZ,
-  is_admin          BOOLEAN NOT NULL DEFAULT FALSE,
   default_app_id    BIGINT CONSTRAINT user_accounts_default_app_fk REFERENCES apps(id) ON DELETE SET NULL,
   auth_issuer       TEXT,
   auth_id           TEXT,
