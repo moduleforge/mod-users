@@ -29,16 +29,23 @@ var ErrUserGone = errors.New("auth: user no longer exists")
 // path in that case (useful for pre-Phase 9 fallback semantics in tests).
 type uuidLookupFn func(ctx context.Context, u uuid.UUID) (db.UserAccount, error)
 
+// FirstUserHookFn is called after the first user account is committed to the
+// database. entityID is the entity_id of the newly created natural person.
+// Errors are logged and ignored so that a bootstrap failure does not prevent
+// the OIDC login — the operator can create the grant manually.
+type FirstUserHookFn func(ctx context.Context, entityID int64) error
+
 // UserResolver resolves a Principal to a *UserContext. For OIDC principals it
 // auto-creates the user account on first sight; for locally-issued JWTs
 // (matching LocalIssuer) it takes a fast path that simply loads by UUID.
 type UserResolver struct {
-	pool        *pgxpool.Pool
-	queries     *db.Queries
-	coreQ       *coredb.Queries
-	adminRole   string
-	localIssuer string
-	uuidLookup  uuidLookupFn
+	pool          *pgxpool.Pool
+	queries       *db.Queries
+	coreQ         *coredb.Queries
+	adminRole     string
+	localIssuer   string
+	uuidLookup    uuidLookupFn
+	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
 }
 
 // NewUserResolver creates a resolver. localIssuer is the value written into
@@ -59,6 +66,12 @@ func NewUserResolver(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Quer
 		r.uuidLookup = queries.GetUserAccountByUUID
 	}
 	return r
+}
+
+// SetFirstUserHook registers a hook to be called after the first user account
+// is created and committed (OIDC auto-create path only). A nil fn clears the hook.
+func (r *UserResolver) SetFirstUserHook(fn FirstUserHookFn) {
+	r.firstUserHook = fn
 }
 
 // Resolve looks up or creates the user account associated with the given Principal.
@@ -213,6 +226,22 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 			"email", p.Email,
 			"user_account_uuid", ua.Uuid.String(),
 		)
+		// Bootstrap wildcard grant for the first user. Runs after commit so the
+		// entity row is visible to the hook's own transaction. A failure is logged
+		// and ignored — the account is created; an operator can grant manually.
+		if r.firstUserHook != nil {
+			if err := r.firstUserHook(ctx, entity.ID); err != nil {
+				slog.ErrorContext(ctx, "resolver: first-user hook failed; wildcard grant not created",
+					"entity_id", entity.ID,
+					"email", p.Email,
+					"error", err,
+				)
+			} else {
+				slog.InfoContext(ctx, "resolver: wildcard manage grant created for first user",
+					"entity_id", entity.ID,
+				)
+			}
+		}
 	}
 
 	return ua, nil

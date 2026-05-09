@@ -23,15 +23,23 @@ type Sender interface {
 	Send(ctx context.Context, to, subject, textBody string) error
 }
 
+// FirstUserHookFn is called after the first user account is committed to the
+// database. entityID is the entity_id of the newly created natural person.
+// Errors are logged and ignored so that a bootstrap failure does not roll back
+// the registration — the operator can create the grant manually. The hook runs
+// outside the registration transaction.
+type FirstUserHookFn func(ctx context.Context, entityID int64) error
+
 // Handler bundles dependencies for the local auth HTTP handlers.
 type Handler struct {
-	pool      *pgxpool.Pool
-	queries   *db.Queries
-	coreQ     *coredb.Queries
-	jwtSecret string
-	issuer    string
-	sender    Sender
-	guiBase   string
+	pool          *pgxpool.Pool
+	queries       *db.Queries
+	coreQ         *coredb.Queries
+	jwtSecret     string
+	issuer        string
+	sender        Sender
+	guiBase       string
+	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
 }
 
 // New constructs a Handler.
@@ -45,6 +53,13 @@ func New(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, jwtSecr
 		sender:    sender,
 		guiBase:   guiBase,
 	}
+}
+
+// SetFirstUserHook registers a hook to be called after the first user account
+// is created and committed. The hook receives the new entity's internal ID.
+// A nil fn is a no-op (clears any previously registered hook).
+func (h *Handler) SetFirstUserHook(fn FirstUserHookFn) {
+	h.firstUserHook = fn
 }
 
 // registerRequest is the body for POST /v1/auth/register.
@@ -175,6 +190,23 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "register: commit", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to commit transaction")
 		return
+	}
+
+	// Bootstrap wildcard grant for the first user. The hook runs after commit so
+	// that the entity row is visible to the hook's own transaction. A hook failure
+	// is logged and ignored — the account is already created; an operator can
+	// create the grant manually via POST /v1/authz/grants.
+	if isFirst && h.firstUserHook != nil {
+		if err := h.firstUserHook(r.Context(), entity.ID); err != nil {
+			slog.ErrorContext(r.Context(), "register: first-user hook failed; wildcard grant not created",
+				"entity_id", entity.ID,
+				"error", err,
+			)
+		} else {
+			slog.InfoContext(r.Context(), "register: wildcard manage grant created for first user",
+				"entity_id", entity.ID,
+			)
+		}
 	}
 
 	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email)

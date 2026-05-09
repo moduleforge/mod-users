@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -342,6 +343,28 @@ func main() {
 		emailSender,
 		cfg.Server.GUIBaseURL,
 	)
+
+	// Wire the first-user wildcard-grant bootstrap hook into both account-creation
+	// paths (local register and OIDC auto-create). When the very first user account
+	// is created, this hook issues a wildcard manage grant for that entity, making
+	// them a super-user via the grants table (replacing the old is_admin bootstrap).
+	//
+	// The hook runs after the account transaction commits, so the entity row is
+	// visible to the hook's own transaction. Failure is logged and non-fatal: the
+	// account already exists and an operator can create the grant manually via
+	// POST /v1/authz/grants.
+	firstUserHook := func(hookCtx context.Context, entityID int64) error {
+		ent, err := coredb.New(pool).GetEntityByID(hookCtx, entityID)
+		if err != nil {
+			return fmt.Errorf("first-user hook: resolve entity UUID: %w", err)
+		}
+		if _, err := authzSvcs.Grant.CreateWildcardGrant(hookCtx, ent.Uuid, "manage"); err != nil {
+			return fmt.Errorf("first-user hook: create wildcard grant: %w", err)
+		}
+		return nil
+	}
+	authHandler.SetFirstUserHook(firstUserHook)
+	resolver.SetFirstUserHook(firstUserHook)
 
 	// Build UserAccountService (service-layer logic extracted from handler in Phase F).
 	uaSvc := usersservice.NewUserAccountService(
