@@ -19,11 +19,13 @@ type Querier interface {
 	ClearSetupTokenHash(ctx context.Context) error
 	ConsumeEmailCode(ctx context.Context, id int64) error
 	ConsumePasswordReset(ctx context.Context, id int64) error
+	CountOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CreateApp(ctx context.Context, arg CreateAppParams) (App, error)
 	CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams) (EmailCode, error)
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
 	CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (UserAccount, error)
 	DeleteAuthLocal(ctx context.Context, userAccountID int64) error
+	DeleteOIDCIdentityByUUID(ctx context.Context, arg DeleteOIDCIdentityByUUIDParams) error
 	// Remove a provider override row. Used by the "revert" endpoint — after
 	// deletion the merge layer falls back to env + well-known defaults.
 	// Returns the number of rows deleted so the handler can distinguish
@@ -35,15 +37,17 @@ type Querier interface {
 	GetAppByUUID(ctx context.Context, argUuid uuid.UUID) (App, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (AuthLocal, error)
 	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
+	GetOIDCIdentityByIssuerSubject(ctx context.Context, arg GetOIDCIdentityByIssuerSubjectParams) (AuthOidcIdentity, error)
 	// Fetch one provider override row by id.
 	GetOIDCProvider(ctx context.Context, id string) (OidcProvider, error)
 	GetUserAccountByAccountHolder(ctx context.Context, accountHolder int64) (UserAccount, error)
-	GetUserAccountByAuth(ctx context.Context, arg GetUserAccountByAuthParams) (UserAccount, error)
 	GetUserAccountByEmail(ctx context.Context, lower string) (UserAccount, error)
 	GetUserAccountByID(ctx context.Context, id int64) (UserAccount, error)
 	GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (UserAccount, error)
+	InsertOIDCIdentity(ctx context.Context, arg InsertOIDCIdentityParams) (AuthOidcIdentity, error)
 	ListAppUserAccounts(ctx context.Context, appID int64) ([]AppsUserAccount, error)
 	ListApps(ctx context.Context) ([]App, error)
+	ListOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) ([]AuthOidcIdentity, error)
 	// Return every provider override row, sorted by id for stable output.
 	ListOIDCProviders(ctx context.Context) ([]OidcProvider, error)
 	ListUserAccountApps(ctx context.Context, userAccountID int64) ([]AppsUserAccount, error)
@@ -60,6 +64,7 @@ type Querier interface {
 	// Install or refresh the active setup-token hash; called once per boot
 	// when the state is unconfirmed and no hash is already present.
 	SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error
+	TouchOIDCIdentityLastSeen(ctx context.Context, id int64) error
 	UpdateApp(ctx context.Context, arg UpdateAppParams) error
 	// Persist the operator's opt-out choice (called from POST /v1/oidc-config/confirm).
 	// Per-provider enable flags live in the oidc_providers table and are

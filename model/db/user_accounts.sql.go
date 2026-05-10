@@ -14,28 +14,20 @@ import (
 )
 
 const createUserAccount = `-- name: CreateUserAccount :one
-INSERT INTO user_accounts (account_holder, email, email_verified_at, auth_issuer, auth_id)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO user_accounts (account_holder, email, email_verified_at)
+VALUES ($1, $2, $3)
 RETURNING id, uuid, account_holder, email, email_verified_at, default_app_id,
-          auth_issuer, auth_id, created_at, updated_at
+          created_at, updated_at
 `
 
 type CreateUserAccountParams struct {
-	AccountHolder   int64       `json:"account_holder"`
-	Email           string      `json:"email"`
-	EmailVerifiedAt *time.Time  `json:"email_verified_at"`
-	AuthIssuer      pgtype.Text `json:"auth_issuer"`
-	AuthID          pgtype.Text `json:"auth_id"`
+	AccountHolder   int64      `json:"account_holder"`
+	Email           string     `json:"email"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 }
 
 func (q *Queries) CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (UserAccount, error) {
-	row := q.db.QueryRow(ctx, createUserAccount,
-		arg.AccountHolder,
-		arg.Email,
-		arg.EmailVerifiedAt,
-		arg.AuthIssuer,
-		arg.AuthID,
-	)
+	row := q.db.QueryRow(ctx, createUserAccount, arg.AccountHolder, arg.Email, arg.EmailVerifiedAt)
 	var i UserAccount
 	err := row.Scan(
 		&i.ID,
@@ -44,8 +36,6 @@ func (q *Queries) CreateUserAccount(ctx context.Context, arg CreateUserAccountPa
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DefaultAppID,
-		&i.AuthIssuer,
-		&i.AuthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -54,7 +44,7 @@ func (q *Queries) CreateUserAccount(ctx context.Context, arg CreateUserAccountPa
 
 const getUserAccountByAccountHolder = `-- name: GetUserAccountByAccountHolder :one
 SELECT id, uuid, account_holder, email, email_verified_at, default_app_id,
-       auth_issuer, auth_id, created_at, updated_at
+       created_at, updated_at
 FROM user_accounts
 WHERE account_holder = $1
 `
@@ -69,38 +59,6 @@ func (q *Queries) GetUserAccountByAccountHolder(ctx context.Context, accountHold
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DefaultAppID,
-		&i.AuthIssuer,
-		&i.AuthID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getUserAccountByAuth = `-- name: GetUserAccountByAuth :one
-SELECT id, uuid, account_holder, email, email_verified_at, default_app_id,
-       auth_issuer, auth_id, created_at, updated_at
-FROM user_accounts
-WHERE auth_issuer = $1 AND auth_id = $2
-`
-
-type GetUserAccountByAuthParams struct {
-	AuthIssuer pgtype.Text `json:"auth_issuer"`
-	AuthID     pgtype.Text `json:"auth_id"`
-}
-
-func (q *Queries) GetUserAccountByAuth(ctx context.Context, arg GetUserAccountByAuthParams) (UserAccount, error) {
-	row := q.db.QueryRow(ctx, getUserAccountByAuth, arg.AuthIssuer, arg.AuthID)
-	var i UserAccount
-	err := row.Scan(
-		&i.ID,
-		&i.Uuid,
-		&i.AccountHolder,
-		&i.Email,
-		&i.EmailVerifiedAt,
-		&i.DefaultAppID,
-		&i.AuthIssuer,
-		&i.AuthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -109,7 +67,7 @@ func (q *Queries) GetUserAccountByAuth(ctx context.Context, arg GetUserAccountBy
 
 const getUserAccountByEmail = `-- name: GetUserAccountByEmail :one
 SELECT id, uuid, account_holder, email, email_verified_at, default_app_id,
-       auth_issuer, auth_id, created_at, updated_at
+       created_at, updated_at
 FROM user_accounts
 WHERE lower(email) = lower($1)
 `
@@ -124,8 +82,6 @@ func (q *Queries) GetUserAccountByEmail(ctx context.Context, lower string) (User
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DefaultAppID,
-		&i.AuthIssuer,
-		&i.AuthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -134,7 +90,7 @@ func (q *Queries) GetUserAccountByEmail(ctx context.Context, lower string) (User
 
 const getUserAccountByID = `-- name: GetUserAccountByID :one
 SELECT id, uuid, account_holder, email, email_verified_at, default_app_id,
-       auth_issuer, auth_id, created_at, updated_at
+       created_at, updated_at
 FROM user_accounts
 WHERE id = $1
 `
@@ -149,8 +105,6 @@ func (q *Queries) GetUserAccountByID(ctx context.Context, id int64) (UserAccount
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DefaultAppID,
-		&i.AuthIssuer,
-		&i.AuthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -159,7 +113,7 @@ func (q *Queries) GetUserAccountByID(ctx context.Context, id int64) (UserAccount
 
 const getUserAccountByUUID = `-- name: GetUserAccountByUUID :one
 SELECT id, uuid, account_holder, email, email_verified_at, default_app_id,
-       auth_issuer, auth_id, created_at, updated_at
+       created_at, updated_at
 FROM user_accounts
 WHERE uuid = $1
 `
@@ -174,8 +128,6 @@ func (q *Queries) GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (
 		&i.Email,
 		&i.EmailVerifiedAt,
 		&i.DefaultAppID,
-		&i.AuthIssuer,
-		&i.AuthID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -184,7 +136,7 @@ func (q *Queries) GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (
 
 const searchUserAccounts = `-- name: SearchUserAccounts :many
 SELECT id, uuid, account_holder, email, email_verified_at, default_app_id,
-       auth_issuer, auth_id, created_at, updated_at
+       created_at, updated_at
 FROM user_accounts
 WHERE ($1::text IS NULL OR lower(email) LIKE '%' || lower($1::text) || '%')
 ORDER BY created_at DESC
@@ -213,8 +165,6 @@ func (q *Queries) SearchUserAccounts(ctx context.Context, arg SearchUserAccounts
 			&i.Email,
 			&i.EmailVerifiedAt,
 			&i.DefaultAppID,
-			&i.AuthIssuer,
-			&i.AuthID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -247,27 +197,17 @@ func (q *Queries) SetDefaultApp(ctx context.Context, arg SetDefaultAppParams) er
 const updateUserAccount = `-- name: UpdateUserAccount :exec
 UPDATE user_accounts
 SET email = $2,
-    email_verified_at = $3,
-    auth_issuer = $4,
-    auth_id = $5
+    email_verified_at = $3
 WHERE id = $1
 `
 
 type UpdateUserAccountParams struct {
-	ID              int64       `json:"id"`
-	Email           string      `json:"email"`
-	EmailVerifiedAt *time.Time  `json:"email_verified_at"`
-	AuthIssuer      pgtype.Text `json:"auth_issuer"`
-	AuthID          pgtype.Text `json:"auth_id"`
+	ID              int64      `json:"id"`
+	Email           string     `json:"email"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 }
 
 func (q *Queries) UpdateUserAccount(ctx context.Context, arg UpdateUserAccountParams) error {
-	_, err := q.db.Exec(ctx, updateUserAccount,
-		arg.ID,
-		arg.Email,
-		arg.EmailVerifiedAt,
-		arg.AuthIssuer,
-		arg.AuthID,
-	)
+	_, err := q.db.Exec(ctx, updateUserAccount, arg.ID, arg.Email, arg.EmailVerifiedAt)
 	return err
 }

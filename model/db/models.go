@@ -35,6 +35,18 @@ type AuthLocal struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
+type AuthOidcIdentity struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	UserAccountID      int64              `json:"user_account_id"`
+	Issuer             string             `json:"issuer"`
+	Subject            string             `json:"subject"`
+	Email              pgtype.Text        `json:"email"`
+	EmailVerifiedAtIdp *time.Time         `json:"email_verified_at_idp"`
+	LinkedAt           pgtype.Timestamptz `json:"linked_at"`
+	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
+}
+
 type EmailCode struct {
 	ID            int64              `json:"id"`
 	UserAccountID int64              `json:"user_account_id"`
@@ -82,8 +94,6 @@ type UserAccount struct {
 	Email           string             `json:"email"`
 	EmailVerifiedAt *time.Time         `json:"email_verified_at"`
 	DefaultAppID    pgtype.Int8        `json:"default_app_id"`
-	AuthIssuer      pgtype.Text        `json:"auth_issuer"`
-	AuthID          pgtype.Text        `json:"auth_id"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
