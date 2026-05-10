@@ -4,6 +4,9 @@
 -- account_holder references legal_entities(entity_id), NOT entities(id), because
 -- only legal entities (natural_person, corporation) can hold user accounts.
 -- Service accounts (machines) cannot hold user accounts — the FK enforces this.
+--
+-- OIDC identity is stored in auth_oidc_identities (many per account); there is no
+-- single-slot auth_issuer/auth_id here.
 CREATE TABLE user_accounts (
   id                BIGSERIAL PRIMARY KEY,
   uuid              UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
@@ -11,17 +14,9 @@ CREATE TABLE user_accounts (
   email             TEXT NOT NULL UNIQUE,
   email_verified_at TIMESTAMPTZ,
   default_app_id    BIGINT CONSTRAINT user_accounts_default_app_fk REFERENCES apps(id) ON DELETE SET NULL,
-  auth_issuer       TEXT,
-  auth_id           TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- Compound partial unique index for OIDC identity lookup.
--- Partial: only enforced when both columns are non-null (local-only accounts have NULL).
-CREATE UNIQUE INDEX user_accounts_auth_idx
-  ON user_accounts(auth_issuer, auth_id)
-  WHERE auth_issuer IS NOT NULL AND auth_id IS NOT NULL;
 
 -- Case-insensitive email lookup for login and search.
 CREATE INDEX user_accounts_email_lower_idx ON user_accounts(lower(email));
