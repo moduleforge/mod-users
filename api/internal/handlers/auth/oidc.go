@@ -218,6 +218,11 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			h.redirectToFrontendError(w, r, "authentication_failed")
 			return
 		}
+		if errors.Is(err, localauth.ErrUnverifiedTakeover) {
+			slog.WarnContext(r.Context(), "oidc callback: unverified account takeover blocked", "provider", providerID)
+			h.redirectToFrontendError(w, r, "unverified_account_exists")
+			return
+		}
 		slog.ErrorContext(r.Context(), "oidc callback: resolve user internal error", "error", err, "provider", providerID)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "user resolution failed")
 		return

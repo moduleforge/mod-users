@@ -17,9 +17,10 @@ func (m *cognitoMapper) Map(rawClaims map[string]any) (Principal, error) {
 	roles := lowercaseAll(getStringSlice(rawClaims, "cognito:groups"))
 
 	return Principal{
-		Subject: sub,
-		Issuer:  iss,
-		Email:   getString(rawClaims, "email"),
-		Roles:   roles,
+		Subject:       sub,
+		Issuer:        iss,
+		Email:         getString(rawClaims, "email"),
+		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
+		Roles:         roles,
 	}, nil
 }

@@ -292,8 +292,6 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 			ID:              ua.ID,
 			Email:           newEmail,
 			EmailVerifiedAt: ua.EmailVerifiedAt,
-			AuthIssuer:      ua.AuthIssuer,
-			AuthID:          ua.AuthID,
 		}); err != nil {
 			return fmt.Errorf("user_accounts.Update update: %w", err)
 		}

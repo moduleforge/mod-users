@@ -189,8 +189,6 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		ID:              ua.ID,
 		Email:           ua.Email,
 		EmailVerifiedAt: &now,
-		AuthIssuer:      ua.AuthIssuer,
-		AuthID:          ua.AuthID,
 	})
 
 	w.WriteHeader(http.StatusNoContent)

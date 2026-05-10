@@ -54,9 +54,10 @@ func (m *microsoftMapper) Map(rawClaims map[string]any) (Principal, error) {
 	}
 
 	return Principal{
-		Subject: sub,
-		Issuer:  iss,
-		Email:   email,
-		Roles:   roles,
+		Subject:       sub,
+		Issuer:        iss,
+		Email:         email,
+		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
+		Roles:         roles,
 	}, nil
 }

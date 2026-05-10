@@ -15,9 +15,10 @@ func (m *googleMapper) Map(rawClaims map[string]any) (Principal, error) {
 	}
 
 	return Principal{
-		Subject: sub,
-		Issuer:  iss,
-		Email:   getString(rawClaims, "email"),
-		Roles:   nil, // Google does not embed roles in ID tokens
+		Subject:       sub,
+		Issuer:        iss,
+		Email:         getString(rawClaims, "email"),
+		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
+		Roles:         nil, // Google does not embed roles in ID tokens
 	}, nil
 }

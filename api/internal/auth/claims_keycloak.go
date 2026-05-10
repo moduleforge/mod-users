@@ -19,9 +19,10 @@ func (m *keycloakMapper) Map(rawClaims map[string]any) (Principal, error) {
 	roles := lowercaseAll(getNestedStringSlice(rawClaims, "realm_access", "roles"))
 
 	return Principal{
-		Subject: sub,
-		Issuer:  iss,
-		Email:   getString(rawClaims, "email"),
-		Roles:   roles,
+		Subject:       sub,
+		Issuer:        iss,
+		Email:         getString(rawClaims, "email"),
+		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
+		Roles:         roles,
 	}, nil
 }

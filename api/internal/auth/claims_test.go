@@ -390,6 +390,44 @@ func TestClaimMapper(t *testing.T) {
 	}
 }
 
+// TestEmailVerifiedClaim covers the bool/string/missing coercion for email_verified.
+func TestEmailVerifiedClaim(t *testing.T) {
+	type tc struct {
+		name          string
+		claimValue    any  // nil means absent
+		wantVerified  bool
+	}
+	cases := []tc{
+		{name: "bool_true", claimValue: true, wantVerified: true},
+		{name: "bool_false", claimValue: false, wantVerified: false},
+		{name: "string_true", claimValue: "true", wantVerified: true},
+		{name: "string_false", claimValue: "false", wantVerified: false},
+		{name: "missing", claimValue: nil, wantVerified: false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			claims := baseClaims()
+			claims["email"] = "user@example.com"
+			if tc.claimValue != nil {
+				claims["email_verified"] = tc.claimValue
+			}
+			// Use google mapper — simplest mapper that carries email_verified.
+			mapper, err := NewClaimMapper("google", MapperOptions{})
+			if err != nil {
+				t.Fatalf("NewClaimMapper: %v", err)
+			}
+			p, err := mapper.Map(claims)
+			if err != nil {
+				t.Fatalf("Map: %v", err)
+			}
+			if p.EmailVerified != tc.wantVerified {
+				t.Errorf("EmailVerified = %v, want %v", p.EmailVerified, tc.wantVerified)
+			}
+		})
+	}
+}
+
 // TestContextRoundTrip verifies the principal context helpers.
 func TestContextRoundTrip(t *testing.T) {
 	uc := &UserContext{

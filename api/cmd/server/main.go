@@ -131,7 +131,11 @@ func main() {
 
 	// Build the UserResolver up-front — both the onboarding
 	// AdminChecker and the post-auth /v1/* handlers need it.
-	resolver := auth.NewUserResolver(pool, queries, coreQueries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer)
+	// Build the UserResolver up-front. The observer group is wired in after
+	// it is constructed (see resolver.SetObserverGroup below). The resolver
+	// only fires events during request handling, which starts after all
+	// initialization completes, so the deferred wiring is safe.
+	resolver := auth.NewUserResolver(pool, queries, coreQueries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer, nil)
 
 	// az is declared here so the AdminChecker closure can close over it. It is
 	// assigned after opReg is built (further below). The closure only runs at
@@ -306,6 +310,10 @@ func main() {
 		return auditdb.New(tx)
 	})
 	observerGroup := observer.NewObserverGroup(auditObserver)
+
+	// Wire the observer group into the resolver now that it's available.
+	// Events (identity link, email verify) will be recorded in the audit log.
+	resolver.SetObserverGroup(observerGroup)
 
 	// Build audit-module's read service and HTTP handler. These serve
 	// GET /v1/audit, /v1/audit/by-actor/{uuid}, /v1/audit/by-entity/{entity_uuid}.

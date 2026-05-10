@@ -31,10 +31,11 @@ func (m *genericMapper) Map(rawClaims map[string]any) (Principal, error) {
 	sudoUserUUID, _ := rawClaims["sudo_user_uuid"].(string)
 
 	return Principal{
-		Subject:      sub,
-		Issuer:       iss,
-		Email:        email,
-		Roles:        roles,
-		SudoUserUUID: sudoUserUUID,
+		Subject:       sub,
+		Issuer:        iss,
+		Email:         email,
+		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
+		Roles:         roles,
+		SudoUserUUID:  sudoUserUUID,
 	}, nil
 }

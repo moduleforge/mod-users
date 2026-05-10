@@ -124,6 +124,23 @@ func lowercaseAll(ss []string) []string {
 	return out
 }
 
+// coerceBoolClaim reads key from claims and returns its boolean value.
+// It handles both native bool and string ("true"/"false") forms as produced
+// by different IdPs. Any other type or absent key returns false.
+func coerceBoolClaim(claims map[string]any, key string) bool {
+	v, ok := claims[key]
+	if !ok {
+		return false
+	}
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		return t == "true"
+	}
+	return false
+}
+
 // extractRequired pulls the mandatory OIDC "sub" and "iss" claims.
 // Returns an error if either is absent or empty.
 func extractRequired(claims map[string]any) (sub, iss string, err error) {

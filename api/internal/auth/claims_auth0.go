@@ -31,10 +31,11 @@ func (m *auth0Mapper) Map(rawClaims map[string]any) (Principal, error) {
 	roles := m.extractRoles(rawClaims)
 
 	return Principal{
-		Subject: sub,
-		Issuer:  iss,
-		Email:   getString(rawClaims, "email"),
-		Roles:   roles,
+		Subject:       sub,
+		Issuer:        iss,
+		Email:         getString(rawClaims, "email"),
+		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
+		Roles:         roles,
 	}, nil
 }
 

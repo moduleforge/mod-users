@@ -208,11 +208,18 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Trigger the verify_email flow so the new account has an immediate path to
+	// a verified status. sendEmailCode logs and swallows its own errors —
+	// the account is already created and the user can re-request the code via
+	// POST /v1/auth/email-code/request.
+	h.sendEmailCode(r, ua.Email, "verify_email")
+
 	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email)
 
 	server.JSON(w, http.StatusCreated, map[string]any{
-		"uuid":  ua.Uuid.String(),
-		"email": ua.Email,
+		"uuid":                      ua.Uuid.String(),
+		"email":                     ua.Email,
+		"email_verification_required": true,
 	})
 }
 
