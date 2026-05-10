@@ -1,6 +1,9 @@
 package auth
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Principal holds the normalized identity extracted from a verified JWT's claims.
 // It represents who the token says the bearer is, before any database lookup.
@@ -16,13 +19,14 @@ type Principal struct {
 // UserContext is the fully resolved in-process identity, populated after the
 // Principal has been matched against the user_accounts table.
 type UserContext struct {
-	UserAccountID int64
-	UserUUID      string
-	EntityID      int64
-	Email         string
-	AssumedUser   *AssumedUserInfo // non-nil while admin is assuming another user
-	AppID         *int64           // resolved app context
-	AppRoles      []string
+	UserAccountID   int64
+	UserUUID        string
+	EntityID        int64
+	Email           string
+	EmailVerifiedAt *time.Time       // nil when the account has not yet verified its email address
+	AssumedUser     *AssumedUserInfo // non-nil while admin is assuming another user
+	AppID           *int64           // resolved app context
+	AppRoles        []string
 }
 
 // AssumedUserInfo carries the identity of the user an admin is currently impersonating.

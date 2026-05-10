@@ -512,10 +512,11 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 
 func (r *UserResolver) buildUserContext(ua db.UserAccount, p Principal) *UserContext {
 	uc := &UserContext{
-		UserAccountID: ua.ID,
-		UserUUID:      ua.Uuid.String(),
-		EntityID:      ua.AccountHolder,
-		Email:         ua.Email,
+		UserAccountID:   ua.ID,
+		UserUUID:        ua.Uuid.String(),
+		EntityID:        ua.AccountHolder,
+		Email:           ua.Email,
+		EmailVerifiedAt: ua.EmailVerifiedAt,
 	}
 
 	if ua.DefaultAppID.Valid {

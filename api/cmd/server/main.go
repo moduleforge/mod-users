@@ -505,63 +505,71 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth(verifier, localMapper, resolver))
 
-			// /v1/self — composed identity endpoint owned by users-module
-			// (uses core's EntityService.GetSelf internally for the entity portion).
+			// GET /v1/self bypasses the email-verification gate. The GUI uses
+			// this endpoint to render the "verify your email" page, so it must
+			// be reachable to unverified accounts.
 			r.Get("/self", selfHandler.Get)
-			r.Put("/self", selfHandler.Put)
 
-			// Core entity CRUD: /v1/entities/natural-persons, /corporations, etc.
-			r.Mount("/", coreRouter)
+			// Everything else requires a verified email address.
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequireVerifiedEmail)
 
-			// Assume identity (admin).
-			r.Delete("/assume", assumeHandler.EndAssume)
+				// PUT /v1/self — update own profile (verified accounts only).
+				r.Put("/self", selfHandler.Put)
 
-			// Audit log endpoints (admin-only). Authorization is enforced at the
-			// service layer by the Authorizer. URL change from the deprecated
-			// /v1/user-accounts/{uuid}/audit to audit-module's canonical shape:
-			//   GET /v1/audit                        — ListRecent (admin)
-			//   GET /v1/audit/by-actor/{uuid}        — entries where uuid is the actor
-			//   GET /v1/audit/by-entity/{entity_uuid} — entries where uuid is the target
-			r.Route("/audit", func(r chi.Router) {
-				audithttpapi.RegisterRoutes(r, auditHandler)
+				// Core entity CRUD: /v1/entities/natural-persons, /corporations, etc.
+				r.Mount("/", coreRouter)
+
+				// Assume identity (admin).
+				r.Delete("/assume", assumeHandler.EndAssume)
+
+				// Audit log endpoints (admin-only). Authorization is enforced at the
+				// service layer by the Authorizer. URL change from the deprecated
+				// /v1/user-accounts/{uuid}/audit to audit-module's canonical shape:
+				//   GET /v1/audit                        — ListRecent (admin)
+				//   GET /v1/audit/by-actor/{uuid}        — entries where uuid is the actor
+				//   GET /v1/audit/by-entity/{entity_uuid} — entries where uuid is the target
+				r.Route("/audit", func(r chi.Router) {
+					audithttpapi.RegisterRoutes(r, auditHandler)
+				})
+
+				// Authz management endpoints. Authorization is enforced at the
+				// service layer via Authorize("manage", nil). Routes:
+				//   /v1/authz/operations — CRUD for operation definitions
+				//   /v1/authz/actor-groups — CRUD + member management for actor groups
+				//   /v1/authz/target-groups — CRUD + member management for target groups
+				//   /v1/authz/grants — create / list / get / revoke grants
+				r.Route("/authz", func(r chi.Router) {
+					authzhttpapi.RegisterRoutes(r, authzSvcs)
+				})
+
+				// User account management. Authorization is enforced at the service
+				// layer: list/create require wildcard admin; get/update/delete enforce
+				// per-entity authorization. RequireAdmin middleware has been removed;
+				// the Authorizer is the sole gate.
+				r.Get("/user-accounts", usersHandler.List)
+				r.Post("/user-accounts", usersHandler.Create)
+				r.Get("/user-accounts/{uuid}", usersHandler.Get)
+				r.Put("/user-accounts/{uuid}", usersHandler.Update)
+				r.Delete("/user-accounts/{uuid}", usersHandler.Delete)
+				r.Post("/user-accounts/{uuid}/grant-admin", usersHandler.GrantAdmin)
+				r.Post("/user-accounts/{uuid}/revoke-admin", usersHandler.RevokeAdmin)
+				r.Post("/user-accounts/{uuid}/assume", assumeHandler.Assume)
+
+				// Apps (multi-tenancy). Authorization is enforced at the handler layer
+				// via Authorize calls; RequireAdmin middleware has been removed.
+				r.Post("/apps", appsHandler.Create)
+				r.Get("/apps", appsHandler.List)
+				r.Get("/apps/{uuid}", appsHandler.GetApp)
+				r.Put("/apps/{uuid}", appsHandler.UpdateApp)
+				r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
+
+				// Apps user-accounts.
+				r.Post("/apps/{uuid}/user-accounts", appsHandler.AssignUser)
+				r.Get("/apps/{uuid}/user-accounts", appsHandler.ListAppUsers)
+				r.Delete("/apps/{uuid}/user-accounts/{user_account_uuid}", appsHandler.RemoveUser)
+				r.Put("/apps/{uuid}/user-accounts/{user_account_uuid}/roles", appsHandler.UpdateUserRoles)
 			})
-
-			// Authz management endpoints. Authorization is enforced at the
-			// service layer via Authorize("manage", nil). Routes:
-			//   /v1/authz/operations — CRUD for operation definitions
-			//   /v1/authz/actor-groups — CRUD + member management for actor groups
-			//   /v1/authz/target-groups — CRUD + member management for target groups
-			//   /v1/authz/grants — create / list / get / revoke grants
-			r.Route("/authz", func(r chi.Router) {
-				authzhttpapi.RegisterRoutes(r, authzSvcs)
-			})
-
-			// User account management. Authorization is enforced at the service
-			// layer: list/create require wildcard admin; get/update/delete enforce
-			// per-entity authorization. RequireAdmin middleware has been removed;
-			// the Authorizer is the sole gate.
-			r.Get("/user-accounts", usersHandler.List)
-			r.Post("/user-accounts", usersHandler.Create)
-			r.Get("/user-accounts/{uuid}", usersHandler.Get)
-			r.Put("/user-accounts/{uuid}", usersHandler.Update)
-			r.Delete("/user-accounts/{uuid}", usersHandler.Delete)
-			r.Post("/user-accounts/{uuid}/grant-admin", usersHandler.GrantAdmin)
-			r.Post("/user-accounts/{uuid}/revoke-admin", usersHandler.RevokeAdmin)
-			r.Post("/user-accounts/{uuid}/assume", assumeHandler.Assume)
-
-			// Apps (multi-tenancy). Authorization is enforced at the handler layer
-			// via Authorize calls; RequireAdmin middleware has been removed.
-			r.Post("/apps", appsHandler.Create)
-			r.Get("/apps", appsHandler.List)
-			r.Get("/apps/{uuid}", appsHandler.GetApp)
-			r.Put("/apps/{uuid}", appsHandler.UpdateApp)
-			r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
-
-			// Apps user-accounts.
-			r.Post("/apps/{uuid}/user-accounts", appsHandler.AssignUser)
-			r.Get("/apps/{uuid}/user-accounts", appsHandler.ListAppUsers)
-			r.Delete("/apps/{uuid}/user-accounts/{user_account_uuid}", appsHandler.RemoveUser)
-			r.Put("/apps/{uuid}/user-accounts/{user_account_uuid}/roles", appsHandler.UpdateUserRoles)
 		})
 	})
 
