@@ -24,6 +24,12 @@ type StatePayload struct {
 	// test-result URL instead. Zero-value (false) keeps back-compat
 	// with state cookies minted before 9.18.
 	TestMode bool `json:"t,omitempty"`
+	// LinkMode is true when the state was minted by a link-mode start
+	// (POST /v1/self/identities/oidc/{provider}/start). The callback
+	// handler skips UserResolver and instead inserts a new identity row
+	// for the authenticated user identified by LinkUserAccountID.
+	LinkMode          bool   `json:"lm,omitempty"`
+	LinkUserAccountID string `json:"luid,omitempty"` // user_account UUID; set iff LinkMode
 }
 
 // Expired reports whether the payload's expiry is in the past.

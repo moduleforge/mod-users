@@ -3,13 +3,20 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moduleforge/core-api/observer"
 	localauth "github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/config"
 	"github.com/moduleforge/users-module/api/internal/server"
@@ -52,11 +59,13 @@ type loginRecorder interface {
 // code start/callback round trip. It holds its own copies of the resolver
 // and the OAuth orchestrator so the main router wiring stays simple.
 type OIDCHandler struct {
+	pool     *pgxpool.Pool
 	queries  *db.Queries
 	oauth    *localauth.OAuth
 	resolver userResolver
 	userSvc  loginRecorder
 	cfg      *config.Config
+	obs      *observer.ObserverGroup // nil-safe; may be nil in tests
 }
 
 // NewOIDCHandler wires up the handler with everything it needs. All fields
@@ -68,6 +77,21 @@ func NewOIDCHandler(queries *db.Queries, oauth *localauth.OAuth, resolver userRe
 		resolver: resolver,
 		userSvc:  userSvc,
 		cfg:      cfg,
+	}
+}
+
+// NewOIDCHandlerWithPool constructs an OIDCHandler with a pool and observer
+// group for the link-mode callback path. Use this in production; the pool-less
+// NewOIDCHandler is retained for tests that cover paths before link-mode.
+func NewOIDCHandlerWithPool(pool *pgxpool.Pool, queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, userSvc loginRecorder, cfg *config.Config, obs *observer.ObserverGroup) *OIDCHandler {
+	return &OIDCHandler{
+		pool:     pool,
+		queries:  queries,
+		oauth:    oauth,
+		resolver: resolver,
+		userSvc:  userSvc,
+		cfg:      cfg,
+		obs:      obs,
 	}
 }
 
@@ -203,6 +227,13 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Link-mode branch: the state carries an existing user account UUID.
+	// Skip UserResolver; insert a new identity row instead.
+	if statePayload.LinkMode {
+		h.handleLinkMode(w, r, providerID, principal, statePayload)
+		return
+	}
+
 	if principal.Email == "" {
 		// Without an email we can't link to or create a user record. This is
 		// almost always a scope misconfiguration on the IdP side.
@@ -319,6 +350,158 @@ func (h *OIDCHandler) redirectToTestResult(
 	q.Set("test_provider", providerID)
 	u.RawQuery = q.Encode()
 	http.Redirect(w, r, u.String(), http.StatusFound)
+}
+
+// handleLinkMode processes an OIDC callback that was initiated in link mode
+// (i.e. statePayload.LinkMode == true). It inserts a new identity row for the
+// user identified by statePayload.LinkUserAccountID without going through
+// UserResolver. The three outcomes are:
+//
+//  1. (issuer, subject) already belongs to the same account → idempotent success.
+//  2. (issuer, subject) belongs to a different account → redirect with identity_in_use.
+//  3. No existing row → insert and redirect with ?linked=1.
+func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, providerID string, principal localauth.Principal, statePayload localauth.StatePayload) {
+	ctx := r.Context()
+
+	// Resolve the user account from the state-embedded UUID.
+	accountUUID, err := uuid.Parse(statePayload.LinkUserAccountID)
+	if err != nil {
+		slog.WarnContext(ctx, "oidc link-mode: invalid user account UUID in state", "error", err)
+		h.redirectToFrontendError(w, r, "authentication_failed")
+		return
+	}
+
+	ua, err := h.queries.GetUserAccountByUUID(ctx, accountUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Token is valid but the account has been deleted since start.
+			h.redirectToFrontendError(w, r, "authentication_failed")
+		} else {
+			slog.ErrorContext(ctx, "oidc link-mode: load user account", "error", err)
+			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
+		}
+		return
+	}
+
+	entityID := ua.AccountHolder
+
+	// Check if this (issuer, subject) is already linked anywhere.
+	existing, err := h.queries.GetOIDCIdentityByIssuerSubject(ctx, db.GetOIDCIdentityByIssuerSubjectParams{
+		Issuer:  principal.Issuer,
+		Subject: principal.Subject,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		slog.ErrorContext(ctx, "oidc link-mode: lookup identity by issuer/subject", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "identity lookup failed")
+		return
+	}
+
+	if err == nil {
+		// Identity already exists somewhere.
+		if existing.UserAccountID == ua.ID {
+			// Idempotent: already linked to the same account — touch and redirect.
+			if touchErr := h.queries.TouchOIDCIdentityLastSeen(ctx, existing.ID); touchErr != nil {
+				slog.WarnContext(ctx, "oidc link-mode: touch last_seen_at", "error", touchErr)
+			}
+			h.redirectToLinkSuccess(w, r, statePayload.ReturnPath)
+			return
+		}
+		// Conflict: identity belongs to a different account.
+		slog.WarnContext(ctx, "oidc link-mode: identity already linked to different account",
+			"provider", providerID,
+			"user_account_uuid", accountUUID.String(),
+		)
+		h.redirectToFrontendError(w, r, "identity_in_use")
+		return
+	}
+
+	// No existing row — insert it in a transaction with the observer.
+	var emailVerifiedAt *time.Time
+	if principal.EmailVerified {
+		now := time.Now()
+		emailVerifiedAt = &now
+	}
+
+	var insertedUUID string
+	tx, txErr := h.pool.Begin(ctx)
+	if txErr != nil {
+		slog.ErrorContext(ctx, "oidc link-mode: begin tx", "error", txErr)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to begin transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := h.queries.WithTx(tx)
+	identity, insertErr := qtx.InsertOIDCIdentity(ctx, db.InsertOIDCIdentityParams{
+		UserAccountID:      ua.ID,
+		Issuer:             principal.Issuer,
+		Subject:            principal.Subject,
+		Email:              pgtype.Text{String: principal.Email, Valid: principal.Email != ""},
+		EmailVerifiedAtIdp: emailVerifiedAt,
+	})
+	if insertErr != nil {
+		slog.ErrorContext(ctx, "oidc link-mode: insert identity", "error", insertErr)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to link identity")
+		return
+	}
+	insertedUUID = identity.Uuid.String()
+
+	after := map[string]any{
+		"uuid":   insertedUUID,
+		"issuer": principal.Issuer,
+	}
+	if obsErr := h.safeObserve(ctx, tx, "link", "auth_oidc_identity", &entityID, nil, after); obsErr != nil {
+		slog.ErrorContext(ctx, "oidc link-mode: observe link", "error", obsErr)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to record identity link")
+		return
+	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		slog.ErrorContext(ctx, "oidc link-mode: commit", "error", fmt.Errorf("commit: %w", commitErr))
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to commit identity link")
+		return
+	}
+
+	h.safeObserveAfterCommit(ctx, "link", "auth_oidc_identity", &entityID, after)
+
+	slog.InfoContext(ctx, "oidc link-mode: identity linked",
+		"provider", providerID,
+		"user_account_uuid", accountUUID.String(),
+		"identity_uuid", insertedUUID,
+	)
+	h.redirectToLinkSuccess(w, r, statePayload.ReturnPath)
+}
+
+// redirectToLinkSuccess 302s to the frontend with ?linked=1.
+func (h *OIDCHandler) redirectToLinkSuccess(w http.ResponseWriter, r *http.Request, returnPath string) {
+	u, err := url.Parse(h.oauth.FrontendReturnURL)
+	if err != nil {
+		server.Error(w, http.StatusInternalServerError, "internal_error", "identity linked but redirect failed")
+		return
+	}
+	q := u.Query()
+	q.Set("linked", "1")
+	if returnPath != "" {
+		q.Set("return", returnPath)
+	}
+	u.RawQuery = q.Encode()
+	http.Redirect(w, r, u.String(), http.StatusFound)
+}
+
+// safeObserve calls obs.Observe only when h.obs is non-nil.
+func (h *OIDCHandler) safeObserve(ctx context.Context, tx pgx.Tx, op, resource string, targetEntityID *int64, before, after any) error {
+	if h.obs == nil {
+		return nil
+	}
+	return h.obs.Observe(ctx, tx, op, resource, targetEntityID, before, after)
+}
+
+// safeObserveAfterCommit calls obs.ObserveAfterCommit only when h.obs is non-nil.
+func (h *OIDCHandler) safeObserveAfterCommit(ctx context.Context, op, resource string, targetEntityID *int64, after any) {
+	if h.obs == nil {
+		return
+	}
+	h.obs.ObserveAfterCommit(ctx, op, resource, targetEntityID, after)
 }
 
 // newStateCookie builds the oidc_state cookie with the security attributes

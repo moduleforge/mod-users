@@ -437,6 +437,44 @@ func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool) (auth
 	return authURL, token, nil
 }
 
+// LinkAuthorizeURL builds an OIDC authorization URL for a link-mode flow.
+// It is identical to AuthorizeURL but sets LinkMode=true and
+// LinkUserAccountID=userAccountUUID in the state payload so the callback can
+// insert a new identity row for the already-authenticated user rather than
+// resolving or creating an account.
+func (o *OAuth) LinkAuthorizeURL(providerID, userAccountUUID, returnPath string) (authorizeURL, stateToken string, err error) {
+	s, err := o.stateByID(providerID)
+	if err != nil {
+		return "", "", err
+	}
+
+	returnPath, err = validateReturnPath(returnPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	nonce, err := randomBase64(32)
+	if err != nil {
+		return "", "", err
+	}
+
+	payload := StatePayload{
+		Provider:          providerID,
+		ReturnPath:        returnPath,
+		Nonce:             nonce,
+		Expires:           time.Now().Add(stateTTL).Unix(),
+		LinkMode:          true,
+		LinkUserAccountID: userAccountUUID,
+	}
+	token, err := o.StateSigner.Sign(payload)
+	if err != nil {
+		return "", "", err
+	}
+
+	authURL := s.OAuthCfg.AuthCodeURL(token, oidc.Nonce(nonce))
+	return authURL, token, nil
+}
+
 // Exchange verifies the state parameter, trades the authorization code for
 // tokens at the provider's token endpoint, validates the resulting id_token,
 // and returns a normalized Principal plus the recovered state payload (so

@@ -402,7 +402,7 @@ func main() {
 		auth.HashPassword,
 	)
 
-	oidcHandler := authhandlers.NewOIDCHandler(queries, oauth, resolver, uaSvc, cfg)
+	oidcHandler := authhandlers.NewOIDCHandlerWithPool(pool, queries, oauth, resolver, uaSvc, cfg, observerGroup)
 
 	// grantAdmin creates a wildcard manage grant for a user account, checked and
 	// issued at the composition root to avoid a direct peer dependency in handlers/.
@@ -441,6 +441,9 @@ func main() {
 		}
 		return authzSvcs.Grant.DeleteWildcardGrant(ctx, ent.Uuid, "manage")
 	})
+
+	// Identities handler — identity-management self-service (Phase 4).
+	identitiesHandler := handlers.NewIdentitiesHandler(pool, queries, oauth, observerGroup)
 
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
@@ -516,6 +519,13 @@ func main() {
 
 				// PUT /v1/self — update own profile (verified accounts only).
 				r.Put("/self", selfHandler.Put)
+
+				// Identity-management self-service (Phase 4).
+				r.Get("/self/identities", identitiesHandler.List)
+				r.Post("/self/identities/oidc/{provider}/start", identitiesHandler.StartLink)
+				r.Delete("/self/identities/{identity_uuid}", identitiesHandler.Unlink)
+				r.Post("/self/credential/password", identitiesHandler.SetPassword)
+				r.Delete("/self/credential/password", identitiesHandler.RemovePassword)
 
 				// Core entity CRUD: /v1/entities/natural-persons, /corporations, etc.
 				r.Mount("/", coreRouter)
