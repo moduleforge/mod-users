@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/go-chi/chi/v5"
@@ -443,7 +444,22 @@ func main() {
 	})
 
 	// Identities handler — identity-management self-service (Phase 4).
-	identitiesHandler := handlers.NewIdentitiesHandler(pool, queries, oauth, observerGroup)
+	// When AUTH_REQUIRE_STEP_UP is enabled, the handler is wired with email
+	// sending and JWT signing so it can issue step-up tokens. The consumed-JTI
+	// cache and its janitor goroutine are started here and live for the
+	// process lifetime.
+	stepUpConsumed := new(sync.Map)
+	auth.StartStepUpJanitor(stepUpConsumed, ctx.Done())
+	identitiesHandler := handlers.NewIdentitiesHandlerWithDeps(handlers.IdentitiesHandlerDeps{
+		Pool:           pool,
+		Queries:        queries,
+		OAuth:          oauth,
+		Obs:            observerGroup,
+		Sender:         emailSender,
+		JWTSecret:      cfg.LocalAuth.JWTSecret,
+		Consumed:       stepUpConsumed,
+		StepUpRequired: cfg.Auth.RequireStepUpForCredentialChange,
+	})
 
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
@@ -526,6 +542,12 @@ func main() {
 				r.Delete("/self/identities/{identity_uuid}", identitiesHandler.Unlink)
 				r.Post("/self/credential/password", identitiesHandler.SetPassword)
 				r.Delete("/self/credential/password", identitiesHandler.RemovePassword)
+
+				// Step-up challenge (Phase 4, Task 5). Mounted regardless of whether
+				// AUTH_REQUIRE_STEP_UP is on — the endpoint must be reachable so the
+				// GUI can drive the flow after receiving a 409 step_up_required.
+				r.Post("/self/credential/step-up", identitiesHandler.StepUpRequest)
+				r.Post("/self/credential/step-up/verify", identitiesHandler.StepUpVerify)
 
 				// Core entity CRUD: /v1/entities/natural-persons, /corporations, etc.
 				r.Mount("/", coreRouter)

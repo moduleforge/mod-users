@@ -108,6 +108,13 @@ type AuthConfig struct {
 	// "<OAuthRedirectBaseURL>/v1/auth/oidc/{provider}/callback".
 	// Required when any provider is enabled.
 	OAuthRedirectBaseURL string
+
+	// RequireStepUpForCredentialChange gates every credential-mutating endpoint
+	// (POST/DELETE password, DELETE OIDC identity, POST link-mode start) behind
+	// a short-lived step-up token obtained via POST /v1/self/credential/step-up
+	// + /verify. Default is false (off). Set AUTH_REQUIRE_STEP_UP=true|1|yes
+	// to enable bank-style "prove you still own this email" enforcement.
+	RequireStepUpForCredentialChange bool
 }
 
 // ServerConfig holds HTTP server settings.
@@ -248,9 +255,10 @@ func Load() (*Config, error) {
 			MaxConnIdleTime: maxConnIdleTime,
 		},
 		Auth: AuthConfig{
-			AdminRole:            getEnv("AUTH_ADMIN_ROLE", "admin"),
-			FrontendReturnURL:    os.Getenv("AUTH_FRONTEND_RETURN_URL"),
-			OAuthRedirectBaseURL: os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
+			AdminRole:                        getEnv("AUTH_ADMIN_ROLE", "admin"),
+			FrontendReturnURL:                os.Getenv("AUTH_FRONTEND_RETURN_URL"),
+			OAuthRedirectBaseURL:             os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
+			RequireStepUpForCredentialChange: parseBoolEnv(os.Getenv("AUTH_REQUIRE_STEP_UP")),
 		},
 		Providers: registry,
 		Server: ServerConfig{
@@ -349,6 +357,17 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// parseBoolEnv accepts "1", "true", "yes" (case-insensitive) as truthy.
+// Anything else — including empty — is false.
+func parseBoolEnv(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
 }
 
 // parseDuration reads key from the environment and parses it as a
