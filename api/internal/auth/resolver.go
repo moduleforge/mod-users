@@ -169,7 +169,7 @@ func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, 
 			}
 			return nil, fmt.Errorf("auth: lookup local user account by uuid: %w", err)
 		}
-		return r.buildUserContext(ua, p), nil
+		return r.buildUserContext(ctx, ua, p), nil
 	}
 
 	// Branch 1: identity row already exists for (issuer, subject).
@@ -204,7 +204,7 @@ func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, 
 				}
 				return nil, fmt.Errorf("auth: load user account for existing identity: %w", loadErr)
 			}
-			return r.buildUserContext(ua, p), nil
+			return r.buildUserContext(ctx, ua, p), nil
 		}
 		if !errors.Is(identErr, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("auth: lookup oidc identity: %w", identErr)
@@ -235,7 +235,7 @@ func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, 
 				if linkErr != nil {
 					return nil, fmt.Errorf("auth: branch 2 link identity: %w", linkErr)
 				}
-				return r.buildUserContext(ua, p), nil
+				return r.buildUserContext(ctx, ua, p), nil
 			}
 
 			// Account is not yet verified.
@@ -259,7 +259,7 @@ func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, 
 				if vlErr != nil {
 					return nil, fmt.Errorf("auth: branch 3 reload user account: %w", vlErr)
 				}
-				return r.buildUserContext(ua, p), nil
+				return r.buildUserContext(ctx, ua, p), nil
 			}
 
 			// Branch 4: unverified account, IdP also unverified → block.
@@ -281,7 +281,7 @@ func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, 
 	if createErr != nil {
 		return nil, fmt.Errorf("auth: auto-create user account: %w", createErr)
 	}
-	return r.buildUserContext(ua, p), nil
+	return r.buildUserContext(ctx, ua, p), nil
 }
 
 // linkIdentity inserts a new auth_oidc_identities row for an existing account.
@@ -316,7 +316,7 @@ func (r *UserResolver) linkIdentity(ctx context.Context, ua db.UserAccount, p Pr
 		"uuid":   identity.Uuid.String(),
 		"issuer": p.Issuer,
 	}
-	if err := r.safeObserve(ctx, tx, "link", "auth_oidc_identity", &entityID, nil, after); err != nil {
+	if err := r.safeObserve(ctx, tx, "create", "auth_oidc_identity", &entityID, nil, after); err != nil {
 		return err
 	}
 
@@ -324,7 +324,7 @@ func (r *UserResolver) linkIdentity(ctx context.Context, ua db.UserAccount, p Pr
 		return fmt.Errorf("commit: %w", err)
 	}
 
-	r.safeObserveAfterCommit(ctx, "link", "auth_oidc_identity", &entityID, after)
+	r.safeObserveAfterCommit(ctx, "create", "auth_oidc_identity", &entityID, after)
 	return nil
 }
 
@@ -363,11 +363,15 @@ func (r *UserResolver) verifyAndLink(ctx context.Context, ua db.UserAccount, p P
 		return fmt.Errorf("insert oidc identity: %w", err)
 	}
 
+	verifyBefore := map[string]any{
+		"uuid":              ua.Uuid.String(),
+		"email_verified_at": nil,
+	}
 	verifyAfter := map[string]any{
 		"uuid":              ua.Uuid.String(),
 		"email_verified_at": now,
 	}
-	if err := r.safeObserve(ctx, tx, "verify", "email", &entityID, nil, verifyAfter); err != nil {
+	if err := r.safeObserve(ctx, tx, "update", "user_account", &entityID, verifyBefore, verifyAfter); err != nil {
 		return err
 	}
 
@@ -375,7 +379,7 @@ func (r *UserResolver) verifyAndLink(ctx context.Context, ua db.UserAccount, p P
 		"uuid":   identity.Uuid.String(),
 		"issuer": p.Issuer,
 	}
-	if err := r.safeObserve(ctx, tx, "link", "auth_oidc_identity", &entityID, nil, linkAfter); err != nil {
+	if err := r.safeObserve(ctx, tx, "create", "auth_oidc_identity", &entityID, nil, linkAfter); err != nil {
 		return err
 	}
 
@@ -383,8 +387,8 @@ func (r *UserResolver) verifyAndLink(ctx context.Context, ua db.UserAccount, p P
 		return fmt.Errorf("commit: %w", err)
 	}
 
-	r.safeObserveAfterCommit(ctx, "verify", "email", &entityID, verifyAfter)
-	r.safeObserveAfterCommit(ctx, "link", "auth_oidc_identity", &entityID, linkAfter)
+	r.safeObserveAfterCommit(ctx, "update", "user_account", &entityID, verifyAfter)
+	r.safeObserveAfterCommit(ctx, "create", "auth_oidc_identity", &entityID, linkAfter)
 	return nil
 }
 
@@ -463,25 +467,60 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 	}
 
 	// Insert identity row in the same transaction.
-	if p.Issuer != "" && p.Subject != "" {
+	var insertedIdentity db.AuthOidcIdentity
+	hasIdentity := p.Issuer != "" && p.Subject != ""
+	if hasIdentity {
 		var idpVerifiedAt *time.Time
 		if p.EmailVerified {
 			t := time.Now()
 			idpVerifiedAt = &t
 		}
-		if _, err := qtx.InsertOIDCIdentity(ctx, db.InsertOIDCIdentityParams{
+		var err error
+		insertedIdentity, err = qtx.InsertOIDCIdentity(ctx, db.InsertOIDCIdentityParams{
 			UserAccountID:      ua.ID,
 			Issuer:             p.Issuer,
 			Subject:            p.Subject,
 			Email:              pgtype.Text{String: p.Email, Valid: p.Email != ""},
 			EmailVerifiedAtIdp: idpVerifiedAt,
-		}); err != nil {
+		})
+		if err != nil {
 			return ua, fmt.Errorf("insert oidc identity: %w", err)
+		}
+	}
+
+	entityID := ua.AccountHolder
+
+	accountAfter := map[string]any{
+		"uuid":              ua.Uuid.String(),
+		"email":             ua.Email,
+		"email_verified_at": ua.EmailVerifiedAt,
+	}
+	if err := r.safeObserve(ctx, tx, "create", "user_account", &entityID, nil, accountAfter); err != nil {
+		return ua, err
+	}
+
+	if hasIdentity {
+		identityAfter := map[string]any{
+			"uuid":    insertedIdentity.Uuid.String(),
+			"issuer":  p.Issuer,
+			"subject": p.Subject,
+		}
+		if err := r.safeObserve(ctx, tx, "create", "auth_oidc_identity", &entityID, nil, identityAfter); err != nil {
+			return ua, err
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return ua, fmt.Errorf("commit: %w", err)
+	}
+
+	r.safeObserveAfterCommit(ctx, "create", "user_account", &entityID, accountAfter)
+	if hasIdentity {
+		r.safeObserveAfterCommit(ctx, "create", "auth_oidc_identity", &entityID, map[string]any{
+			"uuid":    insertedIdentity.Uuid.String(),
+			"issuer":  p.Issuer,
+			"subject": p.Subject,
+		})
 	}
 
 	if isFirstUser {
@@ -510,7 +549,7 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 	return ua, nil
 }
 
-func (r *UserResolver) buildUserContext(ua db.UserAccount, p Principal) *UserContext {
+func (r *UserResolver) buildUserContext(ctx context.Context, ua db.UserAccount, p Principal) *UserContext {
 	uc := &UserContext{
 		UserAccountID:   ua.ID,
 		UserUUID:        ua.Uuid.String(),
@@ -529,7 +568,7 @@ func (r *UserResolver) buildUserContext(ua db.UserAccount, p Principal) *UserCon
 	// session has degraded to a normal session, which is safe).
 	if p.SudoUserUUID != "" && r.queries != nil {
 		if sudoUUID, err := uuid.Parse(p.SudoUserUUID); err == nil {
-			if sudoUA, err := r.queries.GetUserAccountByUUID(context.Background(), sudoUUID); err == nil {
+			if sudoUA, err := r.queries.GetUserAccountByUUID(ctx, sudoUUID); err == nil {
 				uc.AssumedUser = &AssumedUserInfo{
 					UserAccountID: sudoUA.ID,
 					UserUUID:      sudoUA.Uuid.String(),

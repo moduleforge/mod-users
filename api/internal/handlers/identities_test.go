@@ -83,11 +83,11 @@ func (f *fakeQueries) CountOIDCIdentitiesByUserAccount(_ context.Context, _ int6
 	return int64(len(f.oidcIdentities)), nil
 }
 
-func (f *fakeQueries) DeleteOIDCIdentityByUUID(_ context.Context, arg db.DeleteOIDCIdentityByUUIDParams) error {
+func (f *fakeQueries) DeleteOIDCIdentityByUUID(_ context.Context, arg db.DeleteOIDCIdentityByUUIDParams) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.deleteOIDCErr != nil {
-		return f.deleteOIDCErr
+		return 0, f.deleteOIDCErr
 	}
 	f.deletedOIDCUUID = &arg.Uuid
 	// Remove from list to reflect state change for concurrent-safe tests.
@@ -97,8 +97,9 @@ func (f *fakeQueries) DeleteOIDCIdentityByUUID(_ context.Context, arg db.DeleteO
 			filtered = append(filtered, id)
 		}
 	}
+	deleted := int64(len(f.oidcIdentities) - len(filtered))
 	f.oidcIdentities = filtered
-	return nil
+	return deleted, nil
 }
 
 func (f *fakeQueries) DeleteAuthLocal(_ context.Context, _ int64) error {

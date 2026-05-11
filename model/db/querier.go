@@ -25,7 +25,7 @@ type Querier interface {
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
 	CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (UserAccount, error)
 	DeleteAuthLocal(ctx context.Context, userAccountID int64) error
-	DeleteOIDCIdentityByUUID(ctx context.Context, arg DeleteOIDCIdentityByUUIDParams) error
+	DeleteOIDCIdentityByUUID(ctx context.Context, arg DeleteOIDCIdentityByUUIDParams) (int64, error)
 	// Remove a provider override row. Used by the "revert" endpoint — after
 	// deletion the merge layer falls back to env + well-known defaults.
 	// Returns the number of rows deleted so the handler can distinguish

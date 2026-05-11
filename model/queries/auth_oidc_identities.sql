@@ -21,7 +21,7 @@ UPDATE auth_oidc_identities
 SET last_seen_at = now()
 WHERE id = $1;
 
--- name: DeleteOIDCIdentityByUUID :exec
+-- name: DeleteOIDCIdentityByUUID :execrows
 DELETE FROM auth_oidc_identities
 WHERE uuid = $1 AND user_account_id = $2;
 

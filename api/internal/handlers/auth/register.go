@@ -209,10 +209,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Trigger the verify_email flow so the new account has an immediate path to
-	// a verified status. sendEmailCode logs and swallows its own errors —
-	// the account is already created and the user can re-request the code via
-	// POST /v1/auth/email-code/request.
-	h.sendEmailCode(r, ua.Email, "verify_email")
+	// a verified status. Runs asynchronously (mirroring EmailCodeRequest) so
+	// bcrypt cost is incurred off the request path. sendEmailCode logs and
+	// swallows its own errors — the account is already created and the user
+	// can re-request the code via POST /v1/auth/email-code/request.
+	go func() {
+		h.sendEmailCode(r, ua.Email, "verify_email")
+	}()
 
 	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email)
 

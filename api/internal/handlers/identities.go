@@ -250,7 +250,7 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 
 	entityID := uc.EntityID
 
-	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
+	txErr := txhelper.RunSerializable(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
 		qtx := h.queries.WithTx(tx)
 
 		// Verify ownership and get the identity row. DeleteOIDCIdentityByUUID
@@ -271,18 +271,22 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 			return errLastIdentity
 		}
 
-		if err := qtx.DeleteOIDCIdentityByUUID(ctx, db.DeleteOIDCIdentityByUUIDParams{
+		rowsDeleted, err := qtx.DeleteOIDCIdentityByUUID(ctx, db.DeleteOIDCIdentityByUUIDParams{
 			Uuid:          identUUID,
 			UserAccountID: uc.UserAccountID,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("identities.Unlink: delete: %w", err)
+		}
+		if rowsDeleted == 0 {
+			return errIdentityNotFound
 		}
 
 		after := map[string]any{
 			"uuid":    identUUID.String(),
 			"step_up": stepUpUsed,
 		}
-		return h.safeObserve(ctx, tx, "unlink", "auth_oidc_identity", &entityID, nil, after)
+		return h.safeObserve(ctx, tx, "delete", "auth_oidc_identity", &entityID, nil, after)
 	})
 
 	if txErr != nil {
@@ -290,12 +294,16 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 			writeLastIdentityError(w)
 			return
 		}
+		if errors.Is(txErr, errIdentityNotFound) {
+			server.Error(w, http.StatusNotFound, "identity_not_found", "identity not found")
+			return
+		}
 		slog.ErrorContext(r.Context(), "identities.Unlink: transaction", "error", txErr)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to unlink identity")
 		return
 	}
 
-	h.safeObserveAfterCommit(r.Context(), "unlink", "auth_oidc_identity", &entityID, map[string]any{
+	h.safeObserveAfterCommit(r.Context(), "delete", "auth_oidc_identity", &entityID, map[string]any{
 		"uuid":    identUUID.String(),
 		"step_up": stepUpUsed,
 	})
@@ -352,9 +360,9 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	operation := "set"
+	operation := "create"
 	if hasExisting {
-		operation = "change"
+		operation = "update"
 		// Require and verify current_password.
 		if req.CurrentPassword == nil || *req.CurrentPassword == "" {
 			server.Error(w, http.StatusUnauthorized, "bad_credentials", "current_password is required to change an existing password")
@@ -417,7 +425,7 @@ func (h *IdentitiesHandler) RemovePassword(w http.ResponseWriter, r *http.Reques
 	stepUpUsed := h.stepUpRequired
 	entityID := uc.EntityID
 
-	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
+	txErr := txhelper.RunSerializable(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
 		qtx := h.queries.WithTx(tx)
 
 		oidcCount, hasLocal, err := usersservice.IdentityCounts(ctx, qtx, uc.UserAccountID)
@@ -437,7 +445,7 @@ func (h *IdentitiesHandler) RemovePassword(w http.ResponseWriter, r *http.Reques
 		if err := qtx.DeleteAuthLocal(ctx, uc.UserAccountID); err != nil {
 			return fmt.Errorf("identities.RemovePassword: delete: %w", err)
 		}
-		return h.safeObserve(ctx, tx, "unset", "auth_local", &entityID, nil, map[string]any{"step_up": stepUpUsed})
+		return h.safeObserve(ctx, tx, "delete", "auth_local", &entityID, nil, map[string]any{"step_up": stepUpUsed})
 	})
 
 	if txErr != nil {
@@ -450,7 +458,7 @@ func (h *IdentitiesHandler) RemovePassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	h.safeObserveAfterCommit(r.Context(), "unset", "auth_local", &entityID, map[string]any{"step_up": stepUpUsed})
+	h.safeObserveAfterCommit(r.Context(), "delete", "auth_local", &entityID, map[string]any{"step_up": stepUpUsed})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -506,11 +514,6 @@ func (h *IdentitiesHandler) sendStepUpCode(r *http.Request, uc *localauth.UserCo
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "stepup_request: insert email code", "error", err)
-		return
-	}
-
-	if h.sender == nil {
-		slog.ErrorContext(ctx, "stepup_request: no sender configured")
 		return
 	}
 
@@ -623,6 +626,10 @@ func writeStepUpRequired(w http.ResponseWriter) {
 // errLastIdentity is a sentinel returned inside transactions to signal the
 // 409 last_identity safety check failure without leaking implementation details.
 var errLastIdentity = errors.New("identities: last identity cannot be removed")
+
+// errIdentityNotFound is a sentinel returned inside transactions when the
+// identity UUID does not belong to the caller's account.
+var errIdentityNotFound = errors.New("identities: identity not found")
 
 // writeLastIdentityError writes the 409 response mandated by task 4.4.
 func writeLastIdentityError(w http.ResponseWriter) {

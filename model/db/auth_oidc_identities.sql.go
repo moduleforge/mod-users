@@ -34,9 +34,9 @@ type DeleteOIDCIdentityByUUIDParams struct {
 	UserAccountID int64     `json:"user_account_id"`
 }
 
-func (q *Queries) DeleteOIDCIdentityByUUID(ctx context.Context, arg DeleteOIDCIdentityByUUIDParams) error {
-	_, err := q.db.Exec(ctx, deleteOIDCIdentityByUUID, arg.Uuid, arg.UserAccountID)
-	return err
+func (q *Queries) DeleteOIDCIdentityByUUID(ctx context.Context, arg DeleteOIDCIdentityByUUIDParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOIDCIdentityByUUID, arg.Uuid, arg.UserAccountID)
+	return result.RowsAffected(), err
 }
 
 const getOIDCIdentityByIssuerSubject = `-- name: GetOIDCIdentityByIssuerSubject :one

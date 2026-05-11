@@ -185,11 +185,15 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 
 	// verify_email purpose: mark email as verified.
 	now := time.Now()
-	_ = h.queries.UpdateUserAccount(r.Context(), db.UpdateUserAccountParams{
+	if err := h.queries.UpdateUserAccount(r.Context(), db.UpdateUserAccountParams{
 		ID:              ua.ID,
 		Email:           ua.Email,
 		EmailVerifiedAt: &now,
-	})
+	}); err != nil {
+		slog.ErrorContext(r.Context(), "email_code_verify: mark verified", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to mark email verified")
+		return
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }

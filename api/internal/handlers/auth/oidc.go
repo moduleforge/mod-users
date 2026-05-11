@@ -450,7 +450,7 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 		"uuid":   insertedUUID,
 		"issuer": principal.Issuer,
 	}
-	if obsErr := h.safeObserve(ctx, tx, "link", "auth_oidc_identity", &entityID, nil, after); obsErr != nil {
+	if obsErr := h.safeObserve(ctx, tx, "create", "auth_oidc_identity", &entityID, nil, after); obsErr != nil {
 		slog.ErrorContext(ctx, "oidc link-mode: observe link", "error", obsErr)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to record identity link")
 		return
@@ -462,7 +462,7 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 
-	h.safeObserveAfterCommit(ctx, "link", "auth_oidc_identity", &entityID, after)
+	h.safeObserveAfterCommit(ctx, "create", "auth_oidc_identity", &entityID, after)
 
 	slog.InfoContext(ctx, "oidc link-mode: identity linked",
 		"provider", providerID,
