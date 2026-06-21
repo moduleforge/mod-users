@@ -3,7 +3,7 @@ task: example/install-example-deps
 phase: 3
 number: "002"
 title: Verify example/ installs cleanly with bun
-status: todo
+status: done
 tier: sonnet-low
 depends_on: [example/update-example-makefile]
 ---
@@ -42,3 +42,17 @@ Install `example/` dependencies with bun, delete the stale `package-lock.json`, 
 - `make build.example` exits with code 0
 - `example/.next/` is populated with Next.js build output
 - No npm/pnpm invocations appear in build output
+
+## Status
+
+outcome: succeeded
+date: 2026-06-21
+validation_summary: All 6 checks passed. `bun install` resolved 641 packages in example/ (including .yalc local packages). `make build.example` completed with exit 0, producing 16 static pages. No npm/pnpm invocations in output.
+files_affected:
+  - example/bun.lock (created, tracked)
+  - example/package-lock.json (deleted)
+decisions_made:
+  - Copied .yalc/ from main checkout into worktree example/ (gitignored, developer-local) so bun could resolve file: dependencies for @moduleforge/core-gui and @moduleforge/users-gui.
+notes:
+  - Next.js emitted a warning about multiple lockfiles (bun.lock at repo root and in example/); build succeeded despite warning. Consider setting `outputFileTracingRoot` in next.config.ts to silence it.
+commit: 090c404
