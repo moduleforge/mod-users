@@ -45,6 +45,7 @@
   "devDependencies": {
     "@ladle/react": "^5",
     "@tailwindcss/vite": "^4",
+    "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "react": "^19",
