@@ -15,7 +15,8 @@ phases:
           status: todo
           git:
             branch: phase-01-task-01-remove-pnpm-artifacts-configur
-            commit: []
+            commit:
+                - 8e0cb5a
             merge: null
         - number: 2
           slug: bun-install-root
