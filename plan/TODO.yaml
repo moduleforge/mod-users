@@ -66,7 +66,8 @@ phases:
           status: todo
           git:
             branch: phase-03-task-01-update-example-makefile-for-bu
-            commit: []
+            commit:
+                - 8b59697
             merge: null
         - number: 2
           slug: install-example-deps
