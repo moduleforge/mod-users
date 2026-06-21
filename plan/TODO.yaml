@@ -22,7 +22,7 @@ phases:
           slug: bun-install-root
           title: Run bun install at workspace root
           path: ""
-          done: false
+          done: true
           tier: ""
           status: todo
           git:
