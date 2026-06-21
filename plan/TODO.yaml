@@ -43,7 +43,8 @@ phases:
           status: todo
           git:
             branch: phase-02-task-01-update-gui-scripts-and-makefil
-            commit: []
+            commit:
+                - 7214b5f
             merge: null
         - number: 2
           slug: install-gui-deps
