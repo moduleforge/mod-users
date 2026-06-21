@@ -10,3 +10,8 @@ items:
       date: "2026-06-21"
       tag: follow-up
       text: '[plan/phase-03-example/002-install-example-deps.md] Next.js warns about multiple lockfiles (bun.lock at repo root and example/bun.lock). Build succeeds. To silence, set outputFileTracingRoot in example/next.config.ts.'
+    - title: example/Makefile rm redundancy
+      id: 0Qv6
+      date: "2026-06-21"
+      tag: follow-up
+      text: '[phase-03] example/Makefile lines 43-45: `rm -rf $(WORKSPACE_ROOT)/node_modules node_modules` expands to same path twice (WORKSPACE_ROOT=.). Harmless but noisy. Simplify to `rm -rf node_modules`.'
