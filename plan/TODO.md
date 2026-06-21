@@ -18,7 +18,7 @@ Tracking document for the active plan.
 
 ### Phase 03 — Migrate example/
 
-- [ ] [001-update-example-makefile.md](./phase-03-example/001-update-example-makefile.md) — tier `` · branch `…` · commit `…` · merge `…`
+- [ ] [001-update-example-makefile.md](./phase-03-example/001-update-example-makefile.md) — tier `` · branch `phase-03-task-01-update-example-makefile-for-bu` · commit `…` · merge `…`
 - [ ] [002-install-example-deps.md](./phase-03-example/002-install-example-deps.md) — tier `` · branch `…` · commit `…` · merge `…`
 
 ### Phase 04 — Validate full build

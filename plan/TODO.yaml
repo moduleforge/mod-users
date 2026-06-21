@@ -63,6 +63,10 @@ phases:
           done: false
           tier: ""
           status: todo
+          git:
+            branch: phase-03-task-01-update-example-makefile-for-bu
+            commit: []
+            merge: null
         - number: 2
           slug: install-example-deps
           title: Verify example/ installs cleanly with bun
