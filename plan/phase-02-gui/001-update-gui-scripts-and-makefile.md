@@ -86,3 +86,22 @@ The Makefile currently detects pnpm then npm. Replace the package-manager detect
 - `gui/Makefile` WORKSPACE_ROOT resolution looks for `bun.lock`
 - `gui/Makefile` preflight checks for `bun`, not `pnpm`/`npm`
 - Commit all changes with message: `chore(bun-migration): update gui/ scripts and Makefile for bun`
+
+## Status
+
+outcome: succeeded
+date: 2026-06-21
+worktree: worktree/phase-02-task-01-update-gui-scripts-and-makefil
+branch: phase-02-task-01-update-gui-scripts-and-makefil
+
+validation_summary:
+- gui/package.json scripts.build contains `bun run build:css`: passed
+- gui/package.json scripts.build:css uses `bunx`: passed
+- gui/Makefile PM := bun: passed
+- gui/Makefile NPX := bunx: passed
+- gui/Makefile WORKSPACE_ROOT resolution looks for bun.lock: passed
+- gui/Makefile preflight checks for bun (not pnpm/npm): passed
+
+files_modified:
+- gui/package.json
+- gui/Makefile
