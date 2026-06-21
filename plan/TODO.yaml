@@ -61,7 +61,7 @@ phases:
           slug: update-example-makefile
           title: Update example/Makefile for bun
           path: ""
-          done: false
+          done: true
           tier: ""
           status: todo
           git:
