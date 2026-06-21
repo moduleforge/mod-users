@@ -53,6 +53,10 @@ phases:
           done: false
           tier: ""
           status: todo
+          git:
+            branch: phase-02-task-02-verify-gui-installs-cleanly-wi
+            commit: []
+            merge: null
     - number: 3
       slug: example
       title: Migrate example/
