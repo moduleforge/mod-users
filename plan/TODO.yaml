@@ -55,7 +55,8 @@ phases:
           status: todo
           git:
             branch: phase-02-task-02-verify-gui-installs-cleanly-wi
-            commit: []
+            commit:
+                - 21309fe
             merge: null
     - number: 3
       slug: example

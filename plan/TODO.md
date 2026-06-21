@@ -14,7 +14,7 @@ Tracking document for the active plan.
 ### Phase 02 — Migrate gui/
 
 - [x] [001-update-gui-scripts-and-makefile.md](./phase-02-gui/001-update-gui-scripts-and-makefile.md) — tier `` · branch `phase-02-task-01-update-gui-scripts-and-makefil` · commit `7214b5f` · merge `996136e`
-- [ ] [002-install-gui-deps.md](./phase-02-gui/002-install-gui-deps.md) — tier `` · branch `phase-02-task-02-verify-gui-installs-cleanly-wi` · commit `…` · merge `…`
+- [ ] [002-install-gui-deps.md](./phase-02-gui/002-install-gui-deps.md) — tier `` · branch `phase-02-task-02-verify-gui-installs-cleanly-wi` · commit `21309fe` · merge `…`
 
 ### Phase 03 — Migrate example/
 
