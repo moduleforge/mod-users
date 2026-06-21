@@ -25,6 +25,10 @@ phases:
           done: false
           tier: ""
           status: todo
+          git:
+            branch: phase-01-task-02-bun-install-root-workspace
+            commit: []
+            merge: null
     - number: 2
       slug: gui
       title: Migrate gui/
