@@ -9,7 +9,7 @@ Tracking document for the active plan.
 ### Phase 01 — Root workspace migration
 
 - [x] [001-remove-pnpm-artifacts.md](./phase-01-root-workspace/001-remove-pnpm-artifacts.md) — tier `` · branch `phase-01-task-01-remove-pnpm-artifacts-configur` · commit `8e0cb5a` · merge `244ecdc`
-- [x] [002-bun-install-root.md](./phase-01-root-workspace/002-bun-install-root.md) — tier `` · branch `phase-01-task-02-bun-install-root-workspace` · commit `d8b3757` · merge `…`
+- [x] [002-bun-install-root.md](./phase-01-root-workspace/002-bun-install-root.md) — tier `` · branch `phase-01-task-02-bun-install-root-workspace` · commit `d8b3757` · merge `0e53da3`
 
 ### Phase 02 — Migrate gui/
 

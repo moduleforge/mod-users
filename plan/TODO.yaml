@@ -29,7 +29,7 @@ phases:
             branch: phase-01-task-02-bun-install-root-workspace
             commit:
                 - d8b3757
-            merge: null
+            merge: 0e53da3
     - number: 2
       slug: gui
       title: Migrate gui/
