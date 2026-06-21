@@ -77,7 +77,7 @@ phases:
           slug: install-example-deps
           title: Verify example/ installs cleanly with bun
           path: ""
-          done: false
+          done: true
           tier: ""
           status: todo
           git:
