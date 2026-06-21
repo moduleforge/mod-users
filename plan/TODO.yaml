@@ -97,3 +97,7 @@ phases:
           done: false
           tier: ""
           status: todo
+          git:
+            branch: phase-04-task-01-full-build-validation
+            commit: []
+            merge: null

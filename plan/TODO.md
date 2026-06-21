@@ -23,4 +23,4 @@ Tracking document for the active plan.
 
 ### Phase 04 — Validate full build
 
-- [ ] [001-full-build-validation.md](./phase-04-validate/001-full-build-validation.md) — tier `` · branch `…` · commit `…` · merge `…`
+- [ ] [001-full-build-validation.md](./phase-04-validate/001-full-build-validation.md) — tier `` · branch `phase-04-task-01-full-build-validation` · commit `…` · merge `…`
