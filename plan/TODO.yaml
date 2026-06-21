@@ -17,7 +17,7 @@ phases:
             branch: phase-01-task-01-remove-pnpm-artifacts-configur
             commit:
                 - 8e0cb5a
-            merge: null
+            merge: 244ecdc
         - number: 2
           slug: bun-install-root
           title: Run bun install at workspace root
