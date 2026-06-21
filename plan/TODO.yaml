@@ -38,7 +38,7 @@ phases:
           slug: update-gui-scripts-and-makefile
           title: Update gui/package.json scripts and gui/Makefile for bun
           path: ""
-          done: false
+          done: true
           tier: ""
           status: todo
           git:
