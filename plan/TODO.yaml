@@ -57,7 +57,7 @@ phases:
             branch: phase-02-task-02-verify-gui-installs-cleanly-wi
             commit:
                 - 21309fe
-            merge: null
+            merge: 04617ce
     - number: 3
       slug: example
       title: Migrate example/
