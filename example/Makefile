@@ -7,19 +7,13 @@
 # Detect current platform.
 CURRENT_OS := $(shell uname -s)
 
-# Auto-detect package manager: pnpm > npm.
-PM := $(shell if command -v pnpm >/dev/null 2>&1; then echo pnpm; else echo npm; fi)
-NPX := npx
+# Package manager: bun.
+PM := bun
+NPX := bunx
 
-# Workspace root resolution (same logic as gui/Makefile).
-WORKSPACE_ROOT := $(shell d=$$PWD; while [ "$$d" != "/" ]; do \
-	if [ -f "$$d/pnpm-workspace.yaml" ]; then echo "$$d"; break; fi; \
-	d=$$(dirname "$$d"); done)
-ifeq ($(WORKSPACE_ROOT),)
+# example/ is not a bun workspace member — it installs its own node_modules.
 WORKSPACE_ROOT := .
-endif
-
-PLATFORM_STAMP := $(WORKSPACE_ROOT)/node_modules/.platform
+PLATFORM_STAMP := node_modules/.platform
 
 # ---------------------------------------------------------------------------
 # Preflight
@@ -35,7 +29,7 @@ preflight: ## Check tools + fix stale node_modules
 	fi
 	@if ! command -v $(PM) >/dev/null 2>&1; then \
 		echo "FAIL"; \
-		echo "ERROR: neither pnpm nor npm found."; \
+		echo "ERROR: bun is not installed."; \
 		exit 1; \
 	fi
 	@NEEDS_INSTALL=false; \
@@ -52,7 +46,7 @@ preflight: ## Check tools + fix stale node_modules
 		NEEDS_INSTALL=true; \
 	fi; \
 	if [ "$$NEEDS_INSTALL" = "true" ]; then \
-		cd $(WORKSPACE_ROOT) && $(PM) install; \
+		bun install; \
 		echo "$(CURRENT_OS)" > $(PLATFORM_STAMP); \
 	else \
 		echo "node=$$(node --version) pm=$(PM) platform=$(CURRENT_OS) ✓"; \
