@@ -10,7 +10,7 @@ phases:
           slug: remove-pnpm-artifacts
           title: Remove pnpm artifacts and configure bun workspace
           path: ""
-          done: false
+          done: true
           tier: ""
           status: todo
           git:
