@@ -50,7 +50,7 @@ phases:
           slug: install-gui-deps
           title: Verify gui/ installs cleanly with bun
           path: ""
-          done: false
+          done: true
           tier: ""
           status: todo
           git:
