@@ -3,7 +3,7 @@ task: gui/install-gui-deps
 phase: 2
 number: "002"
 title: Verify gui/ installs cleanly with bun
-status: todo
+status: done
 tier: sonnet-low
 depends_on: [gui/update-gui-scripts-and-makefile]
 ---
@@ -36,3 +36,21 @@ Confirm that `gui/` dependencies are correctly installed via the bun workspace (
 - `make build.gui` exits with code 0
 - `gui/dist/` is populated with build artifacts (index.js, index.mjs, index.d.ts, index.css)
 - No npm or pnpm invocations appear in make build.gui output
+
+## Status
+
+- **outcome**: succeeded
+- **date**: 2026-06-21
+- **validation summary**: all checks passed
+  - `gui/package-lock.json` deleted and absent
+  - `make build.gui` exited 0 (tsup CJS+ESM+DTS success, tailwindcss CSS minified)
+  - `gui/dist/` contains: index.js, index.mjs, index.d.ts, index.d.mts, index.css (+ sourcemaps)
+  - no npm or pnpm invocations in build output
+- **files affected** (worktree-relative):
+  - `gui/package.json` — added `@types/node: ^22` to devDependencies (required: `process` used in `gui/src/lib/api.ts` without type definitions caused DTS build failure)
+  - `gui/package-lock.json` — deleted (npm lockfile, replaced by `bun.lock`)
+  - `bun.lock` — updated to include `@types/node` resolution
+- **decisions made**:
+  - Added `@types/node@^22` to `gui/package.json` devDependencies. The `process` global used in `src/lib/api.ts:366` caused a TypeScript DTS build error (`TS2580: Cannot find name 'process'`) because `tsconfig.json` only includes `dom` and `esnext` libs. Adding the type definitions is the minimal correct fix; the `typeof process !== 'undefined'` guard is already correct at runtime.
+  - Copied `gui/.yalc/` from main checkout to worktree `gui/.yalc/` to satisfy the local `file:.yalc/@moduleforge/core-gui` dependency (gitignored; no commit impact).
+  - Wrote `node_modules/.platform` stamp (Darwin) to prevent spurious reinstall on subsequent `make build.gui` invocations.
