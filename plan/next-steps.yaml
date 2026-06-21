@@ -15,3 +15,8 @@ items:
       date: "2026-06-21"
       tag: follow-up
       text: '[phase-03] example/Makefile lines 43-45: `rm -rf $(WORKSPACE_ROOT)/node_modules node_modules` expands to same path twice (WORKSPACE_ROOT=.). Harmless but noisy. Simplify to `rm -rf node_modules`.'
+    - title: example/Makefile install idiom
+      id: bRL4
+      date: "2026-06-21"
+      tag: follow-up
+      text: '[phase-03] example/Makefile uses bare `bun install` while gui/Makefile uses `$(PM) install`. Functionally identical (PM=bun) but inconsistent. Consider aligning to `$(PM) install` and adding the `See https://bun.sh` URL to the error message on line 33.'
