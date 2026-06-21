@@ -68,7 +68,7 @@ phases:
             branch: phase-03-task-01-update-example-makefile-for-bu
             commit:
                 - 8b59697
-            merge: null
+            merge: c320193
         - number: 2
           slug: install-example-deps
           title: Verify example/ installs cleanly with bun
