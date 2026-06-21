@@ -94,7 +94,7 @@ phases:
           slug: full-build-validation
           title: Run make preflight + make build.gui + make build.example end-to-end
           path: ""
-          done: false
+          done: true
           tier: ""
           status: todo
           git:
