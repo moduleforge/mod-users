@@ -76,6 +76,10 @@ phases:
           done: false
           tier: ""
           status: todo
+          git:
+            branch: phase-03-task-02-verify-example-installs-cleanl
+            commit: []
+            merge: null
     - number: 4
       slug: validate
       title: Validate full build
