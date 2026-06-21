@@ -85,7 +85,7 @@ phases:
             branch: phase-03-task-02-verify-example-installs-cleanl
             commit:
                 - 090c404
-            merge: null
+            merge: 53a6056
     - number: 4
       slug: validate
       title: Validate full build
