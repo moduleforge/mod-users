@@ -41,6 +41,10 @@ phases:
           done: false
           tier: ""
           status: todo
+          git:
+            branch: phase-02-task-01-update-gui-scripts-and-makefil
+            commit: []
+            merge: null
         - number: 2
           slug: install-gui-deps
           title: Verify gui/ installs cleanly with bun
