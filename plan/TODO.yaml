@@ -27,7 +27,8 @@ phases:
           status: todo
           git:
             branch: phase-01-task-02-bun-install-root-workspace
-            commit: []
+            commit:
+                - d8b3757
             merge: null
     - number: 2
       slug: gui
