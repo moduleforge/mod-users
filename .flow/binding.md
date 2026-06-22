@@ -9,7 +9,7 @@ notes: Session-binding manifest produced by `project-flow-check`. Regenerated on
 
 ## Project type
 
-- language: typescript / javascript (bun workspace monorepo)
+- language: typescript / javascript (bun workspace monorepo) + go (model/, api/ sub-projects)
 - framework: react (gui/), next.js (example/) — detected in sub-packages only
 - runtime: bun >=1.0 (engines field); bun workspace declared in package.json
 - additional markers: Makefile present, bun.lock present, sub-projects: model (Go), api (Go), gui (TypeScript/React), example (Next.js)
@@ -30,8 +30,8 @@ notes: Session-binding manifest produced by `project-flow-check`. Regenerated on
 | dimension | score | notes |
 |-----------|-------|-------|
 | standard doc set | absent | no README.md, no AGENTS.md at root |
-| docs/ discoverability | n/a | docs/ has only oidc-troubleshooting.md (no spec file) |
-| plan/ shape | n/a | no plan/ directory |
+| docs/ discoverability | absent | docs/ has only oidc-troubleshooting.md (no spec file) |
+| plan/ shape | partial | plan/ present with next-steps.yaml and bun-migration summary; no overview.md or TODO.md |
 | make-layout | present | build, test, run (dev.start) targets present |
 
 ## Bound skill chain
@@ -55,9 +55,8 @@ notes: Session-binding manifest produced by `project-flow-check`. Regenerated on
 - README.md absent — the link-chain root is missing; all docs are orphans.
 - AGENTS.md absent — task agents lack documented build/test/run commands.
 - docs/oidc-troubleshooting.md and next-steps.md are link-chain orphans.
+- No docs/*-spec.md exists; no architecture.md exists.
 
 ## Active plans
 
-| Slug | Branch | Worktree | Status |
-|------|--------|----------|--------|
-| bun-migration | plan/bun-migration | /Users/zane/playground/moduleforge/users-module/worktree/plan/bun-migration | healthy |
+_No active plans._
