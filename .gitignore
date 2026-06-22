@@ -6,10 +6,14 @@ worktree/
 dist/
 
 # files
+# built file
+/api/server
 *.tsbuildinfo
 .DS_Store
 .env
 CLAUDE.md
+# this gets generated based on plugins
+/.mcp.json
 
 # Worktree-local go.work files for isolated builds (authoritative workspace
 # file lives at user-components/go.work).
