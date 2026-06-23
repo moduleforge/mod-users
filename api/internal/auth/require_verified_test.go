@@ -88,6 +88,46 @@ func TestRequireVerifiedEmail_Unverified(t *testing.T) {
 	}
 }
 
+// TestRequireVerifiedEmail_AnonymousAccount confirms that an anonymous account
+// (no email, no EmailVerifiedAt) is rejected with 403 email_unverified by the
+// existing RequireVerifiedEmail middleware. Anonymous users are excluded from
+// all /v1/self endpoints naturally by this check — no separate
+// RequireNamedAccount middleware is needed.
+func TestRequireVerifiedEmail_AnonymousAccount(t *testing.T) {
+	next := &captureHandler{}
+	mw := RequireVerifiedEmail(next)
+
+	// Anonymous accounts have an empty Email and a nil EmailVerifiedAt.
+	uc := &UserContext{
+		UserAccountID:   2,
+		UserUUID:        "00000000-0000-0000-0000-000000000002",
+		EntityID:        20,
+		Email:           "", // no email address
+		EmailVerifiedAt: nil,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/self/credential/step-up", nil)
+	req = req.WithContext(WithUserContext(req.Context(), uc))
+	rec := httptest.NewRecorder()
+
+	mw.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for anonymous account, got %d", rec.Code)
+	}
+	if next.called {
+		t.Fatal("next handler must not be called for anonymous account")
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body["error"] != "email_unverified" {
+		t.Errorf("expected error=email_unverified, got %v", body["error"])
+	}
+}
+
 func TestRequireVerifiedEmail_Verified(t *testing.T) {
 	next := &captureHandler{}
 	mw := RequireVerifiedEmail(next)

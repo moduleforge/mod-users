@@ -499,6 +499,15 @@ func (h *IdentitiesHandler) sendStepUpCode(r *http.Request, uc *localauth.UserCo
 		return
 	}
 
+	// Guard: anonymous accounts have no email address. RequireVerifiedEmail
+	// already blocks them from reaching this endpoint, but we defend in depth
+	// to avoid creating a dangling code row or sending to an empty address if
+	// the middleware chain is ever mis-ordered.
+	if uc.Email == "" {
+		slog.WarnContext(ctx, "stepup_request: account has no email address (anonymous account)", "user_account_id", uc.UserAccountID)
+		return
+	}
+
 	code, hash, err := generateEmailCode()
 	if err != nil {
 		slog.ErrorContext(ctx, "stepup_request: generate code", "error", err)

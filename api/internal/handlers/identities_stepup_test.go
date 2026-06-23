@@ -614,3 +614,51 @@ func TestStepUpRequest_AntiEnumerationTiming(t *testing.T) {
 		t.Errorf("response too fast: elapsed=%v, want ≥200ms", elapsed)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// sendStepUpCode — anonymous-account guard
+// ---------------------------------------------------------------------------
+
+// TestSendStepUpCode_AnonymousAccountSkipsSend verifies that sendStepUpCode
+// does not call sender.Send when uc.Email is empty (anonymous account guard).
+// RequireVerifiedEmail already blocks anonymous users from reaching
+// StepUpRequest, but this test documents the defense-in-depth behaviour added
+// in Phase 3 task 001. The empty-email guard fires before CreateEmailCode, so
+// no code row is created and the sender is never called.
+func TestSendStepUpCode_AnonymousAccountSkipsSend(t *testing.T) {
+	t.Parallel()
+
+	sender := &fakeSender{}
+
+	// queries is non-nil so the nil-check guard passes; the email guard fires
+	// before CreateEmailCode is called.
+	h := &IdentitiesHandler{
+		queries:  &db.Queries{},
+		sender:   sender,
+		consumed: &sync.Map{},
+	}
+
+	// Build an anonymous-style UserContext: no email, no EmailVerifiedAt.
+	anonUC := &localauth.UserContext{
+		UserAccountID: 99,
+		UserUUID:      "00000000-0000-0000-0000-000000000099",
+		EntityID:      990,
+		Email:         "", // anonymous account has no email
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/self/credential/step-up", nil)
+	req = withUC(req, anonUC)
+	rec := httptest.NewRecorder()
+
+	h.StepUpRequest(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	if len(sender.sent) != 0 {
+		t.Errorf("sender.Send called %d time(s) for anonymous account; want 0", len(sender.sent))
+	}
+}
