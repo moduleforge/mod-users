@@ -1,0 +1,255 @@
+module: users
+goModule: github.com/moduleforge/users-module/api
+
+go:
+  api:
+    modulePath: github.com/moduleforge/users-module/api
+    dir: ./api
+  model:
+    modulePath: github.com/moduleforge/users-module/model
+    dir: ./model
+
+migrations:
+  range:
+    first: 100
+    last: 108
+  after:
+    - core-module
+
+provides:
+  services:
+    # localAuthz.New — grants-table authorizer; implements coreAuthz.Authorizer.
+    # Depends on authz DB queries, the operation registry (from authz-module),
+    # and the pool for wildcard-grant checks.
+    - name: authorizer
+      type: "*localAuthz.Authorizer"
+      constructor: localAuthz.New
+      args:
+        - queries:authzdb            # authzdb.New(pool)
+        - infra:opReg                # *authzapi.OperationRegistry — infra singleton from app manifest
+        - infra:pool                 # *pgxpool.Pool (wildcard-grant check)
+
+    # oauthOrchestrator manages OIDC provider onboarding / discovery.
+    # Exposed as a provides.services entry per phase-01 next-steps resolution.
+    - name: oauthOrchestrator
+      type: "*auth.OAuth"
+      constructor: auth.NewOAuth
+      args:
+        - context                # context.Context — startup-time OIDC discovery I/O
+        - infra:cfg              # *config.Config
+
+    # JWT token verifier — validates locally-minted Bearer tokens on every request.
+    - name: verifier
+      type: "*auth.Verifier"
+      constructor: auth.NewVerifier
+      args:
+        - context
+        - config:auth.oidcIssuerURL  # issuerURL (empty string for local-only mode)
+        - config:auth.oidcClientID   # clientID (empty string for local-only mode)
+        - field:cfg.LocalAuth.JWTSecret
+        - field:cfg.LocalAuth.LocalIssuer
+
+    # claimMapper turns JWT claims into a Principal for RequireAuth middleware.
+    - name: claimMapper
+      type: "auth.ClaimMapper"
+      constructor: auth.NewClaimMapper
+      args:
+        - config:auth.mapperStyle  # e.g. "generic"
+        - field:cfg.Auth           # auth.MapperOptions struct (adminRole, emailPath, rolesPath)
+
+    # userResolver resolves a JWT Principal to an internal UserAccount / entity.
+    # SetObserverGroup is called after construction (deferred wiring — safe because
+    # the resolver only fires events during request handling, after all init completes).
+    - name: userResolver
+      type: "*auth.UserResolver"
+      constructor: auth.NewUserResolver
+      args:
+        - infra:pool
+        - queries:usersdb  # *db.Queries (users-module model)
+        - queries:coredb   # *coredb.Queries
+        - field:cfg.Auth.AdminRole
+        - field:cfg.LocalAuth.LocalIssuer
+        # TODO(phase-4/compiler-design): main.go passes nil here and calls
+        # SetObserverGroup after construction (deferred wiring). The 9-form
+        # arg-source vocabulary has no nil sentinel. Until the compiler supports
+        # a nil: or deferred: arg-source, this arg must be handled manually.
+        - symbol:observer.NoopObserver  # placeholder; compiler must emit observer.NoopObserver{} (struct literal, not a func call)
+
+    # UserAccountService — manages user account CRUD and delegates mutation events
+    # to the observer group.
+    - name: userAccountService
+      type: "*usersservice.UserAccountService"
+      constructor: usersservice.NewUserAccountService
+      args:
+        - infra:pool
+        - queries:usersdb            # db.Querier
+        - queries:coredb             # coredb.Querier
+        - service:authorizer         # coreAuthz.Authorizer
+        - service:observerGroup      # *observer.ObserverGroup (reserved — assembled by compiler)
+        - service:naturalPersonService  # coreservice.NaturalPersonServicer from core-module
+        - service:typeResolver       # *types.Resolver from core-module
+        - symbol:auth.HashPassword   # func(plain string)(string, error) — passed as value
+
+    # onboardingHandler — OIDCConfigHandler; owns the oidc_config row and BootState.
+    # Consumed by requireOIDCConfirmed middleware and the /v1/oidc-config route group.
+    - name: onboardingHandler
+      type: "*handlers.OIDCConfigHandler"
+      constructor: handlers.NewOIDCConfigHandler
+      args:
+        - queries:usersdb
+        - service:oauthOrchestrator
+        - field:cfg.Providers
+        - field:cfg.Onboarding.TokenDisplay
+
+    # authHandler — local auth and OIDC callback handler; serves /v1/auth/*.
+    - name: authHandler
+      type: "*authhandlers.Handler"
+      constructor: authhandlers.New
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - field:cfg.LocalAuth.JWTSecret
+        - field:cfg.LocalAuth.LocalIssuer
+        - service:emailSender        # EmailSender — cross-module requires.services entry
+        - field:cfg.Server.GUIBaseURL
+
+    # usersHandler — user account management handler; serves /v1/user-accounts/*.
+    - name: usersHandler
+      type: "*handlers.UserAccountsHandler"
+      constructor: handlers.NewUserAccountsHandler
+      args:
+        - service:userAccountService
+        - service:grantAdminFn       # GrantAdminFn closure from authz-module wiring
+        - service:revokeAdminFn      # GrantAdminFn closure from authz-module wiring
+
+  routes:
+    # /v1/auth — local login, register, email-code, password-reset, OIDC callback.
+    # RegisterRoutes does not yet exist on the auth handler package.
+    # TODO(phase-3): task 001 (extract-auth-routes) — will create authhandlers.RegisterRoutes
+    - prefix: /v1/auth
+      scope: public             # unauthenticated — bearer token not yet issued
+      handler: authHandler
+      constructor: authhandlers.New
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - field:cfg.LocalAuth.JWTSecret
+        - field:cfg.LocalAuth.LocalIssuer
+        - service:emailSender
+        - field:cfg.Server.GUIBaseURL
+      # register: authhandlers.RegisterRoutes  # TODO(phase-3/001): not yet extracted
+      middleware:
+        - requireOIDCConfirmed
+
+    # /v1/oidc-config — OIDC onboarding discovery and setup token endpoints.
+    # Conditionally mounted when TOKEN_DISPLAY != none; the condition belongs in the
+    # generated main.go (app.yaml routing scope), not in the extracted function.
+    # TODO(phase-3): task 002 (extract-oidc-config-routes) — will create handlers.RegisterOIDCConfigRoutes
+    - prefix: /v1/oidc-config
+      scope: public             # unauthenticated — OIDC onboarding precedes auth
+      handler: onboardingHandler
+      constructor: handlers.NewOIDCConfigHandler
+      args:
+        - queries:usersdb
+        - service:oauthOrchestrator
+        - field:cfg.Providers
+        - field:cfg.Onboarding.TokenDisplay
+      # register: handlers.RegisterOIDCConfigRoutes  # TODO(phase-3/002): not yet extracted
+
+    # /v1 (core entity routes) — core-module's NewRouter mounted here via mountFromModule.
+    # The compiler emits: r.Mount("/v1", corehttpapi.NewRouter(coreDeps))
+    # middlewareScope: default (requireOIDCConfirmed + requireAuth + requireVerifiedEmail)
+    - prefix: /v1
+      mountFromModule: corehttpapi.NewRouter
+      args:
+        - service:coreDeps           # corehttpapi.Deps struct from core-module
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
+
+    # /v1 (account routes) — user accounts, apps, identities, self, assume, providers.
+    # RegisterAccountRoutes does not yet exist — this covers the large inline block in main.go.
+    # TODO(phase-3): task 003 (extract-account-routes) — will create handlers.RegisterAccountRoutes
+    - prefix: /v1
+      handler: usersHandler
+      constructor: handlers.NewUserAccountsHandler
+      args:
+        - service:userAccountService
+        - service:grantAdminFn
+        - service:revokeAdminFn
+      # register: handlers.RegisterAccountRoutes  # TODO(phase-3/003): not yet extracted
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
+
+  middleware:
+    # requireAuth validates the Bearer token and sets the Principal in the request context.
+    - name: requireAuth
+      constructor: auth.RequireAuth
+      args:
+        - service:verifier
+        - service:claimMapper
+        - service:userResolver
+
+    # requireVerifiedEmail gates routes to accounts with completed email verification.
+    # This is a plain http.Handler middleware (not a factory) — zero args.
+    - name: requireVerifiedEmail
+      constructor: auth.RequireVerifiedEmail
+      args: []
+
+    # requireOIDCConfirmed gates all /v1/* routes behind the OIDC boot-state check.
+    # Produced by RequireOIDCConfirmed(statusFn) where statusFn is the onboarding
+    # handler's CurrentState method.
+    - name: requireOIDCConfirmed
+      constructor: auth.RequireOIDCConfirmed
+      args:
+        - method:onboardingHandler.CurrentState
+
+hooks:
+  # firstUserGrant bootstraps the wildcard manage grant for the first created user.
+  # The inline closure in main.go will be extracted to an exported function in phase-3.
+  # TODO(phase-3): task 004 (extract-first-user-hook) — will create handlers.WireFirstUserHook
+  firstUserGrant:
+    # symbol: handlers.WireFirstUserHook  # TODO(phase-3/004): function not yet extracted
+    args:
+      - service:userAccountService
+      - service:grantService       # GrantServicer from authz-module
+
+requires:
+  services:
+    - name: naturalPersonService   # coreservice.NaturalPersonServicer from core-module
+    - name: typeResolver           # *types.Resolver from core-module
+    - name: coreDeps               # corehttpapi.Deps struct from core-module
+    - name: grantService           # GrantServicer from authz-module
+    # operationRegistry moved to requires.infra as opReg (infra singleton in app manifest)
+    # TODO: grantAdminFn / revokeAdminFn are composition-root closures built inline in main.go.
+    # These are not services provided by any module; compiler design must address how to
+    # represent inline closures. Flagged for phase-4 compiler design resolution.
+    - name: grantAdminFn           # GrantAdminFn — composition-root closure over authz grant service
+    - name: revokeAdminFn          # GrantAdminFn — composition-root closure over authz grant service
+    # TODO: emailSender source module is unresolved. A future module or the app manifest
+    # must declare provides.services.emailSender. Flagged for phase-2 / app-manifest resolution.
+    - name: emailSender            # EmailSender — cross-module service (source module TBD)
+  infra:
+    - name: pool                   # *pgxpool.Pool
+    - name: opReg                  # *authzapi.OperationRegistry — infra singleton
+    # NOTE: users-module provides its own authorizer (localAuthz.New) — it does NOT require
+    # an external az infra singleton. Removed az from requires.infra.
+    # NOTE: observerGroup is a compiler-reserved service (assembled from all module observers);
+    # it is consumed via service:observerGroup in constructor args, not listed as infra.
+    - name: fieldCipher            # fieldcrypto.Cipher — SSN/EIN encryption (verify usage in source)
+    - name: cfg                    # *config.Config
+
+gui:
+  package: "@moduleforge/users-gui"
+  dir: ./gui
+  peers:
+    - "@moduleforge/core-gui"
+
+openapi:
+  role: host
+  path: ./api/openapi.yaml
