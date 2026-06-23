@@ -72,7 +72,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 		"token": token,
 		"user": map[string]any{
 			"uuid":  actorUA.Uuid.String(),
-			"email": actorUA.Email,
+			"email": actorUA.Email.String,
 		},
 	})
 }
