@@ -14,6 +14,7 @@ import (
 	coredb "github.com/moduleforge/core-model/db"
 	localauth "github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
+	svc "github.com/moduleforge/users-module/api/internal/service"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
@@ -30,6 +31,12 @@ type Sender interface {
 // outside the registration transaction.
 type FirstUserHookFn func(ctx context.Context, entityID int64) error
 
+// anonUserCreator is the service interface required by the Anonymous handler.
+// Defined at the point of use so tests can inject a stub.
+type anonUserCreator interface {
+	CreateAnonymousUser(ctx context.Context, in svc.CreateAnonymousUserInput) (svc.CreateAnonymousUserResult, error)
+}
+
 // Handler bundles dependencies for the local auth HTTP handlers.
 type Handler struct {
 	pool          *pgxpool.Pool
@@ -40,6 +47,7 @@ type Handler struct {
 	sender        Sender
 	guiBase       string
 	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
+	userSvc       anonUserCreator // nil until SetUserSvc is called
 }
 
 // New constructs a Handler.
@@ -53,6 +61,12 @@ func New(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, jwtSecr
 		sender:    sender,
 		guiBase:   guiBase,
 	}
+}
+
+// SetUserSvc wires in the UserAccountService after construction.
+// It must be called before the Anonymous handler is reachable.
+func (h *Handler) SetUserSvc(svc anonUserCreator) {
+	h.userSvc = svc
 }
 
 // SetFirstUserHook registers a hook to be called after the first user account
