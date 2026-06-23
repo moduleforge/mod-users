@@ -77,7 +77,10 @@ func (h *Handler) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
 		resetURL := fmt.Sprintf("%s/reset-password?token=%s", strings.TrimRight(h.guiBase, "/"), plainToken)
 		body := fmt.Sprintf("Click the link below to reset your password:\n\n%s\n\nThis link expires in 30 minutes. If you did not request a password reset, ignore this email.", resetURL)
 
-		if err := h.sender.Send(ctx, ua.Email, "Reset your password", body); err != nil {
+		if !ua.Email.Valid || ua.Email.String == "" {
+			return // anonymous account — skip silently
+		}
+		if err := h.sender.Send(ctx, ua.Email.String, "Reset your password", body); err != nil {
 			slog.ErrorContext(ctx, "password_reset: send email", "error", err)
 		}
 	}()

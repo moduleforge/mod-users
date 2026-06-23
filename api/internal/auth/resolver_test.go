@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/moduleforge/users-module/model/db"
 )
@@ -59,7 +60,7 @@ func TestResolver_LocalIssuerFastPath_Success(t *testing.T) {
 		ID:            42,
 		Uuid:          wantUUID,
 		AccountHolder: 41,
-		Email:         "alice@example.com",
+		Email:         pgtype.Text{String: "alice@example.com", Valid: true},
 	}
 
 	calls := 0
@@ -90,8 +91,8 @@ func TestResolver_LocalIssuerFastPath_Success(t *testing.T) {
 	if uc.UserUUID != wantUUID.String() {
 		t.Errorf("UserUUID = %q, want %q", uc.UserUUID, wantUUID.String())
 	}
-	if uc.Email != wantUser.Email {
-		t.Errorf("Email = %q, want %q", uc.Email, wantUser.Email)
+	if uc.Email != wantUser.Email.String {
+		t.Errorf("Email = %q, want %q", uc.Email, wantUser.Email.String)
 	}
 }
 
@@ -172,7 +173,7 @@ func fakeAccount(id int64, email string, verified bool) db.UserAccount {
 		ID:            id,
 		Uuid:          uuid.New(),
 		AccountHolder: id * 10,
-		Email:         email,
+		Email:         pgtype.Text{String: email, Valid: email != ""},
 	}
 	if verified {
 		t := time.Now()
@@ -222,7 +223,7 @@ func TestResolver_Branch1_ExistingIdentity(t *testing.T) {
 		nil, nil, nil,
 	)
 
-	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email}
+	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email.String}
 	uc, err := r.Resolve(context.Background(), p)
 	if err != nil {
 		t.Fatalf("Branch 1: unexpected error: %v", err)
@@ -247,7 +248,7 @@ func TestResolver_Branch2_VerifiedEmailMatch(t *testing.T) {
 		},
 		// emailAccountLookup: return verified account
 		func(_ context.Context, email string) (db.UserAccount, error) {
-			if email == ua.Email {
+			if email == ua.Email.String {
 				return ua, nil
 			}
 			return db.UserAccount{}, pgx.ErrNoRows
@@ -261,7 +262,7 @@ func TestResolver_Branch2_VerifiedEmailMatch(t *testing.T) {
 		nil, nil,
 	)
 
-	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email, EmailVerified: false}
+	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email.String, EmailVerified: false}
 	uc, err := r.Resolve(context.Background(), p)
 	if err != nil {
 		t.Fatalf("Branch 2: unexpected error: %v", err)
@@ -294,7 +295,7 @@ func TestResolver_Branch3_UnverifiedEmailIdPVerified(t *testing.T) {
 		},
 		// emailAccountLookup: return unverified account
 		func(_ context.Context, email string) (db.UserAccount, error) {
-			if email == ua.Email {
+			if email == ua.Email.String {
 				return ua, nil
 			}
 			return db.UserAccount{}, pgx.ErrNoRows
@@ -315,7 +316,7 @@ func TestResolver_Branch3_UnverifiedEmailIdPVerified(t *testing.T) {
 		nil,
 	)
 
-	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email, EmailVerified: true}
+	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email.String, EmailVerified: true}
 	uc, err := r.Resolve(context.Background(), p)
 	if err != nil {
 		t.Fatalf("Branch 3: unexpected error: %v", err)
@@ -342,7 +343,7 @@ func TestResolver_Branch4_UnverifiedTakeover(t *testing.T) {
 		},
 		// emailAccountLookup: return unverified account
 		func(_ context.Context, email string) (db.UserAccount, error) {
-			if email == ua.Email {
+			if email == ua.Email.String {
 				return ua, nil
 			}
 			return db.UserAccount{}, pgx.ErrNoRows
@@ -350,7 +351,7 @@ func TestResolver_Branch4_UnverifiedTakeover(t *testing.T) {
 		nil, nil, nil, nil,
 	)
 
-	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email, EmailVerified: false}
+	p := Principal{Issuer: issuer, Subject: subject, Email: ua.Email.String, EmailVerified: false}
 	_, err := r.Resolve(context.Background(), p)
 	if err == nil {
 		t.Fatal("Branch 4: expected ErrUnverifiedTakeover, got nil")

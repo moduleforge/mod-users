@@ -459,7 +459,7 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 	// so entity.ID is valid here because we just created the legal_entity row.
 	ua, err = qtx.CreateUserAccount(ctx, db.CreateUserAccountParams{
 		AccountHolder:   entity.ID,
-		Email:           p.Email,
+		Email:           pgtype.Text{String: p.Email, Valid: p.Email != ""},
 		EmailVerifiedAt: emailVerifiedAt,
 	})
 	if err != nil {
@@ -490,9 +490,13 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 
 	entityID := ua.AccountHolder
 
+	var accountEmailVal any
+	if ua.Email.Valid {
+		accountEmailVal = ua.Email.String
+	}
 	accountAfter := map[string]any{
 		"uuid":              ua.Uuid.String(),
-		"email":             ua.Email,
+		"email":             accountEmailVal,
 		"email_verified_at": ua.EmailVerifiedAt,
 	}
 	if err := r.safeObserve(ctx, tx, "create", "user_account", &entityID, nil, accountAfter); err != nil {
@@ -554,7 +558,7 @@ func (r *UserResolver) buildUserContext(ctx context.Context, ua db.UserAccount, 
 		UserAccountID:   ua.ID,
 		UserUUID:        ua.Uuid.String(),
 		EntityID:        ua.AccountHolder,
-		Email:           ua.Email,
+		Email:           ua.Email.String,
 		EmailVerifiedAt: ua.EmailVerifiedAt,
 	}
 
@@ -573,7 +577,7 @@ func (r *UserResolver) buildUserContext(ctx context.Context, ua db.UserAccount, 
 					UserAccountID: sudoUA.ID,
 					UserUUID:      sudoUA.Uuid.String(),
 					EntityID:      sudoUA.AccountHolder,
-					Email:         sudoUA.Email,
+					Email:         sudoUA.Email.String,
 				}
 			}
 		}

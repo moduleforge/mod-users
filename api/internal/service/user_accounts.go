@@ -56,7 +56,8 @@ type UserAccount struct {
 	ID            int64
 	UUID          uuid.UUID
 	AccountHolder int64 // entity internal ID
-	Email         string
+	Email         *string
+	IsAnonymous   bool
 	EmailVerified bool
 	GivenName     string
 	FamilyName    string
@@ -146,7 +147,7 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		// 2. Create the user_account row in the same tx.
 		ua, err := db.New(tx).CreateUserAccount(ctx, db.CreateUserAccountParams{
 			AccountHolder: np.EntityID,
-			Email:         in.Email,
+			Email:         pgtype.Text{String: in.Email, Valid: true},
 		})
 		if err != nil {
 			return fmt.Errorf("user_accounts.Create user_account: %w", err)
@@ -183,9 +184,13 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 	}
 
 	// Post-commit observer.
+	emailVal := any(nil)
+	if out.Email != nil {
+		emailVal = *out.Email
+	}
 	after := map[string]any{
 		"uuid":  out.UUID.String(),
-		"email": out.Email,
+		"email": emailVal,
 	}
 	s.obs.ObserveAfterCommit(ctx, "create", "user_account", &out.AccountHolder, after)
 	// Also fire the natural_person post-commit observer.
@@ -278,9 +283,10 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 
 	before := uaSnapshot(ua)
 
-	newEmail := ua.Email
+	newEmail := ua.Email // pgtype.Text
 	if in.Email != nil {
-		newEmail = strings.TrimSpace(strings.ToLower(*in.Email))
+		trimmed := strings.TrimSpace(strings.ToLower(*in.Email))
+		newEmail = pgtype.Text{String: trimmed, Valid: true}
 	}
 
 	var updated db.UserAccount
@@ -481,11 +487,16 @@ func (s *UserAccountService) LoadByUUID(ctx context.Context, id uuid.UUID) (db.U
 
 // toUserAccount converts a db.UserAccount to the service-layer UserAccount type.
 func toUserAccount(ua db.UserAccount, givenName, familyName string) UserAccount {
+	var email *string
+	if ua.Email.Valid {
+		email = &ua.Email.String
+	}
 	return UserAccount{
 		ID:            ua.ID,
 		UUID:          ua.Uuid,
 		AccountHolder: ua.AccountHolder,
-		Email:         ua.Email,
+		Email:         email,
+		IsAnonymous:   !ua.Email.Valid,
 		EmailVerified: ua.EmailVerifiedAt != nil,
 		GivenName:     givenName,
 		FamilyName:    familyName,
@@ -495,9 +506,13 @@ func toUserAccount(ua db.UserAccount, givenName, familyName string) UserAccount 
 
 // uaSnapshot builds an audit-log-friendly map from a db.UserAccount.
 func uaSnapshot(ua db.UserAccount) map[string]any {
+	emailVal := any(nil)
+	if ua.Email.Valid {
+		emailVal = ua.Email.String
+	}
 	return map[string]any{
 		"uuid":  ua.Uuid.String(),
-		"email": ua.Email,
+		"email": emailVal,
 	}
 }
 
