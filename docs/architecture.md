@@ -22,7 +22,8 @@ The Postgres schema lives in `model/migrations/` (managed with goose) and `model
 | Table | Purpose |
 |---|---|
 | `apps` | Application tenants — a host app may register one or more named apps |
-| `user_accounts` | Core user entity; promoted to `Entity` status for authorization (see [entity-typing](https://github.com/moduleforge/core-module/blob/main/docs/architecture/entity-typing.md)) |
+| `user_accounts` | Core user entity; promoted to `Entity` status for authorization (see [entity-typing](https://github.com/moduleforge/core-module/blob/main/docs/architecture/entity-typing.md)). `email` is nullable — NULL indicates an anonymous account |
+| `anon_tokens` | Maps `device_id` + `session_token` (SHA-256 hashed) to a `user_account`; enables cross-session identity continuity for anonymous users. Rows are deleted when the account is upgraded to a named account |
 | `apps_user_accounts` | Many-to-many join between apps and user accounts |
 | `auth_local` | Email + argon2id password credentials for a user account |
 | `email_codes` | Short-lived one-time codes used for email verification and passwordless login |
@@ -35,14 +36,14 @@ Internal IDs are integers (joins only, never sent in responses). External IDs ar
 
 ## API layer
 
-The HTTP API is defined in `api/openapi.yaml`. Handlers live in `api/internal/handlers/`; business logic in `api/internal/service/`. All endpoints except `register` and `login` require a `Authorization: Bearer <jwt>` header.
+The HTTP API is defined in `api/openapi.yaml`. Handlers live in `api/internal/handlers/`; business logic in `api/internal/service/`. All endpoints except `register`, `login`, and `anonymous` require an `Authorization: Bearer <jwt>` header.
 
 API surface by tag group:
 
 | Tag | Endpoints | Purpose |
 |---|---|---|
 | **Health** | `GET /healthz`, `GET /readyz` | Liveness and readiness probes |
-| **Auth** | `/v1/auth/register`, `/v1/auth/login`, `/v1/auth/email-code`, `/v1/auth/password-reset`, `/v1/auth/providers`, `/v1/auth/oidc/{provider}/start`, `/v1/auth/oidc/{provider}/callback` | All authentication flows |
+| **Auth** | `/v1/auth/register`, `/v1/auth/login`, `/v1/auth/anonymous`, `/v1/auth/email-code`, `/v1/auth/password-reset`, `/v1/auth/providers`, `/v1/auth/oidc/{provider}/start`, `/v1/auth/oidc/{provider}/callback` | All authentication flows |
 | **Self** | `GET /v1/self`, `PUT /v1/self` | Authenticated user reads and updates their own profile |
 | **Users** | CRUD on `/v1/users`, `/v1/users/{uuid}`, grant/assume sub-routes | Admin user management |
 | **Apps** | CRUD on `/v1/apps`, member management | Admin application and tenancy management |
@@ -51,6 +52,8 @@ API surface by tag group:
 ## Authentication flow
 
 Authentication is multi-channel: any given user account may have credentials from multiple sources, all resolving to the same identity.
+
+**Anonymous.** `POST /v1/auth/anonymous` creates a `user_account` with a NULL email (no credentials required) and a corresponding `anon_tokens` row. The response includes a signed JWT (with `is_anonymous: true` claim) and a raw session token. The session token can be presented on a subsequent visit — keyed by `device_id` — to recover the same anonymous identity across sessions. When the user later provides an email address (via `PUT /v1/self`), the service upgrades the account: the `email` column is set, `is_anonymous` becomes false, and all `anon_tokens` rows for that account are deleted. The `login`, `email-code`, and `password-reset` handlers guard against anonymous accounts and return `400 anonymous_account` if called with an anonymous JWT.
 
 **Local (email + password).** `POST /v1/auth/register` creates a `user_account` + `auth_local` row. `POST /v1/auth/login` verifies the argon2id hash and returns a signed JWT.
 
@@ -71,10 +74,13 @@ For OIDC configuration issues and troubleshooting, see [docs/oidc-troubleshootin
 
 ## Multi-channel account model
 
-`user_accounts` is the canonical identity record. Multiple authentication methods can be associated with the same account:
+`user_accounts` is the canonical identity record. `email` is nullable — a NULL value indicates an anonymous account. The derived boolean `is_anonymous` (email IS NULL) is exposed on Go service structs and in API responses. Anonymous accounts are a valid `user_account` subtype: they participate in authorization and auditing the same as named accounts, but they cannot use email-dependent auth flows.
+
+Multiple authentication methods can be associated with the same named account:
 
 - `auth_local` — one per account (email + password).
 - `auth_oidc_identities` — one per provider per account (OIDC sub claim).
+- `anon_tokens` — one or more per anonymous account (device continuity tokens, deleted on upgrade).
 
 When a new OIDC login arrives for an email that matches an existing account, the OIDC identity is linked automatically (merged). This allows a user who originally registered with email/password to later log in via Google without creating a duplicate account, and vice versa.
 
