@@ -260,9 +260,13 @@ func parseUUIDParam(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 
 // userAccountResponse builds a public-facing map from a service UserAccount.
 func userAccountResponse(ua svc.UserAccount) map[string]any {
+	var emailVal any
+	if ua.Email != nil {
+		emailVal = *ua.Email
+	}
 	resp := map[string]any{
 		"uuid":           ua.UUID.String(),
-		"email":          ua.Email,
+		"email":          emailVal,
 		"email_verified": ua.EmailVerified,
 	}
 	if ua.CreatedAt.Valid {

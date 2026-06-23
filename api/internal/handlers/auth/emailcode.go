@@ -109,7 +109,11 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 	}
 	body := fmt.Sprintf("Your verification code is: %s\n\nThis code expires in 5 minutes.", code)
 
-	if err := h.sender.Send(ctx, ua.Email, subject, body); err != nil {
+	if !ua.Email.Valid || ua.Email.String == "" {
+		slog.WarnContext(ctx, "email_code: account has no email address", "user_account_id", ua.ID)
+		return
+	}
+	if err := h.sender.Send(ctx, ua.Email.String, subject, body); err != nil {
 		slog.ErrorContext(ctx, "email_code: send email", "error", err)
 	}
 }
@@ -177,7 +181,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 			"token": token,
 			"user": map[string]any{
 				"uuid":  ua.Uuid.String(),
-				"email": ua.Email,
+				"email": ua.Email.String,
 			},
 		})
 		return
@@ -187,7 +191,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	if err := h.queries.UpdateUserAccount(r.Context(), db.UpdateUserAccountParams{
 		ID:              ua.ID,
-		Email:           ua.Email,
+		Email:           ua.Email, // pgtype.Text — pass through unchanged
 		EmailVerifiedAt: &now,
 	}); err != nil {
 		slog.ErrorContext(r.Context(), "email_code_verify: mark verified", "error", err)

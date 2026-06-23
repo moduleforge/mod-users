@@ -162,7 +162,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// because we just created the legal_entity row above.
 	ua, err := qtx.CreateUserAccount(r.Context(), db.CreateUserAccountParams{
 		AccountHolder: entity.ID,
-		Email:         req.Email,
+		Email:         pgtype.Text{String: req.Email, Valid: true},
 	})
 	if err != nil {
 		// Check for unique violation on email.
@@ -214,14 +214,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// swallows its own errors — the account is already created and the user
 	// can re-request the code via POST /v1/auth/email-code/request.
 	go func() {
-		h.sendEmailCode(r, ua.Email, "verify_email")
+		if ua.Email.Valid {
+			h.sendEmailCode(r, ua.Email.String, "verify_email")
+		}
 	}()
 
-	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email)
+	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email.String)
 
 	server.JSON(w, http.StatusCreated, map[string]any{
-		"uuid":                      ua.Uuid.String(),
-		"email":                     ua.Email,
+		"uuid":                        ua.Uuid.String(),
+		"email":                       ua.Email.String, // always non-null for register
 		"email_verification_required": true,
 	})
 }
