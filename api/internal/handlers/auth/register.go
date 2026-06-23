@@ -37,10 +37,28 @@ type anonUserCreator interface {
 	CreateAnonymousUser(ctx context.Context, in svc.CreateAnonymousUserInput) (svc.CreateAnonymousUserResult, error)
 }
 
+// authQuerier is the narrow db.Querier subset used by the auth handlers (Login,
+// EmailCodeRequest/Verify, PasswordResetRequest/Confirm). Defined at the point
+// of use so tests can inject a stub without implementing the full db.Querier.
+// *db.Queries satisfies this interface; the Register handler uses db.New(tx)
+// directly for transaction-scoped operations.
+type authQuerier interface {
+	GetUserAccountByEmail(ctx context.Context, lower string) (db.UserAccount, error)
+	GetAuthLocal(ctx context.Context, userAccountID int64) (db.AuthLocal, error)
+	CreateEmailCode(ctx context.Context, arg db.CreateEmailCodeParams) (db.EmailCode, error)
+	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
+	ConsumeEmailCode(ctx context.Context, id int64) error
+	UpdateUserAccount(ctx context.Context, arg db.UpdateUserAccountParams) error
+	CreatePasswordReset(ctx context.Context, arg db.CreatePasswordResetParams) (db.PasswordReset, error)
+	GetActivePasswordReset(ctx context.Context, tokenHash string) (db.PasswordReset, error)
+	UpsertAuthLocal(ctx context.Context, arg db.UpsertAuthLocalParams) error
+	ConsumePasswordReset(ctx context.Context, id int64) error
+}
+
 // Handler bundles dependencies for the local auth HTTP handlers.
 type Handler struct {
 	pool          *pgxpool.Pool
-	queries       *db.Queries
+	queries       authQuerier
 	coreQ         *coredb.Queries
 	jwtSecret     string
 	issuer        string
@@ -126,7 +144,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	qtx := h.queries.WithTx(tx)
+	qtx := db.New(tx)
 	coreQtx := h.coreQ.WithTx(tx)
 
 	// Determine first-user bootstrap.
