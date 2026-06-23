@@ -4,9 +4,12 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	localauth "github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
 	svc "github.com/moduleforge/users-module/api/internal/service"
+	db "github.com/moduleforge/users-module/model/db"
 )
 
 // anonymousRequest is the body for POST /v1/auth/anonymous.
@@ -42,14 +45,9 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	// so middleware (e.g. RequireVerifiedEmail) can distinguish anonymous sessions
 	// without a database round-trip.
 	//
-	// We need a db.UserAccount for IssueAnonymousJWT. Build a minimal one from the
-	// service result — only Uuid is consumed by the JWT function.
-	dbUA, err := h.queries.GetUserAccountByUUID(r.Context(), result.UserAccount.UUID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "anonymous: load user account for jwt", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
-		return
-	}
+	// IssueAnonymousJWT only reads ua.Uuid, so we build a minimal db.UserAccount
+	// from the service result UUID — no additional DB round-trip is required.
+	dbUA := db.UserAccount{Uuid: uuid.UUID(result.UserAccount.UUID)}
 
 	token, err := localauth.IssueAnonymousJWT(dbUA, h.jwtSecret, h.issuer)
 	if err != nil {
