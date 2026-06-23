@@ -403,6 +403,9 @@ func main() {
 		auth.HashPassword,
 	)
 
+	// Wire the anonymous-user service into the auth handler now that uaSvc is available.
+	authHandler.SetUserSvc(uaSvc)
+
 	oidcHandler := authhandlers.NewOIDCHandlerWithPool(pool, queries, oauth, resolver, uaSvc, cfg, observerGroup)
 
 	// grantAdmin creates a wildcard manage grant for a user account, checked and
@@ -508,6 +511,7 @@ func main() {
 
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
+		r.Post("/anonymous", authHandler.Anonymous)
 		r.Post("/email-code/request", authHandler.EmailCodeRequest)
 		r.Post("/email-code/verify", authHandler.EmailCodeVerify)
 		r.Post("/password-reset/request", authHandler.PasswordResetRequest)
