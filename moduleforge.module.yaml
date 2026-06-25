@@ -125,8 +125,6 @@ provides:
 
   routes:
     # /v1/auth — local login, register, email-code, password-reset, OIDC callback.
-    # RegisterRoutes does not yet exist on the auth handler package.
-    # TODO(phase-3): task 001 (extract-auth-routes) — will create authhandlers.RegisterRoutes
     - prefix: /v1/auth
       scope: public             # unauthenticated — bearer token not yet issued
       handler: authHandler
@@ -139,7 +137,9 @@ provides:
         - field:cfg.LocalAuth.LocalIssuer
         - service:emailSender
         - field:cfg.Server.GUIBaseURL
-      # register: authhandlers.RegisterRoutes  # TODO(phase-3/001): not yet extracted
+      register: authhandlers.RegisterRoutes
+      register_args:
+        - handler:oidcHandler   # *authhandlers.OIDCHandler — third arg after r and h
       middleware:
         - requireOIDCConfirmed
 
