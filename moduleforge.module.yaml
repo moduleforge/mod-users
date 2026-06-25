@@ -158,16 +158,6 @@ provides:
       register_args:
         - expr:nil              # providersHandler — not yet constructed; nil skips provider CRUD
 
-    # /v1 (core entity routes) — core-module's NewRouter mounted here via mountFromModule.
-    - prefix: /v1
-      mountFromModule: corehttpapi.NewRouter
-      args:
-        - service:coreDeps           # corehttpapi.Deps struct from core-module
-      middleware:
-        - requireOIDCConfirmed
-        - requireAuth
-        - requireVerifiedEmail
-
     # /v1 (account routes) — user-accounts CRUD, assume-identity, and apps/user-accounts.
     - prefix: /v1
       handler: usersHandler
@@ -221,7 +211,6 @@ requires:
   services:
     - name: naturalPersonService   # coreservice.NaturalPersonServicer from core-module
     - name: typeResolver           # *types.Resolver from core-module
-    - name: coreDeps               # corehttpapi.Deps struct from core-module
     - name: grantService           # GrantServicer from authz-module
     # operationRegistry moved to requires.infra as opReg (infra singleton in app manifest)
     # grantAdminFn/revokeAdminFn: composition-root closures; deferred to phase-4 compiler (JEDl)
