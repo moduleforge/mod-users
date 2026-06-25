@@ -468,6 +468,7 @@ func main() {
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
 	usersHandler := handlers.NewUserAccountsHandler(uaSvc, grantAdminFn, revokeAdminFn)
+	_ = usersHandler // wired via RegisterAccountRoutes in generated main.go
 	assumeHandler := handlers.NewAssumeHandler(uaSvc, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
 	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup)
 
@@ -560,18 +561,8 @@ func main() {
 					authzhttpapi.RegisterRoutes(r, authzSvcs)
 				})
 
-				// User account management. Authorization is enforced at the service
-				// layer: list/create require wildcard admin; get/update/delete enforce
-				// per-entity authorization. RequireAdmin middleware has been removed;
-				// the Authorizer is the sole gate.
-				r.Get("/user-accounts", usersHandler.List)
-				r.Post("/user-accounts", usersHandler.Create)
-				r.Get("/user-accounts/{uuid}", usersHandler.Get)
-				r.Put("/user-accounts/{uuid}", usersHandler.Update)
-				r.Delete("/user-accounts/{uuid}", usersHandler.Delete)
-				r.Post("/user-accounts/{uuid}/grant-admin", usersHandler.GrantAdmin)
-				r.Post("/user-accounts/{uuid}/revoke-admin", usersHandler.RevokeAdmin)
-				r.Post("/user-accounts/{uuid}/assume", assumeHandler.Assume)
+				// TODO(generated): account routes wired here by mfgen — see phase-3 codegen-main
+				// handlers.RegisterAccountRoutes(r, usersHandler, assumeHandler, appsHandler)
 
 				// Apps (multi-tenancy). Authorization is enforced at the handler layer
 				// via Authorize calls; RequireAdmin middleware has been removed.
@@ -580,12 +571,6 @@ func main() {
 				r.Get("/apps/{uuid}", appsHandler.GetApp)
 				r.Put("/apps/{uuid}", appsHandler.UpdateApp)
 				r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
-
-				// Apps user-accounts.
-				r.Post("/apps/{uuid}/user-accounts", appsHandler.AssignUser)
-				r.Get("/apps/{uuid}/user-accounts", appsHandler.ListAppUsers)
-				r.Delete("/apps/{uuid}/user-accounts/{user_account_uuid}", appsHandler.RemoveUser)
-				r.Put("/apps/{uuid}/user-accounts/{user_account_uuid}/roles", appsHandler.UpdateUserRoles)
 			})
 		})
 	})

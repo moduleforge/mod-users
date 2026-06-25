@@ -170,9 +170,12 @@ provides:
         - requireAuth
         - requireVerifiedEmail
 
-    # /v1 (account routes) — user accounts, apps, identities, self, assume, providers.
-    # RegisterAccountRoutes does not yet exist — this covers the large inline block in main.go.
-    # TODO(phase-3): task 003 (extract-account-routes) — will create handlers.RegisterAccountRoutes
+    # /v1 (account routes) — user-accounts CRUD, assume-identity, and apps/user-accounts.
+    # RegisterAccountRoutes takes three handler args: usersHandler (primary), assumeHandler,
+    # and appsHandler. The assume and apps/user-accounts routes are not reachable from
+    # *UserAccountsHandler alone, so they are passed as extra register_args.
+    # Note: /v1/apps CRUD (Create/List/GetApp/UpdateApp/DeleteApp) and non-account /v1 routes
+    # (self, identities, audit, authz) remain inline in main.go and are not part of this entry.
     - prefix: /v1
       handler: usersHandler
       constructor: handlers.NewUserAccountsHandler
@@ -180,7 +183,10 @@ provides:
         - service:userAccountService
         - service:grantAdminFn
         - service:revokeAdminFn
-      # register: handlers.RegisterAccountRoutes  # TODO(phase-3/003): not yet extracted
+      register: handlers.RegisterAccountRoutes
+      register_args:
+        - handler:assumeHandler   # *handlers.AssumeHandler — assume-identity route
+        - handler:appsHandler     # *handlers.AppsHandler — apps/user-accounts routes
       middleware:
         - requireOIDCConfirmed
         - requireAuth
