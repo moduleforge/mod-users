@@ -43,7 +43,7 @@ type IdentitiesHandler struct {
 	// Cross-process consistency is not required: tokens are short-lived (5 min)
 	// and tied to a single session. A restart clears the cache, leaving a small
 	// replay window — tolerable per the spec.
-	consumed  *sync.Map
+	consumed *sync.Map
 	// requireStepUp controls whether credential-mutating endpoints require a
 	// valid X-Step-Up-Token header. Reflects cfg.Auth.RequireStepUpForCredentialChange.
 	stepUpRequired bool
@@ -73,10 +73,10 @@ type IdentitiesHandlerDeps struct {
 // NewIdentitiesHandler constructs an IdentitiesHandler.
 func NewIdentitiesHandler(pool *pgxpool.Pool, queries *db.Queries, oauth *localauth.OAuth, obs *observer.ObserverGroup) *IdentitiesHandler {
 	return &IdentitiesHandler{
-		pool:    pool,
-		queries: queries,
-		oauth:   oauth,
-		obs:     obs,
+		pool:     pool,
+		queries:  queries,
+		oauth:    oauth,
+		obs:      obs,
 		consumed: &sync.Map{},
 	}
 }
@@ -703,4 +703,3 @@ func newOIDCStateCookie(value string, maxAge int, r *http.Request) *http.Cookie 
 		SameSite: http.SameSiteLaxMode,
 	}
 }
-

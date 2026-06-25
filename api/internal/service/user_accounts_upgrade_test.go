@@ -22,8 +22,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	coreAuthz "github.com/moduleforge/core-api/authz"
-	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/core-api/observer"
+	coreservice "github.com/moduleforge/core-api/service"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
@@ -165,7 +165,7 @@ func (s *stubUAQuerier) GetSetupTokenHash(_ context.Context) (pgtype.Text, error
 	return pgtype.Text{}, nil
 }
 func (s *stubUAQuerier) SetSetupTokenHash(_ context.Context, _ pgtype.Text) error { return nil }
-func (s *stubUAQuerier) ClearSetupTokenHash(_ context.Context) error               { return nil }
+func (s *stubUAQuerier) ClearSetupTokenHash(_ context.Context) error              { return nil }
 func (s *stubUAQuerier) CreateApp(_ context.Context, _ db.CreateAppParams) (db.App, error) {
 	return db.App{}, nil
 }
@@ -175,9 +175,9 @@ func (s *stubUAQuerier) GetAppByUUID(_ context.Context, _ uuid.UUID) (db.App, er
 func (s *stubUAQuerier) GetAppBySlug(_ context.Context, _ string) (db.App, error) {
 	return db.App{}, pgx.ErrNoRows
 }
-func (s *stubUAQuerier) ListApps(_ context.Context) ([]db.App, error) { return nil, nil }
+func (s *stubUAQuerier) ListApps(_ context.Context) ([]db.App, error)            { return nil, nil }
 func (s *stubUAQuerier) UpdateApp(_ context.Context, _ db.UpdateAppParams) error { return nil }
-func (s *stubUAQuerier) ArchiveApp(_ context.Context, _ int64) error              { return nil }
+func (s *stubUAQuerier) ArchiveApp(_ context.Context, _ int64) error             { return nil }
 func (s *stubUAQuerier) AssignUserAccountToApp(_ context.Context, _ db.AssignUserAccountToAppParams) error {
 	return nil
 }
@@ -208,7 +208,7 @@ var _ db.Querier = (*stubUAQuerier)(nil)
 // are no-ops that return zero values.
 type fakeTx struct {
 	mu      sync.Mutex
-	execs   []string  // SQL strings passed to Exec
+	execs   []string       // SQL strings passed to Exec
 	queryUA db.UserAccount // returned by QueryRow (GetUserAccountByID)
 }
 
@@ -241,14 +241,14 @@ func (f *fakeTx) Query(_ context.Context, _ string, _ ...any) (pgx.Rows, error) 
 	return &emptyRows{}, nil
 }
 
-func (f *fakeTx) Begin(_ context.Context) (pgx.Tx, error)   { return f, nil }
-func (f *fakeTx) Commit(_ context.Context) error             { return nil }
-func (f *fakeTx) Rollback(_ context.Context) error           { return nil }
+func (f *fakeTx) Begin(_ context.Context) (pgx.Tx, error) { return f, nil }
+func (f *fakeTx) Commit(_ context.Context) error          { return nil }
+func (f *fakeTx) Rollback(_ context.Context) error        { return nil }
 func (f *fakeTx) Prepare(_ context.Context, _, _ string) (*pgconn.StatementDescription, error) {
 	return nil, nil
 }
 func (f *fakeTx) SendBatch(_ context.Context, _ *pgx.Batch) pgx.BatchResults { return nil }
-func (f *fakeTx) LargeObjects() pgx.LargeObjects                              { return pgx.LargeObjects{} }
+func (f *fakeTx) LargeObjects() pgx.LargeObjects                             { return pgx.LargeObjects{} }
 func (f *fakeTx) CopyFrom(_ context.Context, _ pgx.Identifier, _ []string, _ pgx.CopyFromSource) (int64, error) {
 	return 0, nil
 }
@@ -295,15 +295,15 @@ func (r *fakeUARow) Scan(dest ...any) error {
 // emptyRows is a pgx.Rows that yields no rows.
 type emptyRows struct{}
 
-func (e *emptyRows) Close()                                          {}
-func (e *emptyRows) Err() error                                      { return nil }
-func (e *emptyRows) CommandTag() pgconn.CommandTag                   { return pgconn.CommandTag{} }
-func (e *emptyRows) FieldDescriptions() []pgconn.FieldDescription    { return nil }
-func (e *emptyRows) Next() bool                                      { return false }
-func (e *emptyRows) Scan(_ ...any) error                             { return nil }
-func (e *emptyRows) Values() ([]any, error)                          { return nil, nil }
-func (e *emptyRows) RawValues() [][]byte                             { return nil }
-func (e *emptyRows) Conn() *pgx.Conn                                 { return nil }
+func (e *emptyRows) Close()                                       {}
+func (e *emptyRows) Err() error                                   { return nil }
+func (e *emptyRows) CommandTag() pgconn.CommandTag                { return pgconn.CommandTag{} }
+func (e *emptyRows) FieldDescriptions() []pgconn.FieldDescription { return nil }
+func (e *emptyRows) Next() bool                                   { return false }
+func (e *emptyRows) Scan(_ ...any) error                          { return nil }
+func (e *emptyRows) Values() ([]any, error)                       { return nil, nil }
+func (e *emptyRows) RawValues() [][]byte                          { return nil }
+func (e *emptyRows) Conn() *pgx.Conn                              { return nil }
 
 // ---------------------------------------------------------------------------
 // fakeDB — implements txhelper.DB

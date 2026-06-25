@@ -529,7 +529,6 @@ func (s *UserAccountService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-
 // RecordLogin records a successful login event in the audit log.
 // It loads the user_account for accountID, sets the opctx actor to that
 // account's entity so the Authorizer sees the right subject, and then

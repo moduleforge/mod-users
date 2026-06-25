@@ -112,4 +112,3 @@ func RequireAuth(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver)
 		})
 	}
 }
-
