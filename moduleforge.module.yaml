@@ -12,7 +12,7 @@ go:
 migrations:
   range:
     first: 100
-    last: 108
+    last: 199
   after:
     - core-module
 
@@ -226,14 +226,7 @@ requires:
     - name: coreDeps               # corehttpapi.Deps struct from core-module
     - name: grantService           # GrantServicer from authz-module
     # operationRegistry moved to requires.infra as opReg (infra singleton in app manifest)
-    # TODO: grantAdminFn / revokeAdminFn are composition-root closures built inline in main.go.
-    # These are not services provided by any module; compiler design must address how to
-    # represent inline closures. Flagged for phase-4 compiler design resolution.
-    - name: grantAdminFn           # GrantAdminFn — composition-root closure over authz grant service
-    - name: revokeAdminFn          # GrantAdminFn — composition-root closure over authz grant service
-    # TODO: emailSender source module is unresolved. A future module or the app manifest
-    # must declare provides.services.emailSender. Flagged for phase-2 / app-manifest resolution.
-    - name: emailSender            # EmailSender — cross-module service (source module TBD)
+    # grantAdminFn/revokeAdminFn: composition-root closures; deferred to phase-4 compiler
   infra:
     - name: pool                   # *pgxpool.Pool
     - name: opReg                  # *authzapi.OperationRegistry — infra singleton
@@ -241,6 +234,7 @@ requires:
     # an external az infra singleton. Removed az from requires.infra.
     # NOTE: observerGroup is a compiler-reserved service (assembled from all module observers);
     # it is consumed via service:observerGroup in constructor args, not listed as infra.
+    - name: smtp                    # *email.SMTPSender — email infra singleton from app manifest
     - name: fieldCipher            # fieldcrypto.Cipher — SSN/EIN encryption (verify usage in source)
     - name: cfg                    # *config.Config
 
