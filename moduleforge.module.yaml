@@ -30,10 +30,10 @@ provides:
         - infra:pool                 # *pgxpool.Pool (wildcard-grant check)
 
     # oauthOrchestrator manages OIDC provider onboarding / discovery.
-    # Exposed as a provides.services entry per phase-01 next-steps resolution.
     - name: oauthOrchestrator
       type: "*auth.OAuth"
       constructor: auth.NewOAuth
+      returnsError: true
       args:
         - context                # context.Context — startup-time OIDC discovery I/O
         - infra:cfg              # *config.Config
@@ -42,24 +42,26 @@ provides:
     - name: verifier
       type: "*auth.Verifier"
       constructor: auth.NewVerifier
+      returnsError: true
       args:
         - context
-        - config:auth.oidcIssuerURL  # issuerURL (empty string for local-only mode)
-        - config:auth.oidcClientID   # clientID (empty string for local-only mode)
+        - expr:""                     # issuerURL — empty for local-only mode
+        - expr:""                     # clientID — empty for local-only mode
         - field:cfg.LocalAuth.JWTSecret
         - field:cfg.LocalAuth.LocalIssuer
 
     # claimMapper turns JWT claims into a Principal for RequireAuth middleware.
+    # The public auth.NewClaimMapper wrapper converts config.AuthConfig to MapperOptions.
     - name: claimMapper
       type: "auth.ClaimMapper"
       constructor: auth.NewClaimMapper
+      returnsError: true
       args:
-        - config:auth.mapperStyle  # e.g. "generic"
-        - field:cfg.Auth           # auth.MapperOptions struct (adminRole, emailPath, rolesPath)
+        - expr:"generic"         # mapperStyle hardcoded for demo deployment
+        - field:cfg.Auth         # config.AuthConfig — public wrapper maps to MapperOptions
 
     # userResolver resolves a JWT Principal to an internal UserAccount / entity.
-    # SetObserverGroup is called after construction (deferred wiring — safe because
-    # the resolver only fires events during request handling, after all init completes).
+    # Receives observerGroup directly (it is declared before non-observer services).
     - name: userResolver
       type: "*auth.UserResolver"
       constructor: auth.NewUserResolver
@@ -69,11 +71,7 @@ provides:
         - queries:coredb   # *coredb.Queries
         - field:cfg.Auth.AdminRole
         - field:cfg.LocalAuth.LocalIssuer
-        # TODO(phase-4/compiler-design): main.go passes nil here and calls
-        # SetObserverGroup after construction (deferred wiring). The 9-form
-        # arg-source vocabulary has no nil sentinel. Until the compiler supports
-        # a nil: or deferred: arg-source, this arg must be handled manually.
-        - symbol:observer.NoopObserver  # placeholder; compiler must emit observer.NoopObserver{} (struct literal, not a func call)
+        - service:observerGroup  # *observer.ObserverGroup — declared before non-observer services
 
     # UserAccountService — manages user account CRUD and delegates mutation events
     # to the observer group.
@@ -92,6 +90,7 @@ provides:
 
     # onboardingHandler — OIDCConfigHandler; owns the oidc_config row and BootState.
     # Consumed by requireOIDCConfirmed middleware and the /v1/oidc-config route group.
+    # The public handlers.NewOIDCConfigHandler wrapper constructs OIDCConfigDeps internally.
     - name: onboardingHandler
       type: "*handlers.OIDCConfigHandler"
       constructor: handlers.NewOIDCConfigHandler
@@ -102,6 +101,7 @@ provides:
         - field:cfg.Onboarding.TokenDisplay
 
     # authHandler — local auth and OIDC callback handler; serves /v1/auth/*.
+    # smtp infra singleton satisfies the email.Sender interface.
     - name: authHandler
       type: "*authhandlers.Handler"
       constructor: authhandlers.New
@@ -111,17 +111,18 @@ provides:
         - queries:coredb
         - field:cfg.LocalAuth.JWTSecret
         - field:cfg.LocalAuth.LocalIssuer
-        - service:emailSender        # EmailSender — cross-module requires.services entry
+        - infra:smtp                 # *email.SMTPSender — satisfies email.Sender interface
         - field:cfg.Server.GUIBaseURL
 
     # usersHandler — user account management handler; serves /v1/user-accounts/*.
+    # grantAdmin/revokeAdmin are composition-root closures (gap JEDl); nil for demo build.
     - name: usersHandler
       type: "*handlers.UserAccountsHandler"
       constructor: handlers.NewUserAccountsHandler
       args:
         - service:userAccountService
-        - service:grantAdminFn       # GrantAdminFn closure from authz-module wiring
-        - service:revokeAdminFn      # GrantAdminFn closure from authz-module wiring
+        - expr:nil                   # grantAdminFn — composition-root closure; deferred (JEDl)
+        - expr:nil                   # revokeAdminFn — composition-root closure; deferred (JEDl)
 
   routes:
     # /v1/auth — local login, register, email-code, password-reset, OIDC callback.
@@ -135,18 +136,15 @@ provides:
         - queries:coredb
         - field:cfg.LocalAuth.JWTSecret
         - field:cfg.LocalAuth.LocalIssuer
-        - service:emailSender
+        - infra:smtp
         - field:cfg.Server.GUIBaseURL
       register: authhandlers.RegisterRoutes
       register_args:
-        - handler:oidcHandler   # *authhandlers.OIDCHandler — third arg after r and h
+        - expr:nil              # oidcHandler — not yet constructed; nil skips OIDC routes
       middleware:
         - requireOIDCConfirmed
 
     # /v1/oidc-config — OIDC onboarding discovery and setup token endpoints.
-    # Conditionally mounted when TOKEN_DISPLAY != none; the condition belongs in the
-    # generated main.go (app.yaml routing scope), not in the extracted function.
-    # TODO(phase-3): task 002 (extract-oidc-config-routes) — will create handlers.RegisterOIDCConfigRoutes
     - prefix: /v1/oidc-config
       scope: public             # unauthenticated — OIDC onboarding precedes auth
       handler: onboardingHandler
@@ -158,11 +156,9 @@ provides:
         - field:cfg.Onboarding.TokenDisplay
       register: handlers.RegisterOIDCConfigRoutes
       register_args:
-        - handler:providersHandler  # *handlers.ProvidersHandler — OIDC provider CRUD routes
+        - expr:nil              # providersHandler — not yet constructed; nil skips provider CRUD
 
     # /v1 (core entity routes) — core-module's NewRouter mounted here via mountFromModule.
-    # The compiler emits: r.Mount("/v1", corehttpapi.NewRouter(coreDeps))
-    # middlewareScope: default (requireOIDCConfirmed + requireAuth + requireVerifiedEmail)
     - prefix: /v1
       mountFromModule: corehttpapi.NewRouter
       args:
@@ -173,22 +169,17 @@ provides:
         - requireVerifiedEmail
 
     # /v1 (account routes) — user-accounts CRUD, assume-identity, and apps/user-accounts.
-    # RegisterAccountRoutes takes three handler args: usersHandler (primary), assumeHandler,
-    # and appsHandler. The assume and apps/user-accounts routes are not reachable from
-    # *UserAccountsHandler alone, so they are passed as extra register_args.
-    # Note: /v1/apps CRUD (Create/List/GetApp/UpdateApp/DeleteApp) and non-account /v1 routes
-    # (self, identities, audit, authz) remain inline in main.go and are not part of this entry.
     - prefix: /v1
       handler: usersHandler
       constructor: handlers.NewUserAccountsHandler
       args:
         - service:userAccountService
-        - service:grantAdminFn
-        - service:revokeAdminFn
+        - expr:nil
+        - expr:nil
       register: handlers.RegisterAccountRoutes
       register_args:
-        - handler:assumeHandler   # *handlers.AssumeHandler — assume-identity route
-        - handler:appsHandler     # *handlers.AppsHandler — apps/user-accounts routes
+        - expr:nil              # assumeHandler — not yet constructed; nil skips assume routes
+        - expr:nil              # appsHandler — not yet constructed; nil skips apps routes
       middleware:
         - requireOIDCConfirmed
         - requireAuth
@@ -204,14 +195,12 @@ provides:
         - service:userResolver
 
     # requireVerifiedEmail gates routes to accounts with completed email verification.
-    # This is a plain http.Handler middleware (not a factory) — zero args.
+    # NewRequireVerifiedEmail() returns RequireVerifiedEmail as a chi.Middleware value.
     - name: requireVerifiedEmail
-      constructor: auth.RequireVerifiedEmail
+      constructor: auth.NewRequireVerifiedEmail
       args: []
 
     # requireOIDCConfirmed gates all /v1/* routes behind the OIDC boot-state check.
-    # Produced by RequireOIDCConfirmed(statusFn) where statusFn is the onboarding
-    # handler's CurrentState method.
     - name: requireOIDCConfirmed
       constructor: auth.RequireOIDCConfirmed
       args:
@@ -219,12 +208,14 @@ provides:
 
 hooks:
   # firstUserGrant bootstraps the wildcard manage grant for the first created user.
-  # Extracted from the inline closure in main.go by phase-2 task 004.
   firstUserGrant:
-    symbol: users.NewFirstUserHook   # github.com/moduleforge/users-module/api/internal/users
+    symbol: users.NewFirstUserHook
     args:
       - infra:pool                   # *pgxpool.Pool
       - service:grantService         # GrantServicer from authz-module
+    registeredOn:
+      - method:userResolver.SetFirstUserHook
+      - method:authHandler.SetFirstUserHook
 
 requires:
   services:
@@ -233,16 +224,11 @@ requires:
     - name: coreDeps               # corehttpapi.Deps struct from core-module
     - name: grantService           # GrantServicer from authz-module
     # operationRegistry moved to requires.infra as opReg (infra singleton in app manifest)
-    # grantAdminFn/revokeAdminFn: composition-root closures; deferred to phase-4 compiler
+    # grantAdminFn/revokeAdminFn: composition-root closures; deferred to phase-4 compiler (JEDl)
   infra:
     - name: pool                   # *pgxpool.Pool
     - name: opReg                  # *authzapi.OperationRegistry — infra singleton
-    # NOTE: users-module provides its own authorizer (localAuthz.New) — it does NOT require
-    # an external az infra singleton. Removed az from requires.infra.
-    # NOTE: observerGroup is a compiler-reserved service (assembled from all module observers);
-    # it is consumed via service:observerGroup in constructor args, not listed as infra.
-    - name: smtp                    # *email.SMTPSender — email infra singleton from app manifest
-    - name: fieldCipher            # fieldcrypto.Cipher — SSN/EIN encryption (verify usage in source)
+    - name: smtp                   # *email.SMTPSender — email infra singleton from app manifest
     - name: cfg                    # *config.Config
 
 gui:
