@@ -7,8 +7,8 @@ dist/
 
 # files
 status.md
-# built file
-/api/server
+# built binary (not the api/server/ proxy package directory)
+/api/server/server
 *.tsbuildinfo
 .DS_Store
 .env
