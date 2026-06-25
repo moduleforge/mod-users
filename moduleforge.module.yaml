@@ -156,7 +156,7 @@ provides:
         - service:oauthOrchestrator
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
-      # register: handlers.RegisterOIDCConfigRoutes  # TODO(phase-3/002): not yet extracted
+      register: handlers.RegisterOIDCConfigRoutes
 
     # /v1 (core entity routes) — core-module's NewRouter mounted here via mountFromModule.
     # The compiler emits: r.Mount("/v1", corehttpapi.NewRouter(coreDeps))
