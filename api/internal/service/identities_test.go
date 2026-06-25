@@ -37,10 +37,10 @@ func (s *stubIdentityQuerier) GetAuthLocal(_ context.Context, _ int64) (db.AuthL
 
 func localRow() *db.AuthLocal {
 	return &db.AuthLocal{
-		UserAccountID:    1,
-		PasswordHash:     "$hash",
+		UserAccountID:     1,
+		PasswordHash:      "$hash",
 		PasswordUpdatedAt: pgtype.Timestamptz{Valid: true},
-		CreatedAt:        pgtype.Timestamptz{Valid: true},
+		CreatedAt:         pgtype.Timestamptz{Valid: true},
 	}
 }
 

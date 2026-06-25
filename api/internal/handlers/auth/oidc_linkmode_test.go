@@ -446,11 +446,11 @@ func TestCallback_LinkMode_ConflictRedirect(t *testing.T) {
 	//
 	// Alternative: test the redirect format independently.
 	h := &OIDCHandler{
-		pool:     nil,
-		queries:  nil,
-		oauth:    &localauth.OAuth{FrontendReturnURL: "http://gui.test/auth/oidc/return"},
-		cfg:      &config.Config{},
-		obs:      nil,
+		pool:    nil,
+		queries: nil,
+		oauth:   &localauth.OAuth{FrontendReturnURL: "http://gui.test/auth/oidc/return"},
+		cfg:     &config.Config{},
+		obs:     nil,
 	}
 
 	// redirectToFrontendError produces a redirect to FrontendReturnURL?error=<code>
@@ -493,11 +493,11 @@ func TestCallback_LinkMode_SuccessRedirectShape(t *testing.T) {
 // the state payload causes a frontend error redirect rather than a 500.
 func TestCallback_LinkMode_InvalidAccountUUID(t *testing.T) {
 	h := &OIDCHandler{
-		pool:     nil,
-		queries:  nil,
-		oauth:    &localauth.OAuth{FrontendReturnURL: "http://gui.test/auth/oidc/return"},
-		cfg:      &config.Config{},
-		obs:      nil,
+		pool:    nil,
+		queries: nil,
+		oauth:   &localauth.OAuth{FrontendReturnURL: "http://gui.test/auth/oidc/return"},
+		cfg:     &config.Config{},
+		obs:     nil,
 	}
 
 	rec := httptest.NewRecorder()

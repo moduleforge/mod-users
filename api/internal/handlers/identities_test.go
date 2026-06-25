@@ -42,13 +42,13 @@ type fakeQueries struct {
 	oidcListErr    error
 
 	// Tracking for delete calls.
-	deletedOIDCUUID   *uuid.UUID
-	deleteOIDCErr     error
+	deletedOIDCUUID    *uuid.UUID
+	deleteOIDCErr      error
 	deletedLocalCalled bool
-	deleteLocalErr    error
+	deleteLocalErr     error
 
 	// Tracking for upsert.
-	upsertedHash  string
+	upsertedHash   string
 	upsertLocalErr error
 
 	// Tracking for touch.
@@ -122,8 +122,8 @@ func (f *fakeQueries) UpsertAuthLocal(_ context.Context, arg db.UpsertAuthLocalP
 	f.upsertedHash = arg.PasswordHash
 	now := time.Now()
 	f.authLocal = &db.AuthLocal{
-		UserAccountID:    arg.UserAccountID,
-		PasswordHash:     arg.PasswordHash,
+		UserAccountID:     arg.UserAccountID,
+		PasswordHash:      arg.PasswordHash,
 		PasswordUpdatedAt: pgtype.Timestamptz{Valid: true, Time: now},
 	}
 	return nil
@@ -280,11 +280,11 @@ func TestIdentitiesHandler_List(t *testing.T) {
 	uc := newTestUC(1, 10)
 
 	tests := []struct {
-		name          string
-		authLocal     *db.AuthLocal
+		name           string
+		authLocal      *db.AuthLocal
 		oidcIdentities []db.AuthOidcIdentity
-		wantLocalSet  bool
-		wantOIDCLen   int
+		wantLocalSet   bool
+		wantOIDCLen    int
 	}{
 		{
 			name:         "no identities",
@@ -292,8 +292,8 @@ func TestIdentitiesHandler_List(t *testing.T) {
 			wantOIDCLen:  0,
 		},
 		{
-			name:      "local only",
-			authLocal: &db.AuthLocal{UserAccountID: 1, PasswordHash: "$hash", PasswordUpdatedAt: pgtype.Timestamptz{Valid: true}},
+			name:         "local only",
+			authLocal:    &db.AuthLocal{UserAccountID: 1, PasswordHash: "$hash", PasswordUpdatedAt: pgtype.Timestamptz{Valid: true}},
 			wantLocalSet: true,
 			wantOIDCLen:  0,
 		},
@@ -383,8 +383,8 @@ func TestIdentitiesHandler_StartLink(t *testing.T) {
 	oauth := &localauth.OAuth{
 		States: map[string]*localauth.ProviderState{
 			"google": {
-				ID:     "google",
-				InitOK: true,
+				ID:       "google",
+				InitOK:   true,
 				OAuthCfg: nil, // nil OAuthCfg triggers nil panic in AuthCodeURL — use ExchangeFn pattern instead
 			},
 		},
@@ -589,10 +589,10 @@ func TestSetPassword_CurrentPassword(t *testing.T) {
 	uc := newTestUC(1, 10)
 
 	tests := []struct {
-		name        string
-		authLocal   *db.AuthLocal
-		body        string
-		wantStatus  int
+		name       string
+		authLocal  *db.AuthLocal
+		body       string
+		wantStatus int
 	}{
 		{
 			name:       "first attach — no current_password needed",

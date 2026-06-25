@@ -263,11 +263,12 @@ func unauthenticatedContext() context.Context {
 // ---------------------------------------------------------------------------
 
 func newUA() svc.UserAccount {
+	email := "user@example.com"
 	return svc.UserAccount{
 		ID:            10,
 		UUID:          uuid.New(),
 		AccountHolder: 42,
-		Email:         "user@example.com",
+		Email:         &email,
 		EmailVerified: false,
 	}
 }
@@ -277,7 +278,7 @@ func newDBUA() db.UserAccount {
 		ID:            10,
 		Uuid:          uuid.New(),
 		AccountHolder: 42,
-		Email:         "user@example.com",
+		Email:         pgtype.Text{String: "user@example.com", Valid: true},
 		CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 }

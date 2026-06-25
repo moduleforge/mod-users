@@ -80,21 +80,6 @@ gui/
 
 > `gui/` depends on `@moduleforge/core-gui` via a `file:.yalc/` link. The `.yalc/` directory is gitignored and must be set up manually in fresh checkouts. See [AGENTS.md](../AGENTS.md#first-time-setup).
 
-### `example/` — Next.js demo application
-
-Standalone Next.js 15 app demonstrating the module integration end-to-end. Functions as the component showcase.
-
-```
-example/
-  package.json          # standalone (not a bun workspace member)
-  bun.lock              # standalone lockfile
-  Makefile
-  next.config.ts
-  tsconfig.json
-  public/               # static assets
-  src/                  # Next.js app source (pages, components, API routes)
-```
-
 ### `deploy/` — deployment configuration
 
 ```

@@ -14,6 +14,7 @@ import (
 	coredb "github.com/moduleforge/core-model/db"
 	localauth "github.com/moduleforge/users-module/api/internal/auth"
 	"github.com/moduleforge/users-module/api/internal/server"
+	svc "github.com/moduleforge/users-module/api/internal/service"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
@@ -30,16 +31,41 @@ type Sender interface {
 // outside the registration transaction.
 type FirstUserHookFn func(ctx context.Context, entityID int64) error
 
+// anonUserCreator is the service interface required by the Anonymous handler.
+// Defined at the point of use so tests can inject a stub.
+type anonUserCreator interface {
+	CreateAnonymousUser(ctx context.Context, in svc.CreateAnonymousUserInput) (svc.CreateAnonymousUserResult, error)
+}
+
+// authQuerier is the narrow db.Querier subset used by the auth handlers (Login,
+// EmailCodeRequest/Verify, PasswordResetRequest/Confirm). Defined at the point
+// of use so tests can inject a stub without implementing the full db.Querier.
+// *db.Queries satisfies this interface; the Register handler uses db.New(tx)
+// directly for transaction-scoped operations.
+type authQuerier interface {
+	GetUserAccountByEmail(ctx context.Context, lower string) (db.UserAccount, error)
+	GetAuthLocal(ctx context.Context, userAccountID int64) (db.AuthLocal, error)
+	CreateEmailCode(ctx context.Context, arg db.CreateEmailCodeParams) (db.EmailCode, error)
+	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
+	ConsumeEmailCode(ctx context.Context, id int64) error
+	UpdateUserAccount(ctx context.Context, arg db.UpdateUserAccountParams) error
+	CreatePasswordReset(ctx context.Context, arg db.CreatePasswordResetParams) (db.PasswordReset, error)
+	GetActivePasswordReset(ctx context.Context, tokenHash string) (db.PasswordReset, error)
+	UpsertAuthLocal(ctx context.Context, arg db.UpsertAuthLocalParams) error
+	ConsumePasswordReset(ctx context.Context, id int64) error
+}
+
 // Handler bundles dependencies for the local auth HTTP handlers.
 type Handler struct {
 	pool          *pgxpool.Pool
-	queries       *db.Queries
+	queries       authQuerier
 	coreQ         *coredb.Queries
 	jwtSecret     string
 	issuer        string
 	sender        Sender
 	guiBase       string
 	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
+	userSvc       anonUserCreator // nil until SetUserSvc is called
 }
 
 // New constructs a Handler.
@@ -53,6 +79,12 @@ func New(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, jwtSecr
 		sender:    sender,
 		guiBase:   guiBase,
 	}
+}
+
+// SetUserSvc wires in the UserAccountService after construction.
+// It must be called before the Anonymous handler is reachable.
+func (h *Handler) SetUserSvc(svc anonUserCreator) {
+	h.userSvc = svc
 }
 
 // SetFirstUserHook registers a hook to be called after the first user account
@@ -112,7 +144,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
-	qtx := h.queries.WithTx(tx)
+	qtx := db.New(tx)
 	coreQtx := h.coreQ.WithTx(tx)
 
 	// Determine first-user bootstrap.
@@ -162,7 +194,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// because we just created the legal_entity row above.
 	ua, err := qtx.CreateUserAccount(r.Context(), db.CreateUserAccountParams{
 		AccountHolder: entity.ID,
-		Email:         req.Email,
+		Email:         pgtype.Text{String: req.Email, Valid: true},
 	})
 	if err != nil {
 		// Check for unique violation on email.
@@ -214,14 +246,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// swallows its own errors — the account is already created and the user
 	// can re-request the code via POST /v1/auth/email-code/request.
 	go func() {
-		h.sendEmailCode(r, ua.Email, "verify_email")
+		if ua.Email.Valid {
+			h.sendEmailCode(r, ua.Email.String, "verify_email")
+		}
 	}()
 
-	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email)
+	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email.String)
 
 	server.JSON(w, http.StatusCreated, map[string]any{
-		"uuid":                      ua.Uuid.String(),
-		"email":                     ua.Email,
+		"uuid":                        ua.Uuid.String(),
+		"email":                       ua.Email.String, // always non-null for register
 		"email_verification_required": true,
 	})
 }

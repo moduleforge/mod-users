@@ -8,9 +8,14 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -56,7 +61,8 @@ type UserAccount struct {
 	ID            int64
 	UUID          uuid.UUID
 	AccountHolder int64 // entity internal ID
-	Email         string
+	Email         *string
+	IsAnonymous   bool
 	EmailVerified bool
 	GivenName     string
 	FamilyName    string
@@ -64,11 +70,37 @@ type UserAccount struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+// CreateAnonymousUserInput carries the fields required to create an anonymous user account.
+// Given and family name are optional for anonymous users; they default to empty strings.
+type CreateAnonymousUserInput struct {
+	DeviceID   string // stable device fingerprint supplied by the client
+	GivenName  string // optional
+	FamilyName string // optional
+}
+
+// AnonToken is the service-layer representation of an anon_tokens row.
+type AnonToken struct {
+	UUID         uuid.UUID
+	DeviceID     string
+	SessionToken string // the raw (unhashed) token — returned to caller only at creation time
+	ExpiresAt    pgtype.Timestamptz
+}
+
+// CreateAnonymousUserResult groups the new UserAccount and AnonToken together.
+type CreateAnonymousUserResult struct {
+	UserAccount UserAccount
+	AnonToken   AnonToken
+}
+
 // ErrEmailTaken is returned by Create when the email is already registered.
 var ErrEmailTaken = fmt.Errorf("email already registered")
 
 // ErrInvalidInput is returned when the caller supplies invalid field values.
 var ErrInvalidInput = fmt.Errorf("invalid input")
+
+// ErrAnonymousAccount is returned when an operation requires a named account
+// but the target is anonymous.
+var ErrAnonymousAccount = fmt.Errorf("anonymous account")
 
 // UserAccountService implements user account CRUD with the standard
 // service-method shape. The Create method composes NaturalPerson creation and
@@ -146,7 +178,7 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		// 2. Create the user_account row in the same tx.
 		ua, err := db.New(tx).CreateUserAccount(ctx, db.CreateUserAccountParams{
 			AccountHolder: np.EntityID,
-			Email:         in.Email,
+			Email:         pgtype.Text{String: in.Email, Valid: true},
 		})
 		if err != nil {
 			return fmt.Errorf("user_accounts.Create user_account: %w", err)
@@ -183,9 +215,13 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 	}
 
 	// Post-commit observer.
+	emailVal := any(nil)
+	if out.Email != nil {
+		emailVal = *out.Email
+	}
 	after := map[string]any{
 		"uuid":  out.UUID.String(),
-		"email": out.Email,
+		"email": emailVal,
 	}
 	s.obs.ObserveAfterCommit(ctx, "create", "user_account", &out.AccountHolder, after)
 	// Also fire the natural_person post-commit observer.
@@ -195,6 +231,109 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 	})
 
 	return out, nil
+}
+
+// CreateAnonymousUser creates an anonymous UserAccount (NULL email) paired with
+// an anon_tokens row. No authorization check is performed — anonymous user
+// creation is a public (unauthenticated) operation.
+//
+// The returned AnonToken.SessionToken contains the raw (unhashed) token.
+// The hashed token is stored in the database and is never returned to callers.
+func (s *UserAccountService) CreateAnonymousUser(ctx context.Context, in CreateAnonymousUserInput) (CreateAnonymousUserResult, error) {
+	if strings.TrimSpace(in.DeviceID) == "" {
+		return CreateAnonymousUserResult{}, fmt.Errorf("%w: device_id is required", ErrInvalidInput)
+	}
+
+	// Anonymous users may omit names; substitute non-empty placeholder strings
+	// because NaturalPersonService.CreateInTx validates non-empty given/family name.
+	givenName := in.GivenName
+	if strings.TrimSpace(givenName) == "" {
+		givenName = "Anonymous"
+	}
+	familyName := in.FamilyName
+	if strings.TrimSpace(familyName) == "" {
+		familyName = "User"
+	}
+
+	var result CreateAnonymousUserResult
+	err := txhelper.Run(ctx, s.db, func(ctx context.Context, tx pgx.Tx) error {
+		// 1. Create natural_person entity in the same tx.
+		np, _, entityID, err := s.npService.CreateInTx(ctx, tx, coreservice.CreateNaturalPersonInput{
+			GivenName:  givenName,
+			FamilyName: familyName,
+		})
+		if err != nil {
+			return fmt.Errorf("user_accounts.CreateAnonymousUser natural_person: %w", err)
+		}
+
+		// 2. Create user_account row with NULL email.
+		ua, err := db.New(tx).CreateUserAccount(ctx, db.CreateUserAccountParams{
+			AccountHolder: np.EntityID,
+			Email:         pgtype.Text{Valid: false},
+		})
+		if err != nil {
+			return fmt.Errorf("user_accounts.CreateAnonymousUser user_account: %w", err)
+		}
+
+		// 3. Generate a cryptographically random 32-byte session token.
+		raw := make([]byte, 32)
+		if _, err := io.ReadFull(rand.Reader, raw); err != nil {
+			return fmt.Errorf("user_accounts.CreateAnonymousUser generate token: %w", err)
+		}
+		plainToken := hex.EncodeToString(raw)
+
+		// 4. SHA-256 hash the plain token for storage.
+		sum := sha256.Sum256([]byte(plainToken))
+		tokenHash := hex.EncodeToString(sum[:])
+
+		// 5. Insert anon_tokens row; token expires 30 days from now.
+		expiresAt := pgtype.Timestamptz{
+			Time:  time.Now().UTC().Add(30 * 24 * time.Hour),
+			Valid: true,
+		}
+		anonRow, err := db.New(tx).CreateAnonToken(ctx, db.CreateAnonTokenParams{
+			DeviceID:      in.DeviceID,
+			SessionToken:  tokenHash,
+			UserAccountID: ua.ID,
+			ExpiresAt:     expiresAt,
+		})
+		if err != nil {
+			return fmt.Errorf("user_accounts.CreateAnonymousUser anon_token: %w", err)
+		}
+
+		// 6. Observe the user_account creation.
+		after := uaSnapshot(ua)
+		if err := s.obs.Observe(ctx, tx, "create", "user_account", &entityID, nil, after); err != nil {
+			return err
+		}
+
+		result = CreateAnonymousUserResult{
+			UserAccount: toUserAccount(ua, in.GivenName, in.FamilyName),
+			AnonToken: AnonToken{
+				UUID:         anonRow.Uuid,
+				DeviceID:     anonRow.DeviceID,
+				SessionToken: plainToken, // return the raw token, not the hash
+				ExpiresAt:    anonRow.ExpiresAt,
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		return CreateAnonymousUserResult{}, err
+	}
+
+	// Post-commit observer.
+	after := map[string]any{
+		"uuid":  result.UserAccount.UUID.String(),
+		"email": nil,
+	}
+	s.obs.ObserveAfterCommit(ctx, "create", "user_account", &result.UserAccount.AccountHolder, after)
+	s.obs.ObserveAfterCommit(ctx, "create", "natural_person", &result.UserAccount.AccountHolder, map[string]any{
+		"given_name":  givenName,
+		"family_name": familyName,
+	})
+
+	return result, nil
 }
 
 // List returns all user accounts matching the optional search term, with
@@ -278,9 +417,10 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 
 	before := uaSnapshot(ua)
 
-	newEmail := ua.Email
+	newEmail := ua.Email // pgtype.Text
 	if in.Email != nil {
-		newEmail = strings.TrimSpace(strings.ToLower(*in.Email))
+		trimmed := strings.TrimSpace(strings.ToLower(*in.Email))
+		newEmail = pgtype.Text{String: trimmed, Valid: true}
 	}
 
 	var updated db.UserAccount
@@ -294,6 +434,16 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 			EmailVerifiedAt: ua.EmailVerifiedAt,
 		}); err != nil {
 			return fmt.Errorf("user_accounts.Update update: %w", err)
+		}
+
+		// Detect upgrade: was anonymous (NULL email), now has email.
+		wasAnonymous := !ua.Email.Valid
+		nowHasEmail := newEmail.Valid
+
+		if wasAnonymous && nowHasEmail {
+			if err := qtx.DeleteAnonTokensByUserAccountID(ctx, ua.ID); err != nil {
+				return fmt.Errorf("user_accounts.Update delete anon_tokens: %w", err)
+			}
 		}
 
 		// Update natural person name fields in the same tx.
@@ -378,7 +528,6 @@ func (s *UserAccountService) Delete(ctx context.Context, id uuid.UUID) error {
 	s.obs.ObserveAfterCommit(ctx, "delete", "user_account", &eid, nil)
 	return nil
 }
-
 
 // RecordLogin records a successful login event in the audit log.
 // It loads the user_account for accountID, sets the opctx actor to that
@@ -481,11 +630,16 @@ func (s *UserAccountService) LoadByUUID(ctx context.Context, id uuid.UUID) (db.U
 
 // toUserAccount converts a db.UserAccount to the service-layer UserAccount type.
 func toUserAccount(ua db.UserAccount, givenName, familyName string) UserAccount {
+	var email *string
+	if ua.Email.Valid {
+		email = &ua.Email.String
+	}
 	return UserAccount{
 		ID:            ua.ID,
 		UUID:          ua.Uuid,
 		AccountHolder: ua.AccountHolder,
-		Email:         ua.Email,
+		Email:         email,
+		IsAnonymous:   !ua.Email.Valid,
 		EmailVerified: ua.EmailVerifiedAt != nil,
 		GivenName:     givenName,
 		FamilyName:    familyName,
@@ -495,9 +649,13 @@ func toUserAccount(ua db.UserAccount, givenName, familyName string) UserAccount 
 
 // uaSnapshot builds an audit-log-friendly map from a db.UserAccount.
 func uaSnapshot(ua db.UserAccount) map[string]any {
+	emailVal := any(nil)
+	if ua.Email.Valid {
+		emailVal = ua.Email.String
+	}
 	return map[string]any{
 		"uuid":  ua.Uuid.String(),
-		"email": ua.Email,
+		"email": emailVal,
 	}
 }
 

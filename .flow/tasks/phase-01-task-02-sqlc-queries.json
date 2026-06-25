@@ -1,0 +1,15 @@
+{
+  "branch": "phase-01-task-02-sqlc-queries",
+  "checkpoints": [
+    {
+      "commit": "b0a3854",
+      "description": "author anon_tokens.sql queries",
+      "timestamp": "2026-06-23T21:21:29Z"
+    },
+    {
+      "commit": "86851b7",
+      "description": "run sqlc generate and confirm generated types",
+      "timestamp": "2026-06-23T21:22:21Z"
+    }
+  ]
+}

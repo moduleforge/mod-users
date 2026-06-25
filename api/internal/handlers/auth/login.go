@@ -87,7 +87,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		"token": token,
 		"user": map[string]any{
 			"uuid":  ua.Uuid.String(),
-			"email": ua.Email,
+			"email": ua.Email.String,
 		},
 	})
 }

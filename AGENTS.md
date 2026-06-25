@@ -4,14 +4,14 @@ This file is the canonical reference for contributors and AI agents working on t
 
 ## Project overview
 
-`@moduleforge/users-module` is a ModuleForge monorepo module providing user identity, account management, and authentication. It ships four sub-projects: `model/` (Go/Postgres/sqlc), `api/` (Go HTTP), `gui/` (TypeScript/React), and `example/` (Next.js demo). See [docs/architecture.md](./docs/architecture.md) for the full system design and [docs/users-module-spec.md](./docs/users-module-spec.md) for the feature specification.
+`@moduleforge/users-module` is a ModuleForge monorepo module providing user identity, account management, and authentication. It ships three sub-projects: `model/` (Go/Postgres/sqlc), `api/` (Go HTTP), and `gui/` (TypeScript/React). A demo application (`app-mfdemo`) lives in a separate project at the aggregate level. See [docs/architecture.md](./docs/architecture.md) for the full system design and [docs/users-module-spec.md](./docs/users-module-spec.md) for the feature specification.
 
 ## Prerequisites
 
 | Tool | Min version | Purpose |
 |---|---|---|
 | Go | 1.21+ | `model/` and `api/` sub-projects |
-| Bun | 1.0+ | `gui/`, `example/`, root workspace |
+| Bun | 1.0+ | `gui/`, root workspace |
 | Docker + Compose | any recent | Local dev stack (Postgres, Authelia, Mailpit) |
 | GNU make | 3.81+ | Build orchestration (use `gmake` on macOS if needed) |
 | sqlc | latest | Go query code generation (`model/`) |
@@ -26,7 +26,6 @@ This file is the canonical reference for contributors and AI agents working on t
    git clone git@github.com:moduleforge/users-module.git
    cd users-module
    bun install          # installs root workspace deps (includes gui/)
-   cd example && bun install && cd ..   # example/ is standalone
    ```
 
 2. **Copy the env file:**
@@ -65,7 +64,6 @@ make build           # build all sub-projects (default target)
 make build.model     # model/ only
 make build.api       # api/ only
 make build.gui       # gui/ only (requires yalc setup)
-make build.example   # example/ only
 make preflight       # verify tool versions and fix stale deps across all sub-projects
 ```
 
@@ -117,7 +115,7 @@ The generated files are committed to the repo. `make clean.build` removes `model
 ## Working in worktrees
 
 This repo uses git worktrees for isolated plan branches. When working in a worktree:
-- Run `bun install` at the worktree root and inside `example/` (the lockfiles are checked in but `node_modules` is gitignored).
+- Run `bun install` at the worktree root (the lockfile is checked in but `node_modules` is gitignored).
 - Copy `.yalc/` from the main checkout into the worktree before building `gui/`.
 - Copy `.env` from the main checkout (it is gitignored).
 
@@ -146,7 +144,6 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 
 - **CI workflow still uses pnpm** (`next-steps id: r86L`): `.github/workflows/ci.yml` installs pnpm and runs `pnpm install --frozen-lockfile`. CI will fail until the workflow is updated to use bun. This is a **blocker** for CI-dependent merges.
 - **yalc dep in gui/package.json** (`next-steps id: 3RgF`): `gui/package.json` lists `@moduleforge/core-gui` as a `file:.yalc/...` dep. Fresh checkouts and CI will fail `bun install` without `.yalc/` present. Consider converting to a peer/optional dep.
-- **example/ dual-lockfile warning** (`next-steps id: QLVr`): Next.js warns about both `bun.lock` (root) and `example/bun.lock` being present. Set `outputFileTracingRoot` in `example/next.config.ts` to silence.
 
 ## Conventions
 

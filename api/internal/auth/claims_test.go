@@ -393,9 +393,9 @@ func TestClaimMapper(t *testing.T) {
 // TestEmailVerifiedClaim covers the bool/string/missing coercion for email_verified.
 func TestEmailVerifiedClaim(t *testing.T) {
 	type tc struct {
-		name          string
-		claimValue    any  // nil means absent
-		wantVerified  bool
+		name         string
+		claimValue   any // nil means absent
+		wantVerified bool
 	}
 	cases := []tc{
 		{name: "bool_true", claimValue: true, wantVerified: true},

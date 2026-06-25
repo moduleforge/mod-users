@@ -63,10 +63,14 @@ components:
         email:
           type: string
           format: email
+          nullable: true
         email_verified:
           type: boolean
         is_admin:
           type: boolean
+        is_anonymous:
+          type: boolean
+          description: True when the account has no email address (anonymous user).
         entity:
           $ref: "#/components/schemas/EntityInfo"
 
@@ -222,6 +226,33 @@ components:
         is_admin:
           type: boolean
 
+    AnonRegisterRequest:
+      type: object
+      required: [device_id]
+      properties:
+        device_id:
+          type: string
+          description: Stable device fingerprint supplied by the client.
+          example: "device-abc123"
+
+    AnonAuthToken:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT access token.
+        session_token:
+          type: string
+          description: Raw session token for cross-session identity continuity. Store securely on the client.
+        user:
+          type: object
+          properties:
+            uuid:
+              type: string
+              format: uuid
+            is_anonymous:
+              type: boolean
+
     # -- App schemas --
 
     AppSummary:
@@ -285,6 +316,7 @@ components:
         email:
           type: string
           format: email
+          nullable: true
         roles:
           type: array
           items:
@@ -460,6 +492,42 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "409":
           description: Email already in use.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/anonymous:
+    post:
+      tags: [Auth]
+      summary: Create anonymous user account
+      description: |
+        Creates a new anonymous user account with no email address. Returns a JWT
+        and a session token for cross-session identity continuity. The account can
+        be upgraded to a named account by patching the email via PUT /v1/self.
+      security: []
+      operationId: registerAnonymous
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnonRegisterRequest"
+      responses:
+        "201":
+          description: Anonymous account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnonAuthToken"
+        "400":
+          description: Validation error (missing device_id).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error.
           content:
             application/json:
               schema:

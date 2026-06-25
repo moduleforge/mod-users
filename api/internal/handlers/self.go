@@ -100,9 +100,13 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 // buildSelfResponse composes the flat response shape the frontend
 // (UserSelf interface) expects.
 func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[string]any {
+	var emailVal any
+	if ua.Email.Valid {
+		emailVal = ua.Email.String
+	}
 	resp := map[string]any{
 		"uuid":       ua.Uuid.String(),
-		"email":      ua.Email,
+		"email":      emailVal,
 		"created_at": ua.CreatedAt.Time,
 		"updated_at": ua.UpdatedAt.Time,
 	}
