@@ -22,43 +22,42 @@ endif
 
 .DEFAULT_GOAL := build
 
-SUBPROJECTS := model api gui example
+SUBPROJECTS := model api gui
 
 # ---------------------------------------------------------------------------
 # Preflight — verify tools + fix cross-platform deps across all sub-projects
 # ---------------------------------------------------------------------------
 
 .PHONY: preflight
-preflight: preflight.model preflight.api preflight.gui preflight.example ## Verify tools and fix stale deps
+preflight: preflight.model preflight.api preflight.gui ## Verify tools and fix stale deps
 	@echo "  preflight complete."
 
-.PHONY: preflight.model preflight.api preflight.gui preflight.example
+.PHONY: preflight.model preflight.api preflight.gui
 preflight.model:   ; @$(MAKE) -C model   preflight
 preflight.api:     ; @$(MAKE) -C api     preflight
 preflight.gui:     ; @$(MAKE) -C gui     preflight
-preflight.example: ; @$(MAKE) -C example preflight
 
 # ---------------------------------------------------------------------------
 # Aggregate / canonical targets
 # ---------------------------------------------------------------------------
 
 .PHONY: build
-build: preflight build.model build.api build.gui build.example ## Build all sub-projects (default)
+build: preflight build.model build.api build.gui ## Build all sub-projects (default)
 
 .PHONY: test
 test: test.unit ## Alias for test.unit
 
 .PHONY: test.unit
-test.unit: test.unit.model test.unit.api test.unit.gui test.unit.example ## Run unit tests across all sub-projects
+test.unit: test.unit.model test.unit.api test.unit.gui ## Run unit tests across all sub-projects
 
 .PHONY: test.integration
-test.integration: test.integration.model test.integration.api test.integration.gui test.integration.example ## Run integration tests across all sub-projects
+test.integration: test.integration.model test.integration.api test.integration.gui ## Run integration tests across all sub-projects
 
 .PHONY: lint
-lint: lint.model lint.api lint.gui lint.example ## Lint all sub-projects (read-only)
+lint: lint.model lint.api lint.gui ## Lint all sub-projects (read-only)
 
 .PHONY: lint-fix
-lint-fix: lint-fix.model lint-fix.api lint-fix.gui lint-fix.example ## Apply lint fixes across all sub-projects
+lint-fix: lint-fix.model lint-fix.api lint-fix.gui ## Apply lint fixes across all sub-projects
 
 .PHONY: clean
 clean: clean.images clean.data clean.build ## Remove build artifacts, DB data, and locally-built images
@@ -127,7 +126,7 @@ _dev.urls:
 	@echo "========================================================================"
 	@echo "  users-module local dev stack"
 	@echo ""
-	@echo "  Example app:        http://localhost:3000/auth/login"
+	@echo "  Demo app:           http://localhost:3000/auth/login (see app-mfdemo/)"
 	@echo "  API:                http://localhost:8080"
 	@echo "  API health:         http://localhost:8080/healthz"
 	@echo "  Mailpit (emails):   http://localhost:8025"
@@ -162,48 +161,41 @@ dev.restart: dev.stop dev.start ## Stop then re-bring up the full stack
 # Per-sub-project delegating targets (dot-namespaced)
 # ---------------------------------------------------------------------------
 
-.PHONY: build.model build.api build.gui build.example
+.PHONY: build.model build.api build.gui
 build.model:   ; @$(MAKE) -C model   build
 build.api:     ; @$(MAKE) -C api     build
 build.gui:     ; @$(MAKE) -C gui     build
-build.example: ; @$(MAKE) -C example build
 
-.PHONY: test.model test.api test.gui test.example
+.PHONY: test.model test.api test.gui
 test.model:   ; @$(MAKE) -C model   test
 test.api:     ; @$(MAKE) -C api     test
 test.gui:     ; @$(MAKE) -C gui     test
-test.example: ; @$(MAKE) -C example test
 
-.PHONY: test.unit.model test.unit.api test.unit.gui test.unit.example
+.PHONY: test.unit.model test.unit.api test.unit.gui
 test.unit.model:   ; @$(MAKE) -C model   test.unit
 test.unit.api:     ; @$(MAKE) -C api     test.unit
 test.unit.gui:     ; @$(MAKE) -C gui     test.unit
-test.unit.example: ; @$(MAKE) -C example test.unit
 
-.PHONY: test.integration.model test.integration.api test.integration.gui test.integration.example
+.PHONY: test.integration.model test.integration.api test.integration.gui
 test.integration.model:   ; @$(MAKE) -C model   test.integration
 test.integration.api:     ; @$(MAKE) -C api     test.integration
 test.integration.gui:     ; @$(MAKE) -C gui     test.integration
-test.integration.example: ; @$(MAKE) -C example test.integration
 
-.PHONY: lint.model lint.api lint.gui lint.example
+.PHONY: lint.model lint.api lint.gui
 lint.model:   ; @$(MAKE) -C model   lint
 lint.api:     ; @$(MAKE) -C api     lint
 lint.gui:     ; @$(MAKE) -C gui     lint
-lint.example: ; @$(MAKE) -C example lint
 
-.PHONY: lint-fix.model lint-fix.api lint-fix.gui lint-fix.example
+.PHONY: lint-fix.model lint-fix.api lint-fix.gui
 lint-fix.model:   ; @$(MAKE) -C model   lint-fix
 lint-fix.api:     ; @$(MAKE) -C api     lint-fix
 lint-fix.gui:     ; @$(MAKE) -C gui     lint-fix
-lint-fix.example: ; @$(MAKE) -C example lint-fix
 
-.PHONY: clean.build clean.build.model clean.build.api clean.build.gui clean.build.example
-clean.build: clean.build.model clean.build.api clean.build.gui clean.build.example ## Remove build artifacts across all sub-projects
+.PHONY: clean.build clean.build.model clean.build.api clean.build.gui
+clean.build: clean.build.model clean.build.api clean.build.gui ## Remove build artifacts across all sub-projects
 clean.build.model:   ; @$(MAKE) -C model   clean
 clean.build.api:     ; @$(MAKE) -C api     clean
 clean.build.gui:     ; @$(MAKE) -C gui     clean
-clean.build.example: ; @$(MAKE) -C example clean
 
 # ---------------------------------------------------------------------------
 # Data + image cleanup (compose-scoped, not owned by any sub-project)
