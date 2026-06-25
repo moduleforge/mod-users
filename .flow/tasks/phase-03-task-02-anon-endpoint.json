@@ -1,0 +1,15 @@
+{
+  "branch": "phase-03-task-02-anon-endpoint",
+  "checkpoints": [
+    {
+      "commit": "bfd49fa",
+      "description": "add userSvc field to auth.Handler, IssueAnonymousJWT, anonymousRequest, and Anonymous handler",
+      "timestamp": "2026-06-23T21:42:28Z"
+    },
+    {
+      "commit": "8c6066a",
+      "description": "add Anonymous handler unit test with table-driven cases for 201/400/500",
+      "timestamp": "2026-06-23T21:43:43Z"
+    }
+  ]
+}

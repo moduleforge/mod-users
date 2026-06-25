@@ -478,25 +478,15 @@ func main() {
 		RedirectBase: cfg.Auth.OAuthRedirectBaseURL,
 		Confirmer:    onboarding,
 	})
+	_ = providersHandler // used by generated routing; suppressed until mfgen wires RegisterOIDCConfigRoutes
 
 	// Onboarding endpoints. Mounted only when TOKEN_DISPLAY != none.
 	// They must be reachable even when state is unconfirmed (the whole
 	// point), so they sit OUTSIDE the RequireOIDCConfirmed gate.
 	if cfg.Onboarding.TokenDisplay != config.TokenDisplayNone {
 		r.Route("/v1/oidc-config", func(r chi.Router) {
-			r.Get("/status", onboarding.Status)
-			r.Post("/confirm", onboarding.Confirm)
-			r.Get("/saved", onboarding.Saved)
-			// Per-provider CRUD (phase 9.11a). All writes require admin
-			// OR setup token; reads require the same (no public info).
-			r.Post("/providers", providersHandler.Create)
-			r.Get("/providers/{id}", providersHandler.Get)
-			r.Put("/providers/{id}", providersHandler.Update)
-			r.Delete("/providers/{id}", providersHandler.Revert)
-			if cfg.Onboarding.TokenDisplay == config.TokenDisplayLocalhost ||
-				cfg.Onboarding.TokenDisplay == config.TokenDisplayBoth {
-				r.Get("/setup-token", onboarding.SetupToken)
-			}
+			// TODO(generated): oidc-config routes wired here by mfgen — see phase-3 codegen-main
+			// handlers.RegisterOIDCConfigRoutes(r, onboarding, providersHandler)
 		})
 	}
 
