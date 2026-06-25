@@ -43,6 +43,7 @@ import (
 	"github.com/moduleforge/users-module/api/internal/observability"
 	"github.com/moduleforge/users-module/api/internal/server"
 	usersservice "github.com/moduleforge/users-module/api/internal/service"
+	"github.com/moduleforge/users-module/api/internal/users"
 	db "github.com/moduleforge/users-module/model/db"
 )
 
@@ -378,16 +379,8 @@ func main() {
 	// visible to the hook's own transaction. Failure is logged and non-fatal: the
 	// account already exists and an operator can create the grant manually via
 	// POST /v1/authz/grants.
-	firstUserHook := func(hookCtx context.Context, entityID int64) error {
-		ent, err := coredb.New(pool).GetEntityByID(hookCtx, entityID)
-		if err != nil {
-			return fmt.Errorf("first-user hook: resolve entity UUID: %w", err)
-		}
-		if _, err := authzSvcs.Grant.CreateWildcardGrant(hookCtx, ent.Uuid, "manage"); err != nil {
-			return fmt.Errorf("first-user hook: create wildcard grant: %w", err)
-		}
-		return nil
-	}
+	// TODO(generated): first-user hook constructed and wired by mfgen — see phase-3 codegen-main
+	firstUserHook := users.NewFirstUserHook(pool, authzSvcs.Grant)
 	authHandler.SetFirstUserHook(firstUserHook)
 	resolver.SetFirstUserHook(firstUserHook)
 
