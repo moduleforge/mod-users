@@ -2,7 +2,7 @@
 
 ## Overview
 
-`users-module` is a ModuleForge module that provides user identity, account management, and authentication as a composable unit. A host application integrates it by mounting the Go model migrations, wiring the Go API services, and importing the React component library. The module ships four sub-projects — `model`, `api`, `gui`, and `example` — each independently consumable and built to the ModuleForge module contract described in [core-module architecture](https://github.com/moduleforge/core-module/blob/main/docs/architecture.md).
+`users-module` is a ModuleForge module that provides user identity, account management, and authentication as a composable unit. A host application integrates it by mounting the Go model migrations, wiring the Go API services, and importing the React component library. The module ships three sub-projects — `model`, `api`, and `gui` — each independently consumable and built to the ModuleForge module contract described in [core-module architecture](https://github.com/moduleforge/core-module/blob/main/docs/architecture.md). A demo application (`app-mfdemo`) that wires the module end-to-end lives in a separate project at the aggregate level.
 
 ## Sub-project layout
 
@@ -11,9 +11,7 @@
 | `model/` | Go | Postgres schema, goose migrations, sqlc query code | Go package with typed query functions and model types |
 | `api/` | Go | HTTP handlers, business-logic services, auth middleware | Mountable HTTP routes; Go service constructors |
 | `gui/` | TypeScript / React | UI components for auth flows and user management | `@moduleforge/users-gui` npm package |
-| `example/` | TypeScript / Next.js | Demo application wiring the module end-to-end | Reference for host-application integration |
-
-The sub-projects have a layered dependency: `api` imports `model`; `gui` is independent of the Go code; `example` depends on both the running `api` and the `gui` library.
+The sub-projects have a layered dependency: `api` imports `model`; `gui` is independent of the Go code. The demo application (`app-mfdemo`, a separate project at the aggregate level) depends on both the running `api` and the `gui` library.
 
 ## Data model
 
@@ -90,7 +88,7 @@ When a new OIDC login arrives for an email that matches an existing account, the
 
 The library depends on `@moduleforge/core-gui` as a peer. For local development, this dependency is linked via yalc rather than a published registry. See [AGENTS.md](../AGENTS.md) for the yalc setup procedure.
 
-The `example/` Next.js app (standalone — not part of the Bun workspace) wires together the running API and the GUI components to demonstrate a complete integration. It serves as the component showcase in lieu of a dedicated story tool.
+The `app-mfdemo` project (a separate Next.js app at the aggregate level — not part of this Bun workspace) wires together the running API and the GUI components to demonstrate a complete integration. It serves as the component showcase in lieu of a dedicated story tool.
 
 ## Local development stack
 
@@ -102,7 +100,7 @@ The `example/` Next.js app (standalone — not part of the Bun workspace) wires 
 | Authelia | 9091 | Local OIDC identity provider |
 | Mailpit | 1025/8025 | SMTP trap for email-code testing |
 | API server | 8080 | Go HTTP API (built from source) |
-| GUI dev server | 3000 | Next.js example app with hot-reload |
+| GUI dev server | 3000 | Next.js dev server (app-mfdemo) with hot-reload |
 
 Copy `.env.example` to `.env` and add `127.0.0.1 authelia` to `/etc/hosts` before first run. See `deploy/local/README.md` for the full first-time setup walkthrough.
 
@@ -117,10 +115,9 @@ make lint           # lint all sub-projects
 make dev.start      # start full local dev stack
 make preflight      # verify tools and fix stale deps
 make build.gui      # build gui/ only
-make build.example  # build example/ only
 ```
 
-JavaScript/TypeScript sub-projects use Bun. `gui/` is a member of the root Bun workspace (`bun install` at the repo root installs its deps). `example/` is standalone (its own `bun.lock`; `bun install` inside `example/`). Go sub-projects (`model/`, `api/`) have their own `go.mod` files.
+JavaScript/TypeScript sub-projects use Bun. `gui/` is a member of the root Bun workspace (`bun install` at the repo root installs its deps). Go sub-projects (`model/`, `api/`) have their own `go.mod` files. The demo app (`app-mfdemo`) is a separate project at the aggregate level.
 
 ## Cross-cutting patterns
 

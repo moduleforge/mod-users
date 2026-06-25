@@ -6,7 +6,7 @@ This document is the canonical functional specification for `@moduleforge/users-
 
 This spec assumes familiarity with the ModuleForge module model described in [core-module's architecture overview](https://github.com/moduleforge/core-module/blob/main/docs/architecture.md). It does not repeat cross-cutting design rationale (authorization, state management, entity typing, database conventions) that is documented there.
 
-The spec covers three sub-packages — `model`, `api`, and `gui` — plus the `example` demo app. For design choices and the *how* of each sub-package, see [docs/architecture.md](./architecture.md). For directory layout and sub-project conventions, see [docs/project-structure.md](./project-structure.md). For build, test, and development commands, see [AGENTS.md](../AGENTS.md).
+The spec covers three sub-packages — `model`, `api`, and `gui`. A demo application (`app-mfdemo`) that exercises the module end-to-end is a separate project at the aggregate level. For design choices and the *how* of each sub-package, see [docs/architecture.md](./architecture.md). For directory layout and sub-project conventions, see [docs/project-structure.md](./project-structure.md). For build, test, and development commands, see [AGENTS.md](../AGENTS.md).
 
 ## Table of contents
 
@@ -125,7 +125,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui` — plus the `e
 
 **Actor:** Authenticated admin user (or operator using the setup token flow when no admin account yet exists).
 
-**Action:** Uses the OIDC configuration UI (served by `example/`) to add, edit, or disable OIDC providers. Changes are persisted to `oidc_providers`. The "Test configuration" flow exercises a full round-trip against the provider without affecting the admin's session and without creating user records.
+**Action:** Uses the OIDC configuration UI (served by `app-mfdemo`) to add, edit, or disable OIDC providers. Changes are persisted to `oidc_providers`. The "Test configuration" flow exercises a full round-trip against the provider without affecting the admin's session and without creating user records.
 
 **Outcome:** The effective provider configuration is the merged result of environment variables and any `oidc_providers` DB overrides — DB rows take precedence. The `oidc_config` singleton tracks whether OIDC is opted out entirely, and holds the setup-token hash used to authorize the initial confirm step before any admin account exists.
 
@@ -147,7 +147,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui` — plus the `e
 
 **Action:** Imports components from `@moduleforge/users-gui` (via npm, Bun workspace, or yalc local link) and composes them into an application shell.
 
-**Outcome:** Components render the auth, profile, admin, and OIDC-config surfaces. The `example/` Next.js app demonstrates all components in a working context; it is the component showcase (the role Storybook plays in other projects). The demo app requires the API running locally.
+**Outcome:** Components render the auth, profile, admin, and OIDC-config surfaces. The `app-mfdemo` Next.js project (at the aggregate level) demonstrates all components in a working context; it is the component showcase (the role Storybook plays in other projects). The demo app requires the API running locally.
 
 ---
 
@@ -282,7 +282,7 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 
 - **Email delivery.** The module generates codes and tokens for email-code login, verification, and password reset. It does not implement or bundle an email transport; the application provides the mail sender.
 
-- **User interface routing and application shell.** The `gui/` component library provides components; it does not provide routing, navigation state, or an app shell. The `example/` Next.js demo app shows one way to compose the components but is not production application code.
+- **User interface routing and application shell.** The `gui/` component library provides components; it does not provide routing, navigation state, or an app shell. The `app-mfdemo` Next.js project (at the aggregate level) shows one way to compose the components but is not production application code.
 
 - **Multi-tenancy beyond app membership.** Application-level tenancy (the `apps` / `apps_user_accounts` model) is available, but the module does not enforce cross-tenant data isolation; that is an application composition concern.
 
