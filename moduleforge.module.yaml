@@ -157,6 +157,8 @@ provides:
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
       register: handlers.RegisterOIDCConfigRoutes
+      register_args:
+        - handler:providersHandler  # *handlers.ProvidersHandler — OIDC provider CRUD routes
 
     # /v1 (core entity routes) — core-module's NewRouter mounted here via mountFromModule.
     # The compiler emits: r.Mount("/v1", corehttpapi.NewRouter(coreDeps))
