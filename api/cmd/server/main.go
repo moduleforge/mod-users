@@ -407,6 +407,7 @@ func main() {
 	authHandler.SetUserSvc(uaSvc)
 
 	oidcHandler := authhandlers.NewOIDCHandlerWithPool(pool, queries, oauth, resolver, uaSvc, cfg, observerGroup)
+	_ = oidcHandler // referenced by TODO comment above; wired via RegisterRoutes in generated main.go
 
 	// grantAdmin creates a wildcard manage grant for a user account, checked and
 	// issued at the composition root to avoid a direct peer dependency in handlers/.
@@ -509,18 +510,8 @@ func main() {
 	r.Route("/v1/auth", func(r chi.Router) {
 		r.Use(requireConfirmed)
 
-		r.Post("/register", authHandler.Register)
-		r.Post("/login", authHandler.Login)
-		r.Post("/anonymous", authHandler.Anonymous)
-		r.Post("/email-code/request", authHandler.EmailCodeRequest)
-		r.Post("/email-code/verify", authHandler.EmailCodeVerify)
-		r.Post("/password-reset/request", authHandler.PasswordResetRequest)
-		r.Post("/password-reset/confirm", authHandler.PasswordResetConfirm)
-
-		// OIDC provider discovery + authorization-code flow (unauthenticated).
-		r.Get("/providers", oidcHandler.ListProviders)
-		r.Get("/oidc/{provider}/start", oidcHandler.Start)
-		r.Get("/oidc/{provider}/callback", oidcHandler.Callback)
+		// TODO(generated): auth routes wired here by mfgen — see phase-3 codegen-main
+		// authhandlers.RegisterRoutes(r, authHandler, oidcHandler)
 	})
 
 	r.Route("/v1", func(r chi.Router) {
