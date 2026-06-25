@@ -219,13 +219,12 @@ provides:
 
 hooks:
   # firstUserGrant bootstraps the wildcard manage grant for the first created user.
-  # The inline closure in main.go will be extracted to an exported function in phase-3.
-  # TODO(phase-3): task 004 (extract-first-user-hook) — will create handlers.WireFirstUserHook
+  # Extracted from the inline closure in main.go by phase-2 task 004.
   firstUserGrant:
-    # symbol: handlers.WireFirstUserHook  # TODO(phase-3/004): function not yet extracted
+    symbol: users.NewFirstUserHook   # github.com/moduleforge/users-module/api/internal/users
     args:
-      - service:userAccountService
-      - service:grantService       # GrantServicer from authz-module
+      - infra:pool                   # *pgxpool.Pool
+      - service:grantService         # GrantServicer from authz-module
 
 requires:
   services:
