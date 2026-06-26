@@ -115,14 +115,14 @@ provides:
         - field:cfg.Server.GUIBaseURL
 
     # usersHandler — user account management handler; serves /v1/user-accounts/*.
-    # grantAdmin/revokeAdmin are composition-root closures (gap JEDl); nil for demo build.
+    # grantAdmin/revokeAdmin are composition-root closures defined in the app manifest.
     - name: usersHandler
       type: "*handlers.UserAccountsHandler"
       constructor: handlers.NewUserAccountsHandler
       args:
         - service:userAccountService
-        - expr:nil                   # grantAdminFn — composition-root closure; deferred (JEDl)
-        - expr:nil                   # revokeAdminFn — composition-root closure; deferred (JEDl)
+        - closure:grantAdminFn       # handlers.GrantAdminFn — defined in app manifest closures
+        - closure:revokeAdminFn      # handlers.GrantAdminFn — defined in app manifest closures
 
   routes:
     # /v1/auth — local login, register, email-code, password-reset, OIDC callback.
@@ -161,11 +161,6 @@ provides:
     # /v1 (account routes) — user-accounts CRUD, assume-identity, and apps/user-accounts.
     - prefix: /v1
       handler: usersHandler
-      constructor: handlers.NewUserAccountsHandler
-      args:
-        - service:userAccountService
-        - expr:nil
-        - expr:nil
       register: handlers.RegisterAccountRoutes
       register_args:
         - expr:nil              # assumeHandler — not yet constructed; nil skips assume routes
