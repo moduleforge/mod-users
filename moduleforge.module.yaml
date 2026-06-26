@@ -114,6 +114,53 @@ provides:
         - infra:smtp                 # *email.SMTPSender — satisfies email.Sender interface
         - field:cfg.Server.GUIBaseURL
 
+    # assumeHandler — assume-identity handler; serves assume routes under /v1.
+    # Depends on userAccountService for identity switching and cfg for JWT signing.
+    - name: assumeHandler
+      type: "*handlers.AssumeHandler"
+      constructor: handlers.NewAssumeHandler
+      args:
+        - service:userAccountService
+        - field:cfg.LocalAuth.JWTSecret
+        - field:cfg.LocalAuth.LocalIssuer
+
+    # appsHandler — apps/user-accounts handler; serves apps routes under /v1.
+    # Depends on authorizer and observerGroup in addition to pool and queries.
+    - name: appsHandler
+      type: "*handlers.AppsHandler"
+      constructor: handlers.NewAppsHandler
+      args:
+        - infra:pool
+        - queries:usersdb
+        - service:authorizer
+        - service:observerGroup
+
+    # oidcHandler — OIDC callback and token-exchange handler; serves /v1/auth OIDC routes.
+    # Depends on userResolver, userAccountService, oauthOrchestrator, and observerGroup.
+    - name: oidcHandler
+      type: "*authhandlers.OIDCHandler"
+      constructor: authhandlers.NewOIDCHandler
+      args:
+        - infra:pool
+        - queries:usersdb
+        - service:oauthOrchestrator
+        - service:userResolver
+        - service:userAccountService
+        - infra:cfg
+        - service:observerGroup
+
+    # providersHandler — OIDC provider CRUD handler; serves /v1/oidc-config provider routes.
+    # Depends on oauthOrchestrator and onboardingHandler (as Confirmer).
+    - name: providersHandler
+      type: "*handlers.ProvidersHandler"
+      constructor: handlers.NewProvidersHandler
+      args:
+        - queries:usersdb
+        - service:oauthOrchestrator
+        - field:cfg.Providers
+        - field:cfg.Auth.OAuthRedirectBaseURL
+        - service:onboardingHandler
+
     # usersHandler — user account management handler; serves /v1/user-accounts/*.
     # grantAdmin/revokeAdmin are composition-root closures defined in the app manifest.
     - name: usersHandler
@@ -140,7 +187,7 @@ provides:
         - field:cfg.Server.GUIBaseURL
       register: authhandlers.RegisterRoutes
       register_args:
-        - expr:nil              # oidcHandler — not yet constructed; nil skips OIDC routes
+        - service:oidcHandler
       middleware:
         - requireOIDCConfirmed
 
@@ -156,15 +203,15 @@ provides:
         - field:cfg.Onboarding.TokenDisplay
       register: handlers.RegisterOIDCConfigRoutes
       register_args:
-        - expr:nil              # providersHandler — not yet constructed; nil skips provider CRUD
+        - service:providersHandler
 
     # /v1 (account routes) — user-accounts CRUD, assume-identity, and apps/user-accounts.
     - prefix: /v1
       handler: usersHandler
       register: handlers.RegisterAccountRoutes
       register_args:
-        - expr:nil              # assumeHandler — not yet constructed; nil skips assume routes
-        - expr:nil              # appsHandler — not yet constructed; nil skips apps routes
+        - service:assumeHandler
+        - service:appsHandler
       middleware:
         - requireOIDCConfirmed
         - requireAuth
