@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	coreAuthz "github.com/moduleforge/core-api/authz"
+	"github.com/moduleforge/core-api/observer"
 	usersdb "github.com/moduleforge/users-module/model/db"
 
 	"github.com/moduleforge/users-module/api/auth"
@@ -47,6 +49,42 @@ func NewOIDCConfigHandler(
 // the admin-grant closures (known gap: phase-4 closure design).
 func NewUserAccountsHandler(svc *innersvc.UserAccountService, grantAdmin, revokeAdmin GrantAdminFn) *UserAccountsHandler {
 	return inner.NewUserAccountsHandler(svc, grantAdmin, revokeAdmin)
+}
+
+// NewProvidersHandler constructs the OIDC providers handler from individual
+// dependencies declared in the module manifest.
+func NewProvidersHandler(
+	queries *usersdb.Queries,
+	oauth *auth.OAuth,
+	envRegistry config.ProviderRegistry,
+	redirectBase string,
+	confirmer *OIDCConfigHandler,
+) *ProvidersHandler {
+	return inner.NewProvidersHandler(inner.ProvidersDeps{
+		Queries:      queries,
+		EnvRegistry:  envRegistry,
+		OAuth:        oauth,
+		RedirectBase: redirectBase,
+		Confirmer:    confirmer,
+	})
+}
+
+// NewAssumeHandler constructs the assume-identity handler.
+func NewAssumeHandler(
+	svc *innersvc.UserAccountService,
+	jwtSecret, issuer string,
+) *AssumeHandler {
+	return inner.NewAssumeHandler(svc, jwtSecret, issuer)
+}
+
+// NewAppsHandler constructs the apps handler.
+func NewAppsHandler(
+	pool *pgxpool.Pool,
+	queries *usersdb.Queries,
+	az coreAuthz.Authorizer,
+	observers *observer.ObserverGroup,
+) *AppsHandler {
+	return inner.NewAppsHandler(pool, queries, az, observers)
 }
 
 // RegisterOIDCConfigRoutes mounts the OIDC-config endpoints on r.
