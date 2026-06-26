@@ -8,11 +8,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moduleforge/core-api/observer"
 	coredb "github.com/moduleforge/core-model/db"
 	usersdb "github.com/moduleforge/users-module/model/db"
 
+	"github.com/moduleforge/users-module/api/auth"
+	"github.com/moduleforge/users-module/api/config"
 	"github.com/moduleforge/users-module/api/email"
 	inner "github.com/moduleforge/users-module/api/internal/handlers/auth"
+	innersvc "github.com/moduleforge/users-module/api/internal/service"
 )
 
 // Handler is the local-auth and OIDC-callback request handler.
@@ -40,4 +44,19 @@ func New(
 // is not configured (routes that need an OIDCHandler are skipped).
 func RegisterRoutes(r chi.Router, h *Handler, oidc *OIDCHandler) {
 	inner.RegisterRoutes(r, h, oidc)
+}
+
+// NewOIDCHandler constructs an OIDCHandler with a connection pool and observer
+// group for production use. It delegates to the internal constructor that
+// supports the link-mode callback path.
+func NewOIDCHandler(
+	pool *pgxpool.Pool,
+	queries *usersdb.Queries,
+	oauth *auth.OAuth,
+	resolver *auth.UserResolver,
+	userSvc *innersvc.UserAccountService,
+	cfg *config.Config,
+	obs *observer.ObserverGroup,
+) *OIDCHandler {
+	return inner.NewOIDCHandlerWithPool(pool, queries, oauth, resolver, userSvc, cfg, obs)
 }
