@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/moduleforge/users-module/api/config"
-	inner "github.com/moduleforge/users-module/api/internal/server"
+	"github.com/moduleforge/mod-users/api/config"
+	inner "github.com/moduleforge/mod-users/api/internal/server"
 )
 
 // New constructs an *http.Server and a *chi.Mux from the provided configuration.

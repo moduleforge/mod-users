@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/moduleforge/users-module/api/internal/config"
-	db "github.com/moduleforge/users-module/model/db"
+	"github.com/moduleforge/mod-users/api/internal/config"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // fakeProvidersQuerier is an in-memory store for oidc_providers rows.

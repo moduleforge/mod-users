@@ -19,7 +19,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/moduleforge/users-module/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 func TestValidateReturnPath(t *testing.T) {

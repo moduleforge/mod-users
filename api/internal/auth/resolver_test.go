@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	db "github.com/moduleforge/users-module/model/db"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // newResolverWithStub builds a UserResolver whose only moving part is a stub

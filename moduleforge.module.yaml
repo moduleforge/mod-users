@@ -1,12 +1,12 @@
 module: users
-goModule: github.com/moduleforge/users-module/api
+goModule: github.com/moduleforge/mod-users/api
 
 go:
   api:
-    modulePath: github.com/moduleforge/users-module/api
+    modulePath: github.com/moduleforge/mod-users/api
     dir: ./api
   model:
-    modulePath: github.com/moduleforge/users-module/model
+    modulePath: github.com/moduleforge/mod-users/model
     dir: ./model
 
 migrations:
@@ -14,7 +14,7 @@ migrations:
     first: 100
     last: 199
   after:
-    - core-module
+    - mod-core
 
 provides:
   services:

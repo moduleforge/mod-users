@@ -12,8 +12,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	localauth "github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/config"
+	localauth "github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 // newTestOAuth stands up a minimal OAuth struct suitable for handler-level

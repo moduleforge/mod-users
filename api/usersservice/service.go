@@ -9,9 +9,9 @@ import (
 	"github.com/moduleforge/core-api/txhelper"
 	"github.com/moduleforge/core-api/types"
 	coredb "github.com/moduleforge/core-model/db"
-	usersdb "github.com/moduleforge/users-module/model/db"
+	usersdb "github.com/moduleforge/mod-users/model/db"
 
-	inner "github.com/moduleforge/users-module/api/internal/service"
+	inner "github.com/moduleforge/mod-users/api/internal/service"
 )
 
 // UserAccountService manages user account CRUD.

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/moduleforge/core-api/opctx"
-	"github.com/moduleforge/users-module/api/internal/authz"
+	"github.com/moduleforge/mod-users/api/internal/authz"
 )
 
 // --- helpers ---

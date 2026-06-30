@@ -21,10 +21,10 @@ import (
 
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/txhelper"
-	localauth "github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/server"
-	usersservice "github.com/moduleforge/users-module/api/internal/service"
-	db "github.com/moduleforge/users-module/model/db"
+	localauth "github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	usersservice "github.com/moduleforge/mod-users/api/internal/service"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // IdentitiesHandler serves identity-management endpoints under /v1/self.

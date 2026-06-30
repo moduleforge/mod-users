@@ -3,7 +3,7 @@
 // modules outside users-module/api can reference them.
 package config
 
-import inner "github.com/moduleforge/users-module/api/internal/config"
+import inner "github.com/moduleforge/mod-users/api/internal/config"
 
 // Type aliases — interchangeable with the internal types (Go spec: same type).
 type Config = inner.Config

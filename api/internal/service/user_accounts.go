@@ -29,7 +29,7 @@ import (
 	"github.com/moduleforge/core-api/txhelper"
 	"github.com/moduleforge/core-api/types"
 	coredb "github.com/moduleforge/core-model/db"
-	db "github.com/moduleforge/users-module/model/db"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // CreateUserAccountInput carries the fields required to create a user account

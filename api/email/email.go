@@ -2,7 +2,7 @@
 // It re-exports the SMTPSender type and constructor from internal/email.
 package email
 
-import inner "github.com/moduleforge/users-module/api/internal/email"
+import inner "github.com/moduleforge/mod-users/api/internal/email"
 
 // SMTPSender sends transactional emails via SMTP.
 type SMTPSender = inner.SMTPSender

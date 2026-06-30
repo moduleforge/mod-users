@@ -17,10 +17,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moduleforge/core-api/observer"
-	localauth "github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/config"
-	"github.com/moduleforge/users-module/api/internal/server"
-	db "github.com/moduleforge/users-module/model/db"
+	localauth "github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // normalizeProviderID lowercases the provider URL param so the lookup matches

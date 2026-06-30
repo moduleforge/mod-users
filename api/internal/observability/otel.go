@@ -18,7 +18,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	nooptrace "go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/moduleforge/users-module/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 // ShutdownFunc flushes and shuts down all OTel providers. Callers should

@@ -18,7 +18,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/moduleforge/users-module/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 // microsoftTenantIssuerRe matches the tenant-specific issuer URL Microsoft

@@ -12,12 +12,12 @@ import (
 
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
-	usersdb "github.com/moduleforge/users-module/model/db"
+	usersdb "github.com/moduleforge/mod-users/model/db"
 
-	"github.com/moduleforge/users-module/api/auth"
-	"github.com/moduleforge/users-module/api/config"
-	inner "github.com/moduleforge/users-module/api/internal/handlers"
-	innersvc "github.com/moduleforge/users-module/api/internal/service"
+	"github.com/moduleforge/mod-users/api/auth"
+	"github.com/moduleforge/mod-users/api/config"
+	inner "github.com/moduleforge/mod-users/api/internal/handlers"
+	innersvc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
 // Handler type aliases.

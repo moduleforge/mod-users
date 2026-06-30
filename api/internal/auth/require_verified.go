@@ -3,7 +3,7 @@ package auth
 import (
 	"net/http"
 
-	"github.com/moduleforge/users-module/api/internal/server"
+	"github.com/moduleforge/mod-users/api/internal/server"
 )
 
 // RequireVerifiedEmail blocks the wrapped handler when the resolved UserContext

@@ -4,8 +4,8 @@ DATABASE_URL ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 
 # Locate core-model migrations via go list, falling back to a relative path
 # for fresh clones before go work sync has run.
-CORE_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/core-model 2>/dev/null || echo ../../core-module/model)
-AUTHZ_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/authz-model 2>/dev/null || echo ../../authz-module/model)
+CORE_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/core-model 2>/dev/null || echo ../../mod-core/model)
+AUTHZ_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/authz-model 2>/dev/null || echo ../../mod-authz/model)
 
 .DEFAULT_GOAL := build
 

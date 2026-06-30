@@ -13,9 +13,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	localauth "github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/server"
-	db "github.com/moduleforge/users-module/model/db"
+	localauth "github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // passwordResetRequestBody is the body for POST /v1/auth/password-reset/request.

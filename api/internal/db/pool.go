@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/moduleforge/users-module/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 // New creates a pgx v5 connection pool configured from cfg.DB,

@@ -10,13 +10,13 @@ import (
 
 	"github.com/moduleforge/core-api/observer"
 	coredb "github.com/moduleforge/core-model/db"
-	usersdb "github.com/moduleforge/users-module/model/db"
+	usersdb "github.com/moduleforge/mod-users/model/db"
 
-	"github.com/moduleforge/users-module/api/auth"
-	"github.com/moduleforge/users-module/api/config"
-	"github.com/moduleforge/users-module/api/email"
-	inner "github.com/moduleforge/users-module/api/internal/handlers/auth"
-	innersvc "github.com/moduleforge/users-module/api/internal/service"
+	"github.com/moduleforge/mod-users/api/auth"
+	"github.com/moduleforge/mod-users/api/config"
+	"github.com/moduleforge/mod-users/api/email"
+	inner "github.com/moduleforge/mod-users/api/internal/handlers/auth"
+	innersvc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
 // Handler is the local-auth and OIDC-callback request handler.

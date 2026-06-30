@@ -13,8 +13,8 @@ import (
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/txhelper"
-	"github.com/moduleforge/users-module/api/internal/server"
-	db "github.com/moduleforge/users-module/model/db"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // AppsHandler serves /v1/apps endpoints.

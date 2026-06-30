@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	localAuthz "github.com/moduleforge/users-module/api/internal/authz"
-	"github.com/moduleforge/users-module/api/internal/server"
+	localAuthz "github.com/moduleforge/mod-users/api/internal/authz"
+	"github.com/moduleforge/mod-users/api/internal/server"
 )
 
 // writeAuthzError maps an authz error to the appropriate HTTP status.

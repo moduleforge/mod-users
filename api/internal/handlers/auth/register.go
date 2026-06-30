@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	coredb "github.com/moduleforge/core-model/db"
-	localauth "github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/server"
-	svc "github.com/moduleforge/users-module/api/internal/service"
-	db "github.com/moduleforge/users-module/model/db"
+	localauth "github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	svc "github.com/moduleforge/mod-users/api/internal/service"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // Sender is the email-sending interface expected by this package.

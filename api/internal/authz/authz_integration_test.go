@@ -42,7 +42,7 @@ import (
 	authzdb "github.com/moduleforge/authz-model/db"
 	"github.com/moduleforge/core-api/opctx"
 	coredb "github.com/moduleforge/core-model/db"
-	"github.com/moduleforge/users-module/api/internal/authz"
+	"github.com/moduleforge/mod-users/api/internal/authz"
 )
 
 // ---------------------------------------------------------------------------

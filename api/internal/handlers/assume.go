@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 
 	coreservice "github.com/moduleforge/core-api/service"
-	"github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/server"
-	db "github.com/moduleforge/users-module/model/db"
+	"github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // assumeServicer is the narrow interface AssumeHandler requires from

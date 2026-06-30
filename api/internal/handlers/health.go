@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/moduleforge/users-module/api/internal/server"
+	"github.com/moduleforge/mod-users/api/internal/server"
 )
 
 // Live is the liveness probe. Always returns 200 — no DB check.

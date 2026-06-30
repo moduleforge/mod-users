@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moduleforge/users-module/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 // resetProviderEnv clears every AUTH_PROVIDER_* / AUTH_PROVIDERS key that

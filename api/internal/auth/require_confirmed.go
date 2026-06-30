@@ -3,8 +3,8 @@ package auth
 import (
 	"net/http"
 
-	"github.com/moduleforge/users-module/api/internal/config"
-	"github.com/moduleforge/users-module/api/internal/server"
+	"github.com/moduleforge/mod-users/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/server"
 )
 
 // RequireOIDCConfirmed blocks /v1/* traffic when the OIDC onboarding flow

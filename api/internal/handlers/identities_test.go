@@ -22,8 +22,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	localauth "github.com/moduleforge/users-module/api/internal/auth"
-	db "github.com/moduleforge/users-module/model/db"
+	localauth "github.com/moduleforge/mod-users/api/internal/auth"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // ---------------------------------------------------------------------------

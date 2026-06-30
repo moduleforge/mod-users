@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	localAuthz "github.com/moduleforge/users-module/api/internal/authz"
-	"github.com/moduleforge/users-module/api/internal/server"
-	svc "github.com/moduleforge/users-module/api/internal/service"
+	localAuthz "github.com/moduleforge/mod-users/api/internal/authz"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	svc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
 // GrantAdminFn creates or removes a wildcard manage grant for the given user account UUID.

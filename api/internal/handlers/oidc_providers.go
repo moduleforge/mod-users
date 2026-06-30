@@ -25,10 +25,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/config"
-	"github.com/moduleforge/users-module/api/internal/server"
-	db "github.com/moduleforge/users-module/model/db"
+	"github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // providerIDPattern matches the slug form required by both the env-var

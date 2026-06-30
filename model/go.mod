@@ -1,4 +1,4 @@
-module github.com/moduleforge/users-module/model
+module github.com/moduleforge/mod-users/model
 
 go 1.26.2
 

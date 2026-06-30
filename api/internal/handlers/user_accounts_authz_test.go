@@ -28,10 +28,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/moduleforge/core-api/opctx"
-	localAuth "github.com/moduleforge/users-module/api/internal/auth"
-	localAuthz "github.com/moduleforge/users-module/api/internal/authz"
-	svc "github.com/moduleforge/users-module/api/internal/service"
-	db "github.com/moduleforge/users-module/model/db"
+	localAuth "github.com/moduleforge/mod-users/api/internal/auth"
+	localAuthz "github.com/moduleforge/mod-users/api/internal/authz"
+	svc "github.com/moduleforge/mod-users/api/internal/service"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/moduleforge/users-module/model/db"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // OIDCProviderQuerier is the narrow subset of db.Querier needed to load

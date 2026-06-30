@@ -15,7 +15,7 @@ import (
 
 	"github.com/moduleforge/core-api/observer"
 	coredb "github.com/moduleforge/core-model/db"
-	db "github.com/moduleforge/users-module/model/db"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // ErrUserGone is returned by UserResolver.Resolve when a locally-issued JWT

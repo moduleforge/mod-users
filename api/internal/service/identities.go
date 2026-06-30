@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	db "github.com/moduleforge/users-module/model/db"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // identityQuerier is the subset of db.Querier needed by IdentityCounts.

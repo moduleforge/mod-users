@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authzservice "github.com/moduleforge/authz-api/service"
-	inner "github.com/moduleforge/users-module/api/internal/users"
+	inner "github.com/moduleforge/mod-users/api/internal/users"
 )
 
 // NewFirstUserHook returns a hook function that bootstraps the wildcard manage

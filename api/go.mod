@@ -1,4 +1,4 @@
-module github.com/moduleforge/users-module/api
+module github.com/moduleforge/mod-users/api
 
 go 1.26.2
 
@@ -40,7 +40,7 @@ require (
 	github.com/moduleforge/authz-model v0.0.0
 	github.com/moduleforge/core-api v0.0.0
 	github.com/moduleforge/core-model v0.0.0
-	github.com/moduleforge/users-module/model v0.0.0
+	github.com/moduleforge/mod-users/model v0.0.0
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
@@ -53,16 +53,16 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/moduleforge/core-model v0.0.0 => ../../core-module/model
+replace github.com/moduleforge/core-model v0.0.0 => ../../mod-core/model
 
-replace github.com/moduleforge/users-module/model v0.0.0 => ../model
+replace github.com/moduleforge/mod-users/model v0.0.0 => ../model
 
-replace github.com/moduleforge/core-api v0.0.0 => ../../core-module/api
+replace github.com/moduleforge/core-api v0.0.0 => ../../mod-core/api
 
-replace github.com/moduleforge/audit-model v0.0.0 => ../../audit-module/model
+replace github.com/moduleforge/audit-model v0.0.0 => ../../mod-audit/model
 
-replace github.com/moduleforge/audit-api v0.0.0 => ../../audit-module/api
+replace github.com/moduleforge/audit-api v0.0.0 => ../../mod-audit/api
 
-replace github.com/moduleforge/authz-model v0.0.0 => ../../authz-module/model
+replace github.com/moduleforge/authz-model v0.0.0 => ../../mod-authz/model
 
-replace github.com/moduleforge/authz-api v0.0.0 => ../../authz-module/api
+replace github.com/moduleforge/authz-api v0.0.0 => ../../mod-authz/api

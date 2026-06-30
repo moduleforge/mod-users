@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/moduleforge/users-module/api/config"
-	inner "github.com/moduleforge/users-module/api/internal/db"
+	"github.com/moduleforge/mod-users/api/config"
+	inner "github.com/moduleforge/mod-users/api/internal/db"
 )
 
 // New constructs a *pgxpool.Pool from the provided configuration.

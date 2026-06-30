@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	svc "github.com/moduleforge/users-module/api/internal/service"
+	svc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
 // ---------------------------------------------------------------------------

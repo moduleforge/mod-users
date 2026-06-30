@@ -24,7 +24,7 @@ import (
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
 	coreservice "github.com/moduleforge/core-api/service"
-	db "github.com/moduleforge/users-module/model/db"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import (
 
 	authzapi "github.com/moduleforge/authz-api/authz"
 	authzdb "github.com/moduleforge/authz-model/db"
-	inner "github.com/moduleforge/users-module/api/internal/authz"
+	inner "github.com/moduleforge/mod-users/api/internal/authz"
 )
 
 // Authorizer is the grants-table implementation of coreAuthz.Authorizer.

@@ -13,9 +13,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/config"
-	db "github.com/moduleforge/users-module/model/db"
+	"github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/config"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // fakeQuerier is an in-memory OIDCConfigQuerier. All access is

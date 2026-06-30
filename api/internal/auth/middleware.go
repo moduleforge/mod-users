@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/moduleforge/core-api/opctx"
-	"github.com/moduleforge/users-module/api/internal/server"
+	"github.com/moduleforge/mod-users/api/internal/server"
 )
 
 // Sentinel errors from AuthenticateRequest. Callers use errors.Is to

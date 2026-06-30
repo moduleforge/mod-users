@@ -6,9 +6,9 @@ import (
 
 	coreservice "github.com/moduleforge/core-api/service"
 	coredb "github.com/moduleforge/core-model/db"
-	"github.com/moduleforge/users-module/api/internal/auth"
-	"github.com/moduleforge/users-module/api/internal/server"
-	db "github.com/moduleforge/users-module/model/db"
+	"github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/server"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // SelfHandler serves /v1/self. /self is a composite identity endpoint:

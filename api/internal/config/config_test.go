@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moduleforge/users-module/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 // requiredEnv is a complete set of required environment variables with valid
