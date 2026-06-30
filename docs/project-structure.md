@@ -1,4 +1,4 @@
-# Project structure — users-module
+# Project structure — mod-users
 
 This document maps every significant directory and key root-level file. After reading it, a contributor or agent should be able to locate any part of the codebase without exploring the tree.
 
@@ -93,7 +93,7 @@ deploy/
 
 ```
 docs/
-  users-module-spec.md    # feature specification and key use cases
+  mod-users-spec.md       # feature specification and key use cases
   architecture.md         # system design, sub-project relationships, auth flow
   project-structure.md    # this file
   oidc-troubleshooting.md # OIDC configuration troubleshooting checklist

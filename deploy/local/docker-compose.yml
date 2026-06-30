@@ -1,5 +1,5 @@
 ---
-# Local development stack for users-module.
+# Local development stack for mod-users.
 #
 # Usage:
 #   make dev.start        # from monorepo root (recommended)
@@ -12,10 +12,10 @@
 #   - api      : Go API server (builds from source, runs migrations on start)
 #   - gui      : Next.js dev server (hot-reload via volume mount)
 
-name: users-module
+name: mod-users
 
 networks:
-  users-module-net:
+  mod-users-net:
     driver: bridge
 
 volumes:
@@ -31,7 +31,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: users-module-postgres
+    container_name: mod-users-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-users}
@@ -42,7 +42,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
-      - users-module-net
+      - mod-users-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-users} -d ${POSTGRES_DB:-users}"]
       interval: 5s
@@ -58,7 +58,7 @@ services:
   # done.
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: users-module-pgadmin
+    container_name: mod-users-pgadmin
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.test}
@@ -77,14 +77,14 @@ services:
       - pgadmin-data:/var/lib/pgadmin
       - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
     networks:
-      - users-module-net
+      - mod-users-net
     depends_on:
       postgres:
         condition: service_healthy
 
   authelia:
     image: authelia/authelia:4.38
-    container_name: users-module-authelia
+    container_name: mod-users-authelia
     restart: unless-stopped
     environment:
       TZ: ${TZ:-UTC}
@@ -99,7 +99,7 @@ services:
     ports:
       - "${AUTHELIA_PORT:-9091}:9091"
     networks:
-      - users-module-net
+      - mod-users-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -116,13 +116,13 @@ services:
   # default ports (1025 / 8025). Swapping is a drop-in.
   mailpit:
     image: axllent/mailpit:latest
-    container_name: users-module-mailpit
+    container_name: mod-users-mailpit
     restart: unless-stopped
     ports:
       - "${SMTP_PORT:-1025}:1025"
       - "${MAILPIT_UI_PORT:-8025}:8025"
     networks:
-      - users-module-net
+      - mod-users-net
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://localhost:8025/readyz"]
       interval: 10s
@@ -135,8 +135,8 @@ services:
   api:
     build:
       context: ../../..
-      dockerfile: users-module/api/Dockerfile
-    container_name: users-module-api
+      dockerfile: mod-users/api/Dockerfile
+    container_name: mod-users-api
     restart: unless-stopped
     env_file:
       - ../../.env
@@ -151,7 +151,7 @@ services:
       # string disables it; the provider registry skips it).
       AUTH_PROVIDER_AUTHELIA_DISPLAY_NAME: Authelia (local)
       AUTH_PROVIDER_AUTHELIA_ISSUER_URL: https://authelia:9091
-      AUTH_PROVIDER_AUTHELIA_CLIENT_ID: users-module
+      AUTH_PROVIDER_AUTHELIA_CLIENT_ID: mod-users
       AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET: ${AUTH_PROVIDER_AUTHELIA_CLIENT_SECRET:-local-authelia-secret}
       AUTH_PROVIDER_AUTHELIA_CLAIM_STYLE: authelia
       # Google client id/secret are intentionally NOT listed here: `environment:`
@@ -173,7 +173,7 @@ services:
       # production OIDC providers serve certs chained to public CAs.
       - ./authelia/certs/cert.pem:/usr/local/share/ca-certificates/authelia.crt:ro
     networks:
-      - users-module-net
+      - mod-users-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -183,8 +183,8 @@ services:
   gui:
     build:
       context: ../../..
-      dockerfile: users-module/gui/Dockerfile.dev
-    container_name: users-module-gui
+      dockerfile: mod-users/gui/Dockerfile.dev
+    container_name: mod-users-gui
     restart: unless-stopped
     environment:
       # The browser (on the host) makes API requests, so this must be the
@@ -203,6 +203,6 @@ services:
       - ../../gui/components.json:/app/gui/components.json
       - ../../gui/eslint.config.mjs:/app/gui/eslint.config.mjs
     networks:
-      - users-module-net
+      - mod-users-net
     depends_on:
       - api

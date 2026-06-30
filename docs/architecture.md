@@ -1,8 +1,8 @@
-# users-module architecture
+# mod-users architecture
 
 ## Overview
 
-`users-module` is a ModuleForge module that provides user identity, account management, and authentication as a composable unit. A host application integrates it by mounting the Go model migrations, wiring the Go API services, and importing the React component library. The module ships three sub-projects — `model`, `api`, and `gui` — each independently consumable and built to the ModuleForge module contract described in [core-module architecture](https://github.com/moduleforge/core-module/blob/main/docs/architecture.md). A demo application (`app-mfdemo`) that wires the module end-to-end lives in a separate project at the aggregate level.
+`mod-users` is a ModuleForge module that provides user identity, account management, and authentication as a composable unit. A host application integrates it by mounting the Go model migrations, wiring the Go API services, and importing the React component library. The module ships three sub-projects — `model`, `api`, and `gui` — each independently consumable and built to the ModuleForge module contract described in [mod-core architecture](https://github.com/moduleforge/mod-core/blob/main/docs/architecture.md). A demo application (`app-mfdemo`) that wires the module end-to-end lives in a separate project at the aggregate level.
 
 ## Sub-project layout
 
@@ -20,7 +20,7 @@ The Postgres schema lives in `model/migrations/` (managed with goose) and `model
 | Table | Purpose |
 |---|---|
 | `apps` | Application tenants — a host app may register one or more named apps |
-| `user_accounts` | Core user entity; promoted to `Entity` status for authorization (see [entity-typing](https://github.com/moduleforge/core-module/blob/main/docs/architecture/entity-typing.md)). `email` is nullable — NULL indicates an anonymous account |
+| `user_accounts` | Core user entity; promoted to `Entity` status for authorization (see [entity-typing](https://github.com/moduleforge/mod-core/blob/main/docs/architecture/entity-typing.md)). `email` is nullable — NULL indicates an anonymous account |
 | `anon_tokens` | Maps `device_id` + `session_token` (SHA-256 hashed) to a `user_account`; enables cross-session identity continuity for anonymous users. Rows are deleted when the account is upgraded to a named account |
 | `apps_user_accounts` | Many-to-many join between apps and user accounts |
 | `auth_local` | Email + argon2id password credentials for a user account |
@@ -30,7 +30,7 @@ The Postgres schema lives in `model/migrations/` (managed with goose) and `model
 | `oidc_providers` | Per-provider OIDC overrides (issuer URL, client ID/secret, stored in DB or env) |
 | `auth_oidc_identities` | OIDC identity records linking an external subject (`sub`) to a `user_account` |
 
-Internal IDs are integers (joins only, never sent in responses). External IDs are UUIDs. Cross-module schema dependencies (e.g., the `legal_entities` table from core-module) are resolved by the host application's migration composition step, not by tight coupling.
+Internal IDs are integers (joins only, never sent in responses). External IDs are UUIDs. Cross-module schema dependencies (e.g., the `legal_entities` table from mod-core) are resolved by the host application's migration composition step, not by tight coupling.
 
 ## API layer
 
@@ -121,14 +121,14 @@ JavaScript/TypeScript sub-projects use Bun. `gui/` is a member of the root Bun w
 
 ## Cross-cutting patterns
 
-**sqlc** generates typed Go query functions from SQL. Queries live in `model/queries/`; the generated output is in `model/db/`. The workflow is: edit SQL → run `make generate` (or `sqlc generate`) → commit generated code. For the rationale behind sqlc and goose, see [core-module: database considerations](https://github.com/moduleforge/core-module/blob/main/docs/architecture/db-considerations.md).
+**sqlc** generates typed Go query functions from SQL. Queries live in `model/queries/`; the generated output is in `model/db/`. The workflow is: edit SQL → run `make generate` (or `sqlc generate`) → commit generated code. For the rationale behind sqlc and goose, see [mod-core: database considerations](https://github.com/moduleforge/mod-core/blob/main/docs/architecture/db-considerations.md).
 
 **yalc** is used to link the `@moduleforge/core-gui` peer dependency during local development. The `.yalc/` directory is gitignored and must be set up manually in fresh worktrees. This pattern is common across ModuleForge GUI modules; see [AGENTS.md](../AGENTS.md) for the concrete steps.
 
 ## Further reading
 
-- [docs/users-module-spec.md](./users-module-spec.md) — feature specification and key use cases
+- [docs/mod-users-spec.md](./mod-users-spec.md) — feature specification and key use cases
 - [docs/oidc-troubleshooting.md](./oidc-troubleshooting.md) — OIDC configuration troubleshooting
 - [docs/project-structure.md](./project-structure.md) — full directory layout
 - [AGENTS.md](../AGENTS.md) — build, test, and dev environment commands
-- [core-module architecture](https://github.com/moduleforge/core-module/blob/main/docs/architecture.md) — module system design, composition model, authorization design
+- [mod-core architecture](https://github.com/moduleforge/mod-core/blob/main/docs/architecture.md) — module system design, composition model, authorization design

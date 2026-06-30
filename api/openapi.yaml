@@ -2,7 +2,7 @@ openapi: "3.0.3"
 info:
   title: Users Module API
   description: |
-    REST API for the users-module. Manages user accounts, authentication,
+    REST API for mod-users. Manages user accounts, authentication,
     authorization, application tenancy, and audit logging.
   version: 0.1.0
   contact:

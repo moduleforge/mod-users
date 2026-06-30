@@ -8,7 +8,7 @@ status: complete
 
 ## What was planned and why
 
-**Goal:** Migrate the users-module monorepo from pnpm+npm to bun as the unified package manager and JavaScript runtime.
+**Goal:** Migrate the mod-users monorepo from pnpm+npm to bun as the unified package manager and JavaScript runtime.
 
 **Motivation:** Consolidate on a single, faster toolchain. pnpm was used at the workspace root and npm was used within sub-projects, resulting in mixed lockfiles and inconsistent `package-lock.json` / `pnpm-lock.yaml` files across the repository.
 

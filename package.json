@@ -1,15 +1,15 @@
 {
-  "name": "@moduleforge/users-module",
+  "name": "@moduleforge/mod-users",
   "version": "1.0.0-alpha.0",
   "private": true,
   "description": "Provides complete model, api, and UI component for user authorization and management.",
   "author": "Zane Rockenbaugh <zane@liquid-labs.com>",
   "license": "Apache-2.0",
-  "repository": "git+ssh://git@github.com/moduleforge/users-module.git",
+  "repository": "git+ssh://git@github.com/moduleforge/mod-users.git",
   "bugs": {
-    "url": "https://github.com/moduleforge/users-module/issues"
+    "url": "https://github.com/moduleforge/mod-users/issues"
   },
-  "homepage": "https://github.com/moduleforge/users-module#readme",
+  "homepage": "https://github.com/moduleforge/mod-users#readme",
   "workspaces": ["gui"],
   "engines": {
     "bun": ">=1.0"

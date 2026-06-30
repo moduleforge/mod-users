@@ -1,10 +1,10 @@
-# AGENTS.md — users-module
+# AGENTS.md — mod-users
 
 This file is the canonical reference for contributors and AI agents working on this codebase. It covers environment setup, build and test commands, project conventions, and known rough edges. Claude Code-specific guidance is in [`.claude/CLAUDE.md`](./.claude/CLAUDE.md), which references this file.
 
 ## Project overview
 
-`@moduleforge/users-module` is a ModuleForge monorepo module providing user identity, account management, and authentication. It ships three sub-projects: `model/` (Go/Postgres/sqlc), `api/` (Go HTTP), and `gui/` (TypeScript/React). A demo application (`app-mfdemo`) lives in a separate project at the aggregate level. See [docs/architecture.md](./docs/architecture.md) for the full system design and [docs/users-module-spec.md](./docs/users-module-spec.md) for the feature specification.
+`@moduleforge/mod-users` is a ModuleForge monorepo module providing user identity, account management, and authentication. It ships three sub-projects: `model/` (Go/Postgres/sqlc), `api/` (Go HTTP), and `gui/` (TypeScript/React). A demo application (`app-mfdemo`) lives in a separate project at the aggregate level. See [docs/architecture.md](./docs/architecture.md) for the full system design and [docs/mod-users-spec.md](./docs/mod-users-spec.md) for the feature specification.
 
 ## Prerequisites
 
@@ -23,8 +23,8 @@ This file is the canonical reference for contributors and AI agents working on t
 
 1. **Clone and install JS dependencies:**
    ```sh
-   git clone git@github.com:moduleforge/users-module.git
-   cd users-module
+   git clone git@github.com:moduleforge/mod-users.git
+   cd mod-users
    bun install          # installs root workspace deps (includes gui/)
    ```
 
@@ -45,7 +45,7 @@ This file is the canonical reference for contributors and AI agents working on t
    ```sh
    # From the core-gui package directory (sibling repo):
    yalc publish
-   # Then from users-module root:
+   # Then from mod-users root:
    cd gui && yalc add @moduleforge/core-gui && cd ..
    bun install
    ```
@@ -151,4 +151,4 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 - **Handlers are thin** — parse input, call one service method, shape response. No business logic in handlers.
 - **Authorization is checked first** in every service method, before any data access.
 - **Generated code (`model/db/`) is committed** and should not be edited by hand. Re-run `sqlc generate` after any query change.
-- **Cross-module schema deps** are resolved by the host application's migration composition step, not by importing core-module schema directly.
+- **Cross-module schema deps** are resolved by the host application's migration composition step, not by importing mod-core schema directly.

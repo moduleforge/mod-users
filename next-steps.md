@@ -1,4 +1,4 @@
-# users-module — next steps
+# mod-users — next steps
 
 All 9 planned phases (foundation → data model → API core → local auth → user mgmt → multi-tenancy → GUI → deploy/CI → Google SSO) have been implemented. Items below are pending manual verification or deferred work that surfaced during implementation. Original phase reports were in `plan/` (now removed); this file is the forward-looking residue.
 
@@ -16,11 +16,11 @@ Related docs:
 
 ## Known open items (code-level, deferred)
 
-- **No DB-backed integration test harness.** All existing tests use hand-rolled in-memory fakes. Adding handler-level integration tests (register → login → /v1/self) against a real Postgres would catch whole classes of issues the unit tests can't. Also blocks the tags-module integration test (see tags-module/next-steps.md).
+- **No DB-backed integration test harness.** All existing tests use hand-rolled in-memory fakes. Adding handler-level integration tests (register → login → /v1/self) against a real Postgres would catch whole classes of issues the unit tests can't. Also blocks the mod-tags integration test (see mod-tags/next-steps.md).
 - **GUI test harness missing.** No vitest/jest scaffolding in `gui/`. Phase 9.2 code has no unit tests as a result. A standalone testing-infra phase is warranted.
 - **Multi-tenancy middleware.** `WithAppContext` (X-App header resolution) is partially implemented in the resolver. Full per-request app scoping needs refinement once real tenant scenarios are exercised.
 - **Email-code hashing.** Uses bcrypt rather than the SHA-256+salt originally specified. Both are fine for v1; noted for consistency review.
-- **Account-merging (`MERGE-V2`).** ✅ Implemented 2026-05-10–11 (commits 7d42ddd → dd01ccb on users-module; core-module 1f80162 added `txhelper.RunSerializable`). `auth_oidc_identities` table, multi-identity resolver with 5-branch decision table, verification gating middleware (`RequireVerifiedEmail`), and `/v1/self/identities` + `/v1/self/credential/password` self-service endpoints. Configurable step-up via `AUTH_REQUIRE_STEP_UP`. Review pass (dev/architect/code-reviewer) and resulting B1 + F1–F7 fixes landed.
+- **Account-merging (`MERGE-V2`).** ✅ Implemented 2026-05-10–11 (commits 7d42ddd → dd01ccb on mod-users; mod-core 1f80162 added `txhelper.RunSerializable`). `auth_oidc_identities` table, multi-identity resolver with 5-branch decision table, verification gating middleware (`RequireVerifiedEmail`), and `/v1/self/identities` + `/v1/self/credential/password` self-service endpoints. Configurable step-up via `AUTH_REQUIRE_STEP_UP`. Review pass (dev/architect/code-reviewer) and resulting B1 + F1–F7 fixes landed.
 
 ## MERGE-V2 follow-up work (deferred from final review)
 
@@ -32,7 +32,7 @@ Related docs:
 - **Step-up replay window after restart.** The single-use `sync.Map` cache is process-local; a restart leaves a replay window up to the 5-min `StepUpTTL`. Fine for single-process today; a DB-backed consumed-`jti` store is needed before multi-replica or before deploys during peak traffic.
 - **`X-Forwarded-Proto` trusted unconditionally** for the Secure cookie flag (`oidc_state` cookie). Document the reverse-proxy assumption; if the API is ever exposed without a proxy that strips inbound `X-Forwarded-Proto`, this is a downgrade vector.
 - **`emailcode.go` uses `== pgx.ErrNoRows`** (3 sites). Inconsistent with the rest of the new code which uses `errors.Is`; cosmetic.
-- **DB-backed integration test harness** — the final review uncovered the `audit_log.op` CHECK constraint violation (B1) only via cross-module synthesis. A real-DB integration suite would have caught it directly. Same blocker as for the tags-module integration tests (already noted above).
+- **DB-backed integration test harness** — the final review uncovered the `audit_log.op` CHECK constraint violation (B1) only via cross-module synthesis. A real-DB integration suite would have caught it directly. Same blocker as for the mod-tags integration tests (already noted above).
 - **Session storage.** Still localStorage + Bearer. Cookie-based sessions are a future consideration.
 - **`refreshUser` 401 handling.** The auth-context's `refreshUser` still routes through the shared `request()` helper and triggers a hard redirect on 401; its local `logout()` call becomes redundant. Same category as the return-page bug fixed in Phase 9.2, just not touched.
 

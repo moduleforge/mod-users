@@ -1,6 +1,6 @@
 # deploy/local
 
-Local development stack for the **users-module** project. Brings up real
+Local development stack for the **mod-users** project. Brings up real
 infrastructure (Postgres, Authelia OIDC, Mailpit SMTP catcher) on a shared
 Docker network so dev/prod parity is preserved — no mock OIDC.
 
@@ -29,7 +29,7 @@ Authelia SSO button in the GUI needs it.
 ## Quick start
 
 ```sh
-# from the users-module repo root, copy the env template:
+# from the mod-users repo root, copy the env template:
 cp .env.example .env
 # edit .env if you want non-default secrets (the defaults are fine for local dev)
 
@@ -53,7 +53,7 @@ docker compose down -v
 | `authelia` | `authelia/authelia:4.38`    | `9091`              | OIDC provider (real, not mocked)     |
 | `mailpit`  | `axllent/mailpit:latest`    | `1025` (SMTP), `8025` (UI) | Captures outbound mail (email-code auth flow). Multi-arch (amd64/arm64). |
 
-All services join the `users-module-net` bridge network and resolve each other
+All services join the `mod-users-net` bridge network and resolve each other
 by service name (e.g. Authelia talks to Mailpit at `mailpit:1025`).
 
 ## Seeded users
@@ -90,7 +90,7 @@ restart authelia`.
 
 Authelia is preconfigured with a single OIDC client for this project:
 
-- **client_id**: `users-module`
+- **client_id**: `mod-users`
 - **client_secret**: `local-authelia-secret` (placeholder; the
   pbkdf2-sha512 hash is committed in `authelia/configuration.yml`. Regenerate
   with `docker run --rm authelia/authelia:4.38 authelia crypto hash generate
@@ -146,7 +146,7 @@ psql install required.
 
 Web UI: <http://localhost:5050>. Log in with `admin@example.test` /
 `admin` (configurable via `PGADMIN_DEFAULT_EMAIL` and
-`PGADMIN_DEFAULT_PASSWORD` in `.env`). The `users-module (local)`
+`PGADMIN_DEFAULT_PASSWORD` in `.env`). The `mod-users (local)`
 server is pre-registered via `deploy/local/pgadmin/servers.json`; on
 first connect type the Postgres password `users` and pgAdmin stores
 it to its volume for future sessions.

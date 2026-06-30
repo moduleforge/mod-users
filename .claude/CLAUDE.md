@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# Claude Code — users-module
+# Claude Code — mod-users
 
 This file covers Claude Code-specific configuration and guidance. For build commands, environment setup, project conventions, and general agent guidance, see [AGENTS.md](../AGENTS.md) (referenced above).
 

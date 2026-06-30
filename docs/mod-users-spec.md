@@ -1,10 +1,10 @@
-# users-module Specification
+# mod-users Specification
 
 ## Purpose and scope
 
-This document is the canonical functional specification for `@moduleforge/users-module`. It describes what the module does and is required to do — the behavioral contracts an implementation must satisfy. It is written for developers and AI agents implementing, modifying, or integrating the module.
+This document is the canonical functional specification for `@moduleforge/mod-users`. It describes what the module does and is required to do — the behavioral contracts an implementation must satisfy. It is written for developers and AI agents implementing, modifying, or integrating the module.
 
-This spec assumes familiarity with the ModuleForge module model described in [core-module's architecture overview](https://github.com/moduleforge/core-module/blob/main/docs/architecture.md). It does not repeat cross-cutting design rationale (authorization, state management, entity typing, database conventions) that is documented there.
+This spec assumes familiarity with the ModuleForge module model described in [mod-core's architecture overview](https://github.com/moduleforge/mod-core/blob/main/docs/architecture.md). It does not repeat cross-cutting design rationale (authorization, state management, entity typing, database conventions) that is documented there.
 
 The spec covers three sub-packages — `model`, `api`, and `gui`. A demo application (`app-mfdemo`) that exercises the module end-to-end is a separate project at the aggregate level. For design choices and the *how* of each sub-package, see [docs/architecture.md](./architecture.md). For directory layout and sub-project conventions, see [docs/project-structure.md](./project-structure.md). For build, test, and development commands, see [AGENTS.md](../AGENTS.md).
 
@@ -181,7 +181,7 @@ When the anonymous user later provides an email address (via `PUT /v1/self`), th
 
 - **OIDC provider configuration merges env and DB.** Environment variables (prefixed `AUTH_PROVIDER_{ID}_*`) supply defaults; `oidc_providers` DB rows are overlaid at runtime. Any column that is NULL in the DB row means "no override — use env value." Deleting a DB row fully reverts to env.
 
-- **The data model is normalized per ModuleForge conventions.** Internal identifiers are integers (never exposed in API responses); external identifiers are UUIDs. `user_accounts` references `legal_entities` (a `core-module` concept) to enforce that only natural persons and corporations — not service accounts — may hold user accounts.
+- **The data model is normalized per ModuleForge conventions.** Internal identifiers are integers (never exposed in API responses); external identifiers are UUIDs. `user_accounts` references `legal_entities` (a `mod-core` concept) to enforce that only natural persons and corporations — not service accounts — may hold user accounts.
 
 ## Data model
 
@@ -190,7 +190,7 @@ The module owns nine Postgres tables. All are managed by goose migrations under 
 | Table | Purpose |
 |---|---|
 | `apps` | Application tenants (name, slug, soft-delete). |
-| `user_accounts` | One row per user. References `legal_entities(entity_id)` (core-module); holds the canonical email (nullable — NULL for anonymous accounts), email-verified timestamp, and default-app FK. The derived boolean `is_anonymous` (email IS NULL) is exposed in Go types and API responses. |
+| `user_accounts` | One row per user. References `legal_entities(entity_id)` (mod-core); holds the canonical email (nullable — NULL for anonymous accounts), email-verified timestamp, and default-app FK. The derived boolean `is_anonymous` (email IS NULL) is exposed in Go types and API responses. |
 | `anon_tokens` | Device continuity tokens for anonymous users. Maps `device_id` + SHA-256-hashed `session_token` → `user_account`. Rows are cascade-deleted when the parent `user_account` is hard-deleted, and are explicitly deleted by the service when an anonymous account is upgraded (email patched from NULL to a real value). |
 | `auth_local` | Local credential (argon2id hash) for email+password login. One row per user account, optional. |
 | `email_codes` | Time-limited, single-use codes for email-code login and email verification. |
@@ -200,7 +200,7 @@ The module owns nine Postgres tables. All are managed by goose migrations under 
 | `oidc_providers` | Per-provider DB overrides (display name, issuer URL, client ID/secret, scopes, enabled flag). |
 | `auth_oidc_identities` | OIDC identity links: `(issuer, subject)` pairs keyed to a user account. Many per account (one per provider). |
 
-The `legal_entities` table referenced by `user_accounts.account_holder` is defined in `core-module/model`; it is composed into the migration set at the application level, not duplicated here.
+The `legal_entities` table referenced by `user_accounts.account_holder` is defined in `mod-core/model`; it is composed into the migration set at the application level, not duplicated here.
 
 ## API definition
 
@@ -270,7 +270,7 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 
 - **Anti-enumeration:** Email-code and password-reset request endpoints return `202` unconditionally to prevent account existence probing.
 
-- **Authorization:** Admin-only endpoints enforce admin privilege on the authenticated principal. The assume endpoint additionally enforces that the acting user is an admin. Authorization follows the ModuleForge `Authorizer` pattern described in [core-module's authorization design](https://github.com/moduleforge/core-module/blob/main/docs/architecture/authorization-design.md).
+- **Authorization:** Admin-only endpoints enforce admin privilege on the authenticated principal. The assume endpoint additionally enforces that the acting user is an admin. Authorization follows the ModuleForge `Authorizer` pattern described in [mod-core's authorization design](https://github.com/moduleforge/mod-core/blob/main/docs/architecture/authorization-design.md).
 
 - **Audit trail:** All mutating operations are audited with before/after state, actor UUID, and timestamp. Assumed-identity actions record both the admin actor and the assumed user.
 

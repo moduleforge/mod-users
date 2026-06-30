@@ -1,9 +1,9 @@
 # model
 
 Postgres 16 schema, goose versioned migrations, and sqlc-generated Go queries
-for the users-module.
+for mod-users.
 
-See [../../core-module/docs/architecture/db-considerations.md](../../core-module/docs/architecture/db-considerations.md)
+See [../../mod-core/docs/architecture/db-considerations.md](../../mod-core/docs/architecture/db-considerations.md)
 for the rationale behind the Postgres + goose choices.
 
 ## Layout

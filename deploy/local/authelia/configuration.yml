@@ -1,5 +1,5 @@
 ---
-# Minimal Authelia config for local users-module development.
+# Minimal Authelia config for local mod-users development.
 #
 # Reference: https://www.authelia.com/configuration/prologue/introduction/
 #
@@ -20,7 +20,7 @@ log:
 theme: light
 
 totp:
-  issuer: users-module-local
+  issuer: mod-users-local
 
 authentication_backend:
   password_reset:
@@ -131,8 +131,8 @@ identity_providers:
         - userinfo
       allowed_origins_from_client_redirect_uris: true
     clients:
-      - client_id: users-module
-        client_name: users-module API + GUI
+      - client_id: mod-users
+        client_name: mod-users API + GUI
         client_secret: '$pbkdf2-sha512$310000$Y75vFGVKl3MvRcNFoL1HlQ$OP0UbZaheQHlQeNEEa9HFjjy994CYodXQaxFmgZJDI8JpJrWgec8LaVEccGxbvV5yYjaty7wmdRgICv2iYcKuw'
         public: false
         authorization_policy: one_factor

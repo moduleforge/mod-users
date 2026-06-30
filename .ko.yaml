@@ -1,4 +1,4 @@
-# ko build configuration for users-module.
+# ko build configuration for mod-users.
 #
 # ko produces minimal OCI images from Go binaries using a distroless base.
 # See https://ko.build for documentation.

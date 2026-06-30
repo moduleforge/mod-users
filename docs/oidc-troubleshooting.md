@@ -1,4 +1,4 @@
-Purpose: Troubleshooting checklist when OIDC login is rejected by the IdP (not by users-module code).
+Purpose: Troubleshooting checklist when OIDC login is rejected by the IdP (not by mod-users code).
 ---
 # OIDC login verification — troubleshooting
 

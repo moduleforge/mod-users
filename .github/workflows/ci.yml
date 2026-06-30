@@ -1,4 +1,4 @@
-# CI pipeline for users-module monorepo.
+# CI pipeline for mod-users monorepo.
 #
 # Triggers on pushes to main and pull requests. Runs lint, test, migration
 # validation, build, and container image build (no push).
