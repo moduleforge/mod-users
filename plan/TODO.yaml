@@ -37,6 +37,7 @@ phases:
     - number: 3
       slug: dev-stack-disposition
       title: Dev-Stack Disposition
+      diff_base: 927b31aed7d45ad0d40007b15cde031bf840aa8a
       tasks:
         - number: 1
           slug: remove-gui-compose-service
