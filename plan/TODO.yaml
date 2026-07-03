@@ -61,7 +61,17 @@ phases:
     - number: 5
       slug: preview-and-readme
       title: Preview And README
-      tasks: []
+      tasks:
+        - number: 1
+          slug: add-preview-target
+          title: Add Preview Target
+          path: phase-05-preview-and-readme/001-add-preview-target.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 6
       slug: doc-updates
       title: Documentation Updates
