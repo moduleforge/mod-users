@@ -31,7 +31,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-02-task-01-remove-nextjs-scaffold
-            commit: []
+            commit:
+                - 14f215d
             merge: null
     - number: 3
       slug: dev-stack-disposition
