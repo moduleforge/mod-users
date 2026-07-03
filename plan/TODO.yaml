@@ -15,7 +15,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-01-align-gui-build-tooling
-            commit: []
+            commit:
+                - 347dc57
             merge: null
     - number: 2
       slug: stale-artifact-cleanup
