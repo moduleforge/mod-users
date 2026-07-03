@@ -55,7 +55,7 @@ This file is the canonical reference for contributors and AI agents working on t
    ```sh
    make dev.start
    ```
-   This starts Postgres (5432), Authelia (9091), Mailpit (8025), and the API server (8080). For local component preview, use `make preview` (Ladle); `app-mfdemo` is the full integration testbed.
+   This starts Postgres (5432), Authelia (9091), Mailpit (8025), and the API server (8080). For local component preview, use `make preview` (Ladle) once available (added in a later phase); `app-mfdemo` is the current integration testbed.
 
 ## Build commands
 
