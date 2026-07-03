@@ -17,7 +17,7 @@ phases:
             branch: phase-01-task-01-align-gui-build-tooling
             commit:
                 - 347dc57
-            merge: null
+            merge: 0943165574948346630bc15ce33d750d2ca13090
     - number: 2
       slug: stale-artifact-cleanup
       title: Stale Artifact Cleanup
