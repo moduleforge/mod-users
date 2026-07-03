@@ -59,23 +59,23 @@ api/
 
 ### `gui/` — TypeScript/React component library
 
-Exports `@moduleforge/users-gui`: React components, an API client, and base styles.
+Exports `@moduleforge/users-gui`: React components and an API client. The library ships no bundled CSS; consumers generate their own via Tailwind v4 `@source` scanning of the built `dist/` output.
 
 ```
 gui/
   package.json          # declares the npm package name and build scripts
   Makefile
   tsconfig.json
-  tsup.config.ts        # library bundler config (outputs CJS + ESM + .d.ts)
-  Dockerfile.dev        # dev container for the GUI server
+  tsup.config.ts        # library bundler config (outputs CJS + ESM + .d.ts; no CSS)
+  vite.config.ts        # Vite config consumed by Ladle (Tailwind v4 plugin for the workbench)
   dist/                 # build output (gitignored; `make build.gui` populates it)
   node_modules/         # managed by bun workspace (gitignored)
+  .ladle/               # Ladle component workbench config, incl. styles.css (Tailwind entry, workbench-only)
   src/
     index.ts            # package entry point — re-exports all public components
     components/         # React UI components (auth flows, profile, admin views)
     lib/                # API client, hooks, shared utilities
     stories/            # Storybook story files (exploratory; not the primary showcase)
-    styles.css          # base component styles
 ```
 
 > `gui/` depends on `@moduleforge/core-gui` via a `file:.yalc/` link. The `.yalc/` directory is gitignored and must be set up manually in fresh checkouts. See [AGENTS.md](../AGENTS.md#first-time-setup).
@@ -85,7 +85,7 @@ gui/
 ```
 deploy/
   local/                # Docker Compose stack for local development
-    docker-compose.yml  # brings up Postgres, Authelia, Mailpit, API, GUI dev server
+    docker-compose.yml  # brings up Postgres, Authelia, Mailpit, API
     authelia/           # Authelia config and certs for local OIDC
 ```
 
