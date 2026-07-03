@@ -70,6 +70,22 @@ No standard skill covers this; follow the `## Procedure` below. The authoritativ
 
 architectural_impact: true
 
+## Status
+
+- **Outcome:** succeeded (implementation task agent, 2026-07-03).
+- **Commit:** see task worktree `phase-01-task-01-align-gui-build-tooling` HEAD (final commit message: `implement phase-01 task-01: align gui build tooling`).
+- **Validation summary:**
+  - `gui/vite.config.ts` byte-identical to `mod-core/gui/vite.config.ts` — confirmed via `diff`.
+  - `gui/tsup.config.ts` is a single `defineConfig({...})` with `external: ['react', 'react-dom', '@moduleforge/core-gui']`, no CSS entry.
+  - `gui/package.json`: `grep -n 'build:css\|file:.yalc'` returns no matches; `"build": "tsup"`; `peerDependencies`/`peerDependenciesMeta` for `@moduleforge/core-gui` unchanged; `"./styles.css"` export preserved. devDeps `@types/node` (used by `process.env` in `src/lib/api.ts`) and `shadcn` (its `tailwind.css` is `@import`ed from the relocated `.ladle/styles.css`) were confirmed referenced and kept per the task's "when in doubt, keep it" guidance.
+  - `gui/.ladle/styles.css` created (moved from `gui/src/styles.css`); `gui/.ladle/components.tsx` imports `./styles.css`; `gui/src/styles.css` removed; `grep -rn "styles.css" gui/src` returns nothing.
+  - `make build.gui` succeeded with `@moduleforge/core-gui` resolved (manually staged into `gui/node_modules/@moduleforge/core-gui` from `mod-core/gui`'s already-built `dist/` + `package.json`, standing in for a real `yalc add` — the sandbox's permission layer blocks `yalc publish` from a task-agent session as a shared-global-store write outside the worktree; see `flagged_for_manager`). `gui/dist/` contains `index.js`, `index.mjs`, `index.d.ts`, `index.d.mts`, and `.map` files; no `index.css`, matching `mod-core/gui/dist/` parity.
+  - Fresh-install check: `rm -rf node_modules gui/node_modules && bun install` at the worktree root completed with no error (`1466 packages installed`); `bun.lock` diff shows only the `file:.yalc/@moduleforge/core-gui` edge removed.
+  - Consumer regression check: **not fully executed** — `app-mfdemo` (aggregate-level, outside `project_root`) has no `node_modules` installed and its own `@moduleforge/users-gui`/`@moduleforge/core-gui` deps are also `file:.yalc/...` links requiring a `yalc publish`/`yalc add` cycle there, which is out of this task's write scope and would hit the same shared-resource permission boundary. As a partial substitute, confirmed `gui/dist/index.js` (this task's build output) still contains the Tailwind class literals used by `src/app/globals.css`'s `@source` scan (e.g. `bg-background`, `text-foreground`, `inline-flex`), consistent with `sibling-build-mechanism.md`'s finding that dropping the CSS build does not break consumers. Full app-mfdemo build verification is flagged for the manager.
+  - `AGENTS.md` no longer contains the 3RgF bullet (confirmed via `grep -n "3RgF" AGENTS.md` → no match); `.claude/CLAUDE.md` yalc gotcha rewritten to reflect install-works / build-and-typecheck-still-need-yalc.
+  - `make lint.gui` (`tsc --noEmit`) passed with no output/errors.
+- **Assumptions applied:** both `## Assumptions` entries were relied on as written; the core-gui-linked-via-yalc assumption held only after a manual node_modules stand-in (see above) since the environment's permission layer prevented an actual `yalc publish`/`yalc add`.
+
 ## Assumptions
 
 - The local dev environment has `@moduleforge/core-gui` linked via yalc so `make build.gui` and `make lint.gui` can resolve the peer import (per AGENTS.md First-time setup step 4). Fresh CI does not build against a populated `.yalc/`; the fresh-install check above deliberately excludes it.
