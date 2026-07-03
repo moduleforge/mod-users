@@ -101,3 +101,37 @@ All 12 items currently recorded in `plan/followups.yaml`, organized by theme:
 - `de6E` (phase-02-gate) — Worktree isolation misses untracked cleanup: when a task's Requirements call for removing untracked/stray filesystem artifacts (not git-tracked), dispatching that task into an isolated task worktree silently no-ops against the actual project root, since `git worktree add` doesn't copy untracked files. Future plan tasks with untracked-file/stray-directory cleanup requirements should either target `project_root` directly for that step or have the manager independently re-verify against `project_root` after merge, rather than trusting the task worktree's self-reported validation.
 - `5arF` (dev-stack-disposition) — The `AGENTS.md` pointer to `make preview` documented a target that did not exist yet in the Phase 03 branch in isolation (added by Phase 05, not yet run in that lineage). Intentional forward-reference per the task doc's own note, since resolved by the manager's interstitial fix (`87262ad`) and Phase 05 landing; flagged originally to confirm merge/phase sequencing wouldn't leave an inconsistent intermediate state if branches were inspected individually before Phase 05 landed.
 - `h4Un` (stale-artifact-cleanup) — The task agent dispatch for the Phase 02 task hit two consecutive infrastructure failures (an API connection drop, then a stall) after completing the substantive work — no content issue, purely infra flakiness. Noted for awareness in case this recurs on future phases/plans.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — GUI Build Alignment
+
+- [x] [001-align-gui-build-tooling.md](./phase-01-gui-build-alignment/001-align-gui-build-tooling.md) — tier `sonnet-high` · branch `phase-01-task-01-align-gui-build-tooling` · commit `347dc57` · merge `0943165574948346630bc15ce33d750d2ca13090`
+
+### Phase 02 — Stale Artifact Cleanup
+
+- [x] [001-remove-nextjs-scaffold.md](./phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md) — tier `sonnet-med` · branch `phase-02-task-01-remove-nextjs-scaffold` · commit `14f215d` · merge `927b31aed7d45ad0d40007b15cde031bf840aa8a`
+
+### Phase 03 — Dev-Stack Disposition
+
+- [x] [001-remove-gui-compose-service.md](./phase-03-dev-stack-disposition/001-remove-gui-compose-service.md) — tier `sonnet-med` · branch `phase-03-task-01-remove-gui-compose-service` · commit `8a24b23` · merge `72cd22a463de7e4032eceba74aea14dd193fcb43`
+
+### Phase 04 — CI Bun Migration
+
+- [x] [001-migrate-ci-to-bun.md](./phase-04-ci-bun-migration/001-migrate-ci-to-bun.md) — tier `sonnet-med` · branch `phase-04-task-01-migrate-ci-to-bun` · commit `1c7f73c` · merge `51a64a7a8ceac826d96030f59005b241335cf693`
+
+### Phase 05 — Preview And README
+
+- [x] [001-add-preview-target.md](./phase-05-preview-and-readme/001-add-preview-target.md) — tier `sonnet-med` · branch `phase-05-task-01-add-preview-target` · commit `027c6dc` · merge `f6e303e1dba25dd2ded61f4ee4ebebf161b6a320`
+
+### Phase 06 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-06-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `phase-06-task-01-update-architecture-docs` · commit `dbccabb` · merge `397d3026f5b9814cd3263738d61a0543454e8671`
