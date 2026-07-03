@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: gui-build-alignment
       title: GUI Build Alignment
+      diff_base: 664d24c8ca73e1b71bbcc39b60be9df7974a2bff
       tasks:
         - number: 1
           slug: align-gui-build-tooling
