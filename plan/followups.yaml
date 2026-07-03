@@ -40,3 +40,8 @@ items:
       date: "2026-07-03"
       tag: ci-bun-migration
       text: '[phase-04-ci-bun-migration/001-migrate-ci-to-bun.md] Pre-existing, package-manager-independent limitation confirmed live: make build.gui''s tsup --dts step fails with Cannot find module ''@moduleforge/core-gui'' in any environment (including CI) where .yalc/ is not populated, since gui/src still imports the package directly. Out of this task''s scope (only cleared the pnpm/bun mismatch) — manager should track a follow-up for resolving @moduleforge/core-gui types in CI (publish/link the package, or scope build.gui out of the CI build job).'
+    - title: 'summary-bun-migration.md stale re: r86L/3RgF'
+      id: kcN3
+      date: "2026-07-03"
+      tag: phase-04-gate
+      text: 'Noted by the phase-04 gate review (correctness/style lenses): plan/summary-bun-migration.md (a dated, frozen historical summary from a prior migration phase) still calls r86L a "[BLOCKER]" and references 3RgF as an open follow-up, but both are now marked resolved in plan/next-steps.yaml by phase-04. Not touched by phase-04''s diff and not in its scope. Low-priority — worth a wording sync if the manager wants the historical summary to read consistently, but it''s frozen historical prose, not live documentation.'
