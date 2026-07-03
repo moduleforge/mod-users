@@ -6,3 +6,7 @@ phases:
       slug: gui-build-alignment
       title: GUI Build Alignment
       tasks: []
+    - number: 2
+      slug: stale-artifact-cleanup
+      title: Stale Artifact Cleanup
+      tasks: []
