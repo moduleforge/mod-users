@@ -27,7 +27,7 @@ phases:
           slug: remove-nextjs-scaffold
           title: Remove Nextjs Scaffold
           path: phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md
-          done: false
+          done: true
           tier: sonnet-med
           git:
             branch: phase-02-task-01-remove-nextjs-scaffold
