@@ -36,6 +36,20 @@ No standard skill; follow the `## Requirements`. Inventory verified in [../notes
 - `find gui -maxdepth 1 -type d -empty` returns nothing (no stray empty dirs left).
 - The remaining `gui/` file inventory matches the sibling shape: config files, `Makefile`, `package.json`, `tsconfig.json`, `tsup.config.ts`, `.ladle/`, and `src/`.
 
+## Status
+
+- **Outcome:** succeeded (implementation task agent, work verified directly by the manager after the agent's dispatch was interrupted twice by infrastructure errors — an API connection drop mid-response, then a stall on resume — after the substantive work was already committed; 2026-07-03).
+- **Commit:** task worktree `phase-02-task-01-remove-nextjs-scaffold`, commits `7fab552` (`git rm` scaffold cruft: README, components.json, public SVGs) and `14f215d` (`.gitignore` replacement; confirmed no stray empty dirs present).
+- **Validation summary (re-verified directly against every `## Validation` item):**
+  - `git ls-files gui/` no longer lists `gui/README.md`, `gui/components.json`, or any `gui/public/*.svg`; `gui/public/` no longer exists — confirmed.
+  - `gui/Dockerfile.dev` still present — confirmed (correctly left for Phase 03).
+  - `gui/.gitignore` matches the six-line sibling form exactly; `grep -n 'next\|pnpm\|vercel\|yarn' gui/.gitignore` returns nothing — confirmed.
+  - `ls -la gui/` shows none of `next.config.ts/`, `eslint.config.mjs/`, `postcss.config.mjs/`, `worktree/`, `.next/` — confirmed.
+  - `find gui -maxdepth 1 -type d -empty` returns nothing — confirmed.
+  - Remaining `gui/` inventory matches sibling shape: `.gitignore`, `.ladle/`, `Dockerfile.dev`, `Makefile`, `node_modules/`, `package.json`, `src/`, `tsconfig.json`, `tsup.config.ts`, `vite.config.ts` — confirmed.
+  - Task worktree working tree is clean (`git status --porcelain` empty).
+- **Assumptions applied:** both `## Assumptions` entries held as written — the stray directories were genuinely empty (none contained files), and Phase 01 had already landed by dispatch time, though this task's disjoint file set made that irrelevant.
+
 ## Assumptions
 
 - The stray empty directories (`next.config.ts/`, etc.) exist on disk as artifacts of a prior rename/checkout and are genuinely empty — verified in the gap-analysis note. If any unexpectedly contains files, stop and report rather than force-removing.
