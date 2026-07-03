@@ -45,3 +45,8 @@ items:
       date: "2026-07-03"
       tag: phase-04-gate
       text: 'Noted by the phase-04 gate review (correctness/style lenses): plan/summary-bun-migration.md (a dated, frozen historical summary from a prior migration phase) still calls r86L a "[BLOCKER]" and references 3RgF as an open follow-up, but both are now marked resolved in plan/next-steps.yaml by phase-04. Not touched by phase-04''s diff and not in its scope. Low-priority — worth a wording sync if the manager wants the historical summary to read consistently, but it''s frozen historical prose, not live documentation.'
+    - title: No dependency cache in CI bun install
+      id: twPi
+      date: "2026-07-03"
+      tag: phase-04-gate
+      text: 'Noted by the phase-04 gate review (efficiency lens): the migrated ci.yml has no actions/cache step for the bun install across CI runs. Pre-existing condition (the prior pnpm workflow had no cache step either), not a regression introduced by phase-04 — but worth a follow-up for CI wall-clock time if the manager wants to optimize further. Out of scope for the pnpm-to-bun migration itself.'
