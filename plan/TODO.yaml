@@ -14,3 +14,7 @@ phases:
       slug: dev-stack-disposition
       title: Dev-Stack Disposition
       tasks: []
+    - number: 4
+      slug: ci-bun-migration
+      title: CI Bun Migration
+      tasks: []
