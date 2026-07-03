@@ -79,7 +79,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-05-task-01-add-preview-target
-            commit: []
+            commit:
+                - 027c6dc
             merge: null
     - number: 6
       slug: doc-updates
