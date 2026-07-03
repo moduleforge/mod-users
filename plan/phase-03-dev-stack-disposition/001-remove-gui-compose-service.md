@@ -47,3 +47,12 @@ No standard skill; follow the `## Requirements`. The `docs/architecture.md` and 
 
 - After removing the compose `gui` service block + `Dockerfile.dev`.
 - After the AGENTS.md + root Makefile comment edits.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-03
+- **Validation summary:** all five checks passed — `deploy/local/docker-compose.yml` has no gui-service references (the remaining `3000` hit is the pre-existing `AUTH_FRONTEND_RETURN_URL` pointing at app-mfdemo, out of scope) and parses cleanly via `docker compose config -q` (validated with a temporary `.env` copied from `.env.example`, then removed — never committed); `gui/Dockerfile.dev` is untracked; `AGENTS.md` step 5 no longer claims a GUI dev server; the root `Makefile` dev-orchestration comment no longer lists a GUI dev server and `_dev.urls` still shows the app-mfdemo demo-app URL; no live `Dockerfile.dev` references remain outside historical `plan/summary-*.md`.
+- **Affected files:** `deploy/local/docker-compose.yml`, `gui/Dockerfile.dev` (deleted), `AGENTS.md`, `Makefile`.
+- **Assumptions applied:** both `## Assumptions` items (remove decision final; port-3000 collision eliminated) applied as stated.
+- **Decision:** for the optional AGENTS.md pointer, added `make preview` (Ladle) / `app-mfdemo` guidance per the task's suggested wording. Note that Phase 05 is what actually adds the `make preview` target, so this branch in isolation (before Phase 05 merges) references a target that does not yet exist; it will exist once the phases integrate. Flagged for the manager to confirm this sequencing is acceptable.
