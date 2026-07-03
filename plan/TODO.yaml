@@ -75,4 +75,14 @@ phases:
     - number: 6
       slug: doc-updates
       title: Documentation Updates
-      tasks: []
+      tasks:
+        - number: 1
+          slug: update-architecture-docs
+          title: Update Architecture Docs
+          path: phase-06-doc-updates/001-update-architecture-docs.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
