@@ -75,7 +75,7 @@ phases:
           slug: add-preview-target
           title: Add Preview Target
           path: phase-05-preview-and-readme/001-add-preview-target.md
-          done: false
+          done: true
           tier: sonnet-med
           git:
             branch: phase-05-task-01-add-preview-target
