@@ -19,7 +19,17 @@ phases:
     - number: 2
       slug: stale-artifact-cleanup
       title: Stale Artifact Cleanup
-      tasks: []
+      tasks:
+        - number: 1
+          slug: remove-nextjs-scaffold
+          title: Remove Nextjs Scaffold
+          path: phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 3
       slug: dev-stack-disposition
       title: Dev-Stack Disposition
