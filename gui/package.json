@@ -16,15 +16,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup && bun run build:css",
-    "build:css": "bunx @tailwindcss/cli -i src/styles.css -o dist/index.css --minify",
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist build .yalc yalc.lock",
     "dev": "ladle serve --port 61002",
     "preview:build": "ladle build"
   },
   "dependencies": {
-    "@moduleforge/core-gui": "file:.yalc/@moduleforge/core-gui",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
