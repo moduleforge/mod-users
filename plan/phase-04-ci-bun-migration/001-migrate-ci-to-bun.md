@@ -44,3 +44,14 @@ No standard skill; follow the `## Requirements`. Context in [../notes/gap-analys
 
 - After rewriting the three CI jobs.
 - After clearing the AGENTS.md / .claude/CLAUDE.md notes and annotating next-steps.yaml.
+
+## Status
+
+- **Outcome:** succeeded. Date: 2026-07-03.
+- Implemented in worktree `worktree/phase-04-task-01-migrate-ci-to-bun`, commits `5c3c12b` (CI job rewrite) and `1c7f73c` (docs/tracker cleanup); final commit captured in the task agent's structured report.
+- `.github/workflows/ci.yml`: `lint`, `test`, and `build` jobs now use `oven-sh/setup-bun@v2` (pinned via new `BUN_VERSION: "1.3.4"` env var, following the existing `GO_VERSION`/`NODE_VERSION`/`SQLC_VERSION` pinning convention) plus a root-level `bun install --frozen-lockfile` step; all `pnpm`/`corepack` steps and the duplicate gui-scoped install in `build` are removed; `actions/setup-node@v4` retained in all three jobs.
+- `AGENTS.md`: removed the now-empty "Known issues and follow-up items" section (its only bullet was the resolved pnpm blocker) along with the **CI workflow still uses pnpm** bullet.
+- `.claude/CLAUDE.md`: removed the **CI still uses pnpm** bullet from "Known gotchas".
+- `plan/next-steps.yaml`: annotated `r86L` and `3RgF` as `resolved: true` with `resolved_date` and a `resolution` note each (items kept, not deleted, to preserve history).
+- Validation: all six `## Validation` checks passed, including a local dry-run of `bun install --frozen-lockfile` at repo root with no `.yalc/` present (succeeded, confirming the Phase 01 dependency fix holds).
+- **Known limitation confirmed, not fixed (per `## Assumptions`):** `make build.gui` still fails at the `tsup` DTS-generation step (`Cannot find module '@moduleforge/core-gui'`) because CI does not populate `.yalc/`. This is pre-existing and package-manager-independent — it is not part of this task's scope (clearing the pnpm/bun mismatch) and is flagged as a follow-up for the manager (resolving `@moduleforge/core-gui` types in CI, e.g. via publish/link or scoping `build.gui` out of CI).
