@@ -65,7 +65,7 @@ phases:
             branch: phase-04-task-01-migrate-ci-to-bun
             commit:
                 - 1c7f73c
-            merge: null
+            merge: 51a64a7a8ceac826d96030f59005b241335cf693
     - number: 5
       slug: preview-and-readme
       title: Preview And README
