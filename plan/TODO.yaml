@@ -53,6 +53,7 @@ phases:
     - number: 4
       slug: ci-bun-migration
       title: CI Bun Migration
+      diff_base: 87262ad4dc284aa21c5e67a1b198bf032afce4ae
       tasks:
         - number: 1
           slug: migrate-ci-to-bun
