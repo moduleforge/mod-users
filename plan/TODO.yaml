@@ -30,7 +30,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: phase-02-task-01-remove-nextjs-scaffold
             commit: []
             merge: null
     - number: 3
