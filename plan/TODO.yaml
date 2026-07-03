@@ -5,7 +5,17 @@ phases:
     - number: 1
       slug: gui-build-alignment
       title: GUI Build Alignment
-      tasks: []
+      tasks:
+        - number: 1
+          slug: align-gui-build-tooling
+          title: Align Gui Build Tooling
+          path: phase-01-gui-build-alignment/001-align-gui-build-tooling.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: stale-artifact-cleanup
       title: Stale Artifact Cleanup
