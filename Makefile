@@ -156,6 +156,11 @@ endif
 .PHONY: dev.restart
 dev.restart: dev.stop dev.start ## Stop then re-bring up the full stack
 
+.PHONY: preview
+preview: ## Run the Ladle component workbench for gui/ (http://localhost:61002)
+	@echo "==> preview: users-module/gui — Ladle on http://localhost:61002"
+	@$(MAKE) -C gui dev.start
+
 # ---------------------------------------------------------------------------
 # Per-sub-project delegating targets (dot-namespaced)
 # ---------------------------------------------------------------------------
