@@ -43,7 +43,7 @@ phases:
           slug: remove-gui-compose-service
           title: Remove Gui Compose Service
           path: phase-03-dev-stack-disposition/001-remove-gui-compose-service.md
-          done: false
+          done: true
           tier: sonnet-med
           git:
             branch: phase-03-task-01-remove-gui-compose-service
