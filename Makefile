@@ -71,7 +71,6 @@ test.all: test.unit test.integration ## Run all tests (unit + integration)
 # `dev.start` runs the full stack in Docker containers:
 #   - Postgres, Authelia, Mailpit (infrastructure)
 #   - API server (Go, built from source, runs migrations on start)
-#   - GUI dev server (Next.js with hot-reload via volume mounts)
 #
 # All services publish ports to localhost for browser access.
 # Ctrl-C stops all containers.
