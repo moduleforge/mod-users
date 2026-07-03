@@ -20,3 +20,8 @@ items:
       date: "2026-07-03"
       tag: stale-artifact-cleanup
       text: '[phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md] The task agent dispatch for this task hit two consecutive infrastructure failures (API connection error, then a stall) after completing the substantive work. No content issue — purely infra flakiness. Noting for awareness in case this recurs on later phases.'
+    - title: Worktree isolation misses untracked cleanup
+      id: de6E
+      date: "2026-07-03"
+      tag: phase-02-gate
+      text: 'Discovered during the phase-02 gate review: when a task''s Requirements call for removing untracked/stray filesystem artifacts (not git-tracked), dispatching that task into an isolated task worktree does not work as expected — `git worktree add` doesn''t copy untracked files from the main checkout, so the fresh task worktree never contains the stray artifacts in the first place, and the task agent''s rm -rf + verification silently checks an already-clean location rather than actually cleaning the project root. This happened in phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md''s Requirement 3 (stray empty dirs + gui/.next/ build cache) — caught by the style review lens, fixed directly by the manager against the actual project root. Future plan tasks that include untracked-file/stray-directory cleanup should either target project_root directly (bypassing worktree isolation for that step) or have the manager independently re-verify against project_root after merge, not just trust the task worktree''s self-reported validation.'
