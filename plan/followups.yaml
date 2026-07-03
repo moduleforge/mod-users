@@ -50,3 +50,8 @@ items:
       date: "2026-07-03"
       tag: phase-04-gate
       text: 'Noted by the phase-04 gate review (efficiency lens): the migrated ci.yml has no actions/cache step for the bun install across CI runs. Pre-existing condition (the prior pnpm workflow had no cache step either), not a regression introduced by phase-04 — but worth a follow-up for CI wall-clock time if the manager wants to optimize further. Out of scope for the pnpm-to-bun migration itself.'
+    - title: 'Per the task doc''s explicit instruction, the '
+      id: 0PHW
+      date: "2026-07-03"
+      tag: preview-and-readme
+      text: '[phase-05-preview-and-readme/001-add-preview-target.md] Per the task doc''s explicit instruction, the cross-repo aggregate-README correction (/Users/zane/playground/moduleforge/README.md module-table cell mod-users -> yes (tsup lib), and GUI workbench row) lives outside project_root in a separate git repo and was intentionally not touched. Remains outstanding for the manager to route to the aggregate-repo process.'
