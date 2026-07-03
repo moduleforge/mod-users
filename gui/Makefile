@@ -1,7 +1,7 @@
 # gui/ sub-project Makefile (@moduleforge/users-gui pure component library).
 # Self-contained: implements the canonical target contract used by the root
 # Makefile so it can be invoked standalone or via `make -C gui <target>`.
-# Build: tsup (JS/TS) + @tailwindcss/cli (CSS). Preview: ladle on port 61002.
+# Build: tsup (JS/TS + DTS). Preview: ladle on port 61002.
 
 .DEFAULT_GOAL := build
 
@@ -66,7 +66,7 @@ preflight: ## Check tools + fix stale node_modules
 # ---------------------------------------------------------------------------
 
 .PHONY: build
-build: preflight ## Build the component library (tsup JS/TS + CSS via tailwindcss-cli)
+build: preflight ## Build the component library (tsup: JS/TS + DTS)
 	$(PM) run build
 
 .PHONY: test

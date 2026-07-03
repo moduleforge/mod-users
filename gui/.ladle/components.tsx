@@ -1,5 +1,5 @@
 import type { GlobalProvider } from '@ladle/react';
-import '../src/styles.css';
+import './styles.css';
 
 export const Provider: GlobalProvider = ({ children, globalState }) => (
   <div className={globalState.theme === 'dark' ? 'dark' : ''}>
