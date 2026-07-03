@@ -15,3 +15,8 @@ items:
       date: "2026-07-03"
       tag: gui-build-alignment
       text: '[phase-01-gui-build-alignment/001-align-gui-build-tooling.md] gui/AGENTS.md First-time setup step 4 still describes @moduleforge/core-gui as reached via a file:.yalc/ link — now technically imprecise (it''s an optional peer dep resolved by yalc, not a committed file: dependency), but the task doc explicitly instructed not to touch step 4, so it was left as-is. Worth a follow-up wording pass if the manager wants full accuracy.'
+    - title: The task agent dispatch for this task hit two
+      id: h4Un
+      date: "2026-07-03"
+      tag: stale-artifact-cleanup
+      text: '[phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md] The task agent dispatch for this task hit two consecutive infrastructure failures (API connection error, then a stall) after completing the substantive work. No content issue — purely infra flakiness. Noting for awareness in case this recurs on later phases.'
