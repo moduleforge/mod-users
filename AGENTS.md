@@ -55,7 +55,7 @@ This file is the canonical reference for contributors and AI agents working on t
    ```sh
    make dev.start
    ```
-   This starts Postgres (5432), Authelia (9091), Mailpit (8025), and the API server (8080). For local component preview, use `make preview` (Ladle) once available (added in a later phase); `app-mfdemo` is the current integration testbed.
+   This starts Postgres (5432), Authelia (9091), Mailpit (8025), and the API server (8080). For local component preview, use `make preview` (Ladle); `app-mfdemo` is the integration testbed.
 
 ## Build commands
 
@@ -92,6 +92,7 @@ make dev.start       # start full Docker Compose stack (Ctrl-C to stop)
 make dev.restart     # restart the stack (useful after .env changes)
 make dev.stop        # stop all containers
 make dev.db-connect  # open a psql shell to the local Postgres instance
+make preview         # run the Ladle component workbench for gui/ (http://localhost:61002)
 make clean           # remove build artifacts, DB data, and locally-built images
 ```
 
