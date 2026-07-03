@@ -84,7 +84,7 @@ When a new OIDC login arrives for an email that matches an existing account, the
 
 ## GUI component library
 
-`gui/` is a React component library built with tsup and exported as `@moduleforge/users-gui`. It provides ready-made components for registration, login (all channels), password reset, and profile management. Source layout: `src/components/` (UI components), `src/lib/` (API client, utilities), `src/styles.css` (base styles).
+`gui/` is a React component library built with tsup and exported as `@moduleforge/users-gui`. It provides ready-made components for registration, login (all channels), password reset, and profile management. Source layout: `src/components/` (UI components), `src/lib/` (API client, utilities). The `tsup` build emits JS and type declarations only — no CSS is bundled into `dist/`. The Tailwind v4 entry stylesheet lives at `gui/.ladle/styles.css` and is used only by the Ladle component workbench (`make preview`); consumers generate their own CSS via Tailwind v4 `@source` scanning of the library's built `dist/` output, as `app-mfdemo` does.
 
 The library depends on `@moduleforge/core-gui` as a peer. For local development, this dependency is linked via yalc rather than a published registry. See [AGENTS.md](../AGENTS.md) for the yalc setup procedure.
 
@@ -100,7 +100,8 @@ The `app-mfdemo` project (a separate Next.js app at the aggregate level — not 
 | Authelia | 9091 | Local OIDC identity provider |
 | Mailpit | 1025/8025 | SMTP trap for email-code testing |
 | API server | 8080 | Go HTTP API (built from source) |
-| GUI dev server | 3000 | Next.js dev server (app-mfdemo) with hot-reload |
+
+`make dev.start` does not run a GUI container. For local component preview, run `make preview` (Ladle, port 61002); `app-mfdemo` (run separately, at the aggregate level) is the integration testbed against the running API.
 
 Copy `.env.example` to `.env` and add `127.0.0.1 authelia` to `/etc/hosts` before first run. See `deploy/local/README.md` for the full first-time setup walkthrough.
 
