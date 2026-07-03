@@ -97,4 +97,4 @@ phases:
             branch: phase-06-task-01-update-architecture-docs
             commit:
                 - dbccabb
-            merge: null
+            merge: 397d3026f5b9814cd3263738d61a0543454e8671
