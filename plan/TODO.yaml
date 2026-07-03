@@ -22,3 +22,7 @@ phases:
       slug: preview-and-readme
       title: Preview And README
       tasks: []
+    - number: 6
+      slug: doc-updates
+      title: Documentation Updates
+      tasks: []
