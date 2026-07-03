@@ -35,3 +35,8 @@ items:
       date: "2026-07-03"
       tag: phase-03-gate
       text: 'Incidental observation from the phase-03 gate review (correctness lens): deploy/local/README.md''s "## What''s not here" section still contains phase-3-era prose ("API and GUI containers — they run on the host during development (Phase 3+ may add them to compose)") that is now doubly stale given the compose gui service existed and was just removed by phase-03. Untouched by phase-03''s diff and not in that task''s files_in_scope. Not currently owned by any registered plan phase (Phase 06 doc-updates covers docs/architecture.md and docs/project-structure.md, not deploy/local/README.md) — worth a follow-up wording pass if the manager wants full accuracy.'
+    - title: Pre-existing, package-manager-independent lim
+      id: VqCM
+      date: "2026-07-03"
+      tag: ci-bun-migration
+      text: '[phase-04-ci-bun-migration/001-migrate-ci-to-bun.md] Pre-existing, package-manager-independent limitation confirmed live: make build.gui''s tsup --dts step fails with Cannot find module ''@moduleforge/core-gui'' in any environment (including CI) where .yalc/ is not populated, since gui/src still imports the package directly. Out of this task''s scope (only cleared the pnpm/bun mismatch) — manager should track a follow-up for resolving @moduleforge/core-gui types in CI (publish/link the package, or scope build.gui out of the CI build job).'
