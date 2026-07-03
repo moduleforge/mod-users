@@ -11,7 +11,7 @@ phases:
           slug: align-gui-build-tooling
           title: Align Gui Build Tooling
           path: phase-01-gui-build-alignment/001-align-gui-build-tooling.md
-          done: false
+          done: true
           tier: sonnet-high
           git:
             branch: phase-01-task-01-align-gui-build-tooling
