@@ -21,6 +21,7 @@ phases:
     - number: 2
       slug: stale-artifact-cleanup
       title: Stale Artifact Cleanup
+      diff_base: b6465b6971c4dcb28e2f7b3e85d102fcf847aea5
       tasks:
         - number: 1
           slug: remove-nextjs-scaffold
