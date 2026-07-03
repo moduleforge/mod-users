@@ -47,7 +47,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-03-task-01-remove-gui-compose-service
-            commit: []
+            commit:
+                - 8a24b23
             merge: null
     - number: 4
       slug: ci-bun-migration
