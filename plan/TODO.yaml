@@ -46,7 +46,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: phase-03-task-01-remove-gui-compose-service
             commit: []
             merge: null
     - number: 4
