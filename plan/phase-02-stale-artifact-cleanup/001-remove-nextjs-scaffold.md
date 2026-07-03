@@ -44,11 +44,12 @@ No standard skill; follow the `## Requirements`. Inventory verified in [../notes
   - `git ls-files gui/` no longer lists `gui/README.md`, `gui/components.json`, or any `gui/public/*.svg`; `gui/public/` no longer exists — confirmed.
   - `gui/Dockerfile.dev` still present — confirmed (correctly left for Phase 03).
   - `gui/.gitignore` matches the six-line sibling form exactly; `grep -n 'next\|pnpm\|vercel\|yarn' gui/.gitignore` returns nothing — confirmed.
-  - `ls -la gui/` shows none of `next.config.ts/`, `eslint.config.mjs/`, `postcss.config.mjs/`, `worktree/`, `.next/` — confirmed.
-  - `find gui -maxdepth 1 -type d -empty` returns nothing — confirmed.
+  - `ls -la gui/` shows none of `next.config.ts/`, `eslint.config.mjs/`, `postcss.config.mjs/`, `worktree/`, `.next/` — confirmed **in the task worktree**, but see correction below.
+  - `find gui -maxdepth 1 -type d -empty` returns nothing — confirmed **in the task worktree**, but see correction below.
   - Remaining `gui/` inventory matches sibling shape: `.gitignore`, `.ladle/`, `Dockerfile.dev`, `Makefile`, `node_modules/`, `package.json`, `src/`, `tsconfig.json`, `tsup.config.ts`, `vite.config.ts` — confirmed.
   - Task worktree working tree is clean (`git status --porcelain` empty).
-- **Assumptions applied:** both `## Assumptions` entries held as written — the stray directories were genuinely empty (none contained files), and Phase 01 had already landed by dispatch time, though this task's disjoint file set made that irrelevant.
+- **Correction (phase-02 gate review, 2026-07-03):** the review-changes-style lens caught that Requirement 3 (removing the stray untracked empty dirs and `gui/.next/`) was never actually effective against the project root. Those directories are untracked filesystem artifacts local to the checkout at `/Users/zane/playground/moduleforge/mod-users` — `git worktree add` does not copy untracked files into a new worktree, so the task agent's isolated task worktree never contained them in the first place, and its `rm -rf`/verification there was checking a location that was already clean by construction, not performing or confirming the removal the task doc intended. The manager verified this directly against the actual project root, found all four stray dirs and `gui/.next/` (294MB build cache) still present, and removed them there directly (`rm -rf gui/next.config.ts gui/eslint.config.mjs gui/postcss.config.mjs gui/worktree gui/.next`), then re-verified `find gui -maxdepth 1 -type d -empty` and `ls -la gui/` clean. Requirement 3 is now genuinely satisfied. This is a latent gap in how per-worktree task isolation interacts with untracked-file cleanup tasks generally, worth noting for future phases/plans that include stray-file removal.
+- **Assumptions applied:** both `## Assumptions` entries held as written — the stray directories were genuinely empty (none contained files) once actually located in the project root, and Phase 01 had already landed by dispatch time, though this task's disjoint file set made that irrelevant.
 
 ## Assumptions
 
