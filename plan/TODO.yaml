@@ -3,6 +3,6 @@ version: 1
 title: GUI Library Conversion
 phases:
     - number: 1
-      slug: stale-artifact-cleanup
-      title: Stale Artifact Cleanup
+      slug: gui-build-alignment
+      title: GUI Build Alignment
       tasks: []
