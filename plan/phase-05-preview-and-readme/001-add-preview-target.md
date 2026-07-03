@@ -41,3 +41,12 @@ No standard skill; follow the `## Requirements`.
 ## Checkpoint hints
 
 - Single-file change; no checkpoints needed.
+
+## Status
+
+- **Outcome:** succeeded. Date: 2026-07-03.
+- Implemented in worktree `worktree/phase-05-task-01-add-preview-target`; final commit captured in the task agent's structured report.
+- `Makefile`: added a `.PHONY: preview` target (in the "Dev orchestration" section, immediately after `dev.restart`) delegating to `$(MAKE) -C gui dev.start`, exactly matching the block specified in `## Requirements` item 1. No other targets were touched.
+- Validation: `grep -n 'preview' Makefile` shows the new target; `make -n preview` dry-run shows delegation to `gui dev.start`; `make help` lists `preview` among the canonical targets with its help text, all pre-existing targets unchanged. Ran `make preview` live — Ladle started, `curl http://localhost:61002` returned HTTP 200, then the process was stopped (Ctrl-C equivalent) to leave the worktree clean.
+- No assumptions from `## Assumptions` were overridden; both held as stated (no pre-existing `preview` target; `gui/Makefile`'s `dev.start` already runs Ladle on 61002).
+- **Flagged for manager (per `## References`, not part of this task):** the cross-repo aggregate `/Users/zane/playground/moduleforge/README.md` module-table cell and "GUI workbench" row updates remain outstanding in the separate aggregate repo.
