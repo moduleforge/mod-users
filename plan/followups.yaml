@@ -5,3 +5,8 @@ items:
       date: "2026-07-03"
       tag: gui-build-alignment
       text: '[phase-01-gui-build-alignment/001-align-gui-build-tooling.md] The consumer regression check against app-mfdemo was not fully executed. app-mfdemo has no node_modules installed, and its own @moduleforge/users-gui/@moduleforge/core-gui dependencies are also file:.yalc/... links needing yalc publish/yalc add there — out of this task''s scope and edit boundary. Recommend the manager (or a session with broader permissions) run the full check: rebuild users-gui, link it into app-mfdemo via yalc, and confirm Tailwind still emits the expected classes.'
+    - title: The sandbox's permission classifier denies ya
+      id: HSiS
+      date: "2026-07-03"
+      tag: gui-build-alignment
+      text: '[phase-01-gui-build-alignment/001-align-gui-build-tooling.md] The sandbox''s permission classifier denies yalc publish (and likely yalc add) run from a task-agent session against the shared ~/.yalc store or a sibling repo, even for legitimate validation purposes named in the task doc''s own Assumptions. This is an environment/tooling gap worth noting for future GUI-alignment tasks in this plan (Phase 02+ will likely hit the same wall running make build.gui/make lint.gui).'
