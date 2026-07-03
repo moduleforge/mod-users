@@ -33,7 +33,17 @@ phases:
     - number: 3
       slug: dev-stack-disposition
       title: Dev-Stack Disposition
-      tasks: []
+      tasks:
+        - number: 1
+          slug: remove-gui-compose-service
+          title: Remove Gui Compose Service
+          path: phase-03-dev-stack-disposition/001-remove-gui-compose-service.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: ci-bun-migration
       title: CI Bun Migration
