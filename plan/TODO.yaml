@@ -14,7 +14,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-01-task-01-align-gui-build-tooling
             commit: []
             merge: null
     - number: 2
