@@ -70,7 +70,7 @@ gui/
   vite.config.ts        # Vite config consumed by Ladle (Tailwind v4 plugin for the workbench)
   dist/                 # build output (gitignored; `make build.gui` populates it)
   node_modules/         # managed by bun workspace (gitignored)
-  .ladle/               # Ladle component workbench config, incl. styles.css (Tailwind entry, workbench-only)
+  .ladle/               # Ladle component workbench config (styles.css is the Tailwind entry, workbench-only)
   src/
     index.ts            # package entry point — re-exports all public components
     components/         # React UI components (auth flows, profile, admin views)
