@@ -49,7 +49,7 @@ phases:
             branch: phase-03-task-01-remove-gui-compose-service
             commit:
                 - 8a24b23
-            merge: null
+            merge: 72cd22a463de7e4032eceba74aea14dd193fcb43
     - number: 4
       slug: ci-bun-migration
       title: CI Bun Migration
