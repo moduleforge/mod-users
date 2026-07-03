@@ -59,7 +59,7 @@ phases:
           slug: migrate-ci-to-bun
           title: Migrate Ci To Bun
           path: phase-04-ci-bun-migration/001-migrate-ci-to-bun.md
-          done: false
+          done: true
           tier: sonnet-med
           git:
             branch: phase-04-task-01-migrate-ci-to-bun
