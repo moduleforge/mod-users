@@ -33,7 +33,7 @@ phases:
             branch: phase-02-task-01-remove-nextjs-scaffold
             commit:
                 - 14f215d
-            merge: null
+            merge: 927b31aed7d45ad0d40007b15cde031bf840aa8a
     - number: 3
       slug: dev-stack-disposition
       title: Dev-Stack Disposition
