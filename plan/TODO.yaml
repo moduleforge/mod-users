@@ -63,7 +63,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-04-task-01-migrate-ci-to-bun
-            commit: []
+            commit:
+                - 1c7f73c
             merge: null
     - number: 5
       slug: preview-and-readme
