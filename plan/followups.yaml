@@ -55,3 +55,8 @@ items:
       date: "2026-07-03"
       tag: preview-and-readme
       text: '[phase-05-preview-and-readme/001-add-preview-target.md] Per the task doc''s explicit instruction, the cross-repo aggregate-README correction (/Users/zane/playground/moduleforge/README.md module-table cell mod-users -> yes (tsup lib), and GUI workbench row) lives outside project_root in a separate git repo and was intentionally not touched. Remains outstanding for the manager to route to the aggregate-repo process.'
+    - title: Pre-existing Storybook vs actual-tool Ladle t
+      id: PZfi
+      date: "2026-07-03"
+      tag: doc-updates
+      text: '[phase-06-doc-updates/001-update-architecture-docs.md] Pre-existing Storybook vs actual-tool Ladle terminology inconsistency in docs/project-structure.md (stories/ comment) and docs/mod-users-spec.md (use case 13, story tool/Storybook role) — predates the completed task docs, out of this task''s scope, needs a separate scope decision.'
