@@ -95,5 +95,6 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-06-task-01-update-architecture-docs
-            commit: []
+            commit:
+                - dbccabb
             merge: null
