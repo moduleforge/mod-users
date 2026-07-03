@@ -143,7 +143,6 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 ## Known issues and follow-up items
 
 - **CI workflow still uses pnpm** (`next-steps id: r86L`): `.github/workflows/ci.yml` installs pnpm and runs `pnpm install --frozen-lockfile`. CI will fail until the workflow is updated to use bun. This is a **blocker** for CI-dependent merges.
-- **yalc dep in gui/package.json** (`next-steps id: 3RgF`): `gui/package.json` lists `@moduleforge/core-gui` as a `file:.yalc/...` dep. Fresh checkouts and CI will fail `bun install` without `.yalc/` present. Consider converting to a peer/optional dep.
 
 ## Conventions
 

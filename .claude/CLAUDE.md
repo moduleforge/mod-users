@@ -13,7 +13,7 @@ This file covers Claude Code-specific configuration and guidance. For build comm
 ## Known gotchas
 
 - **`make clean.build` removes `model/db/`** — restore with `git checkout HEAD -- model/db/` before running Go builds.
-- **yalc link required for gui/ builds** — `gui/package.json` has a `file:.yalc/...` dep on `@moduleforge/core-gui`. Fresh worktrees need the yalc setup from AGENTS.md before `make build.gui` will succeed.
+- **yalc link required for gui/ builds/typecheck** — `gui/package.json` declares `@moduleforge/core-gui` only as an optional peer dependency, so a fresh `bun install` succeeds without it. But `src` still imports `@moduleforge/core-gui` (sidebar-nav, ui/dialog, error-message), so `make build.gui` and `make lint.gui` still need it resolved via the yalc `yalc add` step from AGENTS.md First-time setup.
 - **CI still uses pnpm** — `.github/workflows/ci.yml` has not been updated for bun. CI checks will fail until that's addressed (tracked in `plan/next-steps.yaml`, id `r86L`).
 
 ## File-editing scope
