@@ -5,6 +5,9 @@ items:
       date: "2026-06-21"
       tag: follow-up
       text: '[plan/phase-01-root-workspace/002-bun-install-root.md] gui/package.json declares @moduleforge/core-gui via "file:.yalc/@moduleforge/core-gui" — a yalc local-link that is gitignored. Any fresh worktree or CI environment will fail bun install without the .yalc/ directory present. Consider removing the file: dep from dependencies in gui/package.json (keep as optional peer) or documenting the yalc setup step in the developer setup guide. Out of scope for bun-migration.'
+      resolved: true
+      resolved_date: "2026-07-03"
+      resolution: 'Resolved by Phase 01 of the gui-lib-conversion plan: the file: dep was removed from dependencies in gui/package.json (kept as optional peer), so a fresh bun install no longer requires a populated .yalc/.'
     - title: Next.js dual-lockfile warning
       id: QLVr
       date: "2026-06-21"
@@ -25,3 +28,6 @@ items:
       date: "2026-06-21"
       tag: blocker
       text: '[plan/phase-04-validate/001-full-build-validation.md] .github/workflows/ci.yml references pnpm in three jobs (lint, test, build) — installs pnpm via corepack and runs pnpm install --frozen-lockfile (lines 41-44, 65-68, 104-117). These jobs will fail in CI after the bun migration. A follow-up task is needed to replace pnpm with bun in the CI workflow.'
+      resolved: true
+      resolved_date: "2026-07-03"
+      resolution: '[plan/phase-04-ci-bun-migration/001-migrate-ci-to-bun.md] .github/workflows/ci.yml lint/test/build jobs now install deps via oven-sh/setup-bun + root-level `bun install --frozen-lockfile`; pnpm/corepack steps removed. actions/setup-node retained (gui/ Makefile preflight still checks for node on PATH).'

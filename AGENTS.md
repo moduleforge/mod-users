@@ -140,10 +140,6 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 | `.flow/` | Flow workflow tooling binding manifest |
 | `.claude/` | Claude Code project config |
 
-## Known issues and follow-up items
-
-- **CI workflow still uses pnpm** (`next-steps id: r86L`): `.github/workflows/ci.yml` installs pnpm and runs `pnpm install --frozen-lockfile`. CI will fail until the workflow is updated to use bun. This is a **blocker** for CI-dependent merges.
-
 ## Conventions
 
 - **Internal IDs are never exposed in HTTP responses** — always use the `uuid` field.
