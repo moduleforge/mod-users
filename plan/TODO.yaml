@@ -18,3 +18,7 @@ phases:
       slug: ci-bun-migration
       title: CI Bun Migration
       tasks: []
+    - number: 5
+      slug: preview-and-readme
+      title: Preview And README
+      tasks: []
