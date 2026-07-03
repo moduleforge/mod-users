@@ -10,3 +10,7 @@ phases:
       slug: stale-artifact-cleanup
       title: Stale Artifact Cleanup
       tasks: []
+    - number: 3
+      slug: dev-stack-disposition
+      title: Dev-Stack Disposition
+      tasks: []
