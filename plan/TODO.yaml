@@ -62,7 +62,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: phase-04-task-01-migrate-ci-to-bun
             commit: []
             merge: null
     - number: 5
