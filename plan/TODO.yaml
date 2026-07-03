@@ -78,7 +78,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: phase-05-task-01-add-preview-target
             commit: []
             merge: null
     - number: 6
