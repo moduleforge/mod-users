@@ -30,7 +30,7 @@ phases:
             branch: phase-01-task-02-add-resetpasswordpage-componen
             commit:
                 - 33c3d2c
-            merge: null
+            merge: dc7d0d2
         - number: 3
           slug: email-code-page
           title: Email Code Page
