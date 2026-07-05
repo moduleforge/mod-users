@@ -35,7 +35,7 @@ phases:
           slug: auth-page
           title: Add Auth Page Component
           path: phase-01-auth-ui-components/003-auth-page.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Added AuthPage to gui/src/components/auth-page.tsx, composing LoginForm/RegisterForm (from already-merged task 001) inside a Card from core-gui, with an internal useState<AuthMode> toggle (seeded by initialMode, default 'login') rather than router-driven navigation, per the spec's non-goal of not owning routing. Per-mode CardTitle/CardDescription copy and CardFooter toggle prompts match the app-mfdemo reference; toggle uses a plain button (no router import). Exported AuthPage/AuthPageProps/AuthMode from gui/src/index.ts with a Ladle story. Typecheck clean apart from known pre-existing core-gui .yalc gap. All 5 validation checks pass.
           git:
