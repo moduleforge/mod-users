@@ -115,3 +115,8 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] No headless-browser tooling available to verify console-clean mount in Ladle; substituted a successful production build (bun run preview:build) plus manual code read-through instead.'
+    - title: yalc/bun-install side effect (file:.yalc/@mod
+      id: x7XI
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] yalc/bun-install side effect (file:.yalc/@moduleforge/core-gui re-added to gui/package.json and bun.lock during worktree setup) was reverted before commit; other parallel Phase 1 worktrees may hit the same issue.'
