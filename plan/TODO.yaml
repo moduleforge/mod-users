@@ -39,7 +39,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-01-task-03-add-auth-page-component
-            commit: []
+            commit:
+                - c1a820a
             merge: null
     - number: 2
       slug: doc-updates
