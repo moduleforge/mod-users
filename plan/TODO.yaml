@@ -27,7 +27,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-01-task-02-add-oidc-callback-page-compone
-            commit: []
+            commit:
+                - faa6f7c
             merge: null
         - number: 3
           slug: auth-page
