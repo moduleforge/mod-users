@@ -26,7 +26,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: phase-01-task-02-add-oidc-callback-page-compone
             commit: []
             merge: null
         - number: 3
