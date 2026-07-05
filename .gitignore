@@ -21,3 +21,9 @@ CLAUDE.md
 # file lives at user-components/go.work).
 /go.work
 /go.work.sum
+
+# OAuth/OIDC credential files that must never be committed (see
+# plan/followups.yaml history: pDQQ — live secrets were found committed
+# at the repo root in commit 9680136 and purged from git history).
+client_secret_*.apps.googleusercontent.com.json
+ms-secret-*.token
