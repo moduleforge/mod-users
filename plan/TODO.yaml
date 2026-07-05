@@ -11,7 +11,7 @@ phases:
           slug: forgot-password-page
           title: Forgot Password Page
           path: phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Implemented ForgotPasswordPage as a page-level, router-agnostic component mirroring AuthPage''s pattern: owns its own Card, toggles between a request view (email form, submit button, error via ErrorMessage) and a submitted view (confirmation copy echoing the submitted email), calling api.auth.forgotPassword directly (no useAuth()) and matching LoginForm/RegisterForm''s exact error-handling convention. Exported component + props type from gui/src/index.ts; added a Ladle Default story requiring no AuthProvider wrapper. All specified copy, styling classes, and callback behavior match the task doc. Typecheck, lint, and Ladle production build all passed.'
           git:
