@@ -83,6 +83,8 @@ export { AuthPage } from './components/auth-page';
 export type { AuthPageProps, AuthMode } from './components/auth-page';
 export { EmailCodePage } from './components/email-code-page';
 export type { EmailCodePageProps } from './components/email-code-page';
+export { ForgotPasswordPage } from './components/forgot-password-page';
+export type { ForgotPasswordPageProps } from './components/forgot-password-page';
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger } from './components/ui/dialog';
