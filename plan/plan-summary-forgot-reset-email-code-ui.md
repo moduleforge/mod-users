@@ -1,0 +1,59 @@
+# Plan Summary — Forgot-Password, Reset-Password, and Email-Code UI Components
+
+## What was planned and why
+
+`gui/src` shipped `LoginForm`, `RegisterForm`, `AuthPage`, and `OidcCallbackPage` (added by the prior `login-register-ui` plan) but no ready-to-use UI for the password-recovery and email-one-time-code flows. `app-mfdemo` — a separate, sibling repository outside this project's `project_root` — had already hand-built these pages against the raw API client (`forgot-password/page.tsx`, `reset/page.tsx`, `email-code/page.tsx`). Per `docs/architecture.md`'s GUI component library section, this was explicitly the gap the `login-register-ui` plan left open ("Password reset, profile management, and email one-time-code login are not yet part of this surface").
+
+This plan added three new components to `gui/src/components/` — `ForgotPasswordPage`, `ResetPasswordPage`, and `EmailCodePage` — generalizing the three `app-mfdemo` reference pages into reusable library components, exported from `gui/src/index.ts`. The underlying API client methods (`api.auth.forgotPassword`, `api.auth.resetPassword`, `api.auth.requestEmailCode`, `api.auth.verifyEmailCode`) already existed; this was a UI-layer-only plan with no API client changes in scope. A second, `doc-updates` phase followed, to keep `docs/architecture.md` accurate once the gap was closed. Explicitly out of scope: any change to `app-mfdemo` itself (planned separately, to start only after this plan's component API was finalized) and any change to the API client or server.
+
+## What shipped
+
+### Phase 1 — Forgot/Reset/Email-Code UI Components (`forgot-reset-email-code-ui`)
+
+Three independent, parallel-eligible tasks, each adding one component + its Ladle story + its `gui/src/index.ts` export lines.
+
+- **001 — `forgot-password-page`** (commit `7f3fa78`, merge `c977a25`): Implemented `ForgotPasswordPage` as a page-level, router-agnostic component mirroring `AuthPage`'s pattern — owns its own `Card`, toggling between a request view (email form, submit button, error via `ErrorMessage`) and a submitted view (confirmation copy echoing the submitted email). Calls `api.auth.forgotPassword` directly (no `useAuth()`), matching `LoginForm`/`RegisterForm`'s exact error-handling convention. Exported component + props type from `gui/src/index.ts`; added a Ladle `Default` story requiring no `AuthProvider` wrapper. Typecheck, lint, and Ladle production build all passed.
+- **002 — `reset-password-page`** (commit `33c3d2c`, merge `dc7d0d2`): Implemented `ResetPasswordPage` as a page-level, self-contained component mirroring `OidcCallbackPage`'s structural pattern — no Suspense, no `useSearchParams`/`useRouter`; `token` supplied as a required prop. Validation order (empty token, password length, password match, API call) mirrors the reference; the 12-character minimum was re-verified against server-side checks. Error handling mirrors `LoginForm`/`RegisterForm`'s `ApiRequestError`/generic-fallback pattern. Exported from `gui/src/index.ts` and given a Ladle `Default` story, verified via a live headless-browser-rendered Ladle instance confirming zero console errors at mount.
+- **003 — `email-code-page`** (commit `b1c28b0`, merge `0162f13`): Added `EmailCodePage`, a page-level self-contained component with internal request/verify step state, mirroring `AuthPage`'s multi-view pattern and `LoginForm`'s direct-`useAuth()` convention. Calls `api.auth.requestEmailCode`/`verifyEmailCode`, strips non-digit characters from the code field on every keystroke, calls `setTokenAndUser` before `onSuccess?.()` on successful verification, and treats "Try a different email" as pure internal state reset. No `next/navigation`/`next/link`/`useRouter` usage. Exported `EmailCodePage`/`EmailCodePageProps` from `gui/src/index.ts`; added an `AuthProvider`-wrapped Ladle story. Typecheck, lint, grep check, export check, and Ladle production build all passed.
+
+### Phase 2 — Documentation Updates (`doc-updates`)
+
+- **001 — `update-architecture-docs`** (commit `624ac5b`, merge `67a5030`): Updated `docs/architecture.md`'s GUI component library paragraph to name all seven shipped components (previously four) and replace the stale "Password reset, profile management, and email one-time-code login are not yet part of this surface" sentence with a narrower, accurate "Profile management is not yet part of this surface." Every claim about the three new components was checked against merged source, not just task docs. `docs/mod-users-spec.md` and `docs/project-structure.md` were reviewed, found already accurate, and left unchanged.
+
+## Key decisions
+
+1. **Page-level, self-contained components (not bare forms).** `ForgotPasswordPage`, `ResetPasswordPage`, and `EmailCodePage` each own their own `Card` and, where applicable, their own internal step/state transitions — mirroring `AuthPage`/`OidcCallbackPage`'s full-page composition pattern rather than `LoginForm`/`RegisterForm`'s bare-form pattern. Confirmed after reading all four existing components: `ForgotPasswordPage` and `EmailCodePage` each have two distinct `Card` bodies (request/confirmation and request/verify respectively) — the exact shape `AuthPage` already established. `ResetPasswordPage` has only one view but is still page-level, for API consistency with its siblings and because, like `OidcCallbackPage`, it is a standalone routing target (the emailed reset-link's landing page).
+2. **Naming matches the page-level pattern**: `ForgotPasswordPage`, `ResetPasswordPage`, `EmailCodePage` (not `*Form`), consistent with `AuthPage`/`OidcCallbackPage`.
+3. **Router-agnostic callback pattern, uniformly applied**, with all navigation-adjacent callbacks optional and defaulting to a no-op (the codebase-wide convention; `OidcCallbackPage`'s required `onComplete`/`onError` is a special case that does not apply here). Concretely: a new `onNavigateToLogin?: () => void` prop was added to all three components for their "Back to sign in"/"Sign in with password instead" footer links, rendered as `<button type="button">` (matching `AuthPage`'s existing footer styling) rather than real anchors — a `LinkComponent`-style prop was considered and rejected as unnecessary API surface. `ResetPasswordPage` and `EmailCodePage` additionally get an `onSuccess?: () => void` prop, fired after the underlying action succeeds, replacing the reference pages' `router.push(...)` calls. `ForgotPasswordPage` has no `onSuccess`-equivalent since its "submitted" confirmation renders in place via internal state.
+4. **`ResetPasswordPage`'s `token` is a required prop**, not read via `useSearchParams` internally — the consuming app reads it from the URL and passes it in. The component still performs a defensive `if (!token)` empty-string check before submitting, since a required TypeScript prop doesn't prevent an empty-string runtime value.
+5. **Password minimum length is 12 characters**, confirmed directly against the server-side rule at `api/internal/service/user_accounts.go` (`len(*in.Password) < 12`) rather than trusting the request's transcription — unchanged since the `login-register-ui` plan's `RegisterForm`, and mirrored by `ResetPasswordPage` using the same client-side-mirrors-server comment convention.
+6. **A Ladle story per new component**, following the exact convention of the existing `LoginForm`/`RegisterForm`/`AuthPage` stories: each wraps in `<AuthProvider>` only where `useAuth()` is actually needed (`EmailCodePage` only), with a comment noting submission will fail with a `network_error` in the story environment. `OidcCallbackPage`'s no-story precedent (depends on `window.location` state that can't be faked at mount) doesn't apply to any of the three new components, so all three got stories.
+7. **A second, `doc-updates` phase was required** because the plan modified a public component-library API boundary (this project's Phase 4 architectural-implications check) and because `docs/architecture.md`'s stale "not yet part of this surface" sentence needed correcting the moment these components shipped — following the `login-register-ui` plan's precedent exactly (same phase slug, same task shape, `sonnet-high` tier).
+
+## Follow-up items
+
+- **Footer-link style inconsistency across the three components** (phase-01 gate review, correctness lens): `ForgotPasswordPage`/`ResetPasswordPage`'s "Back to sign in" buttons use `text-sm text-muted-foreground hover:text-foreground`, while `EmailCodePage`'s "Sign in with password instead" uses `text-foreground hover:underline` (`AuthPage`'s mode-toggle style) wrapped in a `<p className="text-muted-foreground">`. No task doc mandated an exact class set (only a `<button type="button">` calling `onNavigateToLogin?.()`), so this is not a correctness defect — a minor visual-consistency cleanup if the manager wants the three footer links to look identical.
+- **`ForgotPasswordPage`'s "Back to sign in" lead copy is unconfirmed against the `app-mfdemo` source**: the task doc specified only button text/styling/behavior, not literal lead-sentence copy, so the implementing task rendered just the button with no prefix text. Worth a direct confirmation against the `app-mfdemo` reference page if exact-copy parity matters.
+- **Recurring flow-mcp doc-lookup tooling failure**: across multiple Phase 1 tasks, the `flow-mcp` `d`/`t`/`s` documentation-lookup tools returned "document not found" when resolving references against this project's default working directory (and against the `sdlcforge/flow` source checkout as `project_root`), despite matching entries existing in the flow plugin's `docs.json` on disk. Tasks worked around this by reading from the installed plugin cache directly. This is an environment/tool-wiring issue independent of any single task and recurred consistently enough (3+ tasks) to be worth investigating.
+- **Plan-doc bookkeeping**: the Phase 2 task's own Status-section update was written only in the plan worktree (the only place the task doc exists) and was left uncommitted there at report time; the plan worktree also had other uncommitted Phase 1 task-doc Status-section updates predating that session. Manager should verify these are committed as part of plan-doc bookkeeping (separate from this summary file's own commit).
+- **`app-mfdemo` consumer migration remains explicitly out of scope and not tracked as a followup here**, per this plan's own instruction (unlike the `login-register-ui` plan's precedent, which did record a followup, tagged `login-register-ui-consumer-migration`, for its own set of pages). That prior followup still stands separately and is unaffected by this plan.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Forgot/Reset/Email-Code UI Components
+
+- [x] [001-forgot-password-page.md](./phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md) — tier `sonnet-med` · branch `phase-01-task-01-add-forgotpasswordpage-compone` · commit `7f3fa78` · merge `c977a25`
+- [x] [002-reset-password-page.md](./phase-01-forgot-reset-email-code-ui/002-reset-password-page.md) — tier `sonnet-med` · branch `phase-01-task-02-add-resetpasswordpage-componen` · commit `33c3d2c` · merge `dc7d0d2`
+- [x] [003-email-code-page.md](./phase-01-forgot-reset-email-code-ui/003-email-code-page.md) — tier `sonnet-med` · branch `phase-01-task-03-add-emailcodepage-component` · commit `b1c28b0` · merge `0162f13`
+
+### Phase 02 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-02-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `phase-02-task-01-update-architecture-docs` · commit `624ac5b` · merge `67a5030`

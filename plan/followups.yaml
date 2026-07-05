@@ -110,3 +110,48 @@ items:
       date: "2026-07-05"
       tag: phase-01-gate
       text: '[phase-01 gate review, correctness lens] ForgotPasswordPage/ResetPasswordPage''s "Back to sign in" buttons use `text-sm text-muted-foreground hover:text-foreground`, while EmailCodePage''s "Sign in with password instead" uses `text-foreground hover:underline` (AuthPage''s mode-toggle style) wrapped in a `<p className="text-muted-foreground">`. No task doc mandated an exact class set (only a `<button type="button">` calling `onNavigateToLogin?.()`), so this is not a correctness defect — a minor visual-consistency cleanup if the manager wants the three footer links to look identical.'
+    - title: 'Tooling note: flow-mcp d/t tools did not reso'
+      id: 2LT7
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] Tooling note: flow-mcp d/t tools did not resolve docs against project_root=mod-users (only worked against a full flow-plugin-repo checkout); environment/tool-wiring issue independent of this task.'
+    - title: No headless-browser tooling available to veri
+      id: Lx9Z
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] No headless-browser tooling available to verify console-clean mount in Ladle; substituted a successful production build (bun run preview:build) plus manual code read-through instead.'
+    - title: yalc/bun-install side effect (file:.yalc/@mod
+      id: x7XI
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] yalc/bun-install side effect (file:.yalc/@moduleforge/core-gui re-added to gui/package.json and bun.lock during worktree setup) was reverted before commit; other parallel Phase 1 worktrees may hit the same issue.'
+    - title: Task doc Requirement 3 doesn't specify litera
+      id: H0PE
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Task doc Requirement 3 doesn''t specify literal lead-sentence copy for the ''Back to sign in'' prompt (only button text/styling/behavior) — rendered just the button with no prefix text; if the app-mfdemo reference page has specific lead copy, worth confirming against the source page directly.'
+    - title: Full interactive Ladle 'no console error at m
+      id: 2I8N
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Full interactive Ladle ''no console error at mount'' verification wasn''t possible in this environment (no browser/headless-browser tool); substituted a clean production build as the closest available proxy.'
+    - title: 'Unrelated to this task: flow-mcp d/s/t docume'
+      id: GgF5
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Unrelated to this task: flow-mcp d/s/t documentation-lookup tools returned ''document not found'' for role/standards/skill docs despite matching entries in flow plugin''s docs.json on disk; fell back to reading source files directly via Read. Environment/tool issue worth attention, separate from this task.'
+    - title: 'Process note: flow-mcp d/t doc-lookup tools f'
+      id: uitu
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/002-reset-password-page.md] Process note: flow-mcp d/t doc-lookup tools failed to resolve references against this project''s default working directory or the sdlcforge/flow source checkout as project_root, both returning document-not-found for entries confirmed present in docs.json; worked around by reading from the installed plugin cache directly. Same tooling issue observed by sibling phase-1 tasks.'
+    - title: Task document Status-section update was writt
+      id: fG8o
+      date: "2026-07-05"
+      tag: doc-updates
+      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Task document Status-section update was written in the plan worktree (only place it exists) and left uncommitted there; manager should commit alongside applying this report.'
+    - title: 'Unrelated to this task: plan worktree shows t'
+      id: MCVQ
+      date: "2026-07-05"
+      tag: doc-updates
+      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Unrelated to this task: plan worktree shows three other uncommitted modified files (phase-01 tasks'' own Status sections) predating this session; manager should commit those too.'
