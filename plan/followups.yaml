@@ -145,3 +145,8 @@ items:
       date: "2026-07-05"
       tag: doc-updates
       text: '[phase-02-doc-updates/001-update-architecture-docs.md] Task document Status-section update was written in the plan worktree (only place it exists) and left uncommitted there; manager should commit alongside applying this report.'
+    - title: 'Unrelated to this task: plan worktree shows t'
+      id: MCVQ
+      date: "2026-07-05"
+      tag: doc-updates
+      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Unrelated to this task: plan worktree shows three other uncommitted modified files (phase-01 tasks'' own Status sections) predating this session; manager should commit those too.'
