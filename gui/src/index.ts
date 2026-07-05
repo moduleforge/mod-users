@@ -81,6 +81,8 @@ export { RegisterForm } from './components/register-form';
 export type { RegisterFormProps } from './components/register-form';
 export { AuthPage } from './components/auth-page';
 export type { AuthPageProps, AuthMode } from './components/auth-page';
+export { ResetPasswordPage } from './components/reset-password-page';
+export type { ResetPasswordPageProps } from './components/reset-password-page';
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger } from './components/ui/dialog';
