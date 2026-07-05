@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: auth-ui-components
       title: Auth UI Components
-      tasks: []
+      tasks:
+        - number: 1
+          slug: login-register-forms
+          title: Add Login And Register Form Components
+          path: phase-01-auth-ui-components/001-login-register-forms.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
