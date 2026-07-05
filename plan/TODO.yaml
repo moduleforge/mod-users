@@ -54,6 +54,7 @@ phases:
           path: phase-02-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: Updated docs/architecture.md's GUI component library paragraph to name all seven shipped components (previously four) and replace the stale 'Password reset, profile management, and email one-time-code login are not yet part of this surface' sentence with a narrower, accurate 'Profile management is not yet part of this surface'. Every claim about the three new components was checked against merged source, not just task docs. docs/mod-users-spec.md and docs/project-structure.md reviewed, found already accurate, left unchanged.
           git:
             branch: phase-02-task-01-update-architecture-docs
             commit:
