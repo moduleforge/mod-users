@@ -15,7 +15,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-01-task-01-add-forgotpasswordpage-compone
-            commit: []
+            commit:
+                - 7f3fa78
             merge: null
         - number: 2
           slug: reset-password-page
