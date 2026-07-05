@@ -60,3 +60,8 @@ items:
       date: "2026-07-03"
       tag: doc-updates
       text: '[phase-06-doc-updates/001-update-architecture-docs.md] Pre-existing Storybook vs actual-tool Ladle terminology inconsistency in docs/project-structure.md (stories/ comment) and docs/mod-users-spec.md (use case 13, story tool/Storybook role) — predates the completed task docs, out of this task''s scope, needs a separate scope decision.'
+    - title: app-mfdemo migration to new auth-ui exports
+      id: nzlS
+      date: "2026-07-05"
+      tag: login-register-ui-consumer-migration
+      text: '[plan/login-register-ui] Once the login-register-ui plan lands, app-mfdemo''s bespoke pages (src/app/auth/login/page.tsx, src/app/auth/register/page.tsx, src/app/auth/oidc/return/page.tsx) could be replaced with the new AuthPage/OidcCallbackPage exports from @moduleforge/users-gui. Not done as part of this plan: app-mfdemo is a separate git repository outside mod-users'' project_root, so a task dispatched from this plan''s worktree cannot reach it (same precedent as follow-up 0PHW from gui-lib-conversion). Migrating also requires yalc-linking the freshly built users-gui package into app-mfdemo, which hits the same yalc/sandbox-permission friction already logged in follow-ups ThVz/HSiS.'
