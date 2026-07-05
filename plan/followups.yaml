@@ -85,3 +85,8 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] No Task tool was available for independent security/correctness sub-agent review; both lenses were applied inline by the same implementing agent instead (no findings).'
+    - title: No Task tool was available to sub-dispatch re
+      id: s5fu
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/003-auth-page.md] No Task tool was available to sub-dispatch review-changes-correctness/review-changes-security as separate agents; the implementing agent applied both lenses inline instead (no findings). Manager may want an independent review pass if strict reviewer/implementer separation matters for this task.'
