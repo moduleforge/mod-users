@@ -130,3 +130,8 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Full interactive Ladle ''no console error at mount'' verification wasn''t possible in this environment (no browser/headless-browser tool); substituted a clean production build as the closest available proxy.'
+    - title: 'Unrelated to this task: flow-mcp d/s/t docume'
+      id: GgF5
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Unrelated to this task: flow-mcp d/s/t documentation-lookup tools returned ''document not found'' for role/standards/skill docs despite matching entries in flow plugin''s docs.json on disk; fell back to reading source files directly via Read. Environment/tool issue worth attention, separate from this task.'
