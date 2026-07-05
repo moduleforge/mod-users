@@ -13,6 +13,7 @@ phases:
           path: phase-01-auth-ui-components/001-login-register-forms.md
           done: false
           tier: sonnet-med
+          digest: Added LoginForm and RegisterForm to gui/src/components/, adapted from app-mfdemo's reference pages with Next.js routing stripped in favor of onSuccess callback + initialError/returnPath props. Self-contained (call useAuth() directly). LoginForm reproduces tri-state OIDC-provider fetch with unmount guard and inline provider icons; RegisterForm reproduces the 12-char server-mirrored password rule. Both exported from gui/src/index.ts with Ladle stories. Typecheck clean apart from known pre-existing @moduleforge/core-gui .yalc gap.
           git:
             branch: phase-01-task-01-add-login-and-register-form-co
             commit:
