@@ -75,6 +75,10 @@ export type { OidcCallbackPageProps } from './components/oidc-callback-page';
 export { SidebarNav } from './components/sidebar-nav';
 export type { SidebarNavProps } from './components/sidebar-nav';
 export { ErrorMessage } from './components/error-message';
+export { LoginForm } from './components/login-form';
+export type { LoginFormProps } from './components/login-form';
+export { RegisterForm } from './components/register-form';
+export type { RegisterFormProps } from './components/register-form';
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger } from './components/ui/dialog';
