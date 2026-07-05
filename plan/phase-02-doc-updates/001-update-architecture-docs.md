@@ -34,3 +34,20 @@ Do not describe `AuthPage`/`OidcCallbackPage`/`LoginForm`/`RegisterForm`'s inter
 ## Metadata
 
 architectural_impact: true
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-05
+- **Implementation worktree:** `/Users/zane/playground/moduleforge/mod-users/worktrees/phase-02-task-01-update-architecture-docs` (branch `phase-02-task-01-update-architecture-docs`)
+- **Files modified (repo-relative to `mod-users`):**
+  - `docs/architecture.md` — "GUI component library" section rewritten to name `LoginForm`, `RegisterForm`, `AuthPage`, and `OidcCallbackPage` at the capability level (self-contained form components calling `useAuth()`/the API client directly; router-agnostic callback-prop pages), and to explicitly state that password reset, profile management, and email one-time-code login are not yet part of the `gui/` surface. The prior text ("ready-made components for registration, login (all channels), password reset, and profile management") overstated the actual inventory once read against what Phase 1 delivered.
+- **Files reviewed, no change made:**
+  - `docs/mod-users-spec.md` use case 13 ("GUI component rendering and demo app") — reads at a generic "auth, profile, admin, and OIDC-config surfaces" level that does not specifically claim login/register capabilities beyond what now exists; still accurate, no edit needed.
+  - `docs/project-structure.md`'s `gui/` section — the `components/` directory-purpose annotation ("auth flows, profile, admin views") is a generic directory-contents description, not a specific component-inventory claim; still accurate, no edit needed.
+  - `docs/architecture.md`'s "Sub-project layout" table row for `gui/` ("UI components for auth flows and user management") — same generic-capability framing as above, not a specific inventory claim; left untouched as out of this task's scope (it predates Phase 1 and Phase 1 did not touch it).
+- **Validation summary:**
+  1. `docs/architecture.md`'s "GUI component library" section was read and updated; it now accurately reflects that Login/Register UI (form + page level) exists, without overstating scope into email-code/forgot-password/reset flows or profile management, all of which remain unimplemented.
+  2. `docs/mod-users-spec.md`'s use case 13 was read; it remains accurate — no wording change needed (recorded explicitly per the Validation section's instruction rather than making a cosmetic edit).
+  3. `grep -rln "gui/" docs/*.md` → `docs/architecture.md`, `docs/project-structure.md`, `docs/mod-users-spec.md`. Each was individually reviewed above; no stale component-inventory claim remains in any of the three.
+- **Assumptions applied:** None beyond what the task doc itself stated (Phase 1's three task documents, read in full, were treated as the authoritative source of what changed; the merged source in the sibling implementation worktree was read directly to cross-check every claim before wording it into the doc).
