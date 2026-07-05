@@ -37,3 +37,23 @@ Three independent, parallel-eligible tasks, each adding one component + its Ladl
 - **Recurring flow-mcp doc-lookup tooling failure**: across multiple Phase 1 tasks, the `flow-mcp` `d`/`t`/`s` documentation-lookup tools returned "document not found" when resolving references against this project's default working directory (and against the `sdlcforge/flow` source checkout as `project_root`), despite matching entries existing in the flow plugin's `docs.json` on disk. Tasks worked around this by reading from the installed plugin cache directly. This is an environment/tool-wiring issue independent of any single task and recurred consistently enough (3+ tasks) to be worth investigating.
 - **Plan-doc bookkeeping**: the Phase 2 task's own Status-section update was written only in the plan worktree (the only place the task doc exists) and was left uncommitted there at report time; the plan worktree also had other uncommitted Phase 1 task-doc Status-section updates predating that session. Manager should verify these are committed as part of plan-doc bookkeeping (separate from this summary file's own commit).
 - **`app-mfdemo` consumer migration remains explicitly out of scope and not tracked as a followup here**, per this plan's own instruction (unlike the `login-register-ui` plan's precedent, which did record a followup, tagged `login-register-ui-consumer-migration`, for its own set of pages). That prior followup still stands separately and is unaffected by this plan.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Forgot/Reset/Email-Code UI Components
+
+- [x] [001-forgot-password-page.md](./phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md) — tier `sonnet-med` · branch `phase-01-task-01-add-forgotpasswordpage-compone` · commit `7f3fa78` · merge `c977a25`
+- [x] [002-reset-password-page.md](./phase-01-forgot-reset-email-code-ui/002-reset-password-page.md) — tier `sonnet-med` · branch `phase-01-task-02-add-resetpasswordpage-componen` · commit `33c3d2c` · merge `dc7d0d2`
+- [x] [003-email-code-page.md](./phase-01-forgot-reset-email-code-ui/003-email-code-page.md) — tier `sonnet-med` · branch `phase-01-task-03-add-emailcodepage-component` · commit `b1c28b0` · merge `0162f13`
+
+### Phase 02 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-02-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `phase-02-task-01-update-architecture-docs` · commit `624ac5b` · merge `67a5030`
