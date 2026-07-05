@@ -35,7 +35,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-01-task-03-add-emailcodepage-component
-            commit: []
+            commit:
+                - b1c28b0
             merge: null
     - number: 2
       slug: doc-updates
