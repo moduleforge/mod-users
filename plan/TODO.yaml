@@ -40,7 +40,7 @@ phases:
             branch: phase-01-task-03-add-emailcodepage-component
             commit:
                 - b1c28b0
-            merge: null
+            merge: 0162f13
     - number: 2
       slug: doc-updates
       title: Documentation Updates
