@@ -42,7 +42,7 @@ phases:
             branch: phase-01-task-03-add-auth-page-component
             commit:
                 - c1a820a
-            merge: null
+            merge: fcac9bce19b34e7021a7e04f7dd14ca93a3c8763
     - number: 2
       slug: doc-updates
       title: Documentation Updates
