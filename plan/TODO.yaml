@@ -27,7 +27,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-01-task-02-add-resetpasswordpage-componen
-            commit: []
+            commit:
+                - 33c3d2c
             merge: null
         - number: 3
           slug: email-code-page
