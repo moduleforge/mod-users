@@ -60,3 +60,23 @@ Drawn from `plan/followups.yaml`, filtered to this plan's phases (`auth-ui-compo
 ### Consumer migration (app-mfdemo) — note on a gap
 
 `plan/overview.md` states that migrating `app-mfdemo` to consume the new `gui/` exports (instead of its bespoke pages) is out of scope for this plan because `app-mfdemo` is a separate git repository outside `project_root`, and records this as "a flagged follow-up for the manager." However, no `plan/followups.yaml` item tagged `login-register-ui-consumer-migration` (or any equivalent tag) currently exists to carry that flag forward. **The manager should add a follow-up item for the `app-mfdemo` consumer migration** (updating `app-mfdemo/src/app/auth/login/page.tsx`, `.../register/page.tsx`, and `.../oidc/return/page.tsx` to use the new `LoginForm`/`RegisterForm`/`AuthPage`/`OidcCallbackPage` exports) if one hasn't been recorded elsewhere — this summary was drafted expecting to find such an item and did not.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Auth UI Components
+
+- [x] [001-login-register-forms.md](./phase-01-auth-ui-components/001-login-register-forms.md) — tier `sonnet-med` · branch `phase-01-task-01-add-login-and-register-form-co` · commit `58d8bef` · merge `12e6757fcf5b26f5fef986414fde8e3fae14526b`
+- [x] [002-oidc-callback-page.md](./phase-01-auth-ui-components/002-oidc-callback-page.md) — tier `sonnet-med` · branch `phase-01-task-02-add-oidc-callback-page-compone` · commit `faa6f7c` · merge `8eaa167ade6631faa7fc9000cdc27595d3ef8763`
+- [x] [003-auth-page.md](./phase-01-auth-ui-components/003-auth-page.md) — tier `sonnet-med` · branch `phase-01-task-03-add-auth-page-component` · commit `c1a820a` · merge `fcac9bce19b34e7021a7e04f7dd14ca93a3c8763`
+
+### Phase 02 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-02-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `phase-02-task-01-update-architecture-docs` · commit `e977b27` · merge `423bb93f08ed4c47868d5d6d450bda7890cb33d1`
