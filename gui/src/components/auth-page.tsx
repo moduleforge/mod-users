@@ -58,14 +58,16 @@ export function AuthPage({
               />
             </CardContent>
             <CardFooter className="text-sm text-center">
-              No account?{' '}
-              <button
-                type="button"
-                className="text-foreground hover:underline"
-                onClick={() => setMode('register')}
-              >
-                Create one
-              </button>
+              <p className="text-muted-foreground">
+                No account?{' '}
+                <button
+                  type="button"
+                  className="text-foreground hover:underline"
+                  onClick={() => setMode('register')}
+                >
+                  Create one
+                </button>
+              </p>
             </CardFooter>
           </>
         ) : (
@@ -78,14 +80,16 @@ export function AuthPage({
               <RegisterForm onSuccess={onAuthenticated} />
             </CardContent>
             <CardFooter className="text-sm text-center">
-              Already have an account?{' '}
-              <button
-                type="button"
-                className="text-foreground hover:underline"
-                onClick={() => setMode('login')}
-              >
-                Sign in
-              </button>
+              <p className="text-muted-foreground">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  className="text-foreground hover:underline"
+                  onClick={() => setMode('login')}
+                >
+                  Sign in
+                </button>
+              </p>
             </CardFooter>
           </>
         )}
