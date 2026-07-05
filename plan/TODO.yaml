@@ -25,6 +25,7 @@ phases:
           path: phase-01-forgot-reset-email-code-ui/002-reset-password-page.md
           done: false
           tier: sonnet-med
+          digest: Implemented ResetPasswordPage as a page-level, self-contained component mirroring OidcCallbackPage's structural pattern - no Suspense, no useSearchParams/useRouter, token supplied as a required prop. Validation order (empty token, password length, password match, API call) mirrors the reference; 12-char minimum re-verified against server-side checks. Error handling mirrors LoginForm/RegisterForm's ApiRequestError/generic-fallback pattern. Exported from gui/src/index.ts and given a Ladle Default story, verified via a live headless-browser-rendered Ladle instance confirming zero console errors at mount.
           git:
             branch: phase-01-task-02-add-resetpasswordpage-componen
             commit:
