@@ -70,3 +70,8 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/001-login-register-forms.md] Task document status update for this task was committed directly in the plan worktree (commit 884b4b3) rather than inside the task''s own worktree, since the task document is a plan artifact that only exists in the plan worktree.'
+    - title: Task document for this task does not exist in
+      id: CAHg
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Task document for this task does not exist inside the task''s own worktree (branch predates the plan branch''s phase-01 task docs); the implementing agent read it from the plan worktree per dispatch instructions instead and did not create a Status section in its own worktree.'
