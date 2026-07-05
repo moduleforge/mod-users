@@ -18,7 +18,7 @@ phases:
             branch: phase-01-task-01-add-forgotpasswordpage-compone
             commit:
                 - 7f3fa78
-            merge: null
+            merge: c977a25
         - number: 2
           slug: reset-password-page
           title: Reset Password Page
