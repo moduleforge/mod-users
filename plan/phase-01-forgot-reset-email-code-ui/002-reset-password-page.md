@@ -64,3 +64,19 @@ Add a new `ResetPasswordPage` component to `gui/src/components/reset-password-pa
 - `gui/src/lib/api.ts` — `api.auth.resetPassword` binding and `ResetPasswordRequest` type.
 - `api/internal/service/user_accounts.go` — authoritative source for the current password-minimum-length rule (grep for `password` near line 157).
 - `plan/overview.md` — Key Decisions 1-5, which this task implements.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-05
+- **Files:** `gui/src/components/reset-password-page.tsx` (new), `gui/src/stories/ResetPasswordPage.stories.tsx` (new), `gui/src/index.ts` (added `ResetPasswordPage`/`ResetPasswordPageProps` exports).
+- **Validation summary:**
+  - `cd gui && bun run typecheck` — passed (required temporarily linking `@moduleforge/core-gui` via `yalc add` per the documented `.yalc` gap; `gui/package.json`/`bun.lock` were reverted afterward to leave the dependency as the documented optional peer, unchanged from before this task).
+  - `make lint.gui` — passed (this target is `tsc --noEmit`; the library has no eslint config).
+  - `grep -n "next/navigation\|next/link\|useSearchParams\|useRouter" gui/src/components/reset-password-page.tsx` — returns nothing.
+  - `ResetPasswordPage`/`ResetPasswordPageProps` exports confirmed in `gui/src/index.ts`.
+  - `gui/src/stories/ResetPasswordPage.stories.tsx` exists with a `Default` story supplying `token="dummy-reset-token"`. Verified via a headless Playwright check against a locally-run `ladle serve` instance: the story renders at mount with zero console messages beyond Vite/React-DevTools boilerplate (no errors). Also exercised the mismatched-password path (shows "Passwords do not match."), the valid-submission path (logs the expected `[api] Network error` / "Could not reach the API server" `network_error`, matching the existing stories' documented no-live-API behavior), and the "Back to sign in" button click — no unexpected errors in any case.
+  - Re-verified the server-side password-minimum-length rule at implementation time: `api/internal/service/user_accounts.go:157` (`if in.Password != nil && len(*in.Password) < 12`) and, more directly relevant to this endpoint, `api/internal/handlers/auth/reset.go:103` (`PasswordResetConfirm`'s `if len(req.Password) < 12`) — both still 12 characters, matching this task doc's figure. No discrepancy found.
+  - Confirmed by read-through: `onSuccess` fires only after a successful `api.auth.resetPassword` call (inside the `try` block, immediately following the `await`), and no `router.push`/navigation call exists anywhere in the file.
+- **Assumptions applied:** `api.auth.resetPassword`/`ResetPasswordRequest` already existed in `gui/src/lib/api.ts` and were already exported from `gui/src/index.ts` — confirmed true, no API client changes made.
+- **Decisions made:** Added a "Remembered your password?" lead-in phrase before the "Back to sign in" button in the `CardFooter` (task doc did not specify exact prefix copy; followed `AuthPage`'s footer-prompt pattern of a short lead-in sentence before the action button). Used `api.auth.resetPassword` called directly from the module-level `api` singleton (not via `useAuth()`), consistent with this task's Requirement 2 and `auth-context.tsx`'s own use of the same singleton import pattern.

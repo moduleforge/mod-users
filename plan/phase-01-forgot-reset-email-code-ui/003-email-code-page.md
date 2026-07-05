@@ -51,3 +51,20 @@ Add a new `EmailCodePage` component to `gui/src/components/email-code-page.tsx`,
 - `gui/src/lib/api.ts` — `api.auth.requestEmailCode`/`verifyEmailCode` bindings and their request/response types.
 - `gui/src/stories/LoginForm.stories.tsx` — `AuthProvider`-wrapped Ladle story convention to mirror.
 - `plan/overview.md` — Key Decisions 1-3, 6, which this task implements.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-05
+- **Validation summary:**
+  - `cd gui && bun run typecheck` — passed (clean, no errors).
+  - `make lint.gui` (tsc-only; no eslint config for this library) — passed.
+  - `grep -n "next/navigation\|next/link\|useRouter" gui/src/components/email-code-page.tsx` — no matches, as required.
+  - `EmailCodePage` / `EmailCodePageProps` exported from `gui/src/index.ts` — confirmed.
+  - `gui/src/stories/EmailCodePage.stories.tsx` created, wraps `<AuthProvider>`; `bun run preview:build` (ladle production build) succeeded and bundled the story with no build errors. A live-browser/console-error check at mount was not performed (no headless-browser tooling available in this environment); relied on the production build succeeding plus the manual read-through below instead.
+  - Manual read-through confirmed: (a) code `onChange` strips non-digits via `e.target.value.replace(/\D/g, '')` on every keystroke; (b) `onSuccess?.()` is called only after `setTokenAndUser(response.token, response.user)` following a successful `verifyEmailCode`, both inside the same `try` block so a thrown error skips both; (c) "Try a different email" (`handleTryDifferentEmail`) only resets `step`/`code`/`error` local state and does not call `onNavigateToLogin`; (d) no `router.push` or other navigation call exists anywhere in the file (only `onSuccess?.()`/`onNavigateToLogin?.()` prop invocations).
+- **Files touched (repo-relative, inside implementation worktree):**
+  - `gui/src/components/email-code-page.tsx` (new)
+  - `gui/src/stories/EmailCodePage.stories.tsx` (new)
+  - `gui/src/index.ts` (added `EmailCodePage`/`EmailCodePageProps` export lines)
+- **Notes:** A fresh `bun install` plus `yalc add @moduleforge/core-gui` (needed locally to resolve `@moduleforge/core-gui` for typecheck/build, per this repo's known yalc gotcha) re-added a `file:.yalc/@moduleforge/core-gui` entry to `gui/package.json`/`bun.lock`. That reverts an earlier intentional commit (`fa0923f`) that dropped the direct dependency in favor of the optional-peer-only declaration, so those two files were reverted back to their committed state (`git checkout -- gui/package.json bun.lock`) before finalizing; only the three files above are part of this task's commit.

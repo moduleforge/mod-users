@@ -49,3 +49,18 @@ Add a new `ForgotPasswordPage` component to `gui/src/components/forgot-password-
 - `gui/src/lib/api.ts` — `api.auth.forgotPassword` binding and `ForgotPasswordRequest` type.
 - `gui/src/stories/AuthPage.stories.tsx`, `gui/src/stories/LoginForm.stories.tsx` — Ladle story conventions to mirror.
 - `plan/overview.md` — Key Decisions 1-6, which this task implements.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-05
+- **Summary:** Added `ForgotPasswordPage` to `gui/src/components/forgot-password-page.tsx`, mirroring `AuthPage`'s page-level pattern (owns its own `Card`, internal request/submitted view state). Exported the component and its props type from `gui/src/index.ts`. Added `gui/src/stories/ForgotPasswordPage.stories.tsx` with a `Default` story (no `AuthProvider` wrapper needed — the component never calls `useAuth()`). The "Back to sign in" affordance in both views is a `<button type="button">` calling `onNavigateToLogin?.()`, styled `text-sm text-muted-foreground hover:text-foreground` per the task's plain-link-treatment instruction.
+- **Validation:**
+  - `cd gui && bun run typecheck` — passed (the worktree's `.yalc/` gap was resolved for this session by copying `.yalc/` from the main checkout per `AGENTS.md`'s "Working in worktrees" step, then `yalc add @moduleforge/core-gui && bun install`; `gui/package.json`/`bun.lock` were reverted afterward since the main checkout does not commit the yalc-added dependency line either — see decision below).
+  - `make lint.gui` — passed (same basis as above).
+  - `grep -n "next/navigation\|next/link" gui/src/components/forgot-password-page.tsx` — no matches.
+  - `ForgotPasswordPage`/`ForgotPasswordPageProps` confirmed exported from `gui/src/index.ts`.
+  - `gui/src/stories/ForgotPasswordPage.stories.tsx` exists, exports `Default`; `cd gui && bun run preview:build` (Ladle static build, used as a proxy for `make preview` since no browser/headless tooling was available in this environment to observe console errors at mount) completed with 0 errors and bundled the new story.
+  - Manual read-through: request/submitted view copy matches the task doc's specified text verbatim; "Back to sign in" calls `onNavigateToLogin?.()` only, no navigation performed by the component itself.
+- **Assumptions applied:** the two documented in `## Assumptions` above (server-side password rule irrelevant; `api.auth.forgotPassword`/`ForgotPasswordRequest` already exist and needed no changes) both held as expected.
+- **Decisions made:** used `yalc add`+`bun install` transiently to get a real typecheck/lint/build signal instead of only asserting the pre-existing gap, then reverted `gui/package.json` and `bun.lock` to their prior committed state (the main checkout's `gui/package.json` does not carry the yalc-added `"@moduleforge/core-gui": "file:.yalc/..."` dependency line either, so committing it here would diverge from the existing convention); the `.yalc/`-linked `node_modules` symlink remains in the worktree (gitignored) for any follow-up validation. The CardFooter's "Back to sign in" prompt is rendered as a standalone centered button with no surrounding lead sentence, since the task doc's Requirement 3 specifies only the button, its styling, and its `onClick`, without prescribing accompanying prose (the source `app-mfdemo` page's exact surrounding text was not available in this project's plan artifacts to copy verbatim).
