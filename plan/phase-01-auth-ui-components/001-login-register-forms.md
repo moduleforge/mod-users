@@ -96,3 +96,24 @@ Existing components each have a `gui/src/stories/<Component>.stories.tsx` file (
 - `gui/src/components/require-auth.tsx` and `gui/src/stories/RequireAuth.stories.tsx` — established callback-injection and story-authoring conventions for this package.
 - `/Users/zane/playground/moduleforge/mod-core/gui/src/NaturalPersonForm.tsx` — sibling-module form-component precedent (contrast: that component is a pure controlled form; these two are intentionally self-contained per this feature's explicit request).
 - `api/internal/service/user_accounts.go` — server-side password-length validation this task's client-side check mirrors.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-05
+- **Implementation worktree:** `/Users/zane/playground/moduleforge/mod-users/worktrees/phase-01-task-01-add-login-and-register-form-co` (branch `phase-01-task-01-add-login-and-register-form-co`, commit `58d8bef`)
+- **Files added/modified (repo-relative to `mod-users`):**
+  - `gui/src/components/login-form.tsx` (new)
+  - `gui/src/components/register-form.tsx` (new)
+  - `gui/src/stories/LoginForm.stories.tsx` (new)
+  - `gui/src/stories/RegisterForm.stories.tsx` (new)
+  - `gui/src/index.ts` (added `LoginForm`/`LoginFormProps` and `RegisterForm`/`RegisterFormProps` exports)
+- **Validation summary:**
+  1. `cd gui && bunx tsc --noEmit` — remaining errors are exactly the known `Cannot find module '@moduleforge/core-gui'` environment gap (5 occurrences, one pre-existing per file that imports the package: `error-message.tsx`, `login-form.tsx`, `register-form.tsx`, `sidebar-nav.tsx`, `ui/dialog.tsx`). No other typecheck errors. Confirmed `.yalc/` is not populated in this worktree; did not attempt `yalc publish`/`yalc add` per instruction.
+  2. Re-read both new files against Requirements — all state fields, the OIDC provider tri-state fetch/render loop, the 12-char client-side password validation, and both error-handling branches (`ApiRequestError` vs. generic fallback) are present and match the reference implementation's behavior (adapted to drop Next.js-specific routing).
+  3. `grep -n "LoginForm\|RegisterForm" gui/src/index.ts` — both component and props-type exports present.
+  4. Confirmed via `grep` that neither new component nor its stories import `next/navigation`, `next/link`, or any router package.
+  5. Added `LoginForm.stories.tsx` and `RegisterForm.stories.tsx` following the `RequireAuth.stories.tsx` pattern (wrapped in `AuthProvider`); both typecheck cleanly under `tsc --noEmit`.
+- **Decisions made:**
+  - Did not annotate component return types as `JSX.Element` (as the illustrative signature in Requirements showed) — `@types/react@19` no longer exposes a global `JSX` namespace, and no other component in this package annotates return types, so components were left with inferred return types for consistency with existing conventions.
+  - Added explicit `React.ChangeEvent<HTMLInputElement>` parameter types on `Input` `onChange` handlers. With `@moduleforge/core-gui` unresolved, `Input`'s prop types fall back to `any`, which made the handler's `e` parameter an implicit `any` under `strict`/`noImplicitAny` — a cascading effect of the known environment gap, not a new defect. Annotating explicitly resolves it independent of whether `core-gui` is linked.
