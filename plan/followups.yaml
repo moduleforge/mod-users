@@ -90,3 +90,8 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/003-auth-page.md] No Task tool was available to sub-dispatch review-changes-correctness/review-changes-security as separate agents; the implementing agent applied both lenses inline instead (no findings). Manager may want an independent review pass if strict reviewer/implementer separation matters for this task.'
+    - title: Task document status update for this task was
+      id: YL5l
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/003-auth-page.md] Task document status update for this task was left uncommitted in the plan worktree (plan/phase-01-auth-ui-components/003-auth-page.md modified but not committed there) — manager to commit as part of plan-doc bookkeeping.'
