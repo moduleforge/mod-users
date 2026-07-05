@@ -135,3 +135,8 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Unrelated to this task: flow-mcp d/s/t documentation-lookup tools returned ''document not found'' for role/standards/skill docs despite matching entries in flow plugin''s docs.json on disk; fell back to reading source files directly via Read. Environment/tool issue worth attention, separate from this task.'
+    - title: 'Process note: flow-mcp d/t doc-lookup tools f'
+      id: uitu
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/002-reset-password-page.md] Process note: flow-mcp d/t doc-lookup tools failed to resolve references against this project''s default working directory or the sdlcforge/flow source checkout as project_root, both returning document-not-found for entries confirmed present in docs.json; worked around by reading from the installed plugin cache directly. Same tooling issue observed by sibling phase-1 tasks.'
