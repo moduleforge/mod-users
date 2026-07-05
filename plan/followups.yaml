@@ -75,3 +75,8 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Task document for this task does not exist inside the task''s own worktree (branch predates the plan branch''s phase-01 task docs); the implementing agent read it from the plan worktree per dispatch instructions instead and did not create a Status section in its own worktree.'
+    - title: Mid-implementation, the implementing agent mi
+      id: gMz5
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Mid-implementation, the implementing agent mistakenly ran finalize-task-commit.sh once from the main checkout instead of its task worktree, creating an unwanted commit (77dac0d) touching .flow/session-lock, .flow/sessions/, .flow/tasks/*.json, and worktree dirs as gitlinks. The agent caught this and ran git reset 9af4f26 in the main checkout to undo it. The manager independently verified afterward that the main checkout HEAD is back at 9af4f26 with no data lost.'
