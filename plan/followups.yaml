@@ -105,3 +105,8 @@ items:
       date: "2026-07-05"
       tag: doc-updates
       text: '[phase-02-doc-updates/001-update-architecture-docs.md] No other stale GUI-inventory claims found; no reviewer findings (no review_focus was supplied for this task).'
+    - title: 'Tooling note: flow-mcp d/t tools did not reso'
+      id: 2LT7
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] Tooling note: flow-mcp d/t tools did not resolve docs against project_root=mod-users (only worked against a full flow-plugin-repo checkout); environment/tool-wiring issue independent of this task.'
