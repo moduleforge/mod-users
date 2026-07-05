@@ -1,10 +1,5 @@
 version: 1
 items:
-    - title: The consumer regression check against app-mfd
-      id: ThVz
-      date: "2026-07-03"
-      tag: gui-build-alignment
-      text: '[phase-01-gui-build-alignment/001-align-gui-build-tooling.md] The consumer regression check against app-mfdemo was not fully executed. app-mfdemo has no node_modules installed, and its own @moduleforge/users-gui/@moduleforge/core-gui dependencies are also file:.yalc/... links needing yalc publish/yalc add there — out of this task''s scope and edit boundary. Recommend the manager (or a session with broader permissions) run the full check: rebuild users-gui, link it into app-mfdemo via yalc, and confirm Tailwind still emits the expected classes.'
     - title: The sandbox's permission classifier denies ya
       id: HSiS
       date: "2026-07-03"
