@@ -15,7 +15,9 @@ export interface OidcCallbackPageProps {
   /**
    * Called when the callback fails: a provider-reported `?error=`, a
    * malformed/missing token, or a failed session hydration. `message` is
-   * safe to display directly or forward as a login page's `?error=` value.
+   * safe to display directly, but if forwarding it as a login page's
+   * `?error=` query-string value, the consumer must `encodeURIComponent`
+   * it first, e.g. `` `/auth/login?error=${encodeURIComponent(message)}` ``.
    */
   onError: (message: string) => void;
   /** Fallback return path when no safe `return` value is present. Defaults to `'/'`. */
