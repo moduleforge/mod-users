@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: auth-ui-components
       title: Auth UI Components
+      diff_base: 9af4f266507daf9ca13c485c3c09b62606d88514
       tasks:
         - number: 1
           slug: login-register-forms
