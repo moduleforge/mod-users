@@ -105,3 +105,8 @@ items:
       date: "2026-07-05"
       tag: security-urgent
       text: '[phase-01 gate review, security lens, out-of-scope discovery] Independent security review of the login-register-ui plan''s phase-01 diff discovered, while reading always-read context, what appear to be live committed OAuth credentials at the mod-users repo root: client_secret_159014138472-2lnc34p2cgldb0g714tcoifgr3u4e71j.apps.googleusercontent.com.json (a Google OAuth client_secret JSON — confirmed via presence of a `client_secret` key) and three ms-secret-*.token files (~41 bytes each, consistent with Microsoft Entra client secrets). Added in commit 9680136 ("wip(main): add UpdateTagValue query to model/queries/tags.sql" — an unrelated commit message suggesting accidental inclusion), well before this plan''s diff_base. Unrelated to this plan''s changes but too significant to withhold: recommend the repo owner verify whether these credentials are live and, if so, rotate them and scrub git history.'
+    - title: 'Task document Status-section update was made '
+      id: slra
+      date: "2026-07-05"
+      tag: doc-updates
+      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Task document Status-section update was made in the plan worktree rather than the task worktree (document only exists there); left uncommitted there — manager should commit alongside applying this report.'
