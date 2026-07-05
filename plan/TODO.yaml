@@ -33,6 +33,7 @@ phases:
           path: phase-01-forgot-reset-email-code-ui/003-email-code-page.md
           done: false
           tier: sonnet-med
+          digest: Added EmailCodePage, a page-level self-contained component with internal request/verify step state, mirroring AuthPage's multi-view pattern and LoginForm's direct-useAuth() convention. Calls api.auth.requestEmailCode/verifyEmailCode, strips non-digit chars from the code field on every keystroke, calls setTokenAndUser before onSuccess?.() on successful verification, and treats 'Try a different email' as pure internal state reset. No next/navigation/next/link/useRouter usage. Exported EmailCodePage/EmailCodePageProps from gui/src/index.ts; added AuthProvider-wrapped Ladle story. Typecheck, lint, grep check, export check, and Ladle production build all passed.
           git:
             branch: phase-01-task-03-add-emailcodepage-component
             commit:
