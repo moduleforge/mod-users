@@ -68,3 +68,16 @@ Add `gui/src/stories/AuthPage.stories.tsx` following the `RequireAuth.stories.ts
 - `plan/phase-01-auth-ui-components/001-login-register-forms.md` — the task this one depends on; defines `LoginForm`/`RegisterForm`'s prop shapes.
 - `gui/src/stories/RequireAuth.stories.tsx` — story-authoring convention for `AuthProvider`-dependent components.
 - `docs/mod-users-spec.md` — Non-goals ("User interface routing... is not provided by `gui/`"), the constraint motivating the internal (not router-driven) mode toggle.
+
+## Status
+
+- **Outcome**: succeeded
+- **Date**: 2026-07-05
+- **Summary**: Added `gui/src/components/auth-page.tsx` exporting `AuthPage`, `AuthPageProps`, and `AuthMode`; wired the exports into `gui/src/index.ts` under `// ─── Components ───`; added `gui/src/stories/AuthPage.stories.tsx` (`Default` and `RegisterMode` stories, `AuthProvider`-wrapped, matching `RequireAuth.stories.tsx`'s precedent of not reaching a real backend). `AuthPage` uses internal `useState<AuthMode>` seeded by `initialMode` (defaulting to `'login'`), composes `Card`/`CardHeader`/`CardTitle`/`CardDescription`/`CardContent`/`CardFooter` from `@moduleforge/core-gui` around `LoginForm`/`RegisterForm`, and toggles mode via `<button type="button">` (no router import).
+- **Validation**:
+  1. `cd gui && bunx tsc --noEmit` — failed only with the known pre-existing `Cannot find module '@moduleforge/core-gui'` errors (7 occurrences across `auth-page.tsx` and 6 pre-existing files); `.yalc/` is absent in this worktree, confirming the documented environment gap (`plan/followups.yaml` `ThVz`/`HSiS`/`VqCM`). No other typecheck errors.
+  2. Confirmed `gui/src/components/login-form.tsx` and `register-form.tsx` exist, already merged from task `001`, exporting `LoginForm`/`RegisterForm` with the documented prop shapes (`LoginFormProps`: `onSuccess`, `initialError`, `returnPath`; `RegisterFormProps`: `onSuccess`) — used as-is, no adaptation needed.
+  3. Re-read the new file: internal uncontrolled mode toggle confirmed, per-mode `CardTitle`/`CardDescription`/`CardFooter` text confirmed, `onAuthenticated`/`initialError`/`returnPath` pass-through to `LoginForm` confirmed.
+  4. `grep -n "AuthPage" gui/src/index.ts` — shows `AuthPage`, `AuthPageProps`, and `AuthMode` exports.
+  5. `grep -n "next/navigation\|next/link\|router" gui/src/components/auth-page.tsx` — no matches; no router import.
+- **Assumptions applied**: Task `001`'s `LoginForm`/`RegisterForm` prop shapes matched what this task assumed; no adaptation was necessary. `@moduleforge/core-gui`'s `Card` family exists with the same API `app-mfdemo` uses (assumed per task doc; not directly verifiable in this environment due to the `.yalc/` gap, consistent with the known pre-existing issue).
