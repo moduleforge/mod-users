@@ -15,7 +15,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-01-task-01-add-login-and-register-form-co
-            commit: []
+            commit:
+                - 58d8bef
             merge: null
         - number: 2
           slug: oidc-callback-page
