@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: oidc-callback-page
+          title: Add Oidc Callback Page Component
+          path: phase-01-auth-ui-components/002-oidc-callback-page.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
