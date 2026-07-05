@@ -110,3 +110,8 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] Tooling note: flow-mcp d/t tools did not resolve docs against project_root=mod-users (only worked against a full flow-plugin-repo checkout); environment/tool-wiring issue independent of this task.'
+    - title: No headless-browser tooling available to veri
+      id: Lx9Z
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] No headless-browser tooling available to verify console-clean mount in Ladle; substituted a successful production build (bun run preview:build) plus manual code read-through instead.'
