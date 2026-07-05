@@ -1,67 +1,53 @@
 slug: forgot-reset-email-code-ui
 version: 1
 title: TODO
-
 phases:
-  - number: 1
-    slug: forgot-reset-email-code-ui
-    title: Forgot/Reset/Email-Code UI Components
-    diff_base: ""
-    tasks:
-      - number: 1
-        slug: forgot-password-page
-        title: Forgot Password Page
-        path: phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md
-        done: false
-        tier: sonnet-med
-        status: ""
-        note: ""
-        digest: ""
-        git:
-          branch: null
-          commit: []
-          merge: null
-      - number: 2
-        slug: reset-password-page
-        title: Reset Password Page
-        path: phase-01-forgot-reset-email-code-ui/002-reset-password-page.md
-        done: false
-        tier: sonnet-med
-        status: ""
-        note: ""
-        digest: ""
-        git:
-          branch: null
-          commit: []
-          merge: null
-      - number: 3
-        slug: email-code-page
-        title: Email Code Page
-        path: phase-01-forgot-reset-email-code-ui/003-email-code-page.md
-        done: false
-        tier: sonnet-med
-        status: ""
-        note: ""
-        digest: ""
-        git:
-          branch: null
-          commit: []
-          merge: null
-  - number: 2
-    slug: doc-updates
-    title: Documentation Updates
-    diff_base: ""
-    tasks:
-      - number: 1
-        slug: update-architecture-docs
-        title: Update Architecture Docs
-        path: phase-02-doc-updates/001-update-architecture-docs.md
-        done: false
-        tier: sonnet-high
-        status: ""
-        note: ""
-        digest: ""
-        git:
-          branch: null
-          commit: []
-          merge: null
+    - number: 1
+      slug: forgot-reset-email-code-ui
+      title: Forgot/Reset/Email-Code UI Components
+      diff_base: e5cd5d96144741cb0352c4deb93079f12ef10171
+      tasks:
+        - number: 1
+          slug: forgot-password-page
+          title: Forgot Password Page
+          path: phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: reset-password-page
+          title: Reset Password Page
+          path: phase-01-forgot-reset-email-code-ui/002-reset-password-page.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: email-code-page
+          title: Email Code Page
+          path: phase-01-forgot-reset-email-code-ui/003-email-code-page.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
+    - number: 2
+      slug: doc-updates
+      title: Documentation Updates
+      tasks:
+        - number: 1
+          slug: update-architecture-docs
+          title: Update Architecture Docs
+          path: phase-02-doc-updates/001-update-architecture-docs.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
