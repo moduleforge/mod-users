@@ -120,3 +120,8 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] yalc/bun-install side effect (file:.yalc/@moduleforge/core-gui re-added to gui/package.json and bun.lock during worktree setup) was reverted before commit; other parallel Phase 1 worktrees may hit the same issue.'
+    - title: Task doc Requirement 3 doesn't specify litera
+      id: H0PE
+      date: "2026-07-05"
+      tag: forgot-reset-email-code-ui
+      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Task doc Requirement 3 doesn''t specify literal lead-sentence copy for the ''Back to sign in'' prompt (only button text/styling/behavior) — rendered just the button with no prefix text; if the app-mfdemo reference page has specific lead copy, worth confirming against the source page directly.'
