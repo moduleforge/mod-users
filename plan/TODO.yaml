@@ -25,6 +25,7 @@ phases:
           path: phase-01-auth-ui-components/002-oidc-callback-page.md
           done: false
           tier: sonnet-med
+          digest: 'Added OidcCallbackPage to gui/src/components/, a framework-agnostic page consuming the OIDC provider round trip: reads a query-string error param (failure, calls onError) or a URL-fragment token/return pair (success), validates via looksLikeJwt/isSafeReturnPath (copied verbatim from app-mfdemo reference incl. all open-redirect rejection branches), strips the fragment from history before firing callbacks, then calls completeExternalLogin from useAuth() and reports via injected onComplete/onError. Exported from gui/src/index.ts. Typecheck clean apart from known pre-existing @moduleforge/core-gui .yalc gap; one real issue (incompatible JSX.Element return-type annotation) found and fixed.'
           git:
             branch: phase-01-task-02-add-oidc-callback-page-compone
             commit:
