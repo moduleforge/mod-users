@@ -54,6 +54,7 @@ phases:
           path: phase-02-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: Updated docs/architecture.md's GUI component library section to name the four Phase-1 components (LoginForm, RegisterForm, AuthPage, OidcCallbackPage) and the pattern they establish (self-contained components calling useAuth()/API client directly; page-level components reporting outcomes via router-agnostic callback props), replacing prior wording that overstated scope by implying ready-made password-reset/profile-management/all-channel-login UI already existed. Reviewed docs/mod-users-spec.md use case 13 and docs/project-structure.md's gui/ section and found both already accurate at their existing generic-capability level - no edits made there. Cross-checked every claim against merged component source before wording it.
           git:
             branch: phase-02-task-01-update-architecture-docs
             commit:
