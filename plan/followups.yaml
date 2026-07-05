@@ -80,3 +80,8 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Mid-implementation, the implementing agent mistakenly ran finalize-task-commit.sh once from the main checkout instead of its task worktree, creating an unwanted commit (77dac0d) touching .flow/session-lock, .flow/sessions/, .flow/tasks/*.json, and worktree dirs as gitlinks. The agent caught this and ran git reset 9af4f26 in the main checkout to undo it. The manager independently verified afterward that the main checkout HEAD is back at 9af4f26 with no data lost.'
+    - title: No Task tool was available for independent se
+      id: Tn8F
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] No Task tool was available for independent security/correctness sub-agent review; both lenses were applied inline by the same implementing agent instead (no findings).'
