@@ -65,3 +65,58 @@ items:
       date: "2026-07-05"
       tag: login-register-ui-consumer-migration
       text: '[plan/login-register-ui] Once the login-register-ui plan lands, app-mfdemo''s bespoke pages (src/app/auth/login/page.tsx, src/app/auth/register/page.tsx, src/app/auth/oidc/return/page.tsx) could be replaced with the new AuthPage/OidcCallbackPage exports from @moduleforge/users-gui. Not done as part of this plan: app-mfdemo is a separate git repository outside mod-users'' project_root, so a task dispatched from this plan''s worktree cannot reach it (same precedent as follow-up 0PHW from gui-lib-conversion). Migrating also requires yalc-linking the freshly built users-gui package into app-mfdemo, which hits the same yalc/sandbox-permission friction already logged in follow-ups ThVz/HSiS.'
+    - title: No Task tool was available to dispatch review
+      id: Vthh
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/001-login-register-forms.md] No Task tool was available to dispatch review-changes-security/review-changes-correctness as independent sub-agents for this task; the implementing agent applied both lenses'' checklists inline instead (no findings). An independent review pass may be warranted before this ships.'
+    - title: Task document status update for this task was
+      id: lbn5
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/001-login-register-forms.md] Task document status update for this task was committed directly in the plan worktree (commit 884b4b3) rather than inside the task''s own worktree, since the task document is a plan artifact that only exists in the plan worktree.'
+    - title: Task document for this task does not exist in
+      id: CAHg
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Task document for this task does not exist inside the task''s own worktree (branch predates the plan branch''s phase-01 task docs); the implementing agent read it from the plan worktree per dispatch instructions instead and did not create a Status section in its own worktree.'
+    - title: Mid-implementation, the implementing agent mi
+      id: gMz5
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Mid-implementation, the implementing agent mistakenly ran finalize-task-commit.sh once from the main checkout instead of its task worktree, creating an unwanted commit (77dac0d) touching .flow/session-lock, .flow/sessions/, .flow/tasks/*.json, and worktree dirs as gitlinks. The agent caught this and ran git reset 9af4f26 in the main checkout to undo it. The manager independently verified afterward that the main checkout HEAD is back at 9af4f26 with no data lost.'
+    - title: No Task tool was available for independent se
+      id: Tn8F
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] No Task tool was available for independent security/correctness sub-agent review; both lenses were applied inline by the same implementing agent instead (no findings).'
+    - title: No Task tool was available to sub-dispatch re
+      id: s5fu
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/003-auth-page.md] No Task tool was available to sub-dispatch review-changes-correctness/review-changes-security as separate agents; the implementing agent applied both lenses inline instead (no findings). Manager may want an independent review pass if strict reviewer/implementer separation matters for this task.'
+    - title: Task document status update for this task was
+      id: YL5l
+      date: "2026-07-05"
+      tag: auth-ui-components
+      text: '[phase-01-auth-ui-components/003-auth-page.md] Task document status update for this task was left uncommitted in the plan worktree (plan/phase-01-auth-ui-components/003-auth-page.md modified but not committed there) — manager to commit as part of plan-doc bookkeeping.'
+    - title: AuthPage remounts LoginForm on toggle
+      id: wufX
+      date: "2026-07-05"
+      tag: phase-01-auth-ui-components
+      text: '[phase-01 gate review, efficiency lens] AuthPage''s mode ternary swaps LoginForm/RegisterForm rather than toggling visibility of stably-mounted children, so LoginForm unmounts/remounts on every transition back to login mode, re-firing its fetchProviders() network call each time. Not a regression vs. the prior app-mfdemo per-route architecture, and the toggle is a low-frequency user-driven interaction (cold path) — informational, not a required fix. If provider-list churn becomes a concern, either keep both forms mounted and toggle visibility with CSS, or lift the provider fetch/cache above LoginForm (e.g. into AuthPage or a shared hook).'
+    - title: Apparent live OAuth secrets in git history
+      id: pDQQ
+      date: "2026-07-05"
+      tag: security-urgent
+      text: '[phase-01 gate review, security lens, out-of-scope discovery] Independent security review of the login-register-ui plan''s phase-01 diff discovered, while reading always-read context, what appear to be live committed OAuth credentials at the mod-users repo root: client_secret_159014138472-2lnc34p2cgldb0g714tcoifgr3u4e71j.apps.googleusercontent.com.json (a Google OAuth client_secret JSON — confirmed via presence of a `client_secret` key) and three ms-secret-*.token files (~41 bytes each, consistent with Microsoft Entra client secrets). Added in commit 9680136 ("wip(main): add UpdateTagValue query to model/queries/tags.sql" — an unrelated commit message suggesting accidental inclusion), well before this plan''s diff_base. Unrelated to this plan''s changes but too significant to withhold: recommend the repo owner verify whether these credentials are live and, if so, rotate them and scrub git history.'
+    - title: 'Task document Status-section update was made '
+      id: slra
+      date: "2026-07-05"
+      tag: doc-updates
+      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Task document Status-section update was made in the plan worktree rather than the task worktree (document only exists there); left uncommitted there — manager should commit alongside applying this report.'
+    - title: No other stale GUI-inventory claims found; no
+      id: hQGq
+      date: "2026-07-05"
+      tag: doc-updates
+      text: '[phase-02-doc-updates/001-update-architecture-docs.md] No other stale GUI-inventory claims found; no reviewer findings (no review_focus was supplied for this task).'
