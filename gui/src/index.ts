@@ -70,6 +70,8 @@ export { cn } from './lib/utils';
 export { ClientLayout } from './components/client-layout';
 export type { ClientLayoutProps } from './components/client-layout';
 export { RequireAuth } from './components/require-auth';
+export { OidcCallbackPage } from './components/oidc-callback-page';
+export type { OidcCallbackPageProps } from './components/oidc-callback-page';
 export { SidebarNav } from './components/sidebar-nav';
 export type { SidebarNavProps } from './components/sidebar-nav';
 export { ErrorMessage } from './components/error-message';
