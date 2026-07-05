@@ -30,7 +30,7 @@ phases:
             branch: phase-01-task-02-add-oidc-callback-page-compone
             commit:
                 - faa6f7c
-            merge: null
+            merge: 8eaa167ade6631faa7fc9000cdc27595d3ef8763
         - number: 3
           slug: auth-page
           title: Add Auth Page Component
