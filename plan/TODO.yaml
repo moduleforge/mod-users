@@ -18,7 +18,7 @@ phases:
             branch: phase-01-task-01-add-login-and-register-form-co
             commit:
                 - 58d8bef
-            merge: null
+            merge: 12e6757fcf5b26f5fef986414fde8e3fae14526b
         - number: 2
           slug: oidc-callback-page
           title: Add Oidc Callback Page Component
