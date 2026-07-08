@@ -1,0 +1,3 @@
+[submodule "docs/mf-standards"]
+	path = docs/mf-standards
+	url = git@github.com:moduleforge/docs-mf-standards.git
