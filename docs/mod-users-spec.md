@@ -4,7 +4,7 @@
 
 This document is the canonical functional specification for `@moduleforge/mod-users`. It describes what the module does and is required to do — the behavioral contracts an implementation must satisfy. It is written for developers and AI agents implementing, modifying, or integrating the module.
 
-This spec assumes familiarity with the ModuleForge module model described in [mod-core's architecture overview](https://github.com/moduleforge/mod-core/blob/main/docs/architecture.md). It does not repeat cross-cutting design rationale (authorization, state management, entity typing, database conventions) that is documented there.
+This spec assumes familiarity with the ModuleForge module model described in [mod-core's architecture overview](./mf-standards/architecture.md). It does not repeat cross-cutting design rationale (authorization, state management, entity typing, database conventions) that is documented there.
 
 The spec covers three sub-packages — `model`, `api`, and `gui`. A demo application (`app-mfdemo`) that exercises the module end-to-end is a separate project at the aggregate level. For design choices and the *how* of each sub-package, see [docs/architecture.md](./architecture.md). For directory layout and sub-project conventions, see [docs/project-structure.md](./project-structure.md). For build, test, and development commands, see [AGENTS.md](../AGENTS.md).
 
@@ -270,7 +270,7 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 
 - **Anti-enumeration:** Email-code and password-reset request endpoints return `202` unconditionally to prevent account existence probing.
 
-- **Authorization:** Admin-only endpoints enforce admin privilege on the authenticated principal. The assume endpoint additionally enforces that the acting user is an admin. Authorization follows the ModuleForge `Authorizer` pattern described in [mod-core's authorization design](https://github.com/moduleforge/mod-core/blob/main/docs/architecture/authorization-design.md).
+- **Authorization:** Admin-only endpoints enforce admin privilege on the authenticated principal. The assume endpoint additionally enforces that the acting user is an admin. Authorization follows the ModuleForge `Authorizer` pattern described in [mod-core's authorization design](./mf-standards/architecture/authorization-design.md).
 
 - **Audit trail:** All mutating operations are audited with before/after state, actor UUID, and timestamp. Assumed-identity actions record both the admin actor and the assumed user.
 
