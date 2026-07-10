@@ -14,7 +14,7 @@ migrations:
     first: 100
     last: 199
   after:
-    - mod-core
+    - core
 
 provides:
   services:
