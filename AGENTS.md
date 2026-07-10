@@ -98,12 +98,14 @@ make clean           # remove build artifacts, DB data, and locally-built images
 
 ## Database migrations
 
-Migrations are managed with goose in `model/migrations/`. They run automatically on API server start. To run or roll back manually:
+Migrations are managed with goose in `model/migrations/`. They run automatically at host-app startup, via the `model/migrations` package's embedded `//go:embed` filesystem and `Migrate` function — the host app's generated `main.go` invokes it against this module's own dedicated `goose_db_version_users` tracking table. To run or roll back manually:
 ```sh
 cd model
 goose -dir migrations postgres "$DB_URL" up
 goose -dir migrations postgres "$DB_URL" down
 ```
+
+Each module numbers its own migrations independently starting from 1, isolated in its own `goose_db_version_<module>` table — modules no longer coordinate a shared global numbering space. Cross-module ordering (when one module's migrations depend on another's schema) is carried by the manifest's `migrations.after` field, not by range allocation. `mod-users` declares `after: [core]` because its migrations FK `mod-core`'s `legal_entities` table. See `docs-mf-standards/manifest-spec.md` §5 for the full convention.
 
 ## Code generation (sqlc)
 
