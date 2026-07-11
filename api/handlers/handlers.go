@@ -30,17 +30,27 @@ type GrantAdminFn = inner.GrantAdminFn
 
 // NewOIDCConfigHandler constructs the OIDC config handler from individual
 // dependencies declared in the module manifest.
+//
+// envNoOIDCEnv and adminChecker were added after the original four params
+// (Phase 02 onboarding-boot-helpers task) so every existing positional
+// caller keeps working with only an append. adminChecker may be nil for
+// deployments with no admin-checker concept — inner tolerates a nil
+// AdminChecker (see OIDCConfigDeps.AdminChecker's doc comment).
 func NewOIDCConfigHandler(
 	queries *usersdb.Queries,
 	oauth *auth.OAuth,
 	envRegistry config.ProviderRegistry,
 	tokenDisplay config.TokenDisplay,
+	envNoOIDCEnv bool,
+	adminChecker func(r *http.Request) (bool, error),
 ) *OIDCConfigHandler {
 	return inner.NewOIDCConfigHandler(inner.OIDCConfigDeps{
 		Queries:      queries,
 		OAuth:        oauth,
 		EnvRegistry:  envRegistry,
+		EnvNoOIDCEnv: envNoOIDCEnv,
 		TokenDisplay: tokenDisplay,
+		AdminChecker: adminChecker,
 	})
 }
 
