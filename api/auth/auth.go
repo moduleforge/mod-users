@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/core-api/observer"
+	coredb "github.com/moduleforge/core-model/db"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 
 	"github.com/moduleforge/mod-users/api/config"
@@ -33,11 +33,28 @@ func NewVerifier(ctx context.Context, issuerURL, clientID, jwtSecret, localIssue
 }
 
 // NewClaimMapper returns a ClaimMapper for the named OIDC claim style.
-// The authCfg provides the AdminRole; other MapperOptions fields are zeroed.
+// The authCfg provides the AdminRole. For the "generic" style, EmailPath and
+// RolesPath are set to the fixed "email"/"roles" claim paths used by this
+// module's own locally-minted JWTs (flat "email" + "roles" claims); other
+// styles leave those fields zeroed as before.
 func NewClaimMapper(style string, authCfg config.AuthConfig) (ClaimMapper, error) {
-	return inner.NewClaimMapper(style, inner.MapperOptions{
+	return inner.NewClaimMapper(style, buildMapperOptions(style, authCfg))
+}
+
+// buildMapperOptions constructs the inner.MapperOptions for the given claim
+// style. Factored out of NewClaimMapper so the per-style option values can be
+// asserted directly in a unit test, without needing access to the unexported
+// concrete mapper types NewClaimMapper's return value hides behind the
+// ClaimMapper interface.
+func buildMapperOptions(style string, authCfg config.AuthConfig) inner.MapperOptions {
+	opts := inner.MapperOptions{
 		AdminRole: authCfg.AdminRole,
-	})
+	}
+	if style == "generic" {
+		opts.EmailPath = "email"
+		opts.RolesPath = "roles"
+	}
+	return opts
 }
 
 // NewUserResolver constructs a UserResolver that maps JWT Principals to internal
@@ -86,4 +103,3 @@ func RequireOIDCConfirmed(statusFn func() config.BootState) func(http.Handler) h
 func HashPassword(plain string) (string, error) {
 	return inner.HashPassword(plain)
 }
-

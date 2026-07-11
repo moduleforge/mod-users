@@ -6,9 +6,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authzservice "github.com/moduleforge/authz-api/service"
+	"github.com/moduleforge/core-api/opctx"
 	coredb "github.com/moduleforge/core-model/db"
 )
 
@@ -31,9 +33,25 @@ func NewFirstUserHook(pool *pgxpool.Pool, grantSvc authzservice.GrantServicer) f
 		if err != nil {
 			return fmt.Errorf("first-user hook: resolve entity UUID: %w", err)
 		}
-		if _, err := grantSvc.CreateWildcardGrant(hookCtx, ent.Uuid, "manage"); err != nil {
-			return fmt.Errorf("first-user hook: create wildcard grant: %w", err)
-		}
-		return nil
+		return grantFirstUserWildcard(hookCtx, grantSvc, ent.Uuid, entityID)
 	}
+}
+
+// grantFirstUserWildcard issues the wildcard "manage" grant for the newly
+// created entity. The signup request that triggers this hook is
+// unauthenticated (the account did not exist yet when the request started),
+// so ctx carries no actor. CreateWildcardGrant's audit-observer write
+// hard-requires opctx.ActorEntityID to be set, so attribute the
+// grant-creation event to the newly created entity itself — the first
+// user's own signup is what triggers their own wildcard grant.
+//
+// Factored out of NewFirstUserHook's closure so the actor-context
+// requirement can be exercised directly in a unit test, without a live
+// database connection to satisfy the enclosing GetEntityByID lookup.
+func grantFirstUserWildcard(ctx context.Context, grantSvc authzservice.GrantServicer, actorUUID uuid.UUID, entityID int64) error {
+	ctx = opctx.WithActor(ctx, entityID)
+	if _, err := grantSvc.CreateWildcardGrant(ctx, actorUUID, "manage"); err != nil {
+		return fmt.Errorf("first-user hook: create wildcard grant: %w", err)
+	}
+	return nil
 }
