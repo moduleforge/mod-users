@@ -91,6 +91,9 @@ provides:
     # onboardingHandler — OIDCConfigHandler; owns the oidc_config row and BootState.
     # Consumed by requireOIDCConfirmed middleware and the /v1/oidc-config route group.
     # The public handlers.NewOIDCConfigHandler wrapper constructs OIDCConfigDeps internally.
+    # envNoOIDCEnv/adminChecker are the two trailing args added by the Phase 02
+    # onboarding-boot-helpers task; neither app has an admin-checker concept yet,
+    # so adminChecker is always expr:nil here.
     - name: onboardingHandler
       type: "*handlers.OIDCConfigHandler"
       constructor: handlers.NewOIDCConfigHandler
@@ -99,6 +102,8 @@ provides:
         - service:oauthOrchestrator
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
+        - expr:oauthOrchestrator.EnvNoOIDCAccounts()
+        - expr:nil
 
     # authHandler — local auth and OIDC callback handler; serves /v1/auth/*.
     # smtp infra singleton satisfies the email.Sender interface.
@@ -192,6 +197,10 @@ provides:
         - requireOIDCConfirmed
 
     # /v1/oidc-config — OIDC onboarding discovery and setup token endpoints.
+    # NOTE: constructor/args below are informational only — the resolver skips
+    # handler-node creation here because provides.services.onboardingHandler
+    # (above) is the canonical construction site for this same-named handler.
+    # Kept in sync with that entry to avoid documentation drift.
     - prefix: /v1/oidc-config
       scope: public             # unauthenticated — OIDC onboarding precedes auth
       handler: onboardingHandler
@@ -201,6 +210,8 @@ provides:
         - service:oauthOrchestrator
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
+        - expr:oauthOrchestrator.EnvNoOIDCAccounts()
+        - expr:nil
       register: handlers.RegisterOIDCConfigRoutes
       register_args:
         - service:providersHandler
