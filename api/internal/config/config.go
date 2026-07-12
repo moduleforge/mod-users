@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -293,6 +294,14 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// SMTP is optional: deployments that never need to send email (e.g. a
+	// personal single-owner instance) can boot without it configured at
+	// all. Surface a non-fatal warning so an operator who *meant* to
+	// configure it notices the gap without the boot failing.
+	if cfg.SMTP.Host == "" {
+		slog.Warn("SMTP not configured; email verification and password-reset emails will not be sent")
+	}
+
 	return cfg, nil
 }
 
@@ -308,8 +317,6 @@ func validate(cfg *Config, parseErrors []string) error {
 	required := []check{
 		{"DB_URL", cfg.DB.URL},
 		{"JWT_SECRET", cfg.LocalAuth.JWTSecret},
-		{"SMTP_HOST", cfg.SMTP.Host},
-		{"SMTP_FROM", cfg.SMTP.From},
 	}
 
 	// When any OIDC provider is enabled, the OAuth callback plumbing needs
@@ -338,9 +345,25 @@ func validate(cfg *Config, parseErrors []string) error {
 		problems = append(problems, "missing required environment variables: "+strings.Join(missing, ", "))
 	}
 
-	// SMTP_PORT is numeric so we check it separately.
-	if cfg.SMTP.Port == 0 {
-		problems = append(problems, "missing required environment variables: SMTP_PORT")
+	// SMTP is never required on its own: a deployment that never sends
+	// email (e.g. a personal single-owner instance) can leave it entirely
+	// unset. But setting SMTP_HOST signals intent to use SMTP, so from
+	// that point the rest of the fields (SMTP_PORT is numeric, so it is
+	// checked separately from the string-valued `required` slice above)
+	// must be present too — a half-configured SMTP block is a real
+	// misconfiguration, not an intentional "off" state.
+	if cfg.SMTP.Host != "" {
+		var smtpMissing []string
+		if cfg.SMTP.Port == 0 {
+			smtpMissing = append(smtpMissing, "SMTP_PORT")
+		}
+		if strings.TrimSpace(cfg.SMTP.From) == "" {
+			smtpMissing = append(smtpMissing, "SMTP_FROM")
+		}
+		if len(smtpMissing) > 0 {
+			problems = append(problems,
+				"SMTP_HOST is set but SMTP is only partially configured; missing: "+strings.Join(smtpMissing, ", "))
+		}
 	}
 
 	if len(problems) == 0 {
