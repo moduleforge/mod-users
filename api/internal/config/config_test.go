@@ -87,14 +87,51 @@ func TestLoad(t *testing.T) {
 		}
 
 		// Without providers, only the always-required fields must be listed.
+		// SMTP is never in this unconditional-required set: a deployment
+		// that never sends email may leave it entirely unset.
 		required := []string{
 			"DB_URL",
 			"JWT_SECRET",
-			"SMTP_HOST",
-			"SMTP_PORT",
-			"SMTP_FROM",
 		}
 		for _, field := range required {
+			if !strings.Contains(err.Error(), field) {
+				t.Errorf("error should mention %q, got: %v", field, err)
+			}
+		}
+		for _, field := range []string{"SMTP_HOST", "SMTP_PORT", "SMTP_FROM"} {
+			if strings.Contains(err.Error(), field) {
+				t.Errorf("error should NOT mention %q (SMTP is optional), got: %v", field, err)
+			}
+		}
+	})
+
+	t.Run("SMTP entirely unset still succeeds", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("SMTP_HOST", "")
+		t.Setenv("SMTP_PORT", "")
+		t.Setenv("SMTP_FROM", "")
+
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("expected no error with SMTP entirely unset, got: %v", err)
+		}
+		if cfg.SMTP.Host != "" || cfg.SMTP.Port != 0 || cfg.SMTP.From != "" {
+			t.Errorf("expected zero-valued SMTP config, got: %+v", cfg.SMTP)
+		}
+	})
+
+	t.Run("SMTP_HOST set without SMTP_PORT/SMTP_FROM fails", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("SMTP_PORT", "")
+		t.Setenv("SMTP_FROM", "")
+
+		_, err := config.Load()
+		if err == nil {
+			t.Fatal("expected an error for partially-configured SMTP, got nil")
+		}
+		for _, field := range []string{"SMTP_PORT", "SMTP_FROM"} {
 			if !strings.Contains(err.Error(), field) {
 				t.Errorf("error should mention %q, got: %v", field, err)
 			}

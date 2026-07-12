@@ -343,14 +343,23 @@ func main() {
 		Logger:   logger,
 	})
 
-	// Build email sender.
-	emailSender := email.NewSMTPSender(
-		cfg.SMTP.Host,
-		cfg.SMTP.Port,
-		cfg.SMTP.From,
-		cfg.SMTP.User,
-		cfg.SMTP.Pass,
-	)
+	// Build email sender. SMTP is optional — deployments that never send
+	// email (e.g. a personal single-owner instance) can leave it entirely
+	// unconfigured, in which case config.Load already logged a boot
+	// warning and we fall back to a no-op sender so registration/reset
+	// flows still work, minus the actual email delivery.
+	var emailSender email.Sender
+	if cfg.SMTP.Host == "" {
+		emailSender = email.NoOpSender{}
+	} else {
+		emailSender = email.NewSMTPSender(
+			cfg.SMTP.Host,
+			cfg.SMTP.Port,
+			cfg.SMTP.From,
+			cfg.SMTP.User,
+			cfg.SMTP.Pass,
+		)
+	}
 
 	// Build server + router.
 	srv, r := server.New(cfg)
