@@ -1,0 +1,8 @@
+slug: self-route-manifest
+version: 1
+title: ""
+phases:
+    - number: 1
+      slug: self-route-wiring
+      title: Self-Route Wiring
+      tasks: []
