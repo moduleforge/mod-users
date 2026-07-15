@@ -15,7 +15,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-01-wire-self-routes-manifest
-            commit: []
+            commit:
+                - "6687689"
             merge: null
     - number: 2
       slug: doc-updates
