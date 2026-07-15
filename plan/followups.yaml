@@ -145,11 +145,6 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/002-reset-password-page.md] Process note: flow-mcp d/t doc-lookup tools failed to resolve references against this project''s default working directory or the sdlcforge/flow source checkout as project_root, both returning document-not-found for entries confirmed present in docs.json; worked around by reading from the installed plugin cache directly. Same tooling issue observed by sibling phase-1 tasks.'
-    - title: Task document Status-section update was writt
-      id: fG8o
-      date: "2026-07-05"
-      tag: doc-updates
-      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Task document Status-section update was written in the plan worktree (only place it exists) and left uncommitted there; manager should commit alongside applying this report.'
     - title: 'Unrelated to this task: plan worktree shows t'
       id: MCVQ
       date: "2026-07-05"
