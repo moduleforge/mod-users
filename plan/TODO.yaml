@@ -40,3 +40,7 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 3
+      slug: gui-core-gui-adoption
+      title: GUI Core-GUI Adoption
+      tasks: []
