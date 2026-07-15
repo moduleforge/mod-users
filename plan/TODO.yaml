@@ -47,4 +47,4 @@ phases:
             branch: null
             commit:
                 - 45852c3
-            merge: null
+            merge: 502d938
