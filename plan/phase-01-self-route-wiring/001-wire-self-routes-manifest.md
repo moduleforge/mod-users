@@ -199,4 +199,55 @@ architectural_impact: true
 - After adding the three manifest edits (`selfHandler` service, `/v1` route entry,
   `coreServices` requires).
 - After reconciling the dev-server comment in `api/cmd/server/main.go`.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-14
+- **Validation summary:**
+  - `make build.api` — passed (`RegisterSelfRoutes` compiles; confirmed via
+    both `go build -o bin/server ./cmd/server` and `go build ./...` across the
+    whole `api` module).
+  - `go vet ./...` — passed, no findings.
+  - `make lint.api` — **not fully green**: `gofmt` flags `api/config/config.go`,
+    but that file is untouched by this task and the same failure is present at
+    the pre-task HEAD (confirmed via `git stash`). The two files this task
+    edited/added (`api/internal/handlers/self_routes.go`,
+    `api/cmd/server/main.go`) both pass `gofmt -l` cleanly. Flagged for the
+    manager below rather than fixed, per scope (it lives outside this task's
+    diff).
+  - `grep -n "RegisterSelfRoutes" moduleforge.module.yaml api/internal/handlers/self_routes.go` — passed.
+  - `grep -n "expr:requireVerifiedEmail" moduleforge.module.yaml` — passed, exactly one match.
+  - New `/v1` self route entry's `middleware:` list — confirmed to contain only
+    `requireOIDCConfirmed` and `requireAuth` (no `requireVerifiedEmail`).
+  - `selfHandler` under `provides.services` and `coreServices` under
+    `requires.services` — each confirmed to appear exactly once.
+  - `api/cmd/server/main.go` — builds; hand-written `GET/PUT /self` block left
+    in place per the task doc's explicit decision, with the new reference
+    comment added immediately above `r.Get("/self", selfHandler.Get)`.
+  - Optional mfgen end-to-end sanity check — skipped (optional per the task
+    doc; the `expr:` pattern was already source-level-verified in the
+    referenced notes doc, and running mfgen risked touching sibling-project
+    scope for no material gain).
+  - Scope guard (`git status`) — confirmed changes only under `mod-users/`:
+    `api/internal/handlers/self_routes.go` (new),
+    `api/cmd/server/main.go`, `moduleforge.module.yaml`, plus this task doc.
+- **Environment note:** `make build.api` initially failed in this worktree
+  with `replacement directory ../../mod-core/api does not exist` (and
+  similarly for mod-audit/mod-authz) — a pre-existing structural artifact of
+  this worktree's nesting depth under `mod-users/worktrees/`, unrelated to
+  this task's edits. Resolved locally by adding a worktree-local `go.work` at
+  the worktree root (gitignored per the existing `/go.work` /.gitignore rule
+  and the project's documented worktree-local-go.work convention — see commit
+  `370c1c4`); this file is not part of the task's diff and was not committed.
+- **Decisions applied under `## Assumptions`:** relied on the task doc's
+  assumption that `requireVerifiedEmail`, `requireAuth`, `requireOIDCConfirmed`,
+  and `coreServices` are all in-scope generated `main.go` variables (per the
+  referenced mfgen verification notes) — no independent re-verification against
+  `mfgen`/`app-mftodo` source was performed beyond what the notes already
+  documented.
+- **Affected source files:**
+  - `api/internal/handlers/self_routes.go` (new)
+  - `moduleforge.module.yaml`
+  - `api/cmd/server/main.go`
 </content>
