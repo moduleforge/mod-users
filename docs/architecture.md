@@ -42,10 +42,12 @@ API surface by tag group:
 |---|---|---|
 | **Health** | `GET /healthz`, `GET /readyz` | Liveness and readiness probes |
 | **Auth** | `/v1/auth/register`, `/v1/auth/login`, `/v1/auth/anonymous`, `/v1/auth/email-code`, `/v1/auth/password-reset`, `/v1/auth/providers`, `/v1/auth/oidc/{provider}/start`, `/v1/auth/oidc/{provider}/callback` | All authentication flows |
-| **Self** | `GET /v1/self`, `PUT /v1/self` | Authenticated user reads and updates their own profile |
+| **Self** | `GET /v1/self`, `PUT /v1/self` | Authenticated user reads and updates their own profile. `GET` is reachable to accounts with an unverified email (so the GUI can render the "verify your email" page); `PUT` requires a verified email |
 | **Users** | CRUD on `/v1/users`, `/v1/users/{uuid}`, grant/assume sub-routes | Admin user management |
 | **Apps** | CRUD on `/v1/apps`, member management | Admin application and tenancy management |
 | **Audit** | `/v1/audit`, `/v1/audit/{resource_type}/{resource_uuid}`, `/v1/users/{uuid}/audit` | Audit log access |
+
+Routes are wired into the generated server via `moduleforge.module.yaml`'s `provides.routes` entries (consumed by the ModuleForge mfgen codegen). Per-route middleware differentiation is expressed by giving the affected route its own manifest entry with its own `middleware:` list — as seen in the account-routes entry and, for the GET/PUT split above, the two self-routes entries — rather than by any register-time conditional.
 
 ## Authentication flow
 

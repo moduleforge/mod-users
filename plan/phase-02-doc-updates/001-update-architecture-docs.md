@@ -122,4 +122,48 @@ Review and update the following files (each named explicitly):
   "consistent with existing convention" remark if desired.
 - `plugins/flow/task-procedures/update-architecture-docs/SKILL.md` — the procedure
   to follow.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-14
+- **Validation summary:**
+  - `docs/architecture.md` — updated the "Self" API-surface row to state the
+    `GET`-unverified / `PUT`-verified contract, and added a one-line mention (no
+    new subsection) that per-route middleware differentiation is expressed via
+    separate manifest entries with their own `middleware:` lists, referencing
+    the account-routes and self-routes entries. No `expr:` per-route
+    middleware-split pattern is documented.
+  - `docs/mod-users-spec.md` — updated use case 7 ("View and update own
+    profile") and the "Self (authenticated)" API checklist section to state the
+    same `GET`-unverified / `PUT`-verified contract.
+  - `plan/notes/mfgen-expr-middleware-pattern.md` — appended a "Correction
+    (post-implementation)" section (existing content left intact) stating (a)
+    `/self` did not end up using the `expr:` pattern — it was redesigned to two
+    manifest entries per the phase-1 architecture-conformance review, and (b)
+    the documented fragility premise was independently shown incorrect by the
+    phase-1 security review (`mfgen/internal/resolver/reachability.go`;
+    middleware nodes are unconditional reachability roots).
+  - `api/openapi.yaml` — verified `GET`/`PUT /v1/self` are already present
+    (`grep -n "/v1/self" api/openapi.yaml` → line 764 plus a reference at line
+    507); no OpenAPI change made, none needed.
+  - `grep -rn "expr:requireVerifiedEmail\|expr: per-route\|sanctioned"
+    docs/architecture.md AGENTS.md` — no matches; confirmed no sanctioned-`expr:`
+    framing exists.
+  - `grep -rn "self" docs/architecture.md docs/mod-users-spec.md` — confirmed
+    the updated contract language appears in both files.
+  - Cross-references checked: no links were added, moved, or removed in
+    `docs/architecture.md` or `docs/mod-users-spec.md`; the `plan/notes/`
+    correction references `mfgen/internal/resolver/reachability.go` (read-only,
+    verification-only path, consistent with the phase-1 task docs' own
+    references) and does not introduce a broken doc link.
+  - Repo has no markdown-lint/doc-standards make target (`Makefile` only
+    defines `lint.model`/`lint.api`/`lint.gui`), so none was run.
+  - Scope guard (`git status`) — confirmed edits only under `docs/` and
+    `plan/notes/` within `mod-users/`; nothing under `mfgen/`, `app-mftodo/`, or
+    sibling modules.
+- **Affected files:**
+  - `docs/architecture.md`
+  - `docs/mod-users-spec.md`
+  - `plan/notes/mfgen-expr-middleware-pattern.md`
 </content>
