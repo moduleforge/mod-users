@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: go-apiresp-foundation
       title: Go Apiresp Foundation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: adopt-apiresp-sentinels-and-writer
+          title: Adopt Apiresp Sentinels And Writer
+          path: phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
