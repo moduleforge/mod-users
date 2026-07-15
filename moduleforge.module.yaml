@@ -240,21 +240,25 @@ provides:
         - requireAuth
         - requireVerifiedEmail
 
-    # /v1/self — authenticated profile read/update. GET /self is reachable to
-    # accounts with UNVERIFIED email (so the GUI can render the "verify your
-    # email" page); PUT /self requires a verified email. The split is expressed
-    # by giving this group only requireOIDCConfirmed + requireAuth at the group
-    # level and passing requireVerifiedEmail into RegisterSelfRoutes as an expr
-    # register-arg, so the handler applies it internally to just the PUT route via
-    # a nested r.Group. See docs/architecture.md and AGENTS.md manifest conventions.
+    # /v1/self (GET) — read own profile. Reachable to accounts with UNVERIFIED
+    # email (so the GUI can render the "verify your email" page). Matches this
+    # file's standard convention: differentiation via each entry's own
+    # middleware: list, not a register-arg.
     - prefix: /v1
       handler: selfHandler
-      register: handlers.RegisterSelfRoutes
-      register_args:
-        - expr:requireVerifiedEmail   # in-scope chi.Middleware var; applied to PUT only, inside the handler
+      register: handlers.RegisterSelfGetRoute
       middleware:
         - requireOIDCConfirmed
         - requireAuth
+
+    # /v1/self (PUT) — update own profile. Requires a verified email.
+    - prefix: /v1
+      handler: selfHandler
+      register: handlers.RegisterSelfPutRoute
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
 
   middleware:
     # requireAuth validates the Bearer token and sets the Principal in the request context.

@@ -1,28 +1,20 @@
 package handlers
 
-import (
-	"net/http"
+import "github.com/go-chi/chi/v5"
 
-	"github.com/go-chi/chi/v5"
-)
-
-// RegisterSelfRoutes mounts GET/PUT /self onto r. The caller supplies the /v1
-// prefix and the group-level middleware (requireOIDCConfirmed, requireAuth)
-// BEFORE calling this function; RegisterSelfRoutes adds neither a prefix nor
-// those gates itself.
-//
-// The email-verification gate is deliberately NOT applied at the group level.
-// The caller passes requireVerifiedEmail in, and this function applies it to
-// PUT /self only, via a nested r.Group — keeping GET /self reachable to accounts
-// whose email is not yet verified (the GUI renders the "verify your email" page
-// from it) while PUT /self stays restricted to verified accounts.
-func RegisterSelfRoutes(r chi.Router, h *SelfHandler, requireVerifiedEmail func(http.Handler) http.Handler) {
-	// GET /self bypasses the email-verification gate.
+// RegisterSelfGetRoute mounts GET /self onto r. The caller supplies the /v1
+// prefix and whatever middleware this entry's manifest group carries
+// (requireOIDCConfirmed, requireAuth) — deliberately NOT requireVerifiedEmail,
+// so accounts with an unverified email can still reach this endpoint (the GUI
+// renders the "verify your email" page from it).
+func RegisterSelfGetRoute(r chi.Router, h *SelfHandler) {
 	r.Get("/self", h.Get)
+}
 
-	// PUT /self requires a verified email.
-	r.Group(func(r chi.Router) {
-		r.Use(requireVerifiedEmail)
-		r.Put("/self", h.Put)
-	})
+// RegisterSelfPutRoute mounts PUT /self onto r. The caller supplies the /v1
+// prefix and this entry's manifest middleware group, which includes
+// requireVerifiedEmail — only accounts with a verified email may update their
+// own profile.
+func RegisterSelfPutRoute(r chi.Router, h *SelfHandler) {
+	r.Put("/self", h.Put)
 }
