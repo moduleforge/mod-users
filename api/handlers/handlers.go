@@ -12,6 +12,8 @@ import (
 
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
+	coreservice "github.com/moduleforge/core-api/service"
+	coredb "github.com/moduleforge/core-model/db"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 
 	"github.com/moduleforge/mod-users/api/auth"
@@ -27,6 +29,7 @@ type ProvidersHandler = inner.ProvidersHandler
 type AssumeHandler = inner.AssumeHandler
 type AppsHandler = inner.AppsHandler
 type GrantAdminFn = inner.GrantAdminFn
+type SelfHandler = inner.SelfHandler
 
 // NewOIDCConfigHandler constructs the OIDC config handler from individual
 // dependencies declared in the module manifest.
@@ -106,6 +109,27 @@ func RegisterOIDCConfigRoutes(r chi.Router, h *OIDCConfigHandler, p *ProvidersHa
 // endpoints on r. assume and apps may be nil for partial deployments.
 func RegisterAccountRoutes(r chi.Router, h *UserAccountsHandler, assume *AssumeHandler, apps *AppsHandler) {
 	inner.RegisterAccountRoutes(r, h, assume, apps)
+}
+
+// NewSelfHandler constructs the /self handler. /self is a composite identity
+// endpoint: core-module owns entity data (via coreSvcs.Entity.GetSelf) while
+// users-module owns the user-account row (email, timestamps, uuid).
+func NewSelfHandler(q *usersdb.Queries, coreQ *coredb.Queries, coreSvcs *coreservice.Services) *SelfHandler {
+	return inner.NewSelfHandler(q, coreQ, coreSvcs)
+}
+
+// RegisterSelfGetRoute mounts GET /self on r. Deliberately separate from
+// RegisterSelfPutRoute so each can carry its own middleware group in the
+// module manifest -- GET must stay reachable to accounts with an unverified
+// email (the GUI renders the "verify your email" page from it).
+func RegisterSelfGetRoute(r chi.Router, h *SelfHandler) {
+	inner.RegisterSelfGetRoute(r, h)
+}
+
+// RegisterSelfPutRoute mounts PUT /self on r. Requires a verified email --
+// see RegisterSelfGetRoute's doc comment for why this is a separate entry.
+func RegisterSelfPutRoute(r chi.Router, h *SelfHandler) {
+	inner.RegisterSelfPutRoute(r, h)
 }
 
 // Live is the liveness health-check handler.
