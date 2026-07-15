@@ -43,4 +43,14 @@ phases:
     - number: 3
       slug: gui-core-gui-adoption
       title: GUI Core-GUI Adoption
-      tasks: []
+      tasks:
+        - number: 1
+          slug: reconcile-api-client-types
+          title: Reconcile Api Client Types
+          path: phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
