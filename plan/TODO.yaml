@@ -42,6 +42,7 @@ phases:
           path: phase-02-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: 'Updated docs/architecture.md and docs/mod-users-spec.md to document the GET-unverified/PUT-verified /self contract as an instance of the existing per-entry-middleware convention (no expr: pattern documented as sanctioned, per the revised task scope). Appended a correction section to plan/notes/mfgen-expr-middleware-pattern.md noting /self did not end up using expr: and that the fragility premise was independently shown incorrect. Verified GET/PUT /v1/self already present in api/openapi.yaml.'
           git:
             branch: null
             commit: []
