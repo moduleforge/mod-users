@@ -18,7 +18,7 @@ phases:
             branch: phase-01-task-01-wire-self-routes-manifest
             commit:
                 - "6687689"
-            merge: null
+            merge: ddc648b
     - number: 2
       slug: doc-updates
       title: Documentation Updates
