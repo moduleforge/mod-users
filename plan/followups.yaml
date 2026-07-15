@@ -155,3 +155,8 @@ items:
       date: "2026-07-05"
       tag: doc-updates
       text: '[phase-02-doc-updates/001-update-architecture-docs.md] Unrelated to this task: plan worktree shows three other uncommitted modified files (phase-01 tasks'' own Status sections) predating this session; manager should commit those too.'
+    - title: This worktree required a local, gitignored go
+      id: oyo6
+      date: "2026-07-15"
+      tag: self-route-wiring
+      text: '[phase-01-self-route-wiring/001-wire-self-routes-manifest.md] This worktree required a local, gitignored go.work file to make make build.api/go build runnable at all (pre-existing structural issue: api/go.mod''s replace-directive relative paths assume a shallower nesting depth than mod-users/worktrees/<task>/ provides). Not committed, but future task worktrees for this repo will likely hit the same issue and may want a documented/standard fix (e.g., a prepare-task-worktree step that auto-generates this file, or an AGENTS.md note) rather than each task agent rediscovering it.'
