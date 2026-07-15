@@ -87,7 +87,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Action:** Calls `GET /v1/self` to retrieve profile, or `PUT /v1/self` to update given name, family name, or default application preference.
 
-**Outcome:** On `GET`, the caller's full profile is returned including entity kind, display name, and default app. On `PUT`, the provided fields are updated and the updated profile is returned.
+**Outcome:** On `GET`, the caller's full profile is returned including entity kind, display name, and default app. On `PUT`, the provided fields are updated and the updated profile is returned. `GET /v1/self` is reachable to an authenticated account even when its email is unverified (the GUI relies on this to render the "verify your email" prompt); `PUT /v1/self` requires a verified email.
 
 ---
 
@@ -226,8 +226,8 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 
 ### Self (authenticated)
 
-- [ ] `GET /v1/self` — retrieve authenticated user's profile.
-- [ ] `PUT /v1/self` — update own given name, family name, or default application.
+- [ ] `GET /v1/self` — retrieve authenticated user's profile. Reachable even when the account's email is unverified.
+- [ ] `PUT /v1/self` — update own given name, family name, or default application. Requires a verified email.
 
 ### Admin: users (admin auth required)
 

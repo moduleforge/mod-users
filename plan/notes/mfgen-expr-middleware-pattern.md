@@ -123,5 +123,29 @@ reference would dangle. Robust fallback if that ever matters:
 `register_args: [expr:auth.NewRequireVerifiedEmail()]` (constructs a fresh, stateless
 instance inline; `auth` is already imported). The plan uses `expr:requireVerifiedEmail`
 per the sanctioned pattern and documents this note in AGENTS.md.
+
+## Correction (post-implementation)
+
+Two corrections to the above, recorded after Phase 1 landed:
+
+1. **`/self` did not end up using the `expr:` pattern.** The phase-1
+   architecture-conformance review found that the initial `expr:requireVerifiedEmail`
+   wiring introduced a second, inconsistent way of expressing per-route middleware
+   differentiation (every other manifest entry, including this file's own
+   account-routes entry, differentiates purely via each entry's own `middleware:`
+   list). The user chose to redesign rather than adopt `expr:` as a sanctioned
+   convention: `/self` now uses two ordinary manifest entries
+   (`RegisterSelfGetRoute` / `RegisterSelfPutRoute`), each gated purely by its own
+   `middleware:` list. No `expr:` register-arg is used for `/self` in the merged
+   code, and `expr:` is not documented anywhere as a sanctioned per-route
+   middleware-split convention.
+2. **The "documented fragility" above was independently shown incorrect.** The
+   phase-1 security review traced mfgen's reachability graph
+   (`mfgen/internal/resolver/reachability.go`) and found that middleware nodes are
+   unconditional reachability roots — the generated middleware var is always
+   emitted regardless of whether any route's `middleware:` list references it. The
+   dangling-reference concern above does not hold. (This correction is noted for
+   completeness; it did not motivate the redesign in point 1, which was driven
+   solely by pattern-consistency, not fragility.)
 </content>
 </invoke>
