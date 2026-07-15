@@ -32,10 +32,10 @@ const (
 	TokenDisplayLocalhost = inner.TokenDisplayLocalhost
 	TokenDisplayNone      = inner.TokenDisplayNone
 
-	BootStateConfirmedOK      = inner.BootStateConfirmedOK
-	BootStateConfirmedOptOut  = inner.BootStateConfirmedOptOut
-	BootStateInitFailed       = inner.BootStateInitFailed
-	BootStateNoEnvNoFlag      = inner.BootStateNoEnvNoFlag
+	BootStateConfirmedOK     = inner.BootStateConfirmedOK
+	BootStateConfirmedOptOut = inner.BootStateConfirmedOptOut
+	BootStateInitFailed      = inner.BootStateInitFailed
+	BootStateNoEnvNoFlag     = inner.BootStateNoEnvNoFlag
 )
 
 // Load reads configuration from environment variables, applies
