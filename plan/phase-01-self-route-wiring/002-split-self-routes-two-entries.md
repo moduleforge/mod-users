@@ -187,3 +187,28 @@ architectural_impact: true
 - After replacing `RegisterSelfRoutes` with the two new functions and confirming `make build.api`.
 - After replacing the manifest's single self entry with two entries.
 - After adding and passing the new test.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-14
+- **Validation summary:**
+  - `make build.api` — passed.
+  - `go vet ./...` — passed, no findings.
+  - `gofmt -l api/internal/handlers/self_routes.go api/cmd/server/main.go` — no output (clean); also confirmed clean for the new `api/internal/handlers/self_routes_test.go`.
+  - New test `TestSelfRoutes_GetPutSplit` (`api/internal/handlers/self_routes_test.go`) — passed (`go test ./internal/handlers/ -run TestSelfRoutes_GetPutSplit -v`, 3 subtests). Sanity-checked per the task doc: temporarily swapped which register call sat behind the verified-email marker (marker moved from the PUT group to the GET group) and reran — all three subtests failed as expected, then reverted to the correct wiring, which passes again. Not a tautology.
+  - `grep -n "RegisterSelfGetRoute\|RegisterSelfPutRoute" moduleforge.module.yaml api/internal/handlers/self_routes.go` — both function names present in both files.
+  - `grep -n "expr:requireVerifiedEmail" moduleforge.module.yaml` — zero matches, confirmed removed.
+  - `grep -n "RegisterSelfRoutes" moduleforge.module.yaml api/internal/handlers/self_routes.go api/cmd/server/main.go` — zero matches, confirmed removed/replaced everywhere.
+  - PUT entry's `middleware:` list contains `requireVerifiedEmail`; GET entry's does not — confirmed by inspection.
+  - `selfHandler` appears exactly once under `provides.services`; `coreServices` appears exactly once under `requires.services` — confirmed by grep count, both unchanged from task 001.
+  - Scope guard (`git status`) — confirmed changes only under `mod-users/`.
+- **Verification against real mfgen source (beyond the referenced notes doc):** read `mergeRouteGroup` directly in `mfgen/internal/codegen/main_gen.go` (~L528-562) to confirm fact 4 independently rather than relying solely on the notes doc — confirmed that when multiple `routeEntry`s share a prefix, each entry with `hasTopMW` (i.e. a non-empty `middleware:` list) is wrapped in its own `r.Group`, so the two new self-route entries (each carrying `middleware:`) each get an isolated, non-bleeding group. This directly supports the two-entries mechanism this redesign now relies on.
+- **Environment note:** as flagged in task 001's Status section, `make build.api` in this worktree initially failed with `replacement directory ... does not exist` for the mod-core/mod-audit/mod-authz replace directives — a pre-existing artifact of this worktree's nesting depth (`mod-users/worktrees/plan/self-route-manifest/worktrees/<task>`, six levels below `moduleforge/`). Resolved locally with a worktree-local `go.work` (six `../` segments to the sibling modules) per the dispatch instructions; this file is gitignored (`/go.work` rule) and was not part of any commit.
+- **Requirement 5 (optional plan-notes correction) — deliberately skipped.** The task doc invites (but does not require) a short correction note in `plan/notes/mfgen-expr-middleware-pattern.md`. The `implement-task` procedure this agent follows explicitly forbids editing any file under `<worktree>/plan/` other than the assigned task document, and the task doc itself provides an explicit skip path ("the manager will otherwise carry this correction forward into Phase 2's doc-updates task directly"), so this was skipped rather than risk an ownership-boundary violation. Flagged below for the manager to apply directly (or via Phase 2) if desired.
+- **Decisions applied under `## Assumptions`:** relied on both stated assumptions — chi's `r.Get`/`r.Put` registration order across the two separate `register:` entries does not affect correctness, and the `selfHandler`/`coreServices` entries from task 001 needed no changes (confirmed unchanged by grep count).
+- **Affected source files:**
+  - `api/internal/handlers/self_routes.go` (replaced `RegisterSelfRoutes` with `RegisterSelfGetRoute`/`RegisterSelfPutRoute`; dropped the now-unused `net/http` import)
+  - `api/internal/handlers/self_routes_test.go` (new)
+  - `moduleforge.module.yaml` (single self route entry replaced with two entries)
+  - `api/cmd/server/main.go` (reconciliation comment updated; no functional change)
