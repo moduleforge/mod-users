@@ -23,7 +23,7 @@ phases:
           slug: split-self-routes-two-entries
           title: Redesign Self Route Registration Using Two Manifest Entries
           path: phase-01-self-route-wiring/002-split-self-routes-two-entries.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Replaced the single RegisterSelfRoutes/expr:requireVerifiedEmail wiring from task 001 with two single-verb register functions (RegisterSelfGetRoute, RegisterSelfPutRoute) and two manifest entries differentiated purely by each entry''s middleware: list, matching the sibling RegisterAccountRoutes convention exactly, per the user''s explicit redesign choice after the phase-1 architecture-conformance review. Updated the dev-server reconciliation comment accordingly. Added and validated a non-tautological test proving the GET-unguarded/PUT-gated split holds. All validation green; diff confined to mod-users/.'
           git:
