@@ -102,3 +102,22 @@ this plan's `doc-updates` task — had any follow-ups recorded):
   task agent rediscovering it independently.
 
 No other open follow-ups were found tagged to this plan's phases or tasks.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Self-Route Wiring
+
+- [x] [001-wire-self-routes-manifest.md](./phase-01-self-route-wiring/001-wire-self-routes-manifest.md) — tier `sonnet-high` · branch `phase-01-task-01-wire-self-routes-manifest` · commit `6687689` · merge `ddc648b`
+- [x] [002-split-self-routes-two-entries.md](./phase-01-self-route-wiring/002-split-self-routes-two-entries.md) — tier `sonnet-high` · branch `phase-01-task-02-split-self-routes-two-entries` · commit `ec548a1` · merge `ce11bb4`
+
+### Phase 02 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-02-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `…` · commit `45852c3` · merge `502d938`
