@@ -131,6 +131,7 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 | `bun.lock` | Workspace lockfile (committed) |
 | `.env.example` | Template for required environment variables |
 | `api/openapi.yaml` | Authoritative REST API specification |
+| `api/handlers/handlers.go` | Public facade re-exporting handler types/constructors/route-registration functions from `api/internal/handlers/` — the only handlers package external modules (host apps) can import. See Conventions below. |
 | `model/schema/` | Postgres schema definitions (source of truth for table structure) |
 | `model/migrations/` | goose migration files (numbered, in order) |
 | `model/queries/` | SQL queries consumed by sqlc |
@@ -150,3 +151,4 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 - **Authorization is checked first** in every service method, before any data access.
 - **Generated code (`model/db/`) is committed** and should not be edited by hand. Re-run `sqlc generate` after any query change.
 - **Cross-module schema deps** are resolved by the host application's migration composition step, not by importing mod-core schema directly.
+- **Any handler/constructor/route-registration function referenced by `moduleforge.module.yaml`'s `constructor:` or `register:` keys must be re-exported through the public facade `api/handlers/handlers.go`, not left only in `api/internal/handlers/`.** External modules — including every `mfgen`-generated host app's composition root (e.g. `app-mftodo/cmd/server/main.go`) — import `github.com/moduleforge/mod-users/api/handlers`, which cannot see unexported-package (`internal/`) symbols. `handlers.go` re-exports each handler type as a type alias (`type X = inner.X`) plus a thin wrapper function per constructor/register call. When adding a new manifest entry, add the matching alias/wrapper to `handlers.go` in the same change — otherwise the manifest addition compiles fine in this repo (tests here only exercise `internal/`) but breaks `mfgen generate` output in every consuming app, and the failure surfaces there, not here. This exact gap shipped in the `self-route-manifest` plan (2026-07-15): `RegisterSelfGetRoute`/`RegisterSelfPutRoute` were added to `internal/handlers` and to the module manifest, but not re-exported, so `app-mftodo`'s generated `main.go` referenced undefined symbols until a follow-up fix added the facade wrappers.

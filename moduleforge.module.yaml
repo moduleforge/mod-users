@@ -189,6 +189,14 @@ provides:
         - service:coreServices       # *coreservice.Services (from mod-core)
 
   routes:
+    # REMINDER when adding a route entry here: every `constructor:`/`register:`
+    # symbol below must also be re-exported (type alias + thin wrapper func)
+    # through the public facade api/handlers/handlers.go. mfgen-generated host
+    # apps import that facade package, not api/internal/handlers directly, so
+    # a manifest-only addition compiles fine in this repo but breaks every
+    # consuming app's `mfgen generate` output. See AGENTS.md's Conventions
+    # section for the full explanation and the self-route-manifest incident
+    # (2026-07-15) this note is here because of.
     # /v1/auth — local login, register, email-code, password-reset, OIDC callback.
     - prefix: /v1/auth
       scope: public             # unauthenticated — bearer token not yet issued
