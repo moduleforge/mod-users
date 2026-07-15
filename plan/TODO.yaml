@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: self-route-wiring
       title: Self-Route Wiring
-      tasks: []
+      tasks:
+        - number: 1
+          slug: wire-self-routes-manifest
+          title: Wire Self Routes Into The Manifest Codegen Path
+          path: phase-01-self-route-wiring/001-wire-self-routes-manifest.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
