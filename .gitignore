@@ -17,8 +17,9 @@ CLAUDE.md
 # this gets generated based on plugins
 /.mcp.json
 
-# Worktree-local go.work files for isolated builds (authoritative workspace
-# file lives at user-components/go.work).
+# Worktree-local go.work files for isolated builds. Gitignored — no
+# aggregate-root go.work is committed; each worktree gets its own local copy
+# (see docs-mf-standards/building-modules.md).
 /go.work
 /go.work.sum
 
