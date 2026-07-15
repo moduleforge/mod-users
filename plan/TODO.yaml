@@ -30,3 +30,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: migrate-identity-account-self-handlers
+          title: Migrate Identity Account Self Handlers
+          path: phase-02-go-vocab-migration/002-migrate-identity-account-self-handlers.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
