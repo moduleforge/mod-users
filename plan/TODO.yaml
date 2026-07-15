@@ -27,7 +27,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-02-split-self-routes-two-entries
-            commit: []
+            commit:
+                - ec548a1
             merge: null
     - number: 2
       slug: doc-updates
