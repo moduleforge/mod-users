@@ -13,6 +13,7 @@ phases:
           path: phase-01-self-route-wiring/001-wire-self-routes-manifest.md
           done: false
           tier: sonnet-high
+          digest: 'Implemented all three required edits to wire GET/PUT /v1/self through the manifest-driven mfgen codegen path: RegisterSelfRoutes function gating PUT only via nested r.Group; selfHandler service entry, /v1 route entry using expr:requireVerifiedEmail as a register-arg, and coreServices requires-entry in moduleforge.module.yaml; dev-server main.go reconciliation comment added, hand-written block left untouched. make build.api, go vet ./..., and all structural validation checks pass. Only gap: pre-existing, out-of-scope gofmt failure in api/config/config.go.'
           git:
             branch: phase-01-task-01-wire-self-routes-manifest
             commit:
