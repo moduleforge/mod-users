@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: self-route-wiring
       title: Self-Route Wiring
+      diff_base: 7f837e8a7ffb15c09fd63678e6584f1728d19e6a
       tasks:
         - number: 1
           slug: wire-self-routes-manifest
