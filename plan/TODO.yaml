@@ -19,4 +19,14 @@ phases:
     - number: 2
       slug: go-vocab-migration
       title: Go Vocab Migration
-      tasks: []
+      tasks:
+        - number: 1
+          slug: migrate-apps-oidc-handlers
+          title: Migrate Apps Oidc Handlers
+          path: phase-02-go-vocab-migration/001-migrate-apps-oidc-handlers.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
