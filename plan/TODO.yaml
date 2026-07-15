@@ -19,6 +19,16 @@ phases:
             commit:
                 - "6687689"
             merge: ddc648b
+        - number: 2
+          slug: split-self-routes-two-entries
+          title: Redesign Self Route Registration Using Two Manifest Entries
+          path: phase-01-self-route-wiring/002-split-self-routes-two-entries.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: doc-updates
       title: Documentation Updates
