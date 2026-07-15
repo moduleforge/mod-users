@@ -515,6 +515,14 @@ func main() {
 			// GET /v1/self bypasses the email-verification gate. The GUI uses
 			// this endpoint to render the "verify your email" page, so it must
 			// be reachable to unverified accounts.
+			//
+			// TODO(generated): this hand-written block mirrors the manifest-driven
+			// wiring — see phase-1 self-route-wiring. GET/PUT /self are now also
+			// expressed via the moduleforge.module.yaml /v1 route entry that
+			// registers handlers.RegisterSelfRoutes (register_args:
+			// [expr:requireVerifiedEmail]), which applies the verified-email gate
+			// to PUT only. This file is a non-generated standalone dev server that
+			// mfgen does not regenerate, so the hand-written block below stays.
 			r.Get("/self", selfHandler.Get)
 
 			// Everything else requires a verified email address.
