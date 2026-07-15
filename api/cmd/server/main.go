@@ -518,11 +518,13 @@ func main() {
 			//
 			// TODO(generated): this hand-written block mirrors the manifest-driven
 			// wiring — see phase-1 self-route-wiring. GET/PUT /self are now also
-			// expressed via the moduleforge.module.yaml /v1 route entry that
-			// registers handlers.RegisterSelfRoutes (register_args:
-			// [expr:requireVerifiedEmail]), which applies the verified-email gate
-			// to PUT only. This file is a non-generated standalone dev server that
-			// mfgen does not regenerate, so the hand-written block below stays.
+			// expressed via two separate moduleforge.module.yaml /v1 route entries:
+			// one registers handlers.RegisterSelfGetRoute under a middleware group
+			// of requireOIDCConfirmed + requireAuth (no verified-email gate); the
+			// other registers handlers.RegisterSelfPutRoute under a middleware group
+			// that adds requireVerifiedEmail. This file is a non-generated
+			// standalone dev server that mfgen does not regenerate, so the
+			// hand-written block below stays.
 			r.Get("/self", selfHandler.Get)
 
 			// Everything else requires a verified email address.
