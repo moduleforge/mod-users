@@ -147,5 +147,3 @@ Two corrections to the above, recorded after Phase 1 landed:
    dangling-reference concern above does not hold. (This correction is noted for
    completeness; it did not motivate the redesign in point 1, which was driven
    solely by pattern-consistency, not fragility.)
-</content>
-</invoke>
