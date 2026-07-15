@@ -160,3 +160,8 @@ items:
       date: "2026-07-15"
       tag: self-route-wiring
       text: '[phase-01-self-route-wiring/001-wire-self-routes-manifest.md] This worktree required a local, gitignored go.work file to make make build.api/go build runnable at all (pre-existing structural issue: api/go.mod''s replace-directive relative paths assume a shallower nesting depth than mod-users/worktrees/<task>/ provides). Not committed, but future task worktrees for this repo will likely hit the same issue and may want a documented/standard fix (e.g., a prepare-task-worktree step that auto-generates this file, or an AGENTS.md note) rather than each task agent rediscovering it.'
+    - title: Pre-existing stray artifact at the end of pla
+      id: BodK
+      date: "2026-07-15"
+      tag: doc-updates
+      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Pre-existing stray artifact at the end of plan/notes/mfgen-expr-middleware-pattern.md (two literal lines: </content> and </invoke>), confirmed present before this task''s edits via git show HEAD. Left untouched per scope (task only authorized a short correction note, not a full rewrite). Manager should clean this up directly.'
