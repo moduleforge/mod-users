@@ -73,7 +73,8 @@ phases:
           tier: sonnet-med
           git:
             branch: phase-03-task-02-adopt-error-banner-widget
-            commit: []
+            commit:
+                - 0a9204e
             merge: null
     - number: 4
       slug: doc-updates
