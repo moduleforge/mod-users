@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: go-apiresp-foundation
       title: Go Apiresp Foundation
+      diff_base: 2bd5c95cb04678b36a154d85ecaad4ce9f889c6c
       tasks:
         - number: 1
           slug: adopt-apiresp-sentinels-and-writer
