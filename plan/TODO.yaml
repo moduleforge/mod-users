@@ -89,6 +89,6 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-04-task-01-update-architecture-docs
             commit: []
             merge: null
