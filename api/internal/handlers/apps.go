@@ -67,7 +67,7 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Authorize: create is admin-only.
 	if err := h.az.Authorize(r.Context(), "create", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -117,7 +117,7 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *AppsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Authorize: list is admin-only.
 	if err := h.az.Authorize(r.Context(), "list", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -144,7 +144,7 @@ func (h *AppsHandler) GetApp(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: read — admin only for apps.
 	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -165,7 +165,7 @@ func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: update — admin only for apps.
 	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -241,7 +241,7 @@ func (h *AppsHandler) DeleteApp(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: delete — admin only for apps.
 	if err := h.az.Authorize(r.Context(), "delete", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -287,7 +287,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: update (assigning a user to an app is an app mutation).
 	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -349,7 +349,7 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: read (listing app members).
 	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -379,7 +379,7 @@ func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: update (removing a user from an app is an app mutation).
 	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 
@@ -426,7 +426,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 
 	// Authorize: update (changing roles is an app mutation).
 	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, err)
+		writeAuthzError(w, r, err)
 		return
 	}
 

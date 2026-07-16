@@ -52,7 +52,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "assume: service error", "error", err)
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 

@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/opctx"
 	localAuth "github.com/moduleforge/mod-users/api/internal/auth"
 	localAuthz "github.com/moduleforge/mod-users/api/internal/authz"
@@ -129,7 +130,7 @@ func (h *shim) List(w http.ResponseWriter, r *http.Request) {
 
 	accounts, err := h.svc.List(r.Context(), svc.ListUserAccountsInput{Search: search, Limit: 20})
 	if err != nil {
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -153,7 +154,7 @@ func (h *shim) Create(w http.ResponseWriter, r *http.Request) {
 		FamilyName: req.FamilyName,
 	})
 	if err != nil {
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 	server_JSON(w, http.StatusCreated, userAccountResponse(ua))
@@ -168,7 +169,7 @@ func (h *shim) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	ua, err := h.svc.Get(r.Context(), id)
 	if err != nil {
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 	server_JSON(w, http.StatusOK, userAccountResponse(ua))
@@ -182,7 +183,7 @@ func (h *shim) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -197,7 +198,7 @@ func (h *shim) GrantAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.grantAdmin != nil {
 		if err := h.grantAdmin(r.Context(), id); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 	}
@@ -213,7 +214,7 @@ func (h *shim) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.revokeAdmin != nil {
 		if err := h.revokeAdmin(r.Context(), id); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 	}
@@ -547,22 +548,67 @@ func TestShim_RevokeAdmin_Forbidden(t *testing.T) {
 
 func TestWriteServiceError_Mapping(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      error
-		wantCode int
+		name        string
+		err         error
+		wantStatus  int
+		wantCode    string
+		wantDetails []apiresp.FieldError // nil when no details[] is expected
 	}{
-		{"unauthenticated", localAuthz.ErrUnauthenticated, http.StatusUnauthorized},
-		{"forbidden", localAuthz.ErrForbidden, http.StatusForbidden},
-		{"email_taken", svc.ErrEmailTaken, http.StatusConflict},
-		{"invalid_input", svc.ErrInvalidInput, http.StatusBadRequest},
-		{"internal", errors.New("db down"), http.StatusInternalServerError},
+		// unauthenticated (was "unauthorized" before apiresp adoption; see
+		// docs/mf-standards/architecture/api-response-design.md "Reserved core
+		// codes" — unauthenticated is the canonical 401 code).
+		{"unauthenticated", localAuthz.ErrUnauthenticated, http.StatusUnauthorized, "unauthenticated", nil},
+		{"forbidden", localAuthz.ErrForbidden, http.StatusForbidden, "forbidden", nil},
+		// email_taken (was a top-level "email_taken" code before apiresp
+		// adoption): now top-level "conflict" (409) with a namespaced
+		// details[].code, per the design doc's worked example.
+		{
+			name:       "email_taken",
+			err:        svc.ErrEmailTaken,
+			wantStatus: http.StatusConflict,
+			wantCode:   "conflict",
+			wantDetails: []apiresp.FieldError{
+				{Field: "email", Code: "users.email_taken", Message: "email is already registered"},
+			},
+		},
+		{"invalid_input", svc.ErrInvalidInput, http.StatusBadRequest, "invalid_input", nil},
+		{"internal", errors.New("db down"), http.StatusInternalServerError, "internal_error", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1/user-accounts", nil)
 			rr := httptest.NewRecorder()
-			writeServiceError(rr, tt.err)
-			if rr.Code != tt.wantCode {
-				t.Errorf("writeServiceError(%v): got %d, want %d", tt.err, rr.Code, tt.wantCode)
+			writeServiceError(rr, req, tt.err)
+			if rr.Code != tt.wantStatus {
+				t.Errorf("writeServiceError(%v): status got %d, want %d", tt.err, rr.Code, tt.wantStatus)
+			}
+
+			var body struct {
+				Error struct {
+					Code    string               `json:"code"`
+					Message string               `json:"message"`
+					Details []apiresp.FieldError `json:"details"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+				t.Fatalf("writeServiceError(%v): body not valid JSON: %v, body=%s", tt.err, err, rr.Body.String())
+			}
+			if body.Error.Code != tt.wantCode {
+				t.Errorf("writeServiceError(%v): error.code got %q, want %q", tt.err, body.Error.Code, tt.wantCode)
+			}
+			if tt.wantDetails == nil {
+				if len(body.Error.Details) != 0 {
+					t.Errorf("writeServiceError(%v): expected no details, got %+v", tt.err, body.Error.Details)
+				}
+				return
+			}
+			if len(body.Error.Details) != len(tt.wantDetails) {
+				t.Fatalf("writeServiceError(%v): details got %+v, want %+v", tt.err, body.Error.Details, tt.wantDetails)
+			}
+			for i, want := range tt.wantDetails {
+				if body.Error.Details[i] != want {
+					t.Errorf("writeServiceError(%v): details[%d] got %+v, want %+v", tt.err, i, body.Error.Details[i], want)
+				}
 			}
 		})
 	}
