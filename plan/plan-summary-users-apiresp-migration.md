@@ -208,3 +208,31 @@ this plan's four phase slugs (`go-apiresp-foundation`, `go-vocab-migration`, `gu
 - Manager-run cross-repo validation (regenerating `app-mfdemo` and `app-mftodo` via `mfgen generate`
   and confirming they build) is still outstanding — it cannot be performed from within this repo's
   task worktree.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Go Apiresp Foundation
+
+- [x] [001-adopt-apiresp-sentinels-and-writer.md](./phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md) — tier `sonnet-high` · branch `phase-01-task-01-adopt-apiresp-sentinels-and-wr` · commit `694f729` · merge `e50d9b48119f2bd9a21653530e5fc64d2a17cc28`
+
+### Phase 02 — Go Vocab Migration
+
+- [x] [001-migrate-apps-oidc-handlers.md](./phase-02-go-vocab-migration/001-migrate-apps-oidc-handlers.md) — tier `sonnet-high` · branch `phase-02-task-01-migrate-apps-oidc-handlers` · commit `34fd280` · merge `de996b6ba0600a29be148e70fe540dc6aba55a33`
+- [x] [002-migrate-identity-account-self-handlers.md](./phase-02-go-vocab-migration/002-migrate-identity-account-self-handlers.md) — tier `sonnet-high` · branch `phase-02-task-02-migrate-identity-account-self` · commit `ea7a469` · merge `69a68aff8ca83cbfba7a3d0cafd5b7600976f3a8`
+
+### Phase 03 — GUI Core-GUI Adoption
+
+- [x] [001-reconcile-api-client-types.md](./phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md) — tier `sonnet-high` · branch `phase-03-task-01-reconcile-api-client-types` · commit `3533209` · merge `f54e84d9e9b67f5bfa6e92d12cf267b10b31bfab`
+- [x] [002-adopt-error-banner-widget.md](./phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md) — tier `sonnet-med` · branch `phase-03-task-02-adopt-error-banner-widget` · commit `0a9204e` · merge `fdc19c49d6853098d8bd66cd931bb262523df59f`
+
+### Phase 04 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-04-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `phase-04-task-01-update-architecture-docs` · commit `ebc05c4` · merge `26b1cd0bf4d463b1e8feda718bf56bbb485e8603`
