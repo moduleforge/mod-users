@@ -15,7 +15,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-01-adopt-apiresp-sentinels-and-wr
-            commit: []
+            commit:
+                - 694f729
             merge: null
     - number: 2
       slug: go-vocab-migration
