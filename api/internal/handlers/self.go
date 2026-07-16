@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 
+	"github.com/moduleforge/core-api/apiresp"
 	coreservice "github.com/moduleforge/core-api/service"
 	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/mod-users/api/internal/auth"
@@ -82,7 +82,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 			coreservice.UpdateNaturalPersonInput{GivenName: req.GivenName, FamilyName: req.FamilyName},
 		)
 		if err != nil {
-			writeCoreServiceErr(w, err)
+			writeCoreServiceErr(w, r, err)
 			return
 		}
 	}
@@ -130,16 +130,11 @@ func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[strin
 	return resp
 }
 
-// writeCoreServiceErr maps core service sentinels to HTTP responses.
-func writeCoreServiceErr(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, coreservice.ErrNotFound):
-		server.Error(w, http.StatusNotFound, "not_found", "resource not found")
-	case errors.Is(err, coreservice.ErrForbidden):
-		server.Error(w, http.StatusForbidden, "forbidden", "access denied")
-	case errors.Is(err, coreservice.ErrInvalidInput):
-		server.Error(w, http.StatusBadRequest, "invalid_input", err.Error())
-	default:
-		server.Error(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
-	}
+// writeCoreServiceErr maps core service sentinels to HTTP responses by
+// delegating to apiresp.WriteError. coreservice.ErrNotFound/ErrForbidden/
+// ErrInvalidInput are already aliases of apiresp's canonical sentinels (see
+// mod-core/api/service/errors.go), so apiresp.WriteError classifies them
+// correctly with no local switch.
+func writeCoreServiceErr(w http.ResponseWriter, r *http.Request, err error) {
+	apiresp.WriteError(w, r, err)
 }
