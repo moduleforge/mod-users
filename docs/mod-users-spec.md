@@ -159,13 +159,13 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Outcome:** A new `user_accounts` row is created with a NULL email address. A corresponding `anon_tokens` row is created, associating the `device_id` with the new account via a SHA-256-hashed session token. The response carries a signed JWT (with `is_anonymous: true` claim) and the raw session token. The session token can be supplied by the client on a later visit to recover the same anonymous identity across sessions, keyed by `device_id`.
 
-When the anonymous user later provides an email address (via `PUT /v1/self`), the account is upgraded: the `email` column is set to the provided value, `is_anonymous` becomes `false`, and all `anon_tokens` rows for that account are deleted. Subsequent auth flows (login, email-code, password-reset) that require an email address guard against anonymous accounts and return `400` with code `anonymous_account` if called with an anonymous JWT.
+When the anonymous user later provides an email address (via `PUT /v1/self`), the account is upgraded: the `email` column is set to the provided value, `is_anonymous` becomes `false`, and all `anon_tokens` rows for that account are deleted. Subsequent auth flows (login, email-code, password-reset) that require an email address guard against anonymous accounts and return `400` with code `anonymous_account` if called with an anonymous JWT — a flat, non-nested error body that is a known, intentionally-deferred non-conformance with the module's canonical `{error:{code,message[,details]}}` envelope described under [General features](#general-features) (out of scope for the current error-vocabulary migration).
 
 ## General features
 
 - **All authenticated endpoints require a valid bearer JWT.** The token is passed as `Authorization: Bearer <token>`. Endpoints explicitly marked `security: []` in the OpenAPI spec (health probes, auth endpoints, provider listing) are the only public endpoints.
 
-- **All errors return a structured payload** with machine-readable `code` and human-readable `message` fields.
+- **All errors return a structured payload**: a top-level `error` object with a machine-readable `code` (drawn from a reserved, closed vocabulary — `unauthenticated`, `forbidden`, `not_found`, `invalid_input`, `conflict`, `internal_error`), a human-readable `message`, and an optional `details` array of `{field, code, message}` entries carrying finer-grained, module-namespaced distinctions (e.g. `users.email_taken`) — `{"error": {"code": ..., "message": ..., "details": [...]}}`. See [`api/openapi.yaml`](../api/openapi.yaml)'s `Error`/`FieldError` schemas for the authoritative shape. A small number of legacy endpoints still emit a flat, non-nested error body as a known, intentionally-deferred non-conformance (e.g. the `400 anonymous_account` case noted in [use case 14](#14-create-an-anonymous-account-and-optionally-upgrade-it) and in [Security requirements](#security-requirements)).
 
 - **All responses use JSON.** Request bodies where required are JSON. Content-type negotiation is not supported.
 
@@ -258,7 +258,7 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 
 ## Security requirements
 
-- **Authentication:** All non-public endpoints require a valid signed JWT passed as a bearer token. JWTs are issued by this module and verified on every request. JWTs issued for anonymous accounts carry an `is_anonymous: true` claim; email-dependent auth operations (`login`, `email-code`, `password-reset`) reject these tokens with `400 anonymous_account`.
+- **Authentication:** All non-public endpoints require a valid signed JWT passed as a bearer token. JWTs are issued by this module and verified on every request. JWTs issued for anonymous accounts carry an `is_anonymous: true` claim; email-dependent auth operations (`login`, `email-code`, `password-reset`) reject these tokens with `400 anonymous_account` — a known, intentionally-deferred flat-envelope non-conformance (see [General features](#general-features)), not the module's canonical nested error shape.
 
 - **Password storage:** Passwords are stored as argon2id encoded strings. Plaintext passwords are never persisted or logged.
 
