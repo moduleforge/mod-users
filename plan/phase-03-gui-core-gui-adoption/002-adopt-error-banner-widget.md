@@ -65,3 +65,35 @@ architectural_impact: true
 2. Replace the direct `Alert`/`AlertDescription` usage with `<ErrorBanner>` (or retire `ErrorMessage`
    and migrate call sites).
 3. Build, test, lint `gui/`.
+
+## Status
+
+- **Outcome:** succeeded (2026-07-16).
+- Chose the thin-wrapper alternative from Requirement 1: `ErrorMessage` now delegates to
+  `@moduleforge/core-gui`'s `<ErrorBanner>` (`error={message}`, `ErrorBannerData` accepts a plain
+  `string`), so no call sites needed migration (Requirement 2 not triggered).
+- Direct `Alert`/`AlertDescription`/`AlertCircle` import and markup removed from
+  `gui/src/components/error-message.tsx`.
+- Validation: `grep -rn "Alert\|AlertDescription" gui/src/components/error-message.tsx` — no match
+  (passed). `grep -rn "ErrorMessage" gui/src` — all references still resolve to the retained wrapper
+  and its call sites (passed; retirement branch not applicable). `make build.gui` — passed. `make
+  lint.gui` (`tsc --noEmit`) — passed. Visual/behavioral parity (null → renders nothing, non-null →
+  destructive banner with message) — preserved by construction via `<ErrorBanner error={message} />`
+  and confirmed by reading `ErrorBanner`'s documented contract in
+  `gui/.yalc/@moduleforge/core-gui/dist/index.d.ts`.
+- `cd gui && bun test` — **not-applicable**, not passed. Confirmed by diffing against the unmodified
+  worktree/main checkout that the entire `gui/` package has zero test files and zero test
+  infrastructure (no `bunfig.toml`, no `bun-types`/`@types/bun`, no Testing Library) — `bun test`
+  exits 1 with "0 test files matching" both before and after this task's change, independent of
+  anything this task touched. A first-pass fix (adding a minimal `error-message.test.tsx` using
+  `bun:test` + `react-dom/server`) typechecked-failed on the missing `bun:test` ambient types, which
+  would require adding a new devDependency (`bun-types`) — a repo-wide test-infra bootstrap outside
+  this task's `## Requirements`/`## Procedure`. Reverted that test file rather than expand scope
+  unilaterally; flagged for the manager below.
+- Assumptions applied: both `## Assumptions` entries (Wave 0 merged with `<ErrorBanner>` exported;
+  yalc link required) held as stated.
+- Flagged for manager: `gui/` (and apparently the whole repo, per a scan for `bun:test`/`bun-types`
+  usage) has no test runner set up yet, so the task doc's `cd gui && bun test` validation bullet is
+  currently unsatisfiable for any `gui/` task without first standing up test infrastructure
+  (`bun-types` devDependency at minimum). Recommend either a follow-up task to establish minimal
+  `gui/` test infra, or amending this validation template bullet until that infra exists.

@@ -1,16 +1,15 @@
-import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@moduleforge/core-gui';
+import { ErrorBanner } from '@moduleforge/core-gui';
 
 interface ErrorMessageProps {
   message: string | null;
 }
 
+/**
+ * Thin wrapper around `@moduleforge/core-gui`'s `<ErrorBanner>` widget,
+ * preserving the existing `ErrorMessage` call-site contract: renders
+ * nothing when `message` is null, otherwise renders a destructive banner
+ * with the message.
+ */
 export function ErrorMessage({ message }: ErrorMessageProps) {
-  if (!message) return null;
-  return (
-    <Alert variant="destructive">
-      <AlertCircle className="size-4" />
-      <AlertDescription>{message}</AlertDescription>
-    </Alert>
-  );
+  return <ErrorBanner error={message} />;
 }
