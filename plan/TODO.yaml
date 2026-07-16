@@ -51,6 +51,7 @@ phases:
     - number: 3
       slug: gui-core-gui-adoption
       title: GUI Core-GUI Adoption
+      diff_base: 9bb8c429f1e5b25f15bb636ace9c9d12c198e34e
       tasks:
         - number: 1
           slug: reconcile-api-client-types
