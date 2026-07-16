@@ -190,11 +190,6 @@ items:
       date: "2026-07-16"
       tag: gui-core-gui-adoption
       text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] Flow''s mid-task-commit.sh/finalize-task-commit.sh git add -A is not yalc-aware: it repeatedly swept up this worktree''s intentionally-uncommitted local file:.yalc/@moduleforge/core-gui entries in gui/package.json/bun.lock, requiring revert commits mid-task. Friction point for any future gui/-touching task in this repo while the yalc workflow is in place.'
-    - title: gui/src/index.ts does not re-export the newly
-      id: xAFi
-      date: "2026-07-16"
-      tag: gui-core-gui-adoption
-      text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] gui/src/index.ts does not re-export the newly-available FieldErrorData type - left as-is (out of stated Requirements), worth a look when index.ts''s export surface is next touched.'
     - title: gui/ has no test runner set up at all (no tes
       id: KXNZ
       date: "2026-07-16"
