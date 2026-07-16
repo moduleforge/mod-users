@@ -81,7 +81,7 @@ type createUserAccountRequest struct {
 func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -192,7 +192,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req updateUserAccountRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -267,7 +267,7 @@ func parseUUIDParam(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	raw := chi.URLParam(r, "uuid")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return uuid.UUID{}, false
 	}
 	return id, true

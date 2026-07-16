@@ -58,7 +58,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 
 	var req selfUpdateRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 

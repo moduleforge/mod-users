@@ -144,7 +144,7 @@ func (h *shim) List(w http.ResponseWriter, r *http.Request) {
 func (h *shim) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
 	if err := decodeJSON(r, &req); err != nil {
-		server_Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server_Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 	ua, err := h.svc.Create(r.Context(), svc.CreateUserAccountInput{
@@ -164,7 +164,7 @@ func (h *shim) Get(w http.ResponseWriter, r *http.Request) {
 	raw := chi.URLParam(r, "uuid")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		server_Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server_Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return
 	}
 	ua, err := h.svc.Get(r.Context(), id)
@@ -179,7 +179,7 @@ func (h *shim) Delete(w http.ResponseWriter, r *http.Request) {
 	raw := chi.URLParam(r, "uuid")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		server_Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server_Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
@@ -193,7 +193,7 @@ func (h *shim) GrantAdmin(w http.ResponseWriter, r *http.Request) {
 	raw := chi.URLParam(r, "uuid")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		server_Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server_Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return
 	}
 	if h.grantAdmin != nil {
@@ -209,7 +209,7 @@ func (h *shim) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
 	raw := chi.URLParam(r, "uuid")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		server_Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server_Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return
 	}
 	if h.revokeAdmin != nil {

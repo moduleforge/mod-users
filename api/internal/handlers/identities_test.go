@@ -494,7 +494,7 @@ func TestSetPassword_Validation(t *testing.T) {
 		_ = makeReq(`{"new_password":""}`)
 	})
 
-	t.Run("password too short → 400 validation_error", func(t *testing.T) {
+	t.Run("password too short → 400 invalid_input", func(t *testing.T) {
 		// Use setPasswordRequest struct directly to verify the length check.
 		req := setPasswordRequest{NewPassword: "tooshort"}
 		if len(req.NewPassword) >= 12 {
@@ -530,11 +530,11 @@ func (h *setPasswordPreCheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 	}
 
 	if req.NewPassword == "" {
-		http.Error(w, "bad_request: new_password required", 400)
+		http.Error(w, "invalid_input: new_password required", 400)
 		return
 	}
 	if len(req.NewPassword) < 12 {
-		http.Error(w, "validation_error: too short", 400)
+		http.Error(w, "invalid_input: too short (users.password_too_short)", 400)
 		return
 	}
 
@@ -547,7 +547,7 @@ func (h *setPasswordPreCheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 	if hasExisting {
 		if req.CurrentPassword == nil || *req.CurrentPassword == "" {
-			http.Error(w, "bad_credentials: current_password required", 401)
+			http.Error(w, "unauthenticated: current_password required (users.bad_credentials)", 401)
 			return
 		}
 		ok, verifyErr := localauth.VerifyPassword(*req.CurrentPassword, existing.PasswordHash)
@@ -556,7 +556,7 @@ func (h *setPasswordPreCheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 			return
 		}
 		if !ok {
-			http.Error(w, "bad_credentials: wrong current_password", 401)
+			http.Error(w, "unauthenticated: wrong current_password (users.bad_credentials)", 401)
 			return
 		}
 	}
