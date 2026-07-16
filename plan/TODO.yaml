@@ -11,7 +11,7 @@ phases:
           slug: adopt-apiresp-sentinels-and-writer
           title: Adopt Apiresp Sentinels And Writer
           path: phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Implemented all six numbered Requirements: promoted authz sentinels onto apiresp''s canonical sentinels; collapsed writeAuthzError/writeServiceError/writeCoreServiceErr onto apiresp.WriteError (threading *http.Request through every call site); wrapped svc.ErrEmailTaken around apiresp.ErrConflict and aliased svc.ErrInvalidInput to apiresp.ErrInvalidInput, with the five validation call sites in service/user_accounts.go now carrying structured users.<rule> field details via apiresp.InvalidInput; kept server/respond.go as thin wrappers routing through apiresp''s own envelope construction; updated user_accounts_authz_test.go''s sentinel-path assertions to the new wire shape. go build, go vet, and the full test suite are all green; make lint fails only due to two pre-existing, out-of-scope issues neither touched by nor related to this diff.'
           git:
