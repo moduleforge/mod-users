@@ -22,11 +22,11 @@ package authz
 
 import (
 	"context"
-	"errors"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authzdb "github.com/moduleforge/authz-model/db"
+	"github.com/moduleforge/core-api/apiresp"
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/opctx"
 
@@ -35,11 +35,19 @@ import (
 
 // ErrUnauthenticated is returned when no actor is present on the context.
 // HTTP handlers should map this to 401.
-var ErrUnauthenticated = errors.New("authz: no authenticated actor")
+//
+// This is an alias for apiresp.ErrUnauthenticated (not an independent
+// sentinel) so errors.Is matches it across module boundaries — apiresp is
+// the canonical home; see docs/mf-standards/architecture/api-response-design.md
+// "Go-layer ownership".
+var ErrUnauthenticated = apiresp.ErrUnauthenticated
 
 // ErrForbidden is returned when the actor is authenticated but not permitted
 // to perform the requested operation. HTTP handlers should map this to 403.
-var ErrForbidden = errors.New("authz: forbidden")
+//
+// This is an alias for apiresp.ErrForbidden (not an independent sentinel);
+// see the ErrUnauthenticated doc comment above.
+var ErrForbidden = apiresp.ErrForbidden
 
 // Compile-time assertion: Authorizer satisfies core's authz.Authorizer.
 var _ coreAuthz.Authorizer = (*Authorizer)(nil)
