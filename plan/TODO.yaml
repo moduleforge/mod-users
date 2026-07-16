@@ -35,7 +35,7 @@ phases:
             branch: phase-02-task-01-migrate-apps-oidc-handlers
             commit:
                 - 34fd280
-            merge: null
+            merge: de996b6ba0600a29be148e70fe540dc6aba55a33
         - number: 2
           slug: migrate-identity-account-self-handlers
           title: Migrate Identity Account Self Handlers
