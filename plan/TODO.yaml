@@ -93,4 +93,4 @@ phases:
             branch: phase-04-task-01-update-architecture-docs
             commit:
                 - ebc05c4
-            merge: null
+            merge: 26b1cd0bf4d463b1e8feda718bf56bbb485e8603
