@@ -57,7 +57,7 @@ phases:
           slug: reconcile-api-client-types
           title: Reconcile Api Client Types
           path: phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Reconciled gui/src/lib/api.ts''s wire/client error types with @moduleforge/core-gui''s canonical shapes: imported and re-exported ApiError, ApiErrorResponse, FieldErrorData, and ApiRequestError in place of three local duplicate definitions, keeping src/index.ts''s existing re-export surface (and all @moduleforge/users-gui consumers) working unchanged. Populated details on thrown ApiRequestErrors by reading errorBody.error.details and passing it as the class''s new optional 4th constructor argument. Changed the 401 branch''s synthesized top-level code from unauthorized to unauthenticated, preserving the unconditional throw outside the skipAuthRedirect-gated redirect block per the task doc''s recorded rationale. make build.gui and make lint.gui both pass; all task-doc grep checks pass.'
           git:
