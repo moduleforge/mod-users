@@ -41,7 +41,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-02-task-02-migrate-identity-account-self
             commit: []
             merge: null
     - number: 3
