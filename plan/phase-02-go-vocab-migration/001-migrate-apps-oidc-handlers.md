@@ -88,3 +88,42 @@ architectural_impact: true
 
 - After `apps.go` + its tests.
 - After `oidc_providers.go` + `oidc_config.go` + their tests.
+
+## Status
+
+**Outcome: succeeded.** 2026-07-16.
+
+Re-grepped `server.Error(` in the three files at task start: 8 `bad_request` + 3 `validation_error`
+in `apps.go`, 6 `bad_request` in `oidc_providers.go`, 1 `bad_request` in `oidc_config.go` — matches
+the `## Assumptions` counts exactly.
+
+- All 15 `bad_request` sites across `apps.go`, `oidc_providers.go`, and `oidc_config.go` now emit
+  top-level `invalid_input` (status unchanged at 400), via the existing `server.Error(w, status,
+  code, message)` helper — Phase 1 did not migrate `server.Error` call sites onto direct
+  `apiresp.WriteError(w, r, err)` calls (confirmed by grepping `identities.go`/`user_accounts.go`,
+  which still carry raw `server.Error(..., "bad_request", ...)` literals outside this task's scope),
+  so per Requirement 3 this task keeps the `server.Error` call form with the corrected code string.
+- All 3 `validation_error` sites in `apps.go` (Create's slug/name-required checks at the original
+  lines ~60/64, and AssignUser's user_uuid-required check at the original line ~300) now emit
+  top-level `invalid_input` via the existing `server.ErrorWithDetails` helper (also already present
+  from Phase 1), each carrying one `details[]` entry: `{field: "slug", code:
+  "users.slug_required"}`, `{field: "name", code: "users.name_required"}`, `{field: "user_uuid",
+  code: "users.user_uuid_required"}`.
+- No test-file changes were needed: `oidc_providers_test.go` and `oidc_config_test.go` assert only
+  on HTTP status codes (`rr.Code`), never on the `error.code` string body, so the code-string
+  migration required no assertion updates. No `apps_test.go` exists.
+- Validation: `cd api && go build ./...` passes; `make test.unit` passes (model has no unit tests —
+  generated code; api's full `go test ./...` is green; gui has no unit tests configured). `make
+  lint` could not be run end-to-end in this environment: `lint.model` requires an ephemeral
+  Postgres via Docker that is unreachable from this sandbox (pre-existing environment limitation,
+  unrelated to this task's changes — `model/` was not touched). `lint.api` (`go vet ./...` +
+  gofmt check) was run directly: `go vet` is clean, and the three files this task edited are
+  gofmt-clean; the only gofmt failure is in `api/config/config.go`, a file this task never touched,
+  confirmed pre-existing at the branch's starting commit (`2439ac0`) and even earlier
+  (`a735fdf`), so it is out of this task's scope. See `flagged_for_manager` in the returned report.
+- Affected files: `api/internal/handlers/apps.go`, `api/internal/handlers/oidc_providers.go`,
+  `api/internal/handlers/oidc_config.go`.
+- Assumptions applied: Wave 0 / Phase 1 merged and `apiresp`-backed writer/vocabulary
+  (`server.Error`, `server.ErrorWithDetails`) already in place — confirmed present in
+  `api/internal/server/respond.go`. Approximate string counts from `## Assumptions` matched the
+  re-grep exactly.
