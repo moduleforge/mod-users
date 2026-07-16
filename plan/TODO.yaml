@@ -72,7 +72,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: phase-03-task-02-adopt-error-banner-widget
             commit: []
             merge: null
     - number: 4
