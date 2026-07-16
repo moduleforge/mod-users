@@ -185,3 +185,8 @@ items:
       date: "2026-07-16"
       tag: gui-core-gui-adoption
       text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] cd gui && bun test is not-applicable: gui/ has zero test files and no test script in its history. Establishing test infra (bun-types devDependency, first test convention) is out of this task''s scope - likely applies identically to sibling task 002.'
+    - title: Flow's mid-task-commit.sh/finalize-task-commi
+      id: le59
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] Flow''s mid-task-commit.sh/finalize-task-commit.sh git add -A is not yalc-aware: it repeatedly swept up this worktree''s intentionally-uncommitted local file:.yalc/@moduleforge/core-gui entries in gui/package.json/bun.lock, requiring revert commits mid-task. Friction point for any future gui/-touching task in this repo while the yalc workflow is in place.'
