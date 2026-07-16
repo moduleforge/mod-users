@@ -408,7 +408,7 @@ func (h *ProvidersHandler) authorize(w http.ResponseWriter, r *http.Request, sub
 		return false
 	}
 	if !ok {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "admin session or setup token required")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "admin session or setup token required")
 		return false
 	}
 	return true
