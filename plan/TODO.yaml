@@ -88,6 +88,7 @@ phases:
           path: phase-04-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: 'Updated api/openapi.yaml''s Error schema (enum of the 6 reserved top-level codes, example: invalid_input, new optional details/FieldError array+schema) and swept the rest of the spec for stale ad-hoc codes (none found beyond the one already-fixed example). Reviewed docs/architecture.md and docs/mod-users-spec.md in full: architecture.md needed only its existing 400 anonymous_account mention annotated as known, intentionally-deferred flat-envelope non-conformance; mod-users-spec.md needed its general error-shape bullet rewritten plus its two anonymous_account mentions similarly annotated. All edits additive/clarifying. Discovered a significant, previously-untracked scope gap: api/internal/handlers/auth/*.go was never migrated by Phase 2, so the new openapi.yaml enum documents a target this slice of the API doesn''t yet meet - flagged in detail rather than silently fixed (Go source work, well outside a docs-only task''s scope).'
           git:
             branch: phase-04-task-01-update-architecture-docs
             commit:
