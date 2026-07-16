@@ -41,7 +41,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 	rawUUID := chi.URLParam(r, "uuid")
 	parsed, err := uuid.Parse(rawUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return
 	}
 
