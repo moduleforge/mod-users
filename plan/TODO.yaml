@@ -42,7 +42,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-02-task-02-migrate-identity-account-self
-            commit: []
+            commit:
+                - ea7a469
             merge: null
     - number: 3
       slug: gui-core-gui-adoption
