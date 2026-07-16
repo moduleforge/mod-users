@@ -62,6 +62,52 @@ No standard skill covers this; see `## Procedure`.
 
 architectural_impact: true
 
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-16
+- **Worktree / branch:** `phase-03-task-01-reconcile-api-client-types` (worktree
+  `worktrees/phase-03-task-01-reconcile-api-client-types`)
+- **Final commit:** `3533209`
+- **Approach taken:** the **Preferred** path (item 1) — `gui/src/lib/api.ts` now `import`s
+  `ApiError`, `ApiErrorResponse`, `FieldErrorData`, and `ApiRequestError` from
+  `@moduleforge/core-gui` and re-exports them under the same names, eliminating the local
+  duplicate `interface ApiError`, `interface ApiErrorResponse`, and `class ApiRequestError`.
+  `src/index.ts` already re-exported these names from `./lib/api`, so no change was needed there
+  for existing `@moduleforge/users-gui` consumers to keep resolving them; `FieldErrorData` is a
+  new re-export (core-gui does not export a plain `FieldError` type — that name is taken by the
+  `<FieldError>` component — so the canonical `FieldErrorData` name was kept as-is rather than
+  aliased).
+- **`request()` kept local** per the Assumptions' stated default: the users-specific
+  auth/token/redirect logic in `createUsersClient`'s `request()` was not replaced with core-gui's
+  shared `request()` helper; only the wire/client types were reconciled.
+- **Item 2 (details):** the `!response.ok` branch in `request()` now reads
+  `errorBody.error.details` into a local `errorDetails: FieldErrorData[] | undefined` and passes
+  it as the 4th constructor argument to the (now core-gui) `ApiRequestError`.
+- **Item 3 (401 code + quirk):** the synthesized top-level code changed from `'unauthorized'` to
+  `'unauthenticated'`; the throw remains unconditional and outside the
+  `if (!skipAuthRedirect …)` block, exactly as directed.
+- **Validation:** `make lint.gui` (`tsc --noEmit`) and `make build.gui` both pass. All four grep
+  checks pass (`'unauthorized'` — no match; `details` — present, populated from the parsed
+  envelope; `@moduleforge/core-gui` — import present; no local `interface
+  ApiError`/`ApiErrorResponse`/`class ApiRequestError` remain). `cd gui && bun test` was **not
+  applicable**: `gui/` has no test files and no `test` script anywhere in its history (confirmed
+  via `git log --all` — no `*.test.*`/`*.spec.*` file was ever added under `gui/`), so `bun test`
+  fails with "0 test files matching" independent of this task's changes; making it pass would
+  require adding a new devDependency (`bun-types`/`@types/bun`) and establishing the project's
+  first test convention, which is outside this task's `## Requirements`. See the implementation
+  report's `flagged_for_manager` for the recommendation to track this as a separate follow-up.
+- **Yalc-setup housekeeping note:** the worktree's local `file:.yalc/@moduleforge/core-gui`
+  dependency entries in `gui/package.json`/`bun.lock` were transiently swept into three of this
+  task's commits by the Flow checkpoint/finalize scripts' `git add -A` (they run from inside the
+  worktree and stage everything pending, including local yalc setup that should stay uncommitted
+  per `AGENTS.md`/`.claude/CLAUDE.md`'s convention — consistent with `fa0923f`'s prior removal of
+  the same entry). Each occurrence was immediately reverted in a dedicated follow-up commit
+  (`c4be539`, `33eafb7`, `3533209`) and the local yalc link re-applied as an uncommitted working-tree
+  change, matching the pre-task state. The final worktree state has only `bun.lock` and
+  `gui/package.json`'s yalc entries uncommitted (as expected); `gui/src/lib/api.ts` and this task
+  document's edits are committed at `1bb439c` / the doc-update commit.
+
 ## Assumptions
 
 - **Wave 0 is merged** and `@moduleforge/core-gui` exports `FieldError`, `ApiError`,
