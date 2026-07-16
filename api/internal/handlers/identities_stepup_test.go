@@ -425,7 +425,7 @@ func (h *stepUpVerifyTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		Purpose:       "credential_change",
 	})
 	if err == pgx.ErrNoRows {
-		http.Error(w, "unauthorized", 401)
+		http.Error(w, "unauthenticated", 401)
 		return
 	}
 	if err != nil {
@@ -434,7 +434,7 @@ func (h *stepUpVerifyTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := bcryptCompare(emailCode.CodeHash, req.Code); err != nil {
-		http.Error(w, "unauthorized", 401)
+		http.Error(w, "unauthenticated", 401)
 		return
 	}
 

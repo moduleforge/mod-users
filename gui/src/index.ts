@@ -5,6 +5,7 @@ export type {
   UsersClientOptions,
   ApiError,
   ApiErrorResponse,
+  FieldErrorData,
   RequestOptions,
   LoginResponse,
   OIDCProvider,

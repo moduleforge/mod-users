@@ -1,24 +1,22 @@
 // ─── Types ───────────────────────────────────────────────────────────────────
+//
+// The wire/client error types below are the canonical shapes from
+// `@moduleforge/core-gui` (docs/mf-standards/architecture/api-response-design.md
+// "GUI-facing error-data contract"), imported and re-exported here rather than
+// redefined locally so this module stays the single source of truth consumers
+// import from (`@moduleforge/users-gui`) without diverging from the shared
+// contract. The local `request()` implementation below is kept (it carries
+// users-specific auth/token/redirect logic); only the types are reconciled.
 
-export interface ApiError {
-  code: string;
-  message: string;
-}
+import type {
+  ApiError,
+  ApiErrorResponse,
+  FieldErrorData,
+} from '@moduleforge/core-gui';
+import { ApiRequestError } from '@moduleforge/core-gui';
 
-export interface ApiErrorResponse {
-  error: ApiError;
-}
-
-export class ApiRequestError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
-    this.name = 'ApiRequestError';
-  }
-}
+export type { ApiError, ApiErrorResponse, FieldErrorData };
+export { ApiRequestError };
 
 export interface RequestOptions extends RequestInit {
   /**
@@ -219,22 +217,29 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         localStorage.removeItem('auth_token');
         window.location.href = '/auth/login';
       }
-      throw new ApiRequestError('unauthorized', 'Authentication required', 401);
+      // Unconditional: this throw is intentional and relied upon even when
+      // skipAuthRedirect suppresses the redirect above — see the
+      // skipAuthRedirect doc comment on RequestOptions. Only the redirect is
+      // skipped; the throw always happens so opted-out callers (e.g. the
+      // OAuth return page) can catch and handle the failure themselves.
+      throw new ApiRequestError('unauthenticated', 'Authentication required', 401);
     }
 
     if (!response.ok) {
       let errorCode = 'unknown_error';
       let errorMessage = `Request failed with status ${response.status}`;
+      let errorDetails: FieldErrorData[] | undefined;
       try {
         const errorBody = (await response.json()) as ApiErrorResponse;
         if (errorBody.error) {
           errorCode = errorBody.error.code;
           errorMessage = errorBody.error.message;
+          errorDetails = errorBody.error.details;
         }
       } catch {
         // ignore JSON parse errors
       }
-      throw new ApiRequestError(errorCode, errorMessage, response.status);
+      throw new ApiRequestError(errorCode, errorMessage, response.status, errorDetails);
     }
 
     if (response.status === 204) {

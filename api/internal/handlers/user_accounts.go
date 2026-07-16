@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	localAuthz "github.com/moduleforge/mod-users/api/internal/authz"
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	svc "github.com/moduleforge/mod-users/api/internal/service"
 )
@@ -39,19 +39,34 @@ func NewUserAccountsHandler(service *svc.UserAccountService, grantAdmin, revokeA
 }
 
 // writeServiceError maps a service error to the appropriate HTTP response.
-func writeServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, localAuthz.ErrUnauthenticated):
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "authentication required")
-	case errors.Is(err, localAuthz.ErrForbidden):
-		server.Error(w, http.StatusForbidden, "forbidden", "access denied")
-	case errors.Is(err, svc.ErrEmailTaken):
-		server.Error(w, http.StatusConflict, "email_taken", "an account with that email already exists")
-	case errors.Is(err, svc.ErrInvalidInput):
-		server.Error(w, http.StatusBadRequest, "validation_error", err.Error())
-	default:
-		server.Error(w, http.StatusInternalServerError, "internal_error", "an unexpected error occurred")
+//
+// localAuthz.ErrUnauthenticated/ErrForbidden and svc.ErrInvalidInput are
+// promoted aliases of apiresp's canonical sentinels, so apiresp.WriteError
+// classifies them correctly with no local switch. svc.ErrEmailTaken is the
+// one case apiresp.WriteError alone cannot fully render: it wraps
+// apiresp.ErrConflict (so apiresp.WriteError would already classify it as
+// 409 conflict), but apiresp exposes no public detail-carrying constructor
+// for the conflict sentinel (only InvalidInput). The users.email_taken
+// field-level detail is attached here, at the mapping point, using
+// apiresp's own envelope/writer types directly — the sentinel
+// classification itself still comes from apiresp (errors.Is against
+// svc.ErrEmailTaken, which wraps apiresp.ErrConflict). Per the design doc
+// this is a deliberate plain 409 (create-time uniqueness), not a masked
+// 403 — no masking logic applies to this path.
+func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, svc.ErrEmailTaken) {
+		apiresp.WriteJSON(w, http.StatusConflict, apiresp.Envelope{
+			Error: apiresp.ErrorBody{
+				Code:    "conflict",
+				Message: "the request conflicts with the current state",
+				Details: []apiresp.FieldError{
+					{Field: "email", Code: "users.email_taken", Message: "email is already registered"},
+				},
+			},
+		})
+		return
 	}
+	apiresp.WriteError(w, r, err)
 }
 
 // createUserAccountRequest is the body for POST /v1/user-accounts (admin).
@@ -66,7 +81,7 @@ type createUserAccountRequest struct {
 func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -80,7 +95,7 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, svc.ErrInvalidInput) {
 			slog.ErrorContext(r.Context(), "user_accounts.create", "error", err)
 		}
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -117,7 +132,7 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.list", "error", err)
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -146,7 +161,7 @@ func (h *UserAccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "user_accounts.get", "error", err)
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -177,7 +192,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req updateUserAccountRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -188,7 +203,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.update", "error", err)
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -204,7 +219,7 @@ func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.delete", "error", err)
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -222,7 +237,7 @@ func (h *UserAccountsHandler) GrantAdmin(w http.ResponseWriter, r *http.Request)
 
 	if err := h.grantAdmin(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.grant-admin", "error", err)
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -240,7 +255,7 @@ func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request
 
 	if err := h.revokeAdmin(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.revoke-admin", "error", err)
-		writeServiceError(w, err)
+		writeServiceError(w, r, err)
 		return
 	}
 
@@ -252,7 +267,7 @@ func parseUUIDParam(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	raw := chi.URLParam(r, "uuid")
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return uuid.UUID{}, false
 	}
 	return id, true

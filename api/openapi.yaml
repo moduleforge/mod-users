@@ -34,16 +34,64 @@ components:
   schemas:
     Error:
       type: object
+      description: |
+        Canonical error envelope. The `code` enum below is the target,
+        module-wide vocabulary — not every operation documented in this
+        file conforms to it yet. The following endpoint groups are served
+        by handlers that predate this vocabulary and may still return
+        legacy, ad-hoc top-level codes (e.g. `bad_request`, `unauthorized`,
+        `validation_error`, `email_taken`) outside this enum:
+        `/v1/auth/register`, `/v1/auth/anonymous`, `/v1/auth/login`,
+        `/v1/auth/email-code/*`, `/v1/auth/password-reset/*`, and
+        `/v1/auth/oidc/*`. Tracked as follow-up `biPE` in
+        `plan/followups.yaml`; migrating these handlers to the enum is out
+        of scope for the current task.
       required: [code, message]
       properties:
         code:
           type: string
-          description: Machine-readable error code.
-          example: bad_request
+          description: |
+            Machine-readable error code, drawn from the reserved top-level vocabulary
+            (a closed set so a generic client can branch on it). Finer-grained,
+            module-specific distinctions are carried in `details[].code`, namespaced
+            by module (e.g. `users.email_taken`) — a module never introduces a new
+            top-level code.
+          enum:
+            - unauthenticated
+            - forbidden
+            - not_found
+            - invalid_input
+            - conflict
+            - internal_error
+          example: invalid_input
         message:
           type: string
           description: Human-readable error description.
           example: "invalid JSON body"
+        details:
+          type: array
+          description: |
+            Optional field-level and sub-error breakdown. Omitted (not present, not
+            an empty array) when there is no per-field detail.
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          description: The input this error binds to (matches a form field name).
+          example: email
+        code:
+          type: string
+          description: Namespaced, module-specific detail code (e.g. `users.email_taken`).
+          example: users.email_taken
+        message:
+          type: string
+          description: Human-readable, safe-to-display detail message.
+          example: "That email is already registered."
 
     HealthStatus:
       type: object

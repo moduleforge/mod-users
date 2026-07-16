@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/moduleforge/core-api/apiresp"
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/opctx"
@@ -93,10 +94,27 @@ type CreateAnonymousUserResult struct {
 }
 
 // ErrEmailTaken is returned by Create when the email is already registered.
-var ErrEmailTaken = fmt.Errorf("email already registered")
+//
+// Wraps apiresp.ErrConflict (rather than being an independent sentinel) so
+// errors.Is(err, apiresp.ErrConflict) succeeds and apiresp.WriteError alone
+// would already classify it as 409 conflict. Per the design doc
+// (docs/mf-standards/architecture/api-response-design.md, "Module-specific
+// extension codes") this is a deliberate plain 409 (create-time uniqueness),
+// not a masked 403 — no masking logic applies to this path. apiresp exposes
+// no public detail-carrying constructor for the conflict sentinel (only
+// InvalidInput), so the users.email_taken field-level detail is attached at
+// the handler mapping point instead; see writeServiceError in
+// handlers/user_accounts.go.
+var ErrEmailTaken = fmt.Errorf("%w: email already registered", apiresp.ErrConflict)
 
 // ErrInvalidInput is returned when the caller supplies invalid field values.
-var ErrInvalidInput = fmt.Errorf("invalid input")
+//
+// This is an alias for apiresp.ErrInvalidInput (not an independent
+// sentinel) so errors.Is matches it across module boundaries — apiresp is
+// the canonical home; see docs/mf-standards/architecture/api-response-design.md
+// "Go-layer ownership". Call sites in this file build the returned error via
+// apiresp.InvalidInput(...) to carry per-field users.<rule> details.
+var ErrInvalidInput = apiresp.ErrInvalidInput
 
 // ErrAnonymousAccount is returned when an operation requires a named account
 // but the target is anonymous.
@@ -146,16 +164,24 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 	// Validate input before touching the authorizer.
 	in.Email = strings.TrimSpace(strings.ToLower(in.Email))
 	if in.Email == "" {
-		return UserAccount{}, fmt.Errorf("%w: email is required", ErrInvalidInput)
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "email", Code: "users.email_required", Message: "email is required",
+		})
 	}
 	if strings.TrimSpace(in.GivenName) == "" {
-		return UserAccount{}, fmt.Errorf("%w: given_name is required", ErrInvalidInput)
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "given_name", Code: "users.given_name_required", Message: "given_name is required",
+		})
 	}
 	if strings.TrimSpace(in.FamilyName) == "" {
-		return UserAccount{}, fmt.Errorf("%w: family_name is required", ErrInvalidInput)
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "family_name", Code: "users.family_name_required", Message: "family_name is required",
+		})
 	}
 	if in.Password != nil && len(*in.Password) < 12 {
-		return UserAccount{}, fmt.Errorf("%w: password must be at least 12 characters", ErrInvalidInput)
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
+		})
 	}
 
 	// Authorize: create is admin-only; use type ID per convention.
@@ -241,7 +267,9 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 // The hashed token is stored in the database and is never returned to callers.
 func (s *UserAccountService) CreateAnonymousUser(ctx context.Context, in CreateAnonymousUserInput) (CreateAnonymousUserResult, error) {
 	if strings.TrimSpace(in.DeviceID) == "" {
-		return CreateAnonymousUserResult{}, fmt.Errorf("%w: device_id is required", ErrInvalidInput)
+		return CreateAnonymousUserResult{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "device_id", Code: "users.device_id_required", Message: "device_id is required",
+		})
 	}
 
 	// Anonymous users may omit names; substitute non-empty placeholder strings

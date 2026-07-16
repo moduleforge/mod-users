@@ -160,3 +160,78 @@ items:
       date: "2026-07-16"
       tag: users-apiresp-migration
       text: 'docs/mf-standards/building-common.md''s "Building inside a task worktree" recipe (go work init && go work use ...) is incomplete: it produces a "conflicting replacements" error inside a real task worktree, because the affected module''s own api/go.mod replace directives (wrongly-resolving at worktree depth) remain active alongside the go.work use entries for the same modules. The actual fix also requires explicit `go work edit -replace <module>@v0.0.0=<corrected-path>` overrides for every sibling module (core-model, core-api, audit-model, audit-api, authz-model, authz-api) — confirmed working in phase-01-task-01-adopt-apiresp-sentinels-and-wr worktree (users-apiresp-migration plan). Separately, mod-users/AGENTS.md''s "Working in worktrees" section (~line 118) covers the gui/.yalc fix but doesn''t mention this Go go.work fix at all, so a fresh task agent has no in-repo pointer to it short of independently discovering docs/mf-standards/building-common.md. Recommend: (1) update building-common.md''s recipe to include the -replace overrides, (2) add a one-line AGENTS.md pointer to that doc section. Owner: docs-mf-standards repo for (1), mod-users AGENTS.md for (2) — cross-repo, not fixable from a single task worktree.'
+    - title: make lint.model's shadow-db-lint step can't r
+      id: 0x4L
+      date: "2026-07-16"
+      tag: go-apiresp-foundation
+      text: '[phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md] make lint.model''s shadow-db-lint step can''t reach its ephemeral Postgres container in this sandbox (Docker networking timeout) - an environment limitation, not a model/ code issue; model/ is untouched by this task.'
+    - title: Pre-existing doc-graph orphans (not from ph1)
+      id: rmQ5
+      date: "2026-07-16"
+      tag: go-apiresp-foundation
+      text: 'Phase-01 boundary review''s link-chain check (README-rooted reachability) found several project docs not reachable from README.md: api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md (plan/*.md, .flow/binding.md, and CLAUDE.md files under plan/ are expected exclusions — transient plan artifacts / agent-context files, not persistent project documentation). None of these orphaned files were touched by phase-01''s diff (which only touched api/*.go, plan/TODO.yaml, plan/followups.yaml, and the phase-01 task doc), so this predates this plan and is not a regression it introduced. No broken links were found otherwise (a python link-checker script; one run produced false-positive broken links for docs/architecture.md and docs/mod-users-spec.md''s ./mf-standards/... links, but a clean re-run confirmed those targets exist and resolve fine). Recommend a manager/tech-writer pass to either link these orphans from README.md (if they should be part of the discoverable doc graph) or confirm they''re intentionally out-of-band (e.g. deploy runbooks meant to be found by directory browsing, not README links).'
+    - title: apiresp needs public Conflict() constructor
+      id: ZVum
+      date: "2026-07-16"
+      tag: go-apiresp-foundation
+      text: 'Phase-01 architecture-conformance review (users-apiresp-migration plan) found: writeServiceError''s svc.ErrEmailTaken branch (api/internal/handlers/user_accounts.go) bypasses apiresp.WriteError and hand-constructs the 409 conflict envelope directly via apiresp.WriteJSON/Envelope/ErrorBody, including a literal message string ("the request conflicts with the current state") that duplicates apiresp''s own unexported publicMessage("conflict") output verbatim. This is a documented, justified stopgap: mod-core/api/apiresp exposes InvalidInput(...) as a public detail-carrying constructor but no equivalent for ErrConflict, so there''s no way to delegate fully to apiresp.WriteError while still attaching the users.email_taken field detail. Recommend a fast-follow on mod-core''s apiresp package (cross-repo, not fixable from mod-users) to add a public constructor (e.g. apiresp.Conflict(details ...FieldError) error, mirroring InvalidInput), which would let writeServiceError collapse fully onto apiresp.WriteError(w, r, err) with no local envelope construction, and remove the message-text duplication/drift risk.'
+    - title: Literal server.Error sites not centralized
+      id: 8iRl
+      date: "2026-07-16"
+      tag: go-vocab-migration
+      text: 'Phase-02 architecture-conformance review (users-apiresp-migration plan) found: the design doc''s "Go-layer ownership" section states the end-state goal is handlers collapsing to apiresp.WriteError(w, r, err) so the status/code/envelope decision lives in one place. Phases 1-2 deliberately kept ~28 literal server.Error(status, "code", message) call sites across apps.go, oidc_providers.go, oidc_config.go, identities.go, self.go, assume.go, user_accounts.go (task doc Requirement 3 explicitly sanctions this deferral for this plan''s scope). The vocabulary at each site is now correct, but still duplicated rather than derived from a single sentinel classification point. Recommend tracking this as an explicit follow-up phase/task ("collapse literal server.Error sites onto sentinel-driven apiresp.WriteError calls") so the centralization goal doesn''t silently fall out of the plan once phase 2 is marked done.'
+    - title: invalid_input message casing vs design doc
+      id: WGZV
+      date: "2026-07-16"
+      tag: go-vocab-migration
+      text: 'Phase-02 architecture-conformance review (users-apiresp-migration plan) found: docs/mf-standards/architecture/api-response-design.md''s worked example uses "One or more fields are invalid." (capitalized, trailing period) as the top-level message for invalid_input + details[] responses. The migrated ErrorWithDetails call sites (e.g. api/internal/handlers/apps.go:52,55, identities.go:352) use "one or more fields are invalid" (lowercase, no period). Non-blocking cosmetic inconsistency - low priority. Recommend either aligning the literal message string with the design doc''s exact casing/punctuation in a future pass, or amending the design doc to note the example message is illustrative, not literal.'
+    - title: 'cd gui && bun test is not-applicable: gui/ ha'
+      id: t5kn
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] cd gui && bun test is not-applicable: gui/ has zero test files and no test script in its history. Establishing test infra (bun-types devDependency, first test convention) is out of this task''s scope - likely applies identically to sibling task 002.'
+    - title: Flow's mid-task-commit.sh/finalize-task-commi
+      id: le59
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] Flow''s mid-task-commit.sh/finalize-task-commit.sh git add -A is not yalc-aware: it repeatedly swept up this worktree''s intentionally-uncommitted local file:.yalc/@moduleforge/core-gui entries in gui/package.json/bun.lock, requiring revert commits mid-task. Friction point for any future gui/-touching task in this repo while the yalc workflow is in place.'
+    - title: gui/ has no test runner set up at all (no tes
+      id: KXNZ
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: '[phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] gui/ has no test runner set up at all (no test files, no bunfig.toml, no bun-types) - the cd gui && bun test validation bullet is currently unsatisfiable for this or any gui/ task without first standing up test infrastructure. Same gap already flagged by sibling task 001.'
+    - title: 'Pre-existing, not investigated further: mod-c'
+      id: JFnc
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: '[phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] Pre-existing, not investigated further: mod-core/gui''s built dist/ has no dist/index.css despite package.json''s ./styles.css export - not touched by this task since error-message.tsx needed no styling changes.'
+    - title: ErrorBanner drops AlertCircle icon vs old UI
+      id: ygBr
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: 'Phase-03 architecture-conformance review (users-apiresp-migration plan) found: gui/src/components/error-message.tsx''s delegation to core-gui''s <ErrorBanner error={message} /> drops the AlertCircle icon the old hand-rolled Alert/AlertDescription markup rendered. Not a functional defect (null/non-null contract parity confirmed exact), and adopting the shared widget is the correct move per the task doc - but it''s core-gui''s own widget design, not something mod-users should independently patch. Worth a quick manual/Ladle visual check if icon presence in destructive banners matters to the design system; if so, raise with whoever owns @moduleforge/core-gui''s ErrorBanner component.'
+    - title: details[] shape not runtime-validated
+      id: L92R
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: 'Phase-03 security review (users-apiresp-migration plan) found: gui/src/lib/api.ts''s request() casts the parsed error JSON body directly to ApiErrorResponse and assigns errorBody.error.details straight into errorDetails: FieldErrorData[] | undefined with no runtime check that details is actually an array or that its elements have field/message as strings. Low-confidence, suggestion-level, non-blocking: not an XSS/injection risk (JSX children are always text-escaped, no dangerouslySetInnerHTML anywhere in @moduleforge/core-gui or mod-users/gui), but a malformed/unexpected-shape body could make React throw at render time ("Objects are not valid as a React child") in <FieldError>/<ErrorBanner>. Mirrors an existing pattern already in @moduleforge/core-gui''s own canonical request() (gui/src/lib/api-client.ts in mod-core), so this diff doesn''t introduce a new risk class - just extends an existing accepted trust assumption. Optional hardening: validate/coerce details shape after parsing so a malformed envelope degrades to "no field details" instead of crashing.'
+    - title: Design doc/core-gui FieldError naming drift
+      id: 8oow
+      date: "2026-07-16"
+      tag: gui-core-gui-adoption
+      text: 'Phase-03 architecture-conformance review (users-apiresp-migration plan) found: docs/mf-standards/architecture/api-response-design.md''s "Widget set implied" wire-type block names the interface FieldError, but the actual shipped @moduleforge/core-gui export is FieldErrorData (the plain name FieldError is taken by the <FieldError> component). mod-users'' Phase 3 diff correctly follows the actual shipped name consistently - no local mismatch was introduced. This naming drift is inherited from Wave 0/core-gui itself and predates this plan; cross-repo, needs reconciling in docs-mf-standards (update the design doc''s example to FieldErrorData) or on the core-gui side, not fixable from mod-users.'
+    - title: 'MAJOR SCOPE-GAP FINDING: api/internal/handler'
+      id: biPE
+      date: "2026-07-16"
+      tag: doc-updates
+      text: '[phase-04-doc-updates/001-update-architecture-docs.md] MAJOR SCOPE-GAP FINDING: api/internal/handlers/auth/*.go (register.go, login.go, emailcode.go, anonymous.go, oidc.go, reset.go) was never covered by either Phase 2 task and still contains ~24-33 literal bad_request/unauthorized/validation_error/email_taken sites in the module''s highest-traffic unauthenticated endpoints (register, login, anonymous account creation, email-code verification, OIDC, password reset). This is distinct from and does not overlap with followup 8iRl (which only covers the 7 files the two Phase 2 tasks actually touched). The new openapi.yaml Error.code enum this task just added documents a target contract that this slice of the API does not yet meet. Manager-verified: 33 grep matches across 6 production files (excluding _test.go matches would still leave the production files affected) via grep -rln in api/internal/handlers/auth/.'
+    - title: Likely pre-existing, unrelated behavioral/doc
+      id: nnfn
+      date: "2026-07-16"
+      tag: doc-updates
+      text: '[phase-04-doc-updates/001-update-architecture-docs.md] Likely pre-existing, unrelated behavioral/doc mismatch: anonymous_account does not appear anywhere in api/internal Go source; login/email-code/password-reset show no IsAnonymous guard logic matching the documented ''400 anonymous_account'' behavior. Not fixed - out of scope for a docs-only task; worth a dedicated doc-accuracy pass separate from this plan.'
+    - title: 'Environment note: docs/mf-standards git submo'
+      id: jg7u
+      date: "2026-07-16"
+      tag: doc-updates
+      text: '[phase-04-doc-updates/001-update-architecture-docs.md] Environment note: docs/mf-standards git submodule was uninitialized at task start in this worktree; initialized read-only (pointer unchanged) to read the referenced design doc.'

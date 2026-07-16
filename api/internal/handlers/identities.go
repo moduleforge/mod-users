@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/txhelper"
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
@@ -216,7 +217,7 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.WarnContext(r.Context(), "identities.StartLink: bad request", "error", err, "provider", providerID)
-		server.Error(w, http.StatusBadRequest, "bad_request", err.Error())
+		server.Error(w, http.StatusBadRequest, "invalid_input", err.Error())
 		return
 	}
 
@@ -244,7 +245,7 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 	rawUUID := chi.URLParam(r, "identity_uuid")
 	identUUID, err := uuid.Parse(rawUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid identity UUID")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid identity UUID")
 		return
 	}
 
@@ -295,7 +296,15 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(txErr, errIdentityNotFound) {
-			server.Error(w, http.StatusNotFound, "identity_not_found", "identity not found")
+			// Not EntityResolver-mediated: errIdentityNotFound only fires when a
+			// delete scoped to the caller's own UserAccountID affects zero rows,
+			// i.e. the caller's own identity UUID is absent. A caller can only
+			// ever probe their own identities, so there is no cross-user
+			// existence leak and existence masking does not apply here — a
+			// plain 404 is correct (see the task doc's recorded decision).
+			server.ErrorWithDetails(w, http.StatusNotFound, "not_found", "identity not found", []apiresp.FieldError{
+				{Code: "users.identity_not_found", Message: "identity not found"},
+			})
 			return
 		}
 		slog.ErrorContext(r.Context(), "identities.Unlink: transaction", "error", txErr)
@@ -336,16 +345,18 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 
 	var req setPasswordRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
 	if req.NewPassword == "" {
-		server.Error(w, http.StatusBadRequest, "bad_request", "new_password is required")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "new_password is required")
 		return
 	}
 	if len(req.NewPassword) < 12 {
-		server.Error(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+			{Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters"},
+		})
 		return
 	}
 
@@ -365,7 +376,9 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 		operation = "update"
 		// Require and verify current_password.
 		if req.CurrentPassword == nil || *req.CurrentPassword == "" {
-			server.Error(w, http.StatusUnauthorized, "bad_credentials", "current_password is required to change an existing password")
+			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
+				{Field: "current_password", Code: "users.bad_credentials", Message: "current_password is required to change an existing password"},
+			})
 			return
 		}
 		ok, verifyErr := localauth.VerifyPassword(*req.CurrentPassword, existing.PasswordHash)
@@ -375,7 +388,9 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if !ok {
-			server.Error(w, http.StatusUnauthorized, "bad_credentials", "current password is incorrect")
+			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
+				{Field: "current_password", Code: "users.bad_credentials", Message: "current password is incorrect"},
+			})
 			return
 		}
 	}
@@ -555,11 +570,11 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 
 	var req stepUpVerifyRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 	if req.Code == "" {
-		server.Error(w, http.StatusBadRequest, "bad_request", "code is required")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "code is required")
 		return
 	}
 
@@ -568,7 +583,7 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 		Purpose:       "credential_change",
 	})
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired code")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
 	if err != nil {
@@ -578,7 +593,7 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(emailCode.CodeHash), []byte(req.Code)); err != nil {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired code")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
 

@@ -161,7 +161,7 @@ func (h *ProvidersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// would collapse both cases.
 	raw, err := parseBody(r)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 	if !h.authorize(w, r, stringField(raw, "setup_token")) {
@@ -169,7 +169,7 @@ func (h *ProvidersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
 	if !providerIDPattern.MatchString(id) {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid provider id format")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid provider id format")
 		return
 	}
 	h.upsertAndRespond(w, r, id, raw, false)
@@ -187,7 +187,7 @@ type createRequest struct {
 func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	raw, err := parseBody(r)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 	if !h.authorize(w, r, stringField(raw, "setup_token")) {
@@ -196,7 +196,7 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	rawID := strings.TrimSpace(stringField(raw, "id"))
 	if rawID == "" {
-		server.Error(w, http.StatusBadRequest, "bad_request", "id is required")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "id is required")
 		return
 	}
 	// Slug validation runs on the raw input so uppercase or underscores
@@ -204,7 +204,7 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// convention (AUTH_PROVIDER_{ID}_*) is lowercased when loaded, but
 	// operator-typed ids must already match the canonical shape.
 	if !providerIDPattern.MatchString(rawID) {
-		server.Error(w, http.StatusBadRequest, "bad_request",
+		server.Error(w, http.StatusBadRequest, "invalid_input",
 			"id must be 2-32 chars, lowercase letters/digits/dashes, no leading or trailing dash")
 		return
 	}
@@ -236,7 +236,7 @@ func (h *ProvidersHandler) Revert(w http.ResponseWriter, r *http.Request) {
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
 	if !providerIDPattern.MatchString(id) {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid provider id format")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid provider id format")
 		return
 	}
 
@@ -408,7 +408,7 @@ func (h *ProvidersHandler) authorize(w http.ResponseWriter, r *http.Request, sub
 		return false
 	}
 	if !ok {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "admin session or setup token required")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "admin session or setup token required")
 		return false
 	}
 	return true

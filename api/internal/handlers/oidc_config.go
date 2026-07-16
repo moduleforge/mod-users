@@ -284,7 +284,7 @@ type confirmRequest struct {
 func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	var req confirmRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -295,7 +295,7 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !authorized {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "setup token or admin session required")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "setup token or admin session required")
 		return
 	}
 
