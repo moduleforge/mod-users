@@ -155,3 +155,8 @@ items:
       date: "2026-07-05"
       tag: doc-updates
       text: '[phase-02-doc-updates/001-update-architecture-docs.md] Unrelated to this task: plan worktree shows three other uncommitted modified files (phase-01 tasks'' own Status sections) predating this session; manager should commit those too.'
+    - title: make lint.model's shadow-db-lint step can't r
+      id: 0x4L
+      date: "2026-07-16"
+      tag: go-apiresp-foundation
+      text: '[phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md] make lint.model''s shadow-db-lint step can''t reach its ephemeral Postgres container in this sandbox (Docker networking timeout) - an environment limitation, not a model/ code issue; model/ is untouched by this task.'
