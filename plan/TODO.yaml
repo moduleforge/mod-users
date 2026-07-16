@@ -22,6 +22,7 @@ phases:
     - number: 2
       slug: go-vocab-migration
       title: Go Vocab Migration
+      diff_base: 5dc534612f8b5ee5f26098898f0a0a6d44aadb16
       tasks:
         - number: 1
           slug: migrate-apps-oidc-handlers
