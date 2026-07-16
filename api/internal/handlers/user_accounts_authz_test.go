@@ -613,3 +613,35 @@ func TestWriteServiceError_Mapping(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Test: writeAuthzError — unclassified error → 500 internal_error
+// ---------------------------------------------------------------------------
+
+// TestWriteAuthzError_Mapping asserts that writeAuthzError, like its sibling
+// writeServiceError, maps an error that is not a recognized apiresp sentinel
+// (apiresp.ErrUnauthenticated / apiresp.ErrForbidden) to a 500 with the
+// "internal_error" code, per apiresp.WriteError's default classification.
+func TestWriteAuthzError_Mapping(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/user-accounts", nil)
+	rr := httptest.NewRecorder()
+
+	err := errors.New("db down")
+	writeAuthzError(rr, req, err)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("writeAuthzError(%v): status got %d, want %d", err, rr.Code, http.StatusInternalServerError)
+	}
+
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if decErr := json.Unmarshal(rr.Body.Bytes(), &body); decErr != nil {
+		t.Fatalf("writeAuthzError(%v): body not valid JSON: %v, body=%s", err, decErr, rr.Body.String())
+	}
+	if body.Error.Code != "internal_error" {
+		t.Errorf("writeAuthzError(%v): error.code got %q, want %q", err, body.Error.Code, "internal_error")
+	}
+}
