@@ -225,3 +225,8 @@ items:
       date: "2026-07-16"
       tag: doc-updates
       text: '[phase-04-doc-updates/001-update-architecture-docs.md] Likely pre-existing, unrelated behavioral/doc mismatch: anonymous_account does not appear anywhere in api/internal Go source; login/email-code/password-reset show no IsAnonymous guard logic matching the documented ''400 anonymous_account'' behavior. Not fixed - out of scope for a docs-only task; worth a dedicated doc-accuracy pass separate from this plan.'
+    - title: 'Environment note: docs/mf-standards git submo'
+      id: jg7u
+      date: "2026-07-16"
+      tag: doc-updates
+      text: '[phase-04-doc-updates/001-update-architecture-docs.md] Environment note: docs/mf-standards git submodule was uninitialized at task start in this worktree; initialized read-only (pointer unchanged) to read the referenced design doc.'
