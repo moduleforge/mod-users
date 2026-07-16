@@ -64,7 +64,7 @@ phases:
             branch: phase-03-task-01-reconcile-api-client-types
             commit:
                 - "3533209"
-            merge: null
+            merge: f54e84d9e9b67f5bfa6e92d12cf267b10b31bfab
         - number: 2
           slug: adopt-error-banner-widget
           title: Adopt Error Banner Widget
