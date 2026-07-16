@@ -18,7 +18,7 @@ phases:
             branch: phase-01-task-01-adopt-apiresp-sentinels-and-wr
             commit:
                 - 694f729
-            merge: null
+            merge: e50d9b48119f2bd9a21653530e5fc64d2a17cc28
     - number: 2
       slug: go-vocab-migration
       title: Go Vocab Migration
