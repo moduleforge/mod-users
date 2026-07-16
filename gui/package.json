@@ -23,6 +23,7 @@
     "preview:build": "ladle build"
   },
   "dependencies": {
+    "@moduleforge/core-gui": "file:.yalc/@moduleforge/core-gui",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
