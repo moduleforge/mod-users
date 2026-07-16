@@ -28,7 +28,7 @@ phases:
           slug: migrate-apps-oidc-handlers
           title: Migrate Apps Oidc Handlers
           path: phase-02-go-vocab-migration/001-migrate-apps-oidc-handlers.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Migrated all server.Error(...) top-level error-code literals in apps.go, oidc_providers.go, and oidc_config.go onto the reserved core vocabulary: 15 bad_request sites -> invalid_input (status unchanged, 400), keeping the existing server.Error call form since Phase 1 did not migrate these sites onto direct apiresp.WriteError calls; 3 validation_error sites in apps.go -> invalid_input + details[] via server.ErrorWithDetails, with detail codes users.slug_required/users.name_required/users.user_uuid_required. No test-file edits needed (oidc_providers_test.go/oidc_config_test.go assert only on HTTP status, no apps_test.go exists). Build and full test suite green.'
           git:
