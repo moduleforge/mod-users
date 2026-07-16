@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/moduleforge/core-api/apiresp"
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/txhelper"
@@ -51,17 +52,21 @@ type createAppRequest struct {
 func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createAppRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 	req.Slug = strings.TrimSpace(req.Slug)
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Slug == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "slug is required")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+			{Field: "slug", Code: "users.slug_required", Message: "slug is required"},
+		})
 		return
 	}
 	if req.Name == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "name is required")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+			{Field: "name", Code: "users.name_required", Message: "name is required"},
+		})
 		return
 	}
 
@@ -171,7 +176,7 @@ func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 
 	var req updateAppRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -293,17 +298,19 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 
 	var req assignUserRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 	if req.UserUUID == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "user_uuid is required")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+			{Field: "user_uuid", Code: "users.user_uuid_required", Message: "user_uuid is required"},
+		})
 		return
 	}
 
 	userUUID, err := uuid.Parse(req.UserUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid user_uuid")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid user_uuid")
 		return
 	}
 
@@ -386,7 +393,7 @@ func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	rawUserUUID := chi.URLParam(r, "user_account_uuid")
 	userUUID, err := uuid.Parse(rawUserUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid user uuid")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid user uuid")
 		return
 	}
 
@@ -433,7 +440,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	rawUserUUID := chi.URLParam(r, "user_account_uuid")
 	userUUID, err := uuid.Parse(rawUserUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid user uuid")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid user uuid")
 		return
 	}
 
@@ -450,7 +457,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 
 	var req updateRolesRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 	if req.Roles == nil {
@@ -479,7 +486,7 @@ func (h *AppsHandler) loadAppByUUIDParam(w http.ResponseWriter, r *http.Request)
 	rawUUID := chi.URLParam(r, "uuid")
 	parsed, err := uuid.Parse(rawUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid uuid")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
 		return db.App{}, false
 	}
 	app, err := h.q.GetAppByUUID(r.Context(), parsed)
