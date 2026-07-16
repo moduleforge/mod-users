@@ -45,7 +45,7 @@ phases:
             branch: phase-02-task-02-migrate-identity-account-self
             commit:
                 - ea7a469
-            merge: null
+            merge: 69a68aff8ca83cbfba7a3d0cafd5b7600976f3a8
     - number: 3
       slug: gui-core-gui-adoption
       title: GUI Core-GUI Adoption
