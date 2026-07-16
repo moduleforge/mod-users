@@ -71,6 +71,7 @@ phases:
           path: phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md
           done: false
           tier: sonnet-med
+          digest: Replaced error-message.tsx's direct Alert/AlertDescription/AlertCircle markup with a one-line delegation to @moduleforge/core-gui's <ErrorBanner> widget, removing the cross-module low-level-primitive coupling the task targeted. Kept ErrorMessage as a thin wrapper (rather than retiring it) since ErrorBannerData accepts a plain string, so no call sites needed updates. make build.gui and make lint.gui pass; behavioral parity holds by construction.
           git:
             branch: phase-03-task-02-adopt-error-banner-widget
             commit:
