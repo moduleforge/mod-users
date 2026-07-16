@@ -31,7 +31,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-02-task-01-migrate-apps-oidc-handlers
             commit: []
             merge: null
         - number: 2
