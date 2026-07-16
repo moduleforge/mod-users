@@ -38,12 +38,48 @@ components:
       properties:
         code:
           type: string
-          description: Machine-readable error code.
-          example: bad_request
+          description: |
+            Machine-readable error code, drawn from the reserved top-level vocabulary
+            (a closed set so a generic client can branch on it). Finer-grained,
+            module-specific distinctions are carried in `details[].code`, namespaced
+            by module (e.g. `users.email_taken`) — a module never introduces a new
+            top-level code.
+          enum:
+            - unauthenticated
+            - forbidden
+            - not_found
+            - invalid_input
+            - conflict
+            - internal_error
+          example: invalid_input
         message:
           type: string
           description: Human-readable error description.
           example: "invalid JSON body"
+        details:
+          type: array
+          description: |
+            Optional field-level and sub-error breakdown. Omitted (not present, not
+            an empty array) when there is no per-field detail.
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          description: The input this error binds to (matches a form field name).
+          example: email
+        code:
+          type: string
+          description: Namespaced, module-specific detail code (e.g. `users.email_taken`).
+          example: users.email_taken
+        message:
+          type: string
+          description: Human-readable, safe-to-display detail message.
+          example: "That email is already registered."
 
     HealthStatus:
       type: object
