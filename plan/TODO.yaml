@@ -32,7 +32,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-02-task-01-migrate-apps-oidc-handlers
-            commit: []
+            commit:
+                - 34fd280
             merge: null
         - number: 2
           slug: migrate-identity-account-self-handlers
