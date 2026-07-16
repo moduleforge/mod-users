@@ -38,7 +38,7 @@ phases:
           slug: migrate-identity-account-self-handlers
           title: Migrate Identity Account Self Handlers
           path: phase-02-go-vocab-migration/002-migrate-identity-account-self-handlers.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Migrated every literal server.Error(...) call site in identities.go, self.go, assume.go, and user_accounts.go onto the reserved core error-code vocabulary: bad_request->invalid_input (11 sites), validation_error->invalid_input+users.password_too_short detail, unauthorized->unauthenticated (2 sites), bad_credentials->unauthenticated+users.bad_credentials detail bound to current_password (2 sites), identity_not_found->not_found+users.identity_not_found detail. The two flat-envelope helpers (writeStepUpRequired, writeLastIdentityError) left untouched as required. Updated matching test files including the user_accounts_authz_test.go shim. Build, vet, and full test suite green; make lint failures are pre-existing/environmental and unrelated to this diff (config.go gofmt issue since fixed by manager directly on the plan branch).'
           git:
