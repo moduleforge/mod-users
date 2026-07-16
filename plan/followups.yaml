@@ -160,3 +160,8 @@ items:
       date: "2026-07-16"
       tag: go-apiresp-foundation
       text: '[phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md] make lint.model''s shadow-db-lint step can''t reach its ephemeral Postgres container in this sandbox (Docker networking timeout) - an environment limitation, not a model/ code issue; model/ is untouched by this task.'
+    - title: Pre-existing doc-graph orphans (not from ph1)
+      id: rmQ5
+      date: "2026-07-16"
+      tag: go-apiresp-foundation
+      text: 'Phase-01 boundary review''s link-chain check (README-rooted reachability) found several project docs not reachable from README.md: api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md (plan/*.md, .flow/binding.md, and CLAUDE.md files under plan/ are expected exclusions — transient plan artifacts / agent-context files, not persistent project documentation). None of these orphaned files were touched by phase-01''s diff (which only touched api/*.go, plan/TODO.yaml, plan/followups.yaml, and the phase-01 task doc), so this predates this plan and is not a regression it introduced. No broken links were found otherwise (a python link-checker script; one run produced false-positive broken links for docs/architecture.md and docs/mod-users-spec.md''s ./mf-standards/... links, but a clean re-run confirmed those targets exist and resolve fine). Recommend a manager/tech-writer pass to either link these orphans from README.md (if they should be part of the discoverable doc graph) or confirm they''re intentionally out-of-band (e.g. deploy runbooks meant to be found by directory browsing, not README links).'
