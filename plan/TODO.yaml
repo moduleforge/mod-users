@@ -61,7 +61,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-03-task-01-reconcile-api-client-types
-            commit: []
+            commit:
+                - "3533209"
             merge: null
         - number: 2
           slug: adopt-error-banner-widget
