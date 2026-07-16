@@ -77,3 +77,107 @@ architectural_impact: true
   and `details`/`FieldError` shape.
 - `plugins/flow/task-procedures/update-architecture-docs/SKILL.md` (via `plugin_root`) — the procedure.
 - Plan `overview.md` "Open scope question" — the deferred flat-envelope codes to leave untouched.
+
+## Status
+
+**Implementation outcome:** succeeded
+
+**Date:** 2026-07-16
+
+**Implementation summary:**
+
+1. **`api/openapi.yaml`** — updated the `Error` schema: `code`'s `example` changed from
+   `bad_request` to `invalid_input`; added a `code` `enum` (`unauthenticated`, `forbidden`,
+   `not_found`, `invalid_input`, `conflict`, `internal_error`) plus a description explaining the
+   closed top-level vocabulary and the `details[].code` module-namespacing convention; added the
+   optional `details` array property (`items: $ref FieldError`) and a new `FieldError` schema
+   (`field`, `code`, `message`, all required, mirroring the design doc's GUI-facing wire type).
+   Swept the whole file for the other stale ad-hoc codes
+   (`bad_request`/`unauthorized`/`email_taken`/`bad_credentials`/`validation_error`/
+   `identity_not_found`) — the only prior occurrence was the one `Error.code.example` line already
+   fixed; no per-endpoint response example embedded a stale code. `make openapi.validate` (the
+   `python3 -c "import yaml..."` fallback, since `spectral` is not installed in this environment)
+   confirms the YAML still parses.
+2. **`docs/architecture.md`** — the "API layer" section had no error-envelope/vocabulary
+   description to begin with (confirmed by re-reading the whole file), so nothing there needed
+   updating. The "Authentication flow" section's `400 anonymous_account` mention (the file's only
+   reserved-code-adjacent reference) is now annotated in place as a flat, non-nested envelope and a
+   known, intentionally-deferred non-conformance with the module's canonical nested shape — left
+   unmigrated, per the task doc's explicit instruction, but no longer reads as if it conforms.
+3. **`docs/mod-users-spec.md`** — reviewed in full (no other error-code or error-shape references
+   found beyond the ones already known). Three edits: (a) the "General features" bullet "All errors
+   return a structured payload…" was rewritten to describe the actual nested
+   `{error:{code,message[,details]}}` envelope, the closed reserved top-level vocabulary, and the
+   optional namespaced `details[].code` convention, with a pointer to `api/openapi.yaml`'s
+   `Error`/`FieldError` schemas as the authoritative shape; (b) the use-case-14 `anonymous_account`
+   mention and (c) the Security-requirements `anonymous_account` mention are both now annotated as
+   the same known, intentionally-deferred flat-envelope non-conformance (cross-referencing the
+   General features bullet), left unmigrated per the task doc.
+
+**Files touched:**
+- `api/openapi.yaml`
+- `docs/architecture.md`
+- `docs/mod-users-spec.md`
+
+**Validation:**
+- `make openapi.validate` — passes (YAML syntax OK via the python3+pyyaml fallback; `spectral` is
+  not installed in this sandbox).
+- `grep -n 'bad_request\|"unauthorized"\|email_taken\|bad_credentials\|validation_error\|identity_not_found' api/openapi.yaml`
+  — the only matches are the two new, intentional `users.email_taken` example strings documenting
+  the namespaced `details[].code` shape (in the `code` property's description and the `FieldError`
+  schema's own `code` example) — not a leftover top-level ad-hoc code.
+- `docs/architecture.md` and `docs/mod-users-spec.md` reviewed in full; each was required to change
+  (see summary above); the `anonymous_account` deferred sites are now explicitly annotated as known
+  non-conformances rather than reading as canonical.
+- Re-read all three edited files after editing: no dangling cross-references introduced (the new
+  `[General features](#general-features)` / `[use case 14](#14-create-an-anonymous-account-and-optionally-upgrade-it)`
+  / `[Security requirements](#security-requirements)` anchors match GitHub's heading-slug algorithm
+  applied to the existing headings, and `[api/openapi.yaml](../api/openapi.yaml)` reuses the same
+  relative path the doc already used elsewhere); no contradicted claims introduced within or across
+  the three files.
+
+**Assumptions applied:**
+- Per `## Assumptions`, treated Phases 1–2 as landed and mirrored the actually-migrated
+  codes/shapes from the handler code into the docs — see the important caveat below, however.
+
+**Flagged for manager:**
+- **Significant, newly-discovered scope gap (not caused by this task, but affects how completely
+  the docs now match runtime behavior):** `api/internal/handlers/auth/*.go`
+  (`register.go`, `login.go`, `emailcode.go`, `anonymous.go`, `oidc.go`, `reset.go` — the
+  register/login/anonymous/email-code/OIDC-start-callback/password-reset endpoints) was **never in
+  scope for either Phase 2 task's file list** (task 001 covered `apps.go`/`oidc_providers.go`/
+  `oidc_config.go`; task 002 covered `identities.go`/`user_accounts.go`/`self.go`/`assume.go`) and
+  still contains roughly 24 unmigrated literal `server.Error(...)` sites using the old ad-hoc codes
+  (`bad_request`, `unauthorized`, `validation_error`, `email_taken`) — confirmed by grep; distinct
+  from, and not covered by, the already-tracked followup `8iRl` ("Literal server.Error sites not
+  centralized", which only lists the 28 sites across the seven files the two Phase 2 tasks *did*
+  touch). Net effect: the new `openapi.yaml` `Error.code` `enum` I added (the reserved 6-code closed
+  set, per this task's explicit Requirement 1) now describes a target contract that a meaningful
+  slice of the actual API surface — including the two highest-traffic unauthenticated entry points,
+  register and login — does not yet meet. I did not touch `api/internal/handlers/auth/*.go` (Go
+  source, outside a docs-only task's scope and this role/tier), and did not soften the new enum,
+  since the task doc explicitly directed documenting the target vocabulary regardless. Recommend the
+  manager register a follow-up (a "Phase 2b"-style task) to migrate this package the same way Phase
+  2's two tasks did, and/or add an explicit followups.yaml entry alongside `8iRl` so the gap doesn't
+  fall out of view.
+- **Separate, likely-pre-existing behavioral question (not fixed, flagged only):** both
+  `docs/architecture.md` and `docs/mod-users-spec.md` state that `login`/`email-code`/
+  `password-reset` "guard against anonymous accounts and return `400 anonymous_account` if called
+  with an anonymous JWT." I could not find `anonymous_account` anywhere in `api/internal` (grepped
+  the whole tree), nor any `IsAnonymous`/`is_anonymous` check in `login.go`, `emailcode.go`, or
+  `reset.go` — and those three endpoints are unauthenticated (`security: []`, submit email/password
+  in the body), so an "anonymous JWT" guard doesn't obviously fit their actual shape.
+  `PasswordResetRequest` (`reset.go`) does special-case a NULL/empty `ua.Email` (anonymous account),
+  but only to skip sending the email while still always returning `204` — no `400` is ever emitted.
+  This looks like a pre-existing documentation/implementation mismatch predating this plan (not
+  something Phases 1–2 touched or introduced), out of scope for this error-vocabulary-focused task
+  to resolve, but worth a dedicated accuracy pass — the annotations I added treat the code (not
+  necessarily the underlying guard's existence) as the known-deferred item, per the task doc's
+  explicit instruction to treat `anonymous_account` as one of the deferred flat-envelope sites.
+- `docs/mf-standards` is a git submodule that was not initialized in this worktree at task start
+  (`git submodule status` showed it as `-<sha>`, i.e. uninitialized); ran
+  `git submodule update --init docs/mf-standards` to read the referenced design doc. This is a
+  read-only local checkout action (the submodule pointer in the index was already correct and is
+  unchanged), not a committed change — noting in case other task worktrees in this plan hit the same
+  uninitialized-submodule state and need the same step before they can read
+  `docs/mf-standards/architecture/api-response-design.md`.
