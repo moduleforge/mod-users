@@ -67,3 +67,52 @@ role_doc: `plugins/flow/references/roles/architect-backend.md`
   explicitly confirmed to need no change, with the reasoning recorded in your task report.
 - `make lint` (or whatever spec-lint tooling this repo has for `openapi.yaml`, if any) still passes
   after the edit.
+
+## Status
+
+**Outcome:** succeeded. **Date:** 2026-07-16.
+
+**Requirement 1 (`api/openapi.yaml`).** Removed the entire stale `description:` block from
+`components.schemas.Error` (12 lines: the `biPE`-citing paragraph disclosing the six endpoint groups
+as non-conformant). Git history confirms this `description` field did not exist prior to the prior
+`users-apiresp-migration` plan's Phase 4 commit `ebc05c4` that introduced it — so removal (rather than
+a rewrite asserting conformance) is the correct choice per the task doc's stated preference: nothing
+else in the schema depended on the description existing, and every sibling top-level schema in this
+file (`FieldError`, `HealthStatus`, `UserDetail`, etc.) likewise has no top-level `description`, so
+removal restores consistency with the file's established convention rather than introducing a new
+permanent-but-empty caveat. The `code` property's own description ("drawn from the reserved top-level
+vocabulary... a closed set") already makes the intended positive claim without any exception language.
+
+**Requirement 2 (doc review).** Read `docs/architecture.md` (137 lines) and `docs/mod-users-spec.md`
+(296 lines) in full. Grepped both for `biPE`, `non-conform`, `does not conform`, `legacy, ad-hoc`,
+`ad-hoc`, `bad_request`, `"unauthorized"`, `validation_error`, and `email_taken`. Every match found (4
+total, at `architecture.md:56` and `mod-users-spec.md:162,168,261`) concerns the separate, already-
+tracked `400 anonymous_account` flat-envelope documentation question (follow-up `nnfn`), not the six
+endpoint groups' `error.code` vocabulary conformance. No other stale reference to the six endpoint
+groups being non-conformant exists in either file — **no edit was needed or made** to
+`docs/architecture.md` or `docs/mod-users-spec.md`.
+
+**Requirement 3.** Follow-up `nnfn` was left untouched, as instructed — the `anonymous_account`
+mentions identified above were read only to confirm they are out of scope, not edited.
+
+**Validation summary:**
+- `grep -n "biPE\|does not conform\|legacy, ad-hoc" api/openapi.yaml` — no matches (confirmed post-edit).
+- Re-read the full `Error` schema after the edit: it now carries no top-level `description`, no
+  disclosure of exceptions, and the `code` property description makes an unqualified positive claim —
+  accurately reflecting that all endpoints in this file, including the six migrated auth groups,
+  conform to the enum. The 5 deferred flat-envelope sites (follow-up `eiF8`) are correctly not
+  referenced anywhere in this schema, as they use a different, bespoke response shape outside this
+  `Error` object.
+- `docs/architecture.md` and `docs/mod-users-spec.md` were read in full and confirmed to need no
+  change (see Requirement 2 above).
+- `make openapi.validate` (this repo's dedicated spec-lint target for `openapi.yaml`, falling back to
+  `python3 -c "import yaml..."` since `spectral` is not installed) — passed: `api/openapi.yaml: YAML
+  syntax OK`. Full `make lint` was attempted but timed out after 2 minutes attempting to resolve
+  toolchains across all sub-projects (`dependencies_installed: not installed` for this task worktree,
+  consistent with the plan overview's noted "not installed" state); since this is a docs-only change
+  with no Go or TypeScript source touched, `make openapi.validate` is the applicable, self-sufficient
+  check and was used instead per the task doc's own "(or whatever spec-lint tooling this repo has...)"
+  allowance.
+
+**Assumptions applied:** none beyond the task doc's own text — no `## Assumptions` section was present
+on this task doc.
