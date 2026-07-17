@@ -44,55 +44,60 @@ export function AuthPage({
   return (
     <div className="flex min-h-full items-center justify-center p-6">
       <Card className="w-full max-w-sm">
-        {mode === 'login' ? (
-          <>
-            <CardHeader>
-              <CardTitle>Sign in</CardTitle>
-              <CardDescription>Enter your credentials to continue</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LoginForm
-                onSuccess={onAuthenticated}
-                initialError={initialError}
-                returnPath={returnPath}
-              />
-            </CardContent>
-            <CardFooter className="text-sm text-center">
-              <p className="text-muted-foreground">
-                No account?{' '}
-                <button
-                  type="button"
-                  className="text-foreground hover:underline"
-                  onClick={() => setMode('register')}
-                >
-                  Create one
-                </button>
-              </p>
-            </CardFooter>
-          </>
-        ) : (
-          <>
-            <CardHeader>
-              <CardTitle>Create an account</CardTitle>
-              <CardDescription>Fill in your details to get started</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RegisterForm onSuccess={onAuthenticated} />
-            </CardContent>
-            <CardFooter className="text-sm text-center">
-              <p className="text-muted-foreground">
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  className="text-foreground hover:underline"
-                  onClick={() => setMode('login')}
-                >
-                  Sign in
-                </button>
-              </p>
-            </CardFooter>
-          </>
-        )}
+        {/*
+          Both modes stay mounted; only visibility toggles. This keeps
+          LoginForm mounted across toggles so its fetchProviders() effect
+          doesn't re-fire every time the user switches back from register.
+          `contents` makes the wrapper transparent to Card's flex layout
+          (which expects CardHeader/CardContent/CardFooter as direct flex
+          children); `hidden` removes the inactive mode from the flow.
+        */}
+        <div className={mode === 'login' ? 'contents' : 'hidden'}>
+          <CardHeader>
+            <CardTitle>Sign in</CardTitle>
+            <CardDescription>Enter your credentials to continue</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LoginForm
+              onSuccess={onAuthenticated}
+              initialError={initialError}
+              returnPath={returnPath}
+            />
+          </CardContent>
+          <CardFooter className="text-sm text-center">
+            <p className="text-muted-foreground">
+              No account?{' '}
+              <button
+                type="button"
+                className="text-foreground hover:underline"
+                onClick={() => setMode('register')}
+              >
+                Create one
+              </button>
+            </p>
+          </CardFooter>
+        </div>
+        <div className={mode === 'register' ? 'contents' : 'hidden'}>
+          <CardHeader>
+            <CardTitle>Create an account</CardTitle>
+            <CardDescription>Fill in your details to get started</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RegisterForm onSuccess={onAuthenticated} />
+          </CardContent>
+          <CardFooter className="text-sm text-center">
+            <p className="text-muted-foreground">
+              Already have an account?{' '}
+              <button
+                type="button"
+                className="text-foreground hover:underline"
+                onClick={() => setMode('login')}
+              >
+                Sign in
+              </button>
+            </p>
+          </CardFooter>
+        </div>
       </Card>
     </div>
   );
