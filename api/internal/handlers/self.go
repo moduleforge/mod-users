@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/moduleforge/core-api/apiresp"
@@ -32,13 +33,13 @@ func (h *SelfHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	ua, err := h.q.GetUserAccountByID(r.Context(), uc.UserAccountID)
 	if err != nil {
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
+		apiresp.WriteError(w, r, fmt.Errorf("self.Get: %w", err))
 		return
 	}
 
 	profile, err := h.coreSvcs.Entity.GetSelf(r.Context(), h.coreQ)
 	if err != nil {
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load entity")
+		apiresp.WriteError(w, r, fmt.Errorf("self.Get: %w", err))
 		return
 	}
 
@@ -58,13 +59,13 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 
 	var req selfUpdateRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	ua, err := h.q.GetUserAccountByID(r.Context(), uc.UserAccountID)
 	if err != nil {
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
+		apiresp.WriteError(w, r, fmt.Errorf("self.Put: %w", err))
 		return
 	}
 
@@ -72,7 +73,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 		// account_holder = entity_id on the legal_entities/natural_persons chain.
 		entity, err := h.coreQ.GetEntityByID(r.Context(), ua.AccountHolder)
 		if err != nil {
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve entity")
+			apiresp.WriteError(w, r, fmt.Errorf("self.Put: %w", err))
 			return
 		}
 		err = h.coreSvcs.NaturalPerson.UpdateByEntityUUID(
@@ -90,7 +91,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 	// Re-fetch the now-updated profile.
 	profile, err := h.coreSvcs.Entity.GetSelf(r.Context(), h.coreQ)
 	if err != nil {
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to reload entity")
+		apiresp.WriteError(w, r, fmt.Errorf("self.Put: %w", err))
 		return
 	}
 
