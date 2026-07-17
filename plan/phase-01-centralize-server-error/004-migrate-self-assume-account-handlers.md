@@ -88,3 +88,33 @@ architectural_impact: true
   leave untouched.
 - `mod-core/api/apiresp/writer.go`, `errors.go` (sentinels), `invalidinput.go`.
 </content>
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-17
+- **Validation summary:** `make build.api` compiles clean (run from worktree root);
+  `make test.unit` passes (all `api/` packages, including
+  `internal/handlers/self_routes_test.go` and
+  `internal/handlers/user_accounts_authz_test.go`); `gofmt -l` and `goimports -l`
+  report no diffs on `self.go`/`assume.go`/`user_accounts.go`; `go vet ./...` clean.
+  `grep -n "server\.Error\|server\.ErrorWithDetails"` returns zero matches in all
+  three files.
+- **Affected source files:**
+  - `api/internal/handlers/self.go`
+  - `api/internal/handlers/assume.go`
+  - `api/internal/handlers/user_accounts.go`
+- **Assumptions applied:** none beyond the task doc's explicit transform rules; no
+  `## Assumptions` section was present on this task doc.
+- **Decisions made:**
+  - Used method-scoped op labels for Category-1 wraps (`self.Get`, `self.Put`,
+    `assume.Assume`) per the task doc's `self.Get: %w` example, applied uniformly to
+    every 500 site within that method rather than a finer per-call-site label.
+  - Removed the `slog.ErrorContext(r.Context(), "assume: issue jwt", "error", err)`
+    line preceding `assume.go:62` — it logged only the same failure `WriteError`
+    now logs server-side, with no distinct structured context to preserve.
+  - No existing test asserted on the old bespoke top-level message strings for any
+    of the 13 migrated sites (spot-checked `self_routes_test.go` and
+    `user_accounts_authz_test.go`), so no test assertions needed updating;
+    `TestWriteServiceError_Mapping` and the `pgx.ErrNoRows` → 404 shim path were
+    left untouched and still pass.
