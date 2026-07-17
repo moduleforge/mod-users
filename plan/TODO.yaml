@@ -18,7 +18,7 @@ phases:
             branch: phase-01-task-01-migrate-local-auth-handlers-ap
             commit:
                 - 46db010
-            merge: null
+            merge: b5a12d8afe583cf36e3375e07c452700fcecff06
         - number: 2
           slug: migrate-oidc-auth-handler
           title: Migrate Oidc Auth Handler
