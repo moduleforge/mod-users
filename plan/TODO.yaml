@@ -35,7 +35,7 @@ phases:
           slug: migrate-identities-handler
           title: Migrate identities.go server.Error Sites
           path: phase-01-centralize-server-error/003-migrate-identities-handler.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Migrated all 23 literal server.Error sites in identities.go onto apiresp.WriteError. Three carve-outs (305/379/391) preserved with ZVum justification comments. writeStepUpRequired/writeLastIdentityError untouched. Build, vet, gofmt, unit tests all clean.
           git:
