@@ -230,11 +230,6 @@ items:
       date: "2026-07-17"
       tag: auth-vocab-migration
       text: '[phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md] make lint''s sequential run fails at lint.model due to an ephemeral-Postgres/Docker networking timeout - environmental, pre-existing, unrelated to this diff (model/ untouched). lint.api was run directly as substitute and passed clean. Likely affects any task running make lint in this environment.'
-    - title: This agent's toolset did not include a Task t
-      id: 1PV8
-      date: "2026-07-17"
-      tag: auth-vocab-migration
-      text: '[phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md] This agent''s toolset did not include a Task tool, so review_focus lenses were run manually inline rather than as nested sub-agent dispatches. Manager may want to confirm this substitution is acceptable for this plan''s audit trail.'
     - title: 'Tooling gap: this task agent had no Task tool'
       id: vJEy
       date: "2026-07-17"
