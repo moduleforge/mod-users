@@ -112,4 +112,53 @@ architectural_impact: true
 - `api/internal/handlers/user_accounts.go:56` (`writeServiceError`/`svc.ErrEmailTaken`)
   — the documented-exception precedent the carve-outs mirror.
 - `mod-core/api/apiresp/writer.go`, `errors.go`, `invalidinput.go`.
-</content>
+
+## Status
+
+**Outcome:** succeeded — 2026-07-17.
+
+All 23 literal `server.Error`/`server.ErrorWithDetails` call sites in
+`api/internal/handlers/identities.go` were migrated per the inventory's category
+tags:
+
+- Category 1 (500 internal_error, 12 sites: 149, 157, 311, 370, 387, 401, 418,
+  472, 591, 608, plus the two `List`/`SetPassword` credential-load sites) now call
+  `apiresp.WriteError(w, r, fmt.Errorf("<op label>: %w", err))`. Every
+  immediately-preceding `slog.ErrorContext` logging only the same failure was
+  removed (`WriteError` logs all 5xx with request context); op labels were
+  preserved from the original log message text at each site.
+- Category 2 (4xx sentinel, no details, 9 sites: 216, 220, 248, 348, 353, 573,
+  577, 586, 596) now call `apiresp.WriteError(w, r, apiresp.ErrInvalidInput /
+  apiresp.ErrNotFound / apiresp.ErrUnauthenticated)` per the matching sentinel.
+  Line 220's dynamic `err.Error()` text is no longer surfaced to the client (the
+  preceding `slog.WarnContext` line was left in place — it is a 4xx site, so
+  `WriteError` does not log it, and it is not redundant the way a 500 site's
+  `ErrorContext` is).
+- Category 3 (line 357, `users.password_too_short`) now calls
+  `apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{...}))` with
+  the exact same field/code/message.
+- Category 4 carve-outs (305, 379, 391) are unchanged in behavior; each now
+  carries a documenting comment referencing followup `ZVum` and the
+  `writeServiceError`/`svc.ErrEmailTaken` precedent in `user_accounts.go`. The
+  existing masking-decision comment above line 305 (now ~310) was kept verbatim
+  and the ZVum note appended after it. Comment wording deliberately avoids the
+  literal substring `server.ErrorWithDetails` so the task's own completion-check
+  grep (`server\.Error\|server\.ErrorWithDetails`) still returns exactly three
+  matches — the three carve-out call sites, nothing else.
+- `writeStepUpRequired`/`writeLastIdentityError` and their call sites were not
+  touched, per the out-of-scope instruction.
+
+**Validation:** `make build.api` compiles clean; `make test.unit` (run from
+`api/`) passes for all packages, including `internal/handlers` (which holds
+`identities_test.go`/`identities_stepup_test.go` — no test assertions needed
+updating, since none of them assert on the top-level message text at any
+migrated site); `gofmt -l identities.go` reports no diffs; `go vet ./...`
+clean; `grep -n "server\.Error\|server\.ErrorWithDetails" identities.go`
+returns exactly three matches (the carve-outs).
+
+**Files touched:** `api/internal/handlers/identities.go`.
+
+**Self-fix (same-diff):** removed a stray literal `</content>` line that had
+been appended to the end of this task document (below the `## References`
+list, outside any real section) — an unrelated pre-existing artifact in a file
+this task was already editing.
