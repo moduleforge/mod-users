@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: centralize-server-error
       title: Centralize server.Error Sites
+      diff_base: 3726f730cf9d84ef04f9ed55af59ec19ec3af2a5
       tasks:
         - number: 1
           slug: migrate-apps-handler
