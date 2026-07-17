@@ -14,7 +14,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-01-task-01-migrate-local-auth-handlers-ap
             commit: []
             merge: null
         - number: 2
