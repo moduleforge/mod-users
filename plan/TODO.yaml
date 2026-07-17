@@ -18,7 +18,7 @@ phases:
             branch: phase-01-task-01-migrate-apps-handler
             commit:
                 - 7d0c558
-            merge: null
+            merge: 7ec28d0
         - number: 2
           slug: migrate-oidc-handlers
           title: Migrate oidc_providers.go and oidc_config.go server.Error Sites
