@@ -121,6 +121,7 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 - Run `bun install` at the worktree root (the lockfile is checked in but `node_modules` is gitignored).
 - Copy `.yalc/` from the main checkout into the worktree before building `gui/`.
 - Copy `.env` from the main checkout (it is gitignored).
+- Go sub-projects (`model/`, `api/`) built inside a task worktree may hit a `go.work` "conflicting replacements" error; the [fix recipe](./docs/mf-standards/building-common.md#building-inside-a-task-worktree) needs `go work edit -replace` overrides for sibling modules (`core-model`, `core-api`, `audit-model`, `audit-api`, `authz-model`, `authz-api`).
 
 ## Key files and directories
 
