@@ -105,3 +105,8 @@ items:
       date: "2026-07-16"
       tag: fix-emailcode-enumeration-message
       text: '[ad-hoc task: fix-emailcode-enumeration-message] api/go.mod''s replace directives (../../mod-core/{api,model}, ../../mod-audit/*, ../../mod-authz/*) resolve correctly from the main mod-users checkout but not from a worktree nested under mod-users/worktrees/ (one level deeper), causing go build/go test to fail out of the box in any such worktree. Confirmed pre-existing and reproducible in an unrelated sibling worktree (2026-07-17-followup-cleanup), not caused by this task''s edit. Worked around by creating symlinks at mod-users/worktrees/{mod-core,mod-audit,mod-authz} -> the real sibling repos under /Users/zane/playground/moduleforge/ (outside the task worktree, no tracked files touched). Related to existing followup 9EBV (go.work replace-conflict fix) but distinct: this is about relative ../../ path depth breaking entirely for any nested worktree, not just go.work usage. Recommend documenting the symlink (or equivalent) step in AGENTS.md''s "Working in worktrees" section, alongside the existing .yalc/ and .env steps, so future nested-worktree tasks don''t rediscover this.'
+    - title: Two rebuild-failure sites in oidc_providers.g
+      id: Z6Vf
+      date: "2026-07-17"
+      tag: centralize-server-error
+      text: '[phase-01-centralize-server-error/002-migrate-oidc-handlers.md] Two rebuild-failure sites in oidc_providers.go now carry an id field in the wrapped error even though the original slog.ErrorContext call at that exact site didn''t log one — purely additive diagnostic context within the same line being edited, not a scope change.'
