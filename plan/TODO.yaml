@@ -46,6 +46,6 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-01-task-04-migrate-self-assume-account-ha
             commit: []
             merge: null
