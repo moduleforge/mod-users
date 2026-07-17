@@ -13,6 +13,7 @@ phases:
           path: phase-01-centralize-server-error/001-migrate-apps-handler.md
           done: false
           tier: sonnet-high
+          digest: Collapsed all 27 literal server.Error/server.ErrorWithDetails sites in apps.go onto apiresp.WriteError. Build, vet, gofmt, unit tests all clean. Zero remaining sites; 0 carve-outs as designated.
           git:
             branch: phase-01-task-01-migrate-apps-handler
             commit:
