@@ -166,8 +166,8 @@ cosmetically but exposes the same "received mail" listing.
 
 ## What's *not* here
 
-- API and GUI containers — they run on the host during development (Phase 3+
-  may add them to compose).
+- API and GUI containers — they run on the host during development and are
+  not part of the compose stack.
 - Production / k8s manifests — see `deploy/k8s/` and Phase 8.
 - Make targets to drive this stack — see Task 1.2 (`make dev.start`, etc.).
 
