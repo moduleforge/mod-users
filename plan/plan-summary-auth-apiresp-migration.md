@@ -103,3 +103,22 @@ Also: follow-up `biPE` — the original scope gap this plan was created to close
 removed from `plan/followups.yaml` during this session's Phase 2 doc-updates task, now that the
 six `auth/*.go` endpoint groups conform to the reserved-code vocabulary and the `openapi.yaml`
 disclosure citing it has been removed.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Auth Vocab Migration
+
+- [x] [001-migrate-local-auth-handlers.md](./phase-01-auth-vocab-migration/001-migrate-local-auth-handlers.md) — tier `sonnet-high` · branch `phase-01-task-01-migrate-local-auth-handlers-ap` · commit `46db010` · merge `b5a12d8afe583cf36e3375e07c452700fcecff06`
+- [x] [002-migrate-oidc-auth-handler.md](./phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md) — tier `sonnet-high` · branch `phase-01-task-02-migrate-oidc-auth-handler-apir` · commit `48fb16e` · merge `81aeaed2984c792e106d1c60535159040fb40cf8`
+
+### Phase 02 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-02-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `phase-02-task-01-update-architecture-docs-bipe` · commit `6264495` · merge `f67dc61df2a23c47f3f141fd468b75b26506aed5`
