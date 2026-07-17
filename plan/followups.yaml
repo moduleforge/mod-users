@@ -245,3 +245,8 @@ items:
       date: "2026-07-17"
       tag: auth-vocab-migration
       text: '[phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md] This agent''s toolset did not include a Task tool, so review_focus lenses were run manually inline rather than as nested sub-agent dispatches. Manager may want to confirm this substitution is acceptable for this plan''s audit trail.'
+    - title: 'Tooling gap: this task agent had no Task tool'
+      id: vJEy
+      date: "2026-07-17"
+      tag: auth-vocab-migration
+      text: '[phase-01-auth-vocab-migration/001-migrate-local-auth-handlers.md] Tooling gap: this task agent had no Task tool available, so review_focus: [correctness, security] nested lens dispatch could not be performed as a true sub-agent dispatch; substituted a manual application of both lenses'' checklists against the diff. Manager may want to re-run a proper review-changes-* dispatch against commit 46db010 if a formal structured review report is required.'
