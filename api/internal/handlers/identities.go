@@ -145,16 +145,14 @@ func (h *IdentitiesHandler) List(w http.ResponseWriter, r *http.Request) {
 	} else if errors.Is(err, pgx.ErrNoRows) {
 		localDTO = &localIdentityDTO{Set: false}
 	} else {
-		slog.ErrorContext(r.Context(), "identities.List: get auth_local", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load credentials")
+		apiresp.WriteError(w, r, fmt.Errorf("identities.List: get auth_local: %w", err))
 		return
 	}
 
 	// OIDC identities
 	rows, err := h.queries.ListOIDCIdentitiesByUserAccount(r.Context(), uc.UserAccountID)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "identities.List: list oidc identities", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load identities")
+		apiresp.WriteError(w, r, fmt.Errorf("identities.List: list oidc identities: %w", err))
 		return
 	}
 
@@ -213,11 +211,11 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 	authURL, state, err := h.oauth.LinkAuthorizeURL(providerID, uc.UserUUID, returnPath)
 	if err != nil {
 		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
-			server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
+			apiresp.WriteError(w, r, apiresp.ErrNotFound)
 			return
 		}
 		slog.WarnContext(r.Context(), "identities.StartLink: bad request", "error", err, "provider", providerID)
-		server.Error(w, http.StatusBadRequest, "invalid_input", err.Error())
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
@@ -245,7 +243,7 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 	rawUUID := chi.URLParam(r, "identity_uuid")
 	identUUID, err := uuid.Parse(rawUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid identity UUID")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
@@ -302,13 +300,19 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 			// ever probe their own identities, so there is no cross-user
 			// existence leak and existence masking does not apply here — a
 			// plain 404 is correct (see the task doc's recorded decision).
+			//
+			// Documented exception (followup ZVum): apiresp exposes no public
+			// detail-carrying constructor for not_found (only InvalidInput), so
+			// the users.identity_not_found field detail cannot be attached via
+			// apiresp.WriteError. Kept as the literal call below, mirroring the
+			// writeServiceError/svc.ErrEmailTaken precedent (user_accounts.go);
+			// collapse once mod-core adds a detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusNotFound, "not_found", "identity not found", []apiresp.FieldError{
 				{Code: "users.identity_not_found", Message: "identity not found"},
 			})
 			return
 		}
-		slog.ErrorContext(r.Context(), "identities.Unlink: transaction", "error", txErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to unlink identity")
+		apiresp.WriteError(w, r, fmt.Errorf("identities.Unlink: transaction: %w", txErr))
 		return
 	}
 
@@ -345,18 +349,18 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 
 	var req setPasswordRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	if req.NewPassword == "" {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "new_password is required")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	if len(req.NewPassword) < 12 {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
-			{Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters"},
-		})
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
+		}))
 		return
 	}
 
@@ -366,8 +370,7 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 	existing, err := h.queries.GetAuthLocal(r.Context(), uc.UserAccountID)
 	hasExisting := err == nil
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		slog.ErrorContext(r.Context(), "identities.SetPassword: get auth_local", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load credentials")
+		apiresp.WriteError(w, r, fmt.Errorf("identities.SetPassword: get auth_local: %w", err))
 		return
 	}
 
@@ -376,6 +379,13 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 		operation = "update"
 		// Require and verify current_password.
 		if req.CurrentPassword == nil || *req.CurrentPassword == "" {
+			// Documented exception (followup ZVum): apiresp exposes no public
+			// detail-carrying constructor for unauthenticated (only
+			// InvalidInput), so the users.bad_credentials field detail cannot
+			// be attached via apiresp.WriteError. Kept as the literal call
+			// below, mirroring the writeServiceError/svc.ErrEmailTaken
+			// precedent (user_accounts.go); collapse once mod-core adds a
+			// detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
 				{Field: "current_password", Code: "users.bad_credentials", Message: "current_password is required to change an existing password"},
 			})
@@ -383,11 +393,17 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 		}
 		ok, verifyErr := localauth.VerifyPassword(*req.CurrentPassword, existing.PasswordHash)
 		if verifyErr != nil {
-			slog.ErrorContext(r.Context(), "identities.SetPassword: verify password", "error", verifyErr)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to verify current password")
+			apiresp.WriteError(w, r, fmt.Errorf("identities.SetPassword: verify password: %w", verifyErr))
 			return
 		}
 		if !ok {
+			// Documented exception (followup ZVum): apiresp exposes no public
+			// detail-carrying constructor for unauthenticated (only
+			// InvalidInput), so the users.bad_credentials field detail cannot
+			// be attached via apiresp.WriteError. Kept as the literal call
+			// below, mirroring the writeServiceError/svc.ErrEmailTaken
+			// precedent (user_accounts.go); collapse once mod-core adds a
+			// detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
 				{Field: "current_password", Code: "users.bad_credentials", Message: "current password is incorrect"},
 			})
@@ -397,8 +413,7 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 
 	hash, err := localauth.HashPassword(req.NewPassword)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "identities.SetPassword: hash password", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process password")
+		apiresp.WriteError(w, r, fmt.Errorf("identities.SetPassword: hash password: %w", err))
 		return
 	}
 
@@ -414,8 +429,7 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 		return h.safeObserve(ctx, tx, operation, "auth_local", &entityID, nil, after)
 	})
 	if txErr != nil {
-		slog.ErrorContext(r.Context(), "identities.SetPassword: transaction", "error", txErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to save password")
+		apiresp.WriteError(w, r, fmt.Errorf("identities.SetPassword: transaction: %w", txErr))
 		return
 	}
 
@@ -468,8 +482,7 @@ func (h *IdentitiesHandler) RemovePassword(w http.ResponseWriter, r *http.Reques
 			writeLastIdentityError(w)
 			return
 		}
-		slog.ErrorContext(r.Context(), "identities.RemovePassword: transaction", "error", txErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to remove password")
+		apiresp.WriteError(w, r, fmt.Errorf("identities.RemovePassword: transaction: %w", txErr))
 		return
 	}
 
@@ -570,11 +583,11 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 
 	var req stepUpVerifyRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	if req.Code == "" {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "code is required")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
@@ -583,17 +596,16 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 		Purpose:       "credential_change",
 	})
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
+		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "stepup_verify: get code", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to look up code")
+		apiresp.WriteError(w, r, fmt.Errorf("stepup_verify: get code: %w", err))
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(emailCode.CodeHash), []byte(req.Code)); err != nil {
-		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
+		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
 		return
 	}
 
@@ -604,8 +616,7 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 
 	token, _, _, err := localauth.IssueStepUpToken([]byte(h.jwtSecret), uc.UserAccountID, localauth.StepUpTTL)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "stepup_verify: issue token", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue step-up token")
+		apiresp.WriteError(w, r, fmt.Errorf("stepup_verify: issue token: %w", err))
 		return
 	}
 
