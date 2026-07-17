@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/moduleforge/core-api/apiresp"
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	svc "github.com/moduleforge/mod-users/api/internal/service"
@@ -23,12 +24,13 @@ type anonymousRequest struct {
 func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	var req anonymousRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
 	if req.DeviceID == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "device_id is required")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "device_id is required",
+			[]apiresp.FieldError{{Field: "device_id", Code: "users.device_id_required", Message: "device_id is required"}})
 		return
 	}
 
