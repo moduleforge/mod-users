@@ -42,8 +42,28 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      # gui/ imports @moduleforge/core-gui directly; it's resolved locally via yalc
+      # per AGENTS.md, and CI must replicate that since the package isn't published to a registry.
+      - name: Checkout core-gui (moduleforge/mod-core)
+        uses: actions/checkout@v4
+        with:
+          repository: moduleforge/mod-core
+          path: mod-core
+
+      - name: Build core-gui and publish to local yalc store
+        run: |
+          cd mod-core/gui
+          bun install --frozen-lockfile
+          bun run build
+          npx --yes yalc publish
+
+      - name: Link core-gui into gui/ via yalc
+        run: |
+          cd gui
+          npx --yes yalc add @moduleforge/core-gui
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
 
       - name: Lint (all sub-projects)
         run: make lint
@@ -106,8 +126,28 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      # gui/ imports @moduleforge/core-gui directly; it's resolved locally via yalc
+      # per AGENTS.md, and CI must replicate that since the package isn't published to a registry.
+      - name: Checkout core-gui (moduleforge/mod-core)
+        uses: actions/checkout@v4
+        with:
+          repository: moduleforge/mod-core
+          path: mod-core
+
+      - name: Build core-gui and publish to local yalc store
+        run: |
+          cd mod-core/gui
+          bun install --frozen-lockfile
+          bun run build
+          npx --yes yalc publish
+
+      - name: Link core-gui into gui/ via yalc
+        run: |
+          cd gui
+          npx --yes yalc add @moduleforge/core-gui
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
 
       - name: Install sqlc
         run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v${{ env.SQLC_VERSION }}
