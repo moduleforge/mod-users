@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -66,4 +68,34 @@ type statusWriter struct {
 func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
 	w.ResponseWriter.WriteHeader(code)
+}
+
+// Flush implements http.Flusher by delegating to the embedded
+// ResponseWriter, if it supports flushing. Required so streaming
+// consumers (e.g. Server-Sent Events) work through AccessLog.
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack implements http.Hijacker by delegating to the embedded
+// ResponseWriter, if it supports hijacking. Required for websocket
+// upgrades to work through AccessLog.
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	return h.Hijack()
+}
+
+// Push implements http.Pusher by delegating to the embedded
+// ResponseWriter, if it supports HTTP/2 server push.
+func (w *statusWriter) Push(target string, opts *http.PushOptions) error {
+	p, ok := w.ResponseWriter.(http.Pusher)
+	if !ok {
+		return http.ErrNotSupported
+	}
+	return p.Push(target, opts)
 }
