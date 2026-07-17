@@ -39,7 +39,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-03-migrate-identities-handler
-            commit: []
+            commit:
+                - 03e1470
             merge: null
         - number: 4
           slug: migrate-self-assume-account-handlers
