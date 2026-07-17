@@ -137,7 +137,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 
 	ua, err := h.queries.GetUserAccountByEmail(r.Context(), req.Email)
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid code")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
 	if err != nil {
