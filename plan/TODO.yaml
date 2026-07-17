@@ -13,6 +13,7 @@ phases:
           path: phase-01-auth-vocab-migration/001-migrate-local-auth-handlers.md
           done: false
           tier: sonnet-high
+          digest: Migrated all 18 mechanical bad_request/unauthorized -> invalid_input/unauthenticated code swaps, the 6 validation_error -> invalid_input+details[] sites, and the one email_taken -> conflict+details[] site across register.go, login.go, emailcode.go, anonymous.go, reset.go, per the task doc's mechanical mapping table and reference implementations. Left the six generic unauthorized->unauthenticated anti-enumeration sites without details[], per Requirement 4. Updated guards_test.go and anonymous_test.go assertions. All required validation passed except make lint's model sub-target (unrelated pre-existing Docker/Postgres environment limitation); lint.api clean. Manual correctness/security review found no diff-introduced issues; surfaced one pre-existing, task-doc-forbidden-to-touch message-text inconsistency in emailcode.go's anti-enumeration paths.
           git:
             branch: phase-01-task-01-migrate-local-auth-handlers-ap
             commit:
