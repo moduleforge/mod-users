@@ -11,7 +11,7 @@ phases:
           slug: migrate-apps-handler
           title: Migrate apps.go server.Error Sites
           path: phase-01-centralize-server-error/001-migrate-apps-handler.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Collapsed all 27 literal server.Error/server.ErrorWithDetails sites in apps.go onto apiresp.WriteError. Build, vet, gofmt, unit tests all clean. Zero remaining sites; 0 carve-outs as designated.
           git:
