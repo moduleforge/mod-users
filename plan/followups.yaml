@@ -160,11 +160,6 @@ items:
       date: "2026-07-16"
       tag: users-apiresp-migration
       text: 'docs/mf-standards/building-common.md''s "Building inside a task worktree" recipe (go work init && go work use ...) is incomplete: it produces a "conflicting replacements" error inside a real task worktree, because the affected module''s own api/go.mod replace directives (wrongly-resolving at worktree depth) remain active alongside the go.work use entries for the same modules. The actual fix also requires explicit `go work edit -replace <module>@v0.0.0=<corrected-path>` overrides for every sibling module (core-model, core-api, audit-model, audit-api, authz-model, authz-api) — confirmed working in phase-01-task-01-adopt-apiresp-sentinels-and-wr worktree (users-apiresp-migration plan). Separately, mod-users/AGENTS.md''s "Working in worktrees" section (~line 118) covers the gui/.yalc fix but doesn''t mention this Go go.work fix at all, so a fresh task agent has no in-repo pointer to it short of independently discovering docs/mf-standards/building-common.md. Recommend: (1) update building-common.md''s recipe to include the -replace overrides, (2) add a one-line AGENTS.md pointer to that doc section. Owner: docs-mf-standards repo for (1), mod-users AGENTS.md for (2) — cross-repo, not fixable from a single task worktree.'
-    - title: make lint.model's shadow-db-lint step can't r
-      id: 0x4L
-      date: "2026-07-16"
-      tag: go-apiresp-foundation
-      text: '[phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md] make lint.model''s shadow-db-lint step can''t reach its ephemeral Postgres container in this sandbox (Docker networking timeout) - an environment limitation, not a model/ code issue; model/ is untouched by this task.'
     - title: Pre-existing doc-graph orphans (not from ph1)
       id: rmQ5
       date: "2026-07-16"
