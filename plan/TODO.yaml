@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: centralize-server-error
       title: Centralize server.Error Sites
-      tasks: []
+      tasks:
+        - number: 1
+          slug: migrate-apps-handler
+          title: Migrate apps.go server.Error Sites
+          path: phase-01-centralize-server-error/001-migrate-apps-handler.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
