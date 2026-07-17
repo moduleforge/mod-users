@@ -35,11 +35,6 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/003-auth-page.md] No Task tool was available to sub-dispatch review-changes-correctness/review-changes-security as separate agents; the implementing agent applied both lenses inline instead (no findings). Manager may want an independent review pass if strict reviewer/implementer separation matters for this task.'
-    - title: AuthPage remounts LoginForm on toggle
-      id: wufX
-      date: "2026-07-05"
-      tag: phase-01-auth-ui-components
-      text: '[phase-01 gate review, efficiency lens] AuthPage''s mode ternary swaps LoginForm/RegisterForm rather than toggling visibility of stably-mounted children, so LoginForm unmounts/remounts on every transition back to login mode, re-firing its fetchProviders() network call each time. Not a regression vs. the prior app-mfdemo per-route architecture, and the toggle is a low-frequency user-driven interaction (cold path) — informational, not a required fix. If provider-list churn becomes a concern, either keep both forms mounted and toggle visibility with CSS, or lift the provider fetch/cache above LoginForm (e.g. into AuthPage or a shared hook).'
     - title: 5 flat-envelope sites deferred
       id: eiF8
       date: "2026-07-14"
