@@ -43,14 +43,6 @@
         "scored_at": "2026-07-17T00:29:44Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
-      "VqCM": {
-        "sig": "57718c0d304728c0a9a8840987670592",
-        "effort_bucket": "medium",
-        "utility_bucket": "high",
-        "rationale": "@moduleforge/core-gui types unresolved in CI breaks make build.gui in any environment without .yalc/ populated — a real broken build gate; fix requires publishing/linking the package or excluding build.gui from CI, moderate implementation effort.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
       "kcN3": {
         "sig": "4895deb0b1ec4b33143d52246e19c79a",
         "effort_bucket": "low",
@@ -251,14 +243,6 @@
         "scored_at": "2026-07-17T00:29:44Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
-      "9EBV": {
-        "sig": "267761c77fb05a35d724305ff058a834",
-        "effort_bucket": "low",
-        "utility_bucket": "high",
-        "rationale": "The mod-users-side fix is a single AGENTS.md pointer addition to the already-confirmed-working go.work fix recipe — trivial effort, high payoff since it removes a recurring build-setup friction point for every future task worktree in this repo.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
       "0x4L": {
         "sig": "ae247ecb51764b11d9985469f15d1488",
         "effort_bucket": "low",
@@ -369,6 +353,22 @@
         "utility_bucket": "low",
         "rationale": "Environment note (submodule uninitialized); already worked around, informational.",
         "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "biPE": {
+        "sig": "d953247188ec3c473430c146d7278e91",
+        "effort_bucket": "high",
+        "utility_bucket": "high",
+        "rationale": "Major scope gap: ~24-33 literal bad_request/unauthorized/validation_error/email_taken sites remain unmigrated in api/internal/handlers/auth/*.go — the module's highest-traffic unauthenticated endpoints (register, login, anonymous, oidc, reset). Distinct from and larger-stakes than 8iRl's already-tracked 28-site gap (which covers lower-traffic administrative endpoints). High utility: closes the apiresp migration's most consequential gap on security/consistency-sensitive surface. High effort: large, security-sensitive refactor across 6 production files.",
+        "scored_at": "2026-07-17T01:30:02Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "ll4D": {
+        "sig": "cae413792f8b7ee78beaa59a101d0127",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Cross-repo doc gap: the AGENTS.md pointer added for followup 9EBV now points to docs/mf-standards/building-common.md's worktree Go-build section, but that section doesn't yet contain the go work edit -replace recipe it's supposed to document. Medium effort (owned by docs-mf-standards repo, needs coordination), medium utility (removes real friction for future task worktrees building Go sub-projects, but is documentation-only).",
+        "scored_at": "2026-07-17T01:30:02Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       }
     },
