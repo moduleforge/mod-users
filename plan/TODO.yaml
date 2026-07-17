@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: auth-vocab-migration
       title: Auth Vocab Migration
-      tasks: []
+      tasks:
+        - number: 1
+          slug: migrate-local-auth-handlers
+          title: Migrate Local Auth Handlers
+          path: phase-01-auth-vocab-migration/001-migrate-local-auth-handlers.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
