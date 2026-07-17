@@ -38,7 +38,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-01-task-03-migrate-identities-handler
             commit: []
             merge: null
         - number: 4
