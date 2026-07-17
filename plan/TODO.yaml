@@ -47,4 +47,4 @@ phases:
             branch: phase-02-task-01-update-architecture-docs-bipe
             commit:
                 - "6264495"
-            merge: null
+            merge: f67dc61df2a23c47f3f141fd468b75b26506aed5
