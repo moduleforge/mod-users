@@ -15,7 +15,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-01-migrate-apps-handler
-            commit: []
+            commit:
+                - 7d0c558
             merge: null
         - number: 2
           slug: migrate-oidc-handlers
