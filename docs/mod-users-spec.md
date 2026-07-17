@@ -147,7 +147,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Action:** Imports components from `@moduleforge/users-gui` (via npm, Bun workspace, or yalc local link) and composes them into an application shell.
 
-**Outcome:** Components render the auth, profile, admin, and OIDC-config surfaces. The `app-mfdemo` Next.js project (at the aggregate level) demonstrates all components in a working context; it is the component showcase (the role Storybook plays in other projects). The demo app requires the API running locally.
+**Outcome:** Components render the auth, profile, admin, and OIDC-config surfaces. The `app-mfdemo` Next.js project (at the aggregate level) demonstrates all components in a working context; it is the component showcase (the role Ladle plays in other projects). The demo app requires the API running locally.
 
 ---
 

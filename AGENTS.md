@@ -41,7 +41,7 @@ This file is the canonical reference for contributors and AI agents working on t
 
 4. **Set up yalc for gui/ peer dependency** (required for `gui/` builds):
 
-   `gui/` depends on `@moduleforge/core-gui` via a `file:.yalc/` link. The `.yalc/` directory is gitignored and must be populated manually in fresh checkouts or worktrees:
+   `gui/` declares `@moduleforge/core-gui` as an optional peer dependency, resolved locally via a `file:.yalc/` link that `yalc add` adds to `gui/package.json` (gitignored, never committed). The `.yalc/` directory is gitignored and must be populated manually in fresh checkouts or worktrees:
    ```sh
    # From the core-gui package directory (sibling repo):
    yalc publish
