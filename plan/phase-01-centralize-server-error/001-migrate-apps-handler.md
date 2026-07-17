@@ -76,6 +76,25 @@ task owns the `apps.go` section of that inventory (lines 55–499).
   package.
 - `grep -c "server\.Error" api/internal/handlers/apps.go` returns `0`.
 
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-17
+- **Validation:** `make build.api` compiles clean; `make test.unit` passes (all
+  packages, including `api/internal/handlers`); `gofmt -l apps.go` and
+  `goimports -l apps.go` report no diffs; `go vet ./...` clean;
+  `grep -c "server\.Error" api/internal/handlers/apps.go` returns `0`.
+- **Affected files:** `api/internal/handlers/apps.go`.
+- **Notes:** All 27 sites collapsed onto `apiresp.WriteError` per the
+  inventory's category tags (12×C1, 12×C2, 3×C3) — no carve-outs, matching the
+  task doc. Every immediately-preceding `slog.ErrorContext` at a 500 site was
+  removed and its op label folded into `fmt.Errorf("<op>: %w", err)`; the
+  `log/slog` import was dropped (no remaining `slog.*` uses in the file) and
+  `fmt` was added. The `server` import is retained (`server.Decode`/
+  `server.JSON` still in use). No test in `internal/handlers` asserted a
+  bespoke top-level message string for any `apps.go` site, so no test edits
+  were required.
+
 ## Metadata
 
 architectural_impact: true

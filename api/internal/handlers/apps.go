@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -52,21 +52,21 @@ type createAppRequest struct {
 func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createAppRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	req.Slug = strings.TrimSpace(req.Slug)
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Slug == "" {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
-			{Field: "slug", Code: "users.slug_required", Message: "slug is required"},
-		})
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "slug", Code: "users.slug_required", Message: "slug is required",
+		}))
 		return
 	}
 	if req.Name == "" {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
-			{Field: "name", Code: "users.name_required", Message: "name is required"},
-		})
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "name", Code: "users.name_required", Message: "name is required",
+		}))
 		return
 	}
 
@@ -97,8 +97,7 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return h.observers.Observe(ctx, tx, "create", "app", nil, nil, after)
 	})
 	if txErr != nil {
-		slog.ErrorContext(r.Context(), "apps.create", "error", txErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create app")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.create: %w", txErr))
 		return
 	}
 
@@ -128,8 +127,7 @@ func (h *AppsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	apps, err := h.q.ListApps(r.Context())
 	if err != nil {
-		slog.ErrorContext(r.Context(), "apps.list", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to list apps")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.list: %w", err))
 		return
 	}
 
@@ -176,7 +174,7 @@ func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 
 	var req updateAppRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
@@ -223,8 +221,7 @@ func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
 		return h.observers.Observe(ctx, tx, "update", "app", nil, before, after)
 	})
 	if txErr != nil {
-		slog.ErrorContext(r.Context(), "apps.update", "error", txErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to update app")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.update: %w", txErr))
 		return
 	}
 
@@ -264,8 +261,7 @@ func (h *AppsHandler) DeleteApp(w http.ResponseWriter, r *http.Request) {
 		return h.observers.Observe(ctx, tx, "delete", "app", nil, before, nil)
 	})
 	if txErr != nil {
-		slog.ErrorContext(r.Context(), "apps.delete", "error", txErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to archive app")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.delete: %w", txErr))
 		return
 	}
 
@@ -298,30 +294,29 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 
 	var req assignUserRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	if req.UserUUID == "" {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
-			{Field: "user_uuid", Code: "users.user_uuid_required", Message: "user_uuid is required"},
-		})
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "user_uuid", Code: "users.user_uuid_required", Message: "user_uuid is required",
+		}))
 		return
 	}
 
 	userUUID, err := uuid.Parse(req.UserUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid user_uuid")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	ua, err := h.q.GetUserAccountByUUID(r.Context(), userUUID)
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusNotFound, "not_found", "user account not found")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "apps.assign_user: get user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.assign_user: get user account: %w", err))
 		return
 	}
 
@@ -335,8 +330,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 		UserAccountID: ua.ID,
 		Roles:         roles,
 	}); err != nil {
-		slog.ErrorContext(r.Context(), "apps.assign_user", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to assign user account to app")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.assign_user: %w", err))
 		return
 	}
 
@@ -362,8 +356,7 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 
 	members, err := h.q.ListAppUserAccounts(r.Context(), app.ID)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "apps.list_users", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to list app user accounts")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.list_users: %w", err))
 		return
 	}
 
@@ -393,18 +386,17 @@ func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	rawUserUUID := chi.URLParam(r, "user_account_uuid")
 	userUUID, err := uuid.Parse(rawUserUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid user uuid")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	ua, err := h.q.GetUserAccountByUUID(r.Context(), userUUID)
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusNotFound, "not_found", "user account not found")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "apps.remove_user: get user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.remove_user: get user account: %w", err))
 		return
 	}
 
@@ -412,8 +404,7 @@ func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		AppID:         app.ID,
 		UserAccountID: ua.ID,
 	}); err != nil {
-		slog.ErrorContext(r.Context(), "apps.remove_user", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to remove user account from app")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.remove_user: %w", err))
 		return
 	}
 
@@ -440,24 +431,23 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	rawUserUUID := chi.URLParam(r, "user_account_uuid")
 	userUUID, err := uuid.Parse(rawUserUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid user uuid")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	ua, err := h.q.GetUserAccountByUUID(r.Context(), userUUID)
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusNotFound, "not_found", "user account not found")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "apps.update_roles: get user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.update_roles: get user account: %w", err))
 		return
 	}
 
 	var req updateRolesRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	if req.Roles == nil {
@@ -469,8 +459,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 		UserAccountID: ua.ID,
 		Roles:         req.Roles,
 	}); err != nil {
-		slog.ErrorContext(r.Context(), "apps.update_roles", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to update roles")
+		apiresp.WriteError(w, r, fmt.Errorf("apps.update_roles: %w", err))
 		return
 	}
 
@@ -486,17 +475,16 @@ func (h *AppsHandler) loadAppByUUIDParam(w http.ResponseWriter, r *http.Request)
 	rawUUID := chi.URLParam(r, "uuid")
 	parsed, err := uuid.Parse(rawUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return db.App{}, false
 	}
 	app, err := h.q.GetAppByUUID(r.Context(), parsed)
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusNotFound, "not_found", "app not found")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return db.App{}, false
 	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "apps: load by uuid", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load app")
+		apiresp.WriteError(w, r, fmt.Errorf("apps: load by uuid: %w", err))
 		return db.App{}, false
 	}
 	return app, true
