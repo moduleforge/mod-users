@@ -230,11 +230,6 @@ items:
       date: "2026-07-17"
       tag: auth-vocab-migration
       text: '[phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md] make lint''s sequential run fails at lint.model due to an ephemeral-Postgres/Docker networking timeout - environmental, pre-existing, unrelated to this diff (model/ untouched). lint.api was run directly as substitute and passed clean. Likely affects any task running make lint in this environment.'
-    - title: Pre-existing anti-enumeration message-text in
-      id: KeV1
-      date: "2026-07-17"
-      tag: auth-vocab-migration
-      text: '[phase-01-auth-vocab-migration/001-migrate-local-auth-handlers.md] Pre-existing anti-enumeration message-text inconsistency in emailcode.go (not introduced by this diff, task doc''s Requirement 1 explicitly forbids changing message text at these sites): EmailCodeVerify''s user-not-found branch returns "invalid code" while its code-not-active/code-mismatch branches return "invalid or expired code". Status and code are now identical (401 unauthenticated) across all three, but the differing message text is a potential enumeration channel. Predates this plan, out of this task''s scope to fix; worth a follow-up item if not already tracked.'
     - title: Nested worktrees break go.mod replace paths
       id: 3atD
       date: "2026-07-16"
