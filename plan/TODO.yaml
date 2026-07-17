@@ -15,7 +15,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-01-migrate-local-auth-handlers-ap
-            commit: []
+            commit:
+                - 46db010
             merge: null
         - number: 2
           slug: migrate-oidc-auth-handler
