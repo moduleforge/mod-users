@@ -43,7 +43,7 @@ phases:
           slug: migrate-self-assume-account-handlers
           title: Migrate self.go, assume.go, and user_accounts.go server.Error Sites
           path: phase-01-centralize-server-error/004-migrate-self-assume-account-handlers.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Collapsed all 13 literal server.Error sites in self.go(6)/assume.go(3)/user_accounts.go(4) onto apiresp.WriteError. Shared helpers writeServiceError/writeCoreServiceErr untouched. Build, vet, gofmt, unit tests all clean. Zero remaining sites; 0 carve-outs.
           git:
