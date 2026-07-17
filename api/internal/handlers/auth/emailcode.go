@@ -36,7 +36,7 @@ type emailCodeVerifyBody struct {
 func (h *Handler) EmailCodeRequest(w http.ResponseWriter, r *http.Request) {
 	var req emailCodeRequestBody
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -122,13 +122,13 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	var req emailCodeVerifyBody
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	if req.Email == "" || req.Code == "" {
-		server.Error(w, http.StatusBadRequest, "bad_request", "email and code are required")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "email and code are required")
 		return
 	}
 	if req.Purpose == "" {
@@ -137,7 +137,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 
 	ua, err := h.queries.GetUserAccountByEmail(r.Context(), req.Email)
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid code")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid code")
 		return
 	}
 	if err != nil {
@@ -151,7 +151,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		Purpose:       req.Purpose,
 	})
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired code")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
 	if err != nil {
@@ -161,7 +161,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(emailCode.CodeHash), []byte(req.Code)); err != nil {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired code")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
 

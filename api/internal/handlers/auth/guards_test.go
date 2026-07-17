@@ -173,19 +173,19 @@ func TestLogin_AnonymousAccount(t *testing.T) {
 			name:       "empty email returns 400",
 			body:       `{"email":"","password":"somepassword"}`,
 			wantStatus: http.StatusBadRequest,
-			wantCode:   "bad_request",
+			wantCode:   "invalid_input",
 		},
 		{
 			name:       "missing email returns 400",
 			body:       `{"password":"somepassword"}`,
 			wantStatus: http.StatusBadRequest,
-			wantCode:   "bad_request",
+			wantCode:   "invalid_input",
 		},
 		{
 			name:       "empty password returns 400",
 			body:       `{"email":"user@example.com","password":""}`,
 			wantStatus: http.StatusBadRequest,
-			wantCode:   "bad_request",
+			wantCode:   "invalid_input",
 		},
 	}
 
