@@ -27,7 +27,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-02-migrate-oidc-handlers
-            commit: []
+            commit:
+                - b29c0b9
             merge: null
         - number: 3
           slug: migrate-identities-handler
