@@ -26,3 +26,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: migrate-identities-handler
+          title: Migrate identities.go server.Error Sites
+          path: phase-01-centralize-server-error/003-migrate-identities-handler.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
