@@ -115,11 +115,6 @@ items:
       date: "2026-07-16"
       tag: go-vocab-migration
       text: 'Phase-02 architecture-conformance review (users-apiresp-migration plan) found: docs/mf-standards/architecture/api-response-design.md''s worked example uses "One or more fields are invalid." (capitalized, trailing period) as the top-level message for invalid_input + details[] responses. The migrated ErrorWithDetails call sites (e.g. api/internal/handlers/apps.go:52,55, identities.go:352) use "one or more fields are invalid" (lowercase, no period). Non-blocking cosmetic inconsistency - low priority. Recommend either aligning the literal message string with the design doc''s exact casing/punctuation in a future pass, or amending the design doc to note the example message is illustrative, not literal.'
-    - title: 'cd gui && bun test is not-applicable: gui/ ha'
-      id: t5kn
-      date: "2026-07-16"
-      tag: gui-core-gui-adoption
-      text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] cd gui && bun test is not-applicable: gui/ has zero test files and no test script in its history. Establishing test infra (bun-types devDependency, first test convention) is out of this task''s scope - likely applies identically to sibling task 002.'
     - title: Flow's mid-task-commit.sh/finalize-task-commi
       id: le59
       date: "2026-07-16"
