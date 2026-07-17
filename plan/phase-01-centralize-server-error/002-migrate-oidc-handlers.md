@@ -98,4 +98,45 @@ architectural_impact: true
   gap this carve-out documents; and `api/internal/handlers/user_accounts.go:56`
   (`writeServiceError`/`svc.ErrEmailTaken`) — the precedent it mirrors.
 - `mod-core/api/apiresp/writer.go`, `errors.go` (sentinels), `invalidinput.go`.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-07-17
+- **Validation summary:** `make build` (api) compiles clean; `make test.unit`
+  (api) passes all packages, including `internal/handlers` (covers
+  `oidc_providers_test.go` and `oidc_config_test.go` — all status-code
+  assertions, incl. `StatusConflict` at the carve-out, `StatusOK`,
+  `StatusNotFound`, `StatusUnauthorized`, pass unchanged); `gofmt -l
+  oidc_providers.go oidc_config.go` reports no diffs; `go vet
+  ./internal/handlers/...` clean. `grep -n "server\.Error"
+  oidc_providers.go` returns exactly one match (the carve-out at the
+  `StatusConflict` "use PUT to update" site); `grep -n "server\.Error"
+  oidc_config.go` returns zero matches.
+- **Affected source files:**
+  - `api/internal/handlers/oidc_providers.go`
+  - `api/internal/handlers/oidc_config.go`
+- **Decisions made:**
+  - All 9 `slog.ErrorContext` calls in `oidc_providers.go` immediately
+    preceded a Category-1 500 site and were removed; distinct `"id", id`
+    fields that were logged were folded into the wrapped error via `%q`.
+    The two `oidc_providers.go` rebuild-failure sites that had **no**
+    logged `id` field originally now include `id` in the wrapped error
+    anyway (cheap, strictly more diagnostic context, does not drop
+    anything that was previously present) — flagged here since it is a
+    small deviation from "only fold what was logged."
+  - `oidc_config.go` retains the `log/slog` import: its two
+    `slog.WarnContext` calls (non-fatal `ClearSetupTokenHash` /
+    post-clear `RefreshState` failures inside `Confirm`) do not precede a
+    `server.Error`/`apiresp.WriteError` site and were left untouched, per
+    the task's "only the literal `server.Error` sites" constraint.
+  - The `oidc_providers.go:218` carve-out was left byte-for-byte as
+    specified, with the documenting comment added directly above it.
+  - No test assertions needed updating — both `oidc_providers_test.go`
+    and `oidc_config_test.go` already asserted only on HTTP status codes,
+    never on top-level message text, so genericizing messages caused no
+    test breakage.
+- **Assumptions applied:** none beyond the task doc's own
+  transform-rule categories; no `## Assumptions` section was present on
+  this task doc.
 </content>
