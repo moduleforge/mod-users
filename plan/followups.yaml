@@ -80,11 +80,6 @@ items:
       date: "2026-07-05"
       tag: phase-01-gate
       text: '[phase-01 gate review, correctness lens] ForgotPasswordPage/ResetPasswordPage''s "Back to sign in" buttons use `text-sm text-muted-foreground hover:text-foreground`, while EmailCodePage''s "Sign in with password instead" uses `text-foreground hover:underline` (AuthPage''s mode-toggle style) wrapped in a `<p className="text-muted-foreground">`. No task doc mandated an exact class set (only a `<button type="button">` calling `onNavigateToLogin?.()`), so this is not a correctness defect — a minor visual-consistency cleanup if the manager wants the three footer links to look identical.'
-    - title: No headless-browser tooling available to veri
-      id: Lx9Z
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] No headless-browser tooling available to verify console-clean mount in Ladle; substituted a successful production build (bun run preview:build) plus manual code read-through instead.'
     - title: yalc/bun-install side effect (file:.yalc/@mod
       id: x7XI
       date: "2026-07-05"
