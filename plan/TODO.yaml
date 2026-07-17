@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: auth-vocab-migration
       title: Auth Vocab Migration
+      diff_base: 5f1922e589696a146e1f97526507cc622079494c
       tasks:
         - number: 1
           slug: migrate-local-auth-handlers
