@@ -50,11 +50,6 @@ items:
       date: "2026-07-16"
       tag: go-apiresp-foundation
       text: 'Phase-01 architecture-conformance review (users-apiresp-migration plan) found: writeServiceError''s svc.ErrEmailTaken branch (api/internal/handlers/user_accounts.go) bypasses apiresp.WriteError and hand-constructs the 409 conflict envelope directly via apiresp.WriteJSON/Envelope/ErrorBody, including a literal message string ("the request conflicts with the current state") that duplicates apiresp''s own unexported publicMessage("conflict") output verbatim. This is a documented, justified stopgap: mod-core/api/apiresp exposes InvalidInput(...) as a public detail-carrying constructor but no equivalent for ErrConflict, so there''s no way to delegate fully to apiresp.WriteError while still attaching the users.email_taken field detail. Recommend a fast-follow on mod-core''s apiresp package (cross-repo, not fixable from mod-users) to add a public constructor (e.g. apiresp.Conflict(details ...FieldError) error, mirroring InvalidInput), which would let writeServiceError collapse fully onto apiresp.WriteError(w, r, err) with no local envelope construction, and remove the message-text duplication/drift risk.'
-    - title: Literal server.Error sites not centralized
-      id: 8iRl
-      date: "2026-07-16"
-      tag: go-vocab-migration
-      text: 'Phase-02 architecture-conformance review (users-apiresp-migration plan) found: the design doc''s "Go-layer ownership" section states the end-state goal is handlers collapsing to apiresp.WriteError(w, r, err) so the status/code/envelope decision lives in one place. Phases 1-2 deliberately kept ~28 literal server.Error(status, "code", message) call sites across apps.go, oidc_providers.go, oidc_config.go, identities.go, self.go, assume.go, user_accounts.go (task doc Requirement 3 explicitly sanctions this deferral for this plan''s scope). The vocabulary at each site is now correct, but still duplicated rather than derived from a single sentinel classification point. Recommend tracking this as an explicit follow-up phase/task ("collapse literal server.Error sites onto sentinel-driven apiresp.WriteError calls") so the centralization goal doesn''t silently fall out of the plan once phase 2 is marked done.'
     - title: Flow's mid-task-commit.sh/finalize-task-commi
       id: le59
       date: "2026-07-16"
