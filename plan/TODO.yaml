@@ -25,7 +25,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-02-migrate-oidc-auth-handler-apir
-            commit: []
+            commit:
+                - 48fb16e
             merge: null
     - number: 2
       slug: doc-updates
