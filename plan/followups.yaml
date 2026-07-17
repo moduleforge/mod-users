@@ -55,11 +55,6 @@ items:
       date: "2026-07-05"
       tag: phase-01-auth-ui-components
       text: '[phase-01 gate review, efficiency lens] AuthPage''s mode ternary swaps LoginForm/RegisterForm rather than toggling visibility of stably-mounted children, so LoginForm unmounts/remounts on every transition back to login mode, re-firing its fetchProviders() network call each time. Not a regression vs. the prior app-mfdemo per-route architecture, and the toggle is a low-frequency user-driven interaction (cold path) — informational, not a required fix. If provider-list churn becomes a concern, either keep both forms mounted and toggle visibility with CSS, or lift the provider fetch/cache above LoginForm (e.g. into AuthPage or a shared hook).'
-    - title: 'Task document Status-section update was made '
-      id: slra
-      date: "2026-07-05"
-      tag: doc-updates
-      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Task document Status-section update was made in the plan worktree rather than the task worktree (document only exists there); left uncommitted there — manager should commit alongside applying this report.'
     - title: Footer-link style inconsistency, 3 components
       id: MY1g
       date: "2026-07-05"
