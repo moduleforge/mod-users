@@ -36,3 +36,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: migrate-self-assume-account-handlers
+          title: Migrate self.go, assume.go, and user_accounts.go server.Error Sites
+          path: phase-01-centralize-server-error/004-migrate-self-assume-account-handlers.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
