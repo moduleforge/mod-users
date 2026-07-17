@@ -44,5 +44,6 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-02-task-01-update-architecture-docs-bipe
-            commit: []
+            commit:
+                - "6264495"
             merge: null
