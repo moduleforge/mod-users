@@ -30,7 +30,7 @@ phases:
             branch: phase-01-task-02-migrate-oidc-auth-handler-apir
             commit:
                 - 48fb16e
-            merge: null
+            merge: 81aeaed2984c792e106d1c60535159040fb40cf8
     - number: 2
       slug: doc-updates
       title: Documentation Updates
