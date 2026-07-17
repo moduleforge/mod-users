@@ -133,3 +133,29 @@ architectural_impact: false
 
 - After the four `Start`/`Callback` call-site edits in `oidc.go`.
 - After confirming (and, if needed, updating) the two OIDC test files.
+
+## Status
+
+- **Outcome:** succeeded (2026-07-16).
+- All four `bad_request` → `invalid_input` swaps applied to `api/internal/handlers/auth/oidc.go`
+  (`Start` line 143, `Callback` lines 180/186/202). The three `not_found` sites and all `internal_error`
+  sites were left byte-for-byte unchanged, confirmed by diff.
+- `oidc_test.go` and `oidc_linkmode_test.go` were grepped for `"bad_request"`/`"not_found"` literal
+  assertions per Requirement 4 — none found (both files assert only on HTTP status for the 400/404
+  branches, and `TestOIDC_Callback_ResolverDBError_Returns500` asserts `internal_error`, unaffected by
+  this task). No test-file edit was needed or made.
+- Validation: `make build.api` passed; `cd api && go vet ./...` clean; `make test.unit` passed
+  (all `api/...` packages, including `internal/handlers/auth` — 1.399s); the two required `grep`
+  checks passed exactly as specified; diff manually reviewed — no `server.Error(...)` call form was
+  converted to `apiresp.WriteError`, and `h.clearStateCookie` plus the redirect-vs-direct-response
+  branching in `Callback`/`Start`/`handleLinkMode` are unchanged (diff touches only the `code` string
+  literal at the 4 call sites). `make lint` (sequential) failed at the `lint.model` stage on an
+  environmental ephemeral-Postgres/Docker networking timeout unrelated to this diff (`model/` is not
+  touched by this task); ran `make lint.api` directly instead, which passed clean (`go vet` + `gofmt`
+  check).
+- Correctness and security review lenses were run inline (no `Task` tool was available in this agent's
+  toolset to dispatch nested review sub-agents) against the diff vs. `main` (base `44a2273`, head
+  `48fb16e`). No findings from either lens. Confirmed via caller grep that no GUI code parses the
+  `error.code` JSON field for the `/v1/auth/oidc/{provider}/start` or `/callback` endpoints — both are
+  reached via full-page browser navigation (`window.location.assign`), not `fetch`, so the code-string
+  change carries no client-side regression risk.
