@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: migrate-oidc-handlers
+          title: Migrate oidc_providers.go and oidc_config.go server.Error Sites
+          path: phase-01-centralize-server-error/002-migrate-oidc-handlers.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
