@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moduleforge/core-api/apiresp"
 	coredb "github.com/moduleforge/core-model/db"
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -106,26 +107,30 @@ type registerRequest struct {
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
 	if req.Email == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "email is required")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "email is required",
+			[]apiresp.FieldError{{Field: "email", Code: "users.email_required", Message: "email is required"}})
 		return
 	}
 	if len(req.Password) < 12 {
-		server.Error(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "password must be at least 12 characters",
+			[]apiresp.FieldError{{Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters"}})
 		return
 	}
 	if strings.TrimSpace(req.GivenName) == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "given_name is required")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "given_name is required",
+			[]apiresp.FieldError{{Field: "given_name", Code: "users.given_name_required", Message: "given_name is required"}})
 		return
 	}
 	if strings.TrimSpace(req.FamilyName) == "" {
-		server.Error(w, http.StatusBadRequest, "validation_error", "family_name is required")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "family_name is required",
+			[]apiresp.FieldError{{Field: "family_name", Code: "users.family_name_required", Message: "family_name is required"}})
 		return
 	}
 
@@ -200,7 +205,12 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		// Check for unique violation on email.
 		var pgErr *pgconn.PgError
 		if isPgError(err, &pgErr) && pgErr.Code == "23505" {
-			server.Error(w, http.StatusConflict, "email_taken", "an account with that email already exists")
+			server.ErrorWithDetails(w, http.StatusConflict, "conflict",
+				"an account with that email already exists",
+				[]apiresp.FieldError{
+					{Field: "email", Code: "users.email_taken", Message: "email is already registered"},
+				},
+			)
 			return
 		}
 		slog.ErrorContext(r.Context(), "register: create user account", "error", err)
