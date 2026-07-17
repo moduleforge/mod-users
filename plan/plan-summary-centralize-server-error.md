@@ -128,3 +128,20 @@ follow-up items (`Wkx3` and `6vir` — see below) rather than requiring rework.
   removed," which does not match the current file state — flagged here so the
   manager can remove/close `8iRl` explicitly now that this plan has completed its
   scope.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Centralize server.Error Sites
+
+- [x] [001-migrate-apps-handler.md](./phase-01-centralize-server-error/001-migrate-apps-handler.md) — tier `sonnet-high` · branch `phase-01-task-01-migrate-apps-handler` · commit `7d0c558` · merge `7ec28d0`
+- [x] [002-migrate-oidc-handlers.md](./phase-01-centralize-server-error/002-migrate-oidc-handlers.md) — tier `sonnet-high` · branch `phase-01-task-02-migrate-oidc-handlers` · commit `b29c0b9` · merge `7bf624c`
+- [x] [003-migrate-identities-handler.md](./phase-01-centralize-server-error/003-migrate-identities-handler.md) — tier `sonnet-high` · branch `phase-01-task-03-migrate-identities-handler` · commit `03e1470` · merge `9deb4ee`
+- [x] [004-migrate-self-assume-account-handlers.md](./phase-01-centralize-server-error/004-migrate-self-assume-account-handlers.md) — tier `sonnet-high` · branch `phase-01-task-04-migrate-self-assume-account-ha` · commit `d3f6bd4` · merge `29e1093`
