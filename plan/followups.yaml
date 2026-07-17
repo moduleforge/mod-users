@@ -85,11 +85,6 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Task doc Requirement 3 doesn''t specify literal lead-sentence copy for the ''Back to sign in'' prompt (only button text/styling/behavior) — rendered just the button with no prefix text; if the app-mfdemo reference page has specific lead copy, worth confirming against the source page directly.'
-    - title: 'Process note: flow-mcp d/t doc-lookup tools f'
-      id: uitu
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/002-reset-password-page.md] Process note: flow-mcp d/t doc-lookup tools failed to resolve references against this project''s default working directory or the sdlcforge/flow source checkout as project_root, both returning document-not-found for entries confirmed present in docs.json; worked around by reading from the installed plugin cache directly. Same tooling issue observed by sibling phase-1 tasks.'
     - title: 'Unrelated to this task: plan worktree shows t'
       id: MCVQ
       date: "2026-07-05"
