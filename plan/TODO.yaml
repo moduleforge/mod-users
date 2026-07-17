@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: migrate-oidc-auth-handler
+          title: Migrate Oidc Auth Handler
+          path: phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
