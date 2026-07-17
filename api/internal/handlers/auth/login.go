@@ -26,13 +26,13 @@ type loginRequest struct {
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	if req.Email == "" || req.Password == "" {
-		server.Error(w, http.StatusBadRequest, "bad_request", "email and password are required")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "email and password are required")
 		return
 	}
 
@@ -59,7 +59,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if notFound {
 		// Run a dummy verify to consume constant time even when user is absent.
 		_, _ = localauth.VerifyPassword(req.Password, dummyHash)
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid email or password")
 		return
 	}
 
@@ -70,7 +70,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid email or password")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid email or password")
 		return
 	}
 

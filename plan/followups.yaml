@@ -150,11 +150,6 @@ items:
       date: "2026-07-14"
       tag: users-apiresp-migration
       text: '[users-apiresp-migration planning] The apiresp-migration plan''s Go vocab migration (phase-02) deliberately excludes 5 sites that use server.JSON directly to emit bespoke, non-standard flat response bodies rather than going through the standard error trio: api/internal/auth/require_verified.go:24,34 (internal_error flat, email_unverified), require_confirmed.go:36 (oidc_not_confirmed, drives an auth-flow redirect), and identities.go:626 (step_up_required, carries an extra challenge_path field), :646 (last_identity). These are the module''s most non-conformant sites, but migrating them to the standard nested envelope is a breaking change to consuming apps'' GUI code (app-mfdemo/app-mftodo), which keys off these bespoke shapes directly (confirmed: writeStepUpRequired''s own comment says the GUI reads error as a string). Deferred as an explicit follow-up rather than expanding this plan''s scope into a coordinated cross-repo GUI change. Recommend a dedicated future plan spanning mod-users + the consuming apps'' GUI code once this migration''s core scope has landed and the pattern for coordinated cross-repo breaking changes is established.'
-    - title: make lint.model's shadow-db-lint step can't r
-      id: 0x4L
-      date: "2026-07-16"
-      tag: go-apiresp-foundation
-      text: '[phase-01-go-apiresp-foundation/001-adopt-apiresp-sentinels-and-writer.md] make lint.model''s shadow-db-lint step can''t reach its ephemeral Postgres container in this sandbox (Docker networking timeout) - an environment limitation, not a model/ code issue; model/ is untouched by this task.'
     - title: Pre-existing doc-graph orphans (not from ph1)
       id: rmQ5
       date: "2026-07-16"
@@ -210,11 +205,6 @@ items:
       date: "2026-07-16"
       tag: gui-core-gui-adoption
       text: 'Phase-03 architecture-conformance review (users-apiresp-migration plan) found: docs/mf-standards/architecture/api-response-design.md''s "Widget set implied" wire-type block names the interface FieldError, but the actual shipped @moduleforge/core-gui export is FieldErrorData (the plain name FieldError is taken by the <FieldError> component). mod-users'' Phase 3 diff correctly follows the actual shipped name consistently - no local mismatch was introduced. This naming drift is inherited from Wave 0/core-gui itself and predates this plan; cross-repo, needs reconciling in docs-mf-standards (update the design doc''s example to FieldErrorData) or on the core-gui side, not fixable from mod-users.'
-    - title: 'MAJOR SCOPE-GAP FINDING: api/internal/handler'
-      id: biPE
-      date: "2026-07-16"
-      tag: doc-updates
-      text: '[phase-04-doc-updates/001-update-architecture-docs.md] MAJOR SCOPE-GAP FINDING: api/internal/handlers/auth/*.go (register.go, login.go, emailcode.go, anonymous.go, oidc.go, reset.go) was never covered by either Phase 2 task and still contains ~24-33 literal bad_request/unauthorized/validation_error/email_taken sites in the module''s highest-traffic unauthenticated endpoints (register, login, anonymous account creation, email-code verification, OIDC, password reset). This is distinct from and does not overlap with followup 8iRl (which only covers the 7 files the two Phase 2 tasks actually touched). The new openapi.yaml Error.code enum this task just added documents a target contract that this slice of the API does not yet meet. Manager-verified: 33 grep matches across 6 production files (excluding _test.go matches would still leave the production files affected) via grep -rln in api/internal/handlers/auth/.'
     - title: Likely pre-existing, unrelated behavioral/doc
       id: nnfn
       date: "2026-07-16"
@@ -230,3 +220,13 @@ items:
       date: "2026-07-16"
       tag: agents-md-go-work-pointer
       text: '[followup 9EBV follow-through] Added an AGENTS.md "Working in worktrees" pointer to docs/mf-standards/building-common.md''s "Building inside a task worktree" section for the go.work worktree-build fix. However, that section''s actual current content (as of commit 7daa56a in the docs-mf-standards submodule, pinned at a8bc74955) only documents `go work init && go work use ...` — it does not yet document the "conflicting replacements" error or the `go work edit -replace <module>@v0.0.0=<corrected-path>` overrides needed for sibling modules (core-model, core-api, audit-model, audit-api, authz-model, authz-api), which is the actual fix confirmed working in the users-apiresp-migration plan (originally followup 9EBV, part 1). The AGENTS.md pointer is accurate as a pointer (the section exists and is topically correct) but currently points to incomplete content. Cross-repo: docs-mf-standards repo owns building-common.md and must add the -replace recipe; not fixable from mod-users.'
+    - title: make lint's sequential run fails at lint.mode
+      id: DQU4
+      date: "2026-07-17"
+      tag: auth-vocab-migration
+      text: '[phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md] make lint''s sequential run fails at lint.model due to an ephemeral-Postgres/Docker networking timeout - environmental, pre-existing, unrelated to this diff (model/ untouched). lint.api was run directly as substitute and passed clean. Likely affects any task running make lint in this environment.'
+    - title: Pre-existing anti-enumeration message-text in
+      id: KeV1
+      date: "2026-07-17"
+      tag: auth-vocab-migration
+      text: '[phase-01-auth-vocab-migration/001-migrate-local-auth-handlers.md] Pre-existing anti-enumeration message-text inconsistency in emailcode.go (not introduced by this diff, task doc''s Requirement 1 explicitly forbids changing message text at these sites): EmailCodeVerify''s user-not-found branch returns "invalid code" while its code-not-active/code-mismatch branches return "invalid or expired code". Status and code are now identical (401 unauthenticated) across all three, but the differing message text is a potential enumeration channel. Predates this plan, out of this task''s scope to fix; worth a follow-up item if not already tracked.'

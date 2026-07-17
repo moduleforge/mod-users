@@ -140,7 +140,7 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.WarnContext(r.Context(), "oidc start: bad request", "error", err, "provider", providerID)
-		server.Error(w, http.StatusBadRequest, "bad_request", err.Error())
+		server.Error(w, http.StatusBadRequest, "invalid_input", err.Error())
 		return
 	}
 
@@ -177,13 +177,13 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	code := q.Get("code")
 	rawState := q.Get("state")
 	if code == "" || rawState == "" {
-		server.Error(w, http.StatusBadRequest, "bad_request", "missing code or state")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "missing code or state")
 		return
 	}
 
 	cookie, err := r.Cookie(stateCookieName)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "missing state cookie")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "missing state cookie")
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		// (token endpoint, id_token verify) reports a generic error via redirect
 		// so the GUI can surface it and the operator can inspect logs.
 		if errors.Is(err, localauth.ErrStateValidation) {
-			server.Error(w, http.StatusBadRequest, "bad_request", "invalid or expired state")
+			server.Error(w, http.StatusBadRequest, "invalid_input", "invalid or expired state")
 			return
 		}
 		// Test mode: surface the exchange/verify error directly on the
