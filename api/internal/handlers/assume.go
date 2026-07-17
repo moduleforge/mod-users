@@ -3,12 +3,14 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/moduleforge/core-api/apiresp"
 	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -41,14 +43,14 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 	rawUUID := chi.URLParam(r, "uuid")
 	parsed, err := uuid.Parse(rawUUID)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid uuid")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	sudoUA, actorUA, err := h.svc.Assume(r.Context(), parsed)
 	if err != nil {
 		if errors.Is(err, coreservice.ErrNotFound) {
-			server.Error(w, http.StatusNotFound, "not_found", "user account not found")
+			apiresp.WriteError(w, r, apiresp.ErrNotFound)
 			return
 		}
 		slog.ErrorContext(r.Context(), "assume: service error", "error", err)
@@ -58,8 +60,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.IssueAssumeJWT(sudoUA, actorUA, h.jwtSecret, h.issuer)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "assume: issue jwt", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
+		apiresp.WriteError(w, r, fmt.Errorf("assume.Assume: %w", err))
 		return
 	}
 
