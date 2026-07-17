@@ -58,14 +58,16 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
                 receive a password reset link shortly.
               </CardDescription>
             </CardHeader>
-            <CardFooter className="justify-center">
-              <button
-                type="button"
-                className="text-sm text-muted-foreground hover:text-foreground"
-                onClick={() => onNavigateToLogin?.()}
-              >
-                Back to sign in
-              </button>
+            <CardFooter className="text-sm text-center">
+              <p className="text-muted-foreground">
+                <button
+                  type="button"
+                  className="text-foreground hover:underline"
+                  onClick={() => onNavigateToLogin?.()}
+                >
+                  Back to sign in
+                </button>
+              </p>
             </CardFooter>
           </>
         ) : (
@@ -96,14 +98,16 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
                 </Button>
               </form>
             </CardContent>
-            <CardFooter className="justify-center">
-              <button
-                type="button"
-                className="text-sm text-muted-foreground hover:text-foreground"
-                onClick={() => onNavigateToLogin?.()}
-              >
-                Back to sign in
-              </button>
+            <CardFooter className="text-sm text-center">
+              <p className="text-muted-foreground">
+                <button
+                  type="button"
+                  className="text-foreground hover:underline"
+                  onClick={() => onNavigateToLogin?.()}
+                >
+                  Back to sign in
+                </button>
+              </p>
             </CardFooter>
           </>
         )}

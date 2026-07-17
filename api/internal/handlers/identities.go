@@ -354,7 +354,7 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if len(req.NewPassword) < 12 {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
 			{Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters"},
 		})
 		return

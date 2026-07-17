@@ -1,0 +1,377 @@
+{
+  "version": 1,
+  "entries": {
+    "todo": {},
+    "followup": {
+      "cJ41": {
+        "sig": "90e807b0f47e8cbb25f38e73f8ee8aec",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Wording-only AGENTS.md accuracy pass (yalc vs peer-dep description); low effort, low urgency documentation nit.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "h4Un": {
+        "sig": "45a02ad0ffecb67336b476a5cae0f5ed",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Informational note on infra flakiness during a completed task; no outstanding action, kept for awareness only.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "de6E": {
+        "sig": "e1b01562b8c04739d72f47517bbb7eeb",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Documents a real gap in worktree-isolation handling for untracked-file cleanup tasks; actionable as process/runbook guidance for future plan authoring, moderate effort to write and verify.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "5arF": {
+        "sig": "14a5e194f1e769736d16ac65f750aff6",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Forward-reference flag for phase sequencing; phase 5 has since landed, so the risk window has likely already closed.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "S74e": {
+        "sig": "a769882ed48354d04ad0fe0e78c3a024",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Single stale sentence in deploy/local/README.md; quick wording fix.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "kcN3": {
+        "sig": "4895deb0b1ec4b33143d52246e19c79a",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Frozen historical summary doc references stale item state; cosmetic wording sync only, no functional impact.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "twPi": {
+        "sig": "4613ad8444801cff3b903c1dd61b6e60",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "CI bun install lacks dependency caching; pre-existing, moderate effort to add actions/cache step, moderate payoff via CI wall-clock savings.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "0PHW": {
+        "sig": "103a0c6e58dbf12e80fb933acd84e661",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Cross-repo aggregate README correction needed outside project_root; requires routing to a separate repo's process, moderate coordination effort.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "PZfi": {
+        "sig": "156fa9567069f70221309f9e005447be",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Storybook vs Ladle terminology inconsistency in two doc files; quick find-replace fix.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "nzlS": {
+        "sig": "aacefa6ff038d4f7454e62bd040f14cd",
+        "effort_bucket": "high",
+        "utility_bucket": "medium",
+        "rationale": "Migrating app-mfdemo to new AuthPage/OidcCallbackPage exports is a cross-repo change blocked on yalc-linking friction already logged elsewhere; substantial coordinated effort.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "Vthh": {
+        "sig": "d2a1fd57c8a86a9d84f26fceeb8ef20b",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Independent review pass for login/register forms wasn't dispatched separately; re-running review lenses is moderate effort, moderate safety-net value (no findings expected from inline pass).",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "lbn5": {
+        "sig": "27c2b8e04c68e5442726ea5cd815a346",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Process note on where a commit landed; no outstanding action.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "CAHg": {
+        "sig": "1dece783d505100120c68a277df1ac81",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Task doc predates plan-branch structure, no Status section created; informational, low remaining value to backfill.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "gMz5": {
+        "sig": "a95feb35f0860ca77eb7fdef9b23cc49",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Accidental stray commit already caught and reset by the agent; fully resolved, informational only.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "Tn8F": {
+        "sig": "c1634199901abcfd457ea4a8dd24dad6",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Same pattern as Vthh — independent review pass not dispatched for OIDC callback page; moderate effort to re-run, moderate safety value.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "s5fu": {
+        "sig": "38d63c5c818cf0f5bd61c85dc574863b",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Same pattern — independent review pass not dispatched for AuthPage; moderate effort, moderate safety value.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "YL5l": {
+        "sig": "e2f63b181f43f97d2c0b7b9a876f93cf",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Task doc Status-section update left uncommitted in the plan worktree from a since-merged plan; likely already resolved — worth verifying and pruning.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "wufX": {
+        "sig": "606f9e1ab56ff52b63ec04699fdc052a",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "AuthPage remount-on-toggle re-fires fetchProviders(); explicitly flagged informational/optional, low-frequency cold path.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "slra": {
+        "sig": "5fc097d16910f9ce179fd51dd10c30ba",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Same uncommitted-Status-section pattern as YL5l/MCVQ from a since-merged plan; likely stale, worth verifying and pruning.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "hQGq": {
+        "sig": "b7f5bc2dfda66879c953cba0138fe245",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "No findings recorded; purely informational, no action.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "MY1g": {
+        "sig": "04b4fe185baff495082780f5ef798503",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Minor footer-link visual style inconsistency across 3 components; small CSS class alignment.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "2LT7": {
+        "sig": "455a3d9f67bdeb3aa57adea54be78364",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Environment/tooling note about flow-mcp doc resolution; not a project code issue.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "Lx9Z": {
+        "sig": "462b61675d70c23768e47a9c4201b58f",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Workaround note (build instead of headless browser check); already resolved via substitute verification.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "x7XI": {
+        "sig": "ca5e60c77f1d886d25de26fb1e209b31",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Yalc side-effect already reverted before commit; informational note for future worktrees.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "H0PE": {
+        "sig": "67f5ab5ef98b7360fb7f25a384c6d02e",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Missing lead-copy spec for a button; quick confirm-against-reference-and-adjust if warranted.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "2I8N": {
+        "sig": "cfe98379c1e777c73119dc76cedf444f",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Verification substitution note; already handled, informational.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "GgF5": {
+        "sig": "0bb1aff2c866e807d08497b912c2fa64",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Environment/tooling doc-lookup issue; not project-actionable.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "uitu": {
+        "sig": "458fb68055f882ba5544100fc56d3b89",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Same tooling issue as GgF5/2LT7; environment note only.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "MCVQ": {
+        "sig": "1508f6f5ba0b46865c6850fa89c16ce4",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Uncommitted files from a since-merged plan's phase-01 Status sections; likely already resolved — worth verifying and pruning.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "eiF8": {
+        "sig": "3653b771c6adae462e3b840324edb3ce",
+        "effort_bucket": "high",
+        "utility_bucket": "high",
+        "rationale": "5 flat-envelope error sites deliberately deferred; migrating them is a breaking cross-repo GUI change requiring a dedicated coordinated plan across mod-users + consuming apps.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "0x4L": {
+        "sig": "ae247ecb51764b11d9985469f15d1488",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Environment/sandbox limitation (Docker networking) unrelated to project code; not actionable here.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "rmQ5": {
+        "sig": "9766fd131a3d94184e288e4c84531298",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Several project docs are unreachable from README's link graph; linking them in (or confirming intentional exclusion) is a moderate documentation-graph cleanup.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "ZVum": {
+        "sig": "75c4dd2d2cb5980b780aa64d5a1d554e",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Needs a public apiresp.Conflict() constructor in the cross-repo mod-core package before writeServiceError can fully delegate; moderate cross-repo coordination effort, moderate payoff (removes message-string duplication/drift risk).",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "8iRl": {
+        "sig": "d723aab6857648f6ff71c052ff8430ef",
+        "effort_bucket": "high",
+        "utility_bucket": "high",
+        "rationale": "~28 literal server.Error call sites remain uncentralized despite the design doc's end-state goal of collapsing all handlers onto apiresp.WriteError; fully within mod-users' own scope (no cross-repo blocker), sizable refactor across 7 files but completes an explicitly tracked architecture goal.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "WGZV": {
+        "sig": "dba2cc8f789c56212fe4b755327d9855",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Cosmetic message casing/punctuation mismatch vs design doc's worked example; trivial fix or doc amendment.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "t5kn": {
+        "sig": "7ccc91bedef4ef9dfd57dc4554bb1453",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Not-applicable note — gui/ has no test infrastructure yet; see KXNZ for the actionable version of this gap.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "le59": {
+        "sig": "67e75b5ceae4fcb036ef8a9c61e2895e",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Flow's commit scripts aren't yalc-aware and repeatedly sweep up intentional local yalc entries; fixing requires updating Flow's own scripts (outside mod-users), moderate effort, recurring friction-reduction payoff for future gui/ tasks.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "KXNZ": {
+        "sig": "4664a3cfc76bd7dba1e0ae200cac9549",
+        "effort_bucket": "high",
+        "utility_bucket": "medium",
+        "rationale": "No test runner exists in gui/ at all — standing up first test infra (bun-types, bunfig, first test convention) is a nontrivial one-time investment before cd gui && bun test becomes satisfiable for any gui/ task.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "JFnc": {
+        "sig": "896ea794ba88b2953ab7708b2e16cb71",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Pre-existing cross-repo (mod-core) packaging gap, not investigated further; low priority, not owned by mod-users.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "ygBr": {
+        "sig": "a982abd9d6faad8a9e5d24d9a20b051c",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Cross-repo (core-gui) visual-design decision (missing icon); not something mod-users should independently patch.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "L92R": {
+        "sig": "25c31956bb5233ded5a586dfd65c78aa",
+        "effort_bucket": "medium",
+        "utility_bucket": "low",
+        "rationale": "Optional runtime-validation hardening for parsed error-response shape; non-blocking, mirrors an existing accepted trust assumption already in core-gui itself.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "8oow": {
+        "sig": "7fbd4f8738d744de1de6b20117931c9d",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Cross-repo (docs-mf-standards) naming-drift doc fix; mod-users' own usage is already correct.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "nnfn": {
+        "sig": "6a5251b7c652294780e32d675cb1fdae",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Pre-existing behavioral/doc mismatch (anonymous_account) needs a dedicated doc-accuracy investigation pass; out of scope for the prior docs-only task.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "jg7u": {
+        "sig": "a152a4814765b200d014cab745c90d3f",
+        "effort_bucket": "low",
+        "utility_bucket": "low",
+        "rationale": "Environment note (submodule uninitialized); already worked around, informational.",
+        "scored_at": "2026-07-17T00:29:44Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "biPE": {
+        "sig": "d953247188ec3c473430c146d7278e91",
+        "effort_bucket": "high",
+        "utility_bucket": "high",
+        "rationale": "Major scope gap: ~24-33 literal bad_request/unauthorized/validation_error/email_taken sites remain unmigrated in api/internal/handlers/auth/*.go — the module's highest-traffic unauthenticated endpoints (register, login, anonymous, oidc, reset). Distinct from and larger-stakes than 8iRl's already-tracked 28-site gap (which covers lower-traffic administrative endpoints). High utility: closes the apiresp migration's most consequential gap on security/consistency-sensitive surface. High effort: large, security-sensitive refactor across 6 production files.",
+        "scored_at": "2026-07-17T01:30:02Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      },
+      "ll4D": {
+        "sig": "cae413792f8b7ee78beaa59a101d0127",
+        "effort_bucket": "medium",
+        "utility_bucket": "medium",
+        "rationale": "Cross-repo doc gap: the AGENTS.md pointer added for followup 9EBV now points to docs/mf-standards/building-common.md's worktree Go-build section, but that section doesn't yet contain the go work edit -replace recipe it's supposed to document. Medium effort (owned by docs-mf-standards repo, needs coordination), medium utility (removes real friction for future task worktrees building Go sub-projects, but is documentation-only).",
+        "scored_at": "2026-07-17T01:30:02Z",
+        "metrics_generated_at": "2026-07-06T01:51:59Z"
+      }
+    },
+    "roadmap": {}
+  }
+}

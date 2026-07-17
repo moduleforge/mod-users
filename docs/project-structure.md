@@ -75,7 +75,7 @@ gui/
     index.ts            # package entry point — re-exports all public components
     components/         # React UI components (auth flows, profile, admin views)
     lib/                # API client, hooks, shared utilities
-    stories/            # Storybook story files (exploratory; not the primary showcase)
+    stories/            # Ladle story files (exploratory; not the primary showcase)
 ```
 
 > `gui/` depends on `@moduleforge/core-gui` via a `file:.yalc/` link. The `.yalc/` directory is gitignored and must be set up manually in fresh checkouts. See [AGENTS.md](../AGENTS.md#first-time-setup).

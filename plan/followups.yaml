@@ -1,40 +1,10 @@
 version: 1
 items:
-    - title: gui/AGENTS.md First-time setup step 4 still d
-      id: cJ41
-      date: "2026-07-03"
-      tag: gui-build-alignment
-      text: '[phase-01-gui-build-alignment/001-align-gui-build-tooling.md] gui/AGENTS.md First-time setup step 4 still describes @moduleforge/core-gui as reached via a file:.yalc/ link — now technically imprecise (it''s an optional peer dep resolved by yalc, not a committed file: dependency), but the task doc explicitly instructed not to touch step 4, so it was left as-is. Worth a follow-up wording pass if the manager wants full accuracy.'
-    - title: The task agent dispatch for this task hit two
-      id: h4Un
-      date: "2026-07-03"
-      tag: stale-artifact-cleanup
-      text: '[phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md] The task agent dispatch for this task hit two consecutive infrastructure failures (API connection error, then a stall) after completing the substantive work. No content issue — purely infra flakiness. Noting for awareness in case this recurs on later phases.'
     - title: Worktree isolation misses untracked cleanup
       id: de6E
       date: "2026-07-03"
       tag: phase-02-gate
       text: 'Discovered during the phase-02 gate review: when a task''s Requirements call for removing untracked/stray filesystem artifacts (not git-tracked), dispatching that task into an isolated task worktree does not work as expected — `git worktree add` doesn''t copy untracked files from the main checkout, so the fresh task worktree never contains the stray artifacts in the first place, and the task agent''s rm -rf + verification silently checks an already-clean location rather than actually cleaning the project root. This happened in phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md''s Requirement 3 (stray empty dirs + gui/.next/ build cache) — caught by the style review lens, fixed directly by the manager against the actual project root. Future plan tasks that include untracked-file/stray-directory cleanup should either target project_root directly (bypassing worktree isolation for that step) or have the manager independently re-verify against project_root after merge, not just trust the task worktree''s self-reported validation.'
-    - title: The AGENTS.md pointer to make preview documen
-      id: 5arF
-      date: "2026-07-03"
-      tag: dev-stack-disposition
-      text: '[phase-03-dev-stack-disposition/001-remove-gui-compose-service.md] The AGENTS.md pointer to make preview documents a target that does not exist yet in this task branch in isolation (added by Phase 05, not yet run in this lineage). Intentional forward-reference per the task doc''s own note; flagging so the manager confirms merge/phase sequencing doesn''t leave an inconsistent intermediate state if branches are inspected individually before Phase 05 lands.'
-    - title: 'deploy/local/README.md stale re: gui compose'
-      id: S74e
-      date: "2026-07-03"
-      tag: phase-03-gate
-      text: 'Incidental observation from the phase-03 gate review (correctness lens): deploy/local/README.md''s "## What''s not here" section still contains phase-3-era prose ("API and GUI containers — they run on the host during development (Phase 3+ may add them to compose)") that is now doubly stale given the compose gui service existed and was just removed by phase-03. Untouched by phase-03''s diff and not in that task''s files_in_scope. Not currently owned by any registered plan phase (Phase 06 doc-updates covers docs/architecture.md and docs/project-structure.md, not deploy/local/README.md) — worth a follow-up wording pass if the manager wants full accuracy.'
-    - title: Pre-existing, package-manager-independent lim
-      id: VqCM
-      date: "2026-07-03"
-      tag: ci-bun-migration
-      text: '[phase-04-ci-bun-migration/001-migrate-ci-to-bun.md] Pre-existing, package-manager-independent limitation confirmed live: make build.gui''s tsup --dts step fails with Cannot find module ''@moduleforge/core-gui'' in any environment (including CI) where .yalc/ is not populated, since gui/src still imports the package directly. Out of this task''s scope (only cleared the pnpm/bun mismatch) — manager should track a follow-up for resolving @moduleforge/core-gui types in CI (publish/link the package, or scope build.gui out of the CI build job).'
-    - title: 'summary-bun-migration.md stale re: r86L/3RgF'
-      id: kcN3
-      date: "2026-07-03"
-      tag: phase-04-gate
-      text: 'Noted by the phase-04 gate review (correctness/style lenses): plan/summary-bun-migration.md (a dated, frozen historical summary from a prior migration phase) still calls r86L a "[BLOCKER]" and references 3RgF as an open follow-up, but both are now marked resolved in plan/next-steps.yaml by phase-04. Not touched by phase-04''s diff and not in its scope. Low-priority — worth a wording sync if the manager wants the historical summary to read consistently, but it''s frozen historical prose, not live documentation.'
     - title: No dependency cache in CI bun install
       id: twPi
       date: "2026-07-03"
@@ -45,11 +15,6 @@ items:
       date: "2026-07-03"
       tag: preview-and-readme
       text: '[phase-05-preview-and-readme/001-add-preview-target.md] Per the task doc''s explicit instruction, the cross-repo aggregate-README correction (/Users/zane/playground/moduleforge/README.md module-table cell mod-users -> yes (tsup lib), and GUI workbench row) lives outside project_root in a separate git repo and was intentionally not touched. Remains outstanding for the manager to route to the aggregate-repo process.'
-    - title: Pre-existing Storybook vs actual-tool Ladle t
-      id: PZfi
-      date: "2026-07-03"
-      tag: doc-updates
-      text: '[phase-06-doc-updates/001-update-architecture-docs.md] Pre-existing Storybook vs actual-tool Ladle terminology inconsistency in docs/project-structure.md (stories/ comment) and docs/mod-users-spec.md (use case 13, story tool/Storybook role) — predates the completed task docs, out of this task''s scope, needs a separate scope decision.'
     - title: app-mfdemo migration to new auth-ui exports
       id: nzlS
       date: "2026-07-05"
@@ -60,21 +25,6 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/001-login-register-forms.md] No Task tool was available to dispatch review-changes-security/review-changes-correctness as independent sub-agents for this task; the implementing agent applied both lenses'' checklists inline instead (no findings). An independent review pass may be warranted before this ships.'
-    - title: Task document status update for this task was
-      id: lbn5
-      date: "2026-07-05"
-      tag: auth-ui-components
-      text: '[phase-01-auth-ui-components/001-login-register-forms.md] Task document status update for this task was committed directly in the plan worktree (commit 884b4b3) rather than inside the task''s own worktree, since the task document is a plan artifact that only exists in the plan worktree.'
-    - title: Task document for this task does not exist in
-      id: CAHg
-      date: "2026-07-05"
-      tag: auth-ui-components
-      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Task document for this task does not exist inside the task''s own worktree (branch predates the plan branch''s phase-01 task docs); the implementing agent read it from the plan worktree per dispatch instructions instead and did not create a Status section in its own worktree.'
-    - title: Mid-implementation, the implementing agent mi
-      id: gMz5
-      date: "2026-07-05"
-      tag: auth-ui-components
-      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] Mid-implementation, the implementing agent mistakenly ran finalize-task-commit.sh once from the main checkout instead of its task worktree, creating an unwanted commit (77dac0d) touching .flow/session-lock, .flow/sessions/, .flow/tasks/*.json, and worktree dirs as gitlinks. The agent caught this and ran git reset 9af4f26 in the main checkout to undo it. The manager independently verified afterward that the main checkout HEAD is back at 9af4f26 with no data lost.'
     - title: No Task tool was available for independent se
       id: Tn8F
       date: "2026-07-05"
@@ -85,81 +35,11 @@ items:
       date: "2026-07-05"
       tag: auth-ui-components
       text: '[phase-01-auth-ui-components/003-auth-page.md] No Task tool was available to sub-dispatch review-changes-correctness/review-changes-security as separate agents; the implementing agent applied both lenses inline instead (no findings). Manager may want an independent review pass if strict reviewer/implementer separation matters for this task.'
-    - title: Task document status update for this task was
-      id: YL5l
-      date: "2026-07-05"
-      tag: auth-ui-components
-      text: '[phase-01-auth-ui-components/003-auth-page.md] Task document status update for this task was left uncommitted in the plan worktree (plan/phase-01-auth-ui-components/003-auth-page.md modified but not committed there) — manager to commit as part of plan-doc bookkeeping.'
-    - title: AuthPage remounts LoginForm on toggle
-      id: wufX
-      date: "2026-07-05"
-      tag: phase-01-auth-ui-components
-      text: '[phase-01 gate review, efficiency lens] AuthPage''s mode ternary swaps LoginForm/RegisterForm rather than toggling visibility of stably-mounted children, so LoginForm unmounts/remounts on every transition back to login mode, re-firing its fetchProviders() network call each time. Not a regression vs. the prior app-mfdemo per-route architecture, and the toggle is a low-frequency user-driven interaction (cold path) — informational, not a required fix. If provider-list churn becomes a concern, either keep both forms mounted and toggle visibility with CSS, or lift the provider fetch/cache above LoginForm (e.g. into AuthPage or a shared hook).'
-    - title: 'Task document Status-section update was made '
-      id: slra
-      date: "2026-07-05"
-      tag: doc-updates
-      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Task document Status-section update was made in the plan worktree rather than the task worktree (document only exists there); left uncommitted there — manager should commit alongside applying this report.'
-    - title: No other stale GUI-inventory claims found; no
-      id: hQGq
-      date: "2026-07-05"
-      tag: doc-updates
-      text: '[phase-02-doc-updates/001-update-architecture-docs.md] No other stale GUI-inventory claims found; no reviewer findings (no review_focus was supplied for this task).'
-    - title: Footer-link style inconsistency, 3 components
-      id: MY1g
-      date: "2026-07-05"
-      tag: phase-01-gate
-      text: '[phase-01 gate review, correctness lens] ForgotPasswordPage/ResetPasswordPage''s "Back to sign in" buttons use `text-sm text-muted-foreground hover:text-foreground`, while EmailCodePage''s "Sign in with password instead" uses `text-foreground hover:underline` (AuthPage''s mode-toggle style) wrapped in a `<p className="text-muted-foreground">`. No task doc mandated an exact class set (only a `<button type="button">` calling `onNavigateToLogin?.()`), so this is not a correctness defect — a minor visual-consistency cleanup if the manager wants the three footer links to look identical.'
-    - title: 'Tooling note: flow-mcp d/t tools did not reso'
-      id: 2LT7
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] Tooling note: flow-mcp d/t tools did not resolve docs against project_root=mod-users (only worked against a full flow-plugin-repo checkout); environment/tool-wiring issue independent of this task.'
-    - title: No headless-browser tooling available to veri
-      id: Lx9Z
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] No headless-browser tooling available to verify console-clean mount in Ladle; substituted a successful production build (bun run preview:build) plus manual code read-through instead.'
-    - title: yalc/bun-install side effect (file:.yalc/@mod
-      id: x7XI
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/003-email-code-page.md] yalc/bun-install side effect (file:.yalc/@moduleforge/core-gui re-added to gui/package.json and bun.lock during worktree setup) was reverted before commit; other parallel Phase 1 worktrees may hit the same issue.'
-    - title: Task doc Requirement 3 doesn't specify litera
-      id: H0PE
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Task doc Requirement 3 doesn''t specify literal lead-sentence copy for the ''Back to sign in'' prompt (only button text/styling/behavior) — rendered just the button with no prefix text; if the app-mfdemo reference page has specific lead copy, worth confirming against the source page directly.'
-    - title: Full interactive Ladle 'no console error at m
-      id: 2I8N
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Full interactive Ladle ''no console error at mount'' verification wasn''t possible in this environment (no browser/headless-browser tool); substituted a clean production build as the closest available proxy.'
-    - title: 'Unrelated to this task: flow-mcp d/s/t docume'
-      id: GgF5
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Unrelated to this task: flow-mcp d/s/t documentation-lookup tools returned ''document not found'' for role/standards/skill docs despite matching entries in flow plugin''s docs.json on disk; fell back to reading source files directly via Read. Environment/tool issue worth attention, separate from this task.'
-    - title: 'Process note: flow-mcp d/t doc-lookup tools f'
-      id: uitu
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/002-reset-password-page.md] Process note: flow-mcp d/t doc-lookup tools failed to resolve references against this project''s default working directory or the sdlcforge/flow source checkout as project_root, both returning document-not-found for entries confirmed present in docs.json; worked around by reading from the installed plugin cache directly. Same tooling issue observed by sibling phase-1 tasks.'
-    - title: 'Unrelated to this task: plan worktree shows t'
-      id: MCVQ
-      date: "2026-07-05"
-      tag: doc-updates
-      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Unrelated to this task: plan worktree shows three other uncommitted modified files (phase-01 tasks'' own Status sections) predating this session; manager should commit those too.'
     - title: 5 flat-envelope sites deferred
       id: eiF8
       date: "2026-07-14"
       tag: users-apiresp-migration
       text: '[users-apiresp-migration planning] The apiresp-migration plan''s Go vocab migration (phase-02) deliberately excludes 5 sites that use server.JSON directly to emit bespoke, non-standard flat response bodies rather than going through the standard error trio: api/internal/auth/require_verified.go:24,34 (internal_error flat, email_unverified), require_confirmed.go:36 (oidc_not_confirmed, drives an auth-flow redirect), and identities.go:626 (step_up_required, carries an extra challenge_path field), :646 (last_identity). These are the module''s most non-conformant sites, but migrating them to the standard nested envelope is a breaking change to consuming apps'' GUI code (app-mfdemo/app-mftodo), which keys off these bespoke shapes directly (confirmed: writeStepUpRequired''s own comment says the GUI reads error as a string). Deferred as an explicit follow-up rather than expanding this plan''s scope into a coordinated cross-repo GUI change. Recommend a dedicated future plan spanning mod-users + the consuming apps'' GUI code once this migration''s core scope has landed and the pattern for coordinated cross-repo breaking changes is established.'
-    - title: go.work worktree fix incomplete + AGENTS gap
-      id: 9EBV
-      date: "2026-07-16"
-      tag: users-apiresp-migration
-      text: 'docs/mf-standards/building-common.md''s "Building inside a task worktree" recipe (go work init && go work use ...) is incomplete: it produces a "conflicting replacements" error inside a real task worktree, because the affected module''s own api/go.mod replace directives (wrongly-resolving at worktree depth) remain active alongside the go.work use entries for the same modules. The actual fix also requires explicit `go work edit -replace <module>@v0.0.0=<corrected-path>` overrides for every sibling module (core-model, core-api, audit-model, audit-api, authz-model, authz-api) — confirmed working in phase-01-task-01-adopt-apiresp-sentinels-and-wr worktree (users-apiresp-migration plan). Separately, mod-users/AGENTS.md''s "Working in worktrees" section (~line 118) covers the gui/.yalc fix but doesn''t mention this Go go.work fix at all, so a fresh task agent has no in-repo pointer to it short of independently discovering docs/mf-standards/building-common.md. Recommend: (1) update building-common.md''s recipe to include the -replace overrides, (2) add a one-line AGENTS.md pointer to that doc section. Owner: docs-mf-standards repo for (1), mod-users AGENTS.md for (2) — cross-repo, not fixable from a single task worktree.'
     - title: Pre-existing doc-graph orphans (not from ph1)
       id: rmQ5
       date: "2026-07-16"
@@ -175,16 +55,6 @@ items:
       date: "2026-07-16"
       tag: go-vocab-migration
       text: 'Phase-02 architecture-conformance review (users-apiresp-migration plan) found: the design doc''s "Go-layer ownership" section states the end-state goal is handlers collapsing to apiresp.WriteError(w, r, err) so the status/code/envelope decision lives in one place. Phases 1-2 deliberately kept ~28 literal server.Error(status, "code", message) call sites across apps.go, oidc_providers.go, oidc_config.go, identities.go, self.go, assume.go, user_accounts.go (task doc Requirement 3 explicitly sanctions this deferral for this plan''s scope). The vocabulary at each site is now correct, but still duplicated rather than derived from a single sentinel classification point. Recommend tracking this as an explicit follow-up phase/task ("collapse literal server.Error sites onto sentinel-driven apiresp.WriteError calls") so the centralization goal doesn''t silently fall out of the plan once phase 2 is marked done.'
-    - title: invalid_input message casing vs design doc
-      id: WGZV
-      date: "2026-07-16"
-      tag: go-vocab-migration
-      text: 'Phase-02 architecture-conformance review (users-apiresp-migration plan) found: docs/mf-standards/architecture/api-response-design.md''s worked example uses "One or more fields are invalid." (capitalized, trailing period) as the top-level message for invalid_input + details[] responses. The migrated ErrorWithDetails call sites (e.g. api/internal/handlers/apps.go:52,55, identities.go:352) use "one or more fields are invalid" (lowercase, no period). Non-blocking cosmetic inconsistency - low priority. Recommend either aligning the literal message string with the design doc''s exact casing/punctuation in a future pass, or amending the design doc to note the example message is illustrative, not literal.'
-    - title: 'cd gui && bun test is not-applicable: gui/ ha'
-      id: t5kn
-      date: "2026-07-16"
-      tag: gui-core-gui-adoption
-      text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] cd gui && bun test is not-applicable: gui/ has zero test files and no test script in its history. Establishing test infra (bun-types devDependency, first test convention) is out of this task''s scope - likely applies identically to sibling task 002.'
     - title: Flow's mid-task-commit.sh/finalize-task-commi
       id: le59
       date: "2026-07-16"
@@ -220,11 +90,11 @@ items:
       date: "2026-07-16"
       tag: doc-updates
       text: '[phase-04-doc-updates/001-update-architecture-docs.md] Likely pre-existing, unrelated behavioral/doc mismatch: anonymous_account does not appear anywhere in api/internal Go source; login/email-code/password-reset show no IsAnonymous guard logic matching the documented ''400 anonymous_account'' behavior. Not fixed - out of scope for a docs-only task; worth a dedicated doc-accuracy pass separate from this plan.'
-    - title: 'Environment note: docs/mf-standards git submo'
-      id: jg7u
+    - title: building-common.md missing -replace recipe
+      id: ll4D
       date: "2026-07-16"
-      tag: doc-updates
-      text: '[phase-04-doc-updates/001-update-architecture-docs.md] Environment note: docs/mf-standards git submodule was uninitialized at task start in this worktree; initialized read-only (pointer unchanged) to read the referenced design doc.'
+      tag: agents-md-go-work-pointer
+      text: '[followup 9EBV follow-through] Added an AGENTS.md "Working in worktrees" pointer to docs/mf-standards/building-common.md''s "Building inside a task worktree" section for the go.work worktree-build fix. However, that section''s actual current content (as of commit 7daa56a in the docs-mf-standards submodule, pinned at a8bc74955) only documents `go work init && go work use ...` — it does not yet document the "conflicting replacements" error or the `go work edit -replace <module>@v0.0.0=<corrected-path>` overrides needed for sibling modules (core-model, core-api, audit-model, audit-api, authz-model, authz-api), which is the actual fix confirmed working in the users-apiresp-migration plan (originally followup 9EBV, part 1). The AGENTS.md pointer is accurate as a pointer (the section exists and is topically correct) but currently points to incomplete content. Cross-repo: docs-mf-standards repo owns building-common.md and must add the -replace recipe; not fixable from mod-users.'
     - title: make lint's sequential run fails at lint.mode
       id: DQU4
       date: "2026-07-17"
