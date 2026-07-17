@@ -20,11 +20,6 @@ items:
       date: "2026-07-03"
       tag: phase-03-gate
       text: 'Incidental observation from the phase-03 gate review (correctness lens): deploy/local/README.md''s "## What''s not here" section still contains phase-3-era prose ("API and GUI containers — they run on the host during development (Phase 3+ may add them to compose)") that is now doubly stale given the compose gui service existed and was just removed by phase-03. Untouched by phase-03''s diff and not in that task''s files_in_scope. Not currently owned by any registered plan phase (Phase 06 doc-updates covers docs/architecture.md and docs/project-structure.md, not deploy/local/README.md) — worth a follow-up wording pass if the manager wants full accuracy.'
-    - title: 'summary-bun-migration.md stale re: r86L/3RgF'
-      id: kcN3
-      date: "2026-07-03"
-      tag: phase-04-gate
-      text: 'Noted by the phase-04 gate review (correctness/style lenses): plan/summary-bun-migration.md (a dated, frozen historical summary from a prior migration phase) still calls r86L a "[BLOCKER]" and references 3RgF as an open follow-up, but both are now marked resolved in plan/next-steps.yaml by phase-04. Not touched by phase-04''s diff and not in its scope. Low-priority — worth a wording sync if the manager wants the historical summary to read consistently, but it''s frozen historical prose, not live documentation.'
     - title: No dependency cache in CI bun install
       id: twPi
       date: "2026-07-03"
