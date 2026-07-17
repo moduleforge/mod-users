@@ -11,6 +11,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -184,8 +186,7 @@ func (h *OIDCConfigHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	merged, err := config.LoadMergedProviders(r.Context(), h.deps.EnvRegistry, h.deps.Queries)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc status: load merged providers", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load provider state")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc status: load merged providers: %w", err))
 		return
 	}
 	providers := h.buildStatusProviders(merged)
@@ -231,7 +232,7 @@ type setupTokenResponse struct {
 // stale hash.
 func (h *OIDCConfigHandler) SetupToken(w http.ResponseWriter, r *http.Request) {
 	if !isLoopbackAddr(r.RemoteAddr) {
-		server.Error(w, http.StatusForbidden, "forbidden", "setup token endpoint is loopback-only")
+		apiresp.WriteError(w, r, apiresp.ErrForbidden)
 		return
 	}
 
@@ -239,7 +240,7 @@ func (h *OIDCConfigHandler) SetupToken(w http.ResponseWriter, r *http.Request) {
 	state := h.cachedBoot.State
 	h.mu.RUnlock()
 	if state.Confirmed() {
-		server.Error(w, http.StatusNotFound, "not_found", "setup already confirmed")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 
@@ -247,7 +248,7 @@ func (h *OIDCConfigHandler) SetupToken(w http.ResponseWriter, r *http.Request) {
 	tok := h.currentPlainTokenLocked()
 	h.mu.RUnlock()
 	if tok == "" {
-		server.Error(w, http.StatusNotFound, "not_found", "no active setup token")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 	server.JSON(w, http.StatusOK, setupTokenResponse{Token: tok})
@@ -284,18 +285,17 @@ type confirmRequest struct {
 func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	var req confirmRequest
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	authorized, err := h.authorizeConfirm(r, req.SetupToken)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc confirm: admin check failed", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to authorize request")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc confirm: authorize: %w", err))
 		return
 	}
 	if !authorized {
-		server.Error(w, http.StatusUnauthorized, "unauthenticated", "setup token or admin session required")
+		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
 		return
 	}
 
@@ -322,15 +322,13 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 			ID:      id,
 			Enabled: wanted[id],
 		}); err != nil {
-			slog.ErrorContext(r.Context(), "oidc confirm: set provider enabled", "error", err, "provider", id)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to persist configuration")
+			apiresp.WriteError(w, r, fmt.Errorf("oidc confirm: set provider enabled %q: %w", id, err))
 			return
 		}
 	}
 
 	if err := h.deps.Queries.UpdateOIDCConfig(r.Context(), optOut); err != nil {
-		slog.ErrorContext(r.Context(), "oidc confirm: db update", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to persist configuration")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc confirm: db update: %w", err))
 		return
 	}
 
@@ -340,20 +338,17 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	// they hit Confirm.
 	merged, err := config.LoadMergedProviders(r.Context(), h.deps.EnvRegistry, h.deps.Queries)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc confirm: load merged providers", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to reload providers")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc confirm: load merged providers: %w", err))
 		return
 	}
 	if err := h.deps.OAuth.Rebuild(r.Context(), config.MergedRegistry(merged)); err != nil {
-		slog.ErrorContext(r.Context(), "oidc confirm: rebuild oauth", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to reload providers")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc confirm: rebuild oauth: %w", err))
 		return
 	}
 
 	// Recompute state now that both DB + OAuth have the new view.
 	if err := h.RefreshState(r.Context()); err != nil {
-		slog.ErrorContext(r.Context(), "oidc confirm: refresh state", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to recompute state")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc confirm: refresh state: %w", err))
 		return
 	}
 
@@ -430,8 +425,7 @@ func (h *OIDCConfigHandler) Saved(w http.ResponseWriter, r *http.Request) {
 
 	merged, err := config.LoadMergedProviders(r.Context(), h.deps.EnvRegistry, h.deps.Queries)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc saved: load merged providers", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load saved config")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc saved: load merged providers: %w", err))
 		return
 	}
 	enabled := make(map[string]bool, len(merged))

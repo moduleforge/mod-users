@@ -15,8 +15,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -25,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -130,17 +131,16 @@ func (h *ProvidersHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
 	if !providerIDPattern.MatchString(id) {
-		server.Error(w, http.StatusNotFound, "not_found", "unknown provider id")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 	view, ok, err := h.buildView(r.Context(), id)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc provider get: db error", "error", err, "id", id)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load provider")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider get %q: %w", id, err))
 		return
 	}
 	if !ok {
-		server.Error(w, http.StatusNotFound, "not_found", "provider not found")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 	server.JSON(w, http.StatusOK, view)
@@ -161,7 +161,7 @@ func (h *ProvidersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// would collapse both cases.
 	raw, err := parseBody(r)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	if !h.authorize(w, r, stringField(raw, "setup_token")) {
@@ -169,7 +169,7 @@ func (h *ProvidersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
 	if !providerIDPattern.MatchString(id) {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid provider id format")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	h.upsertAndRespond(w, r, id, raw, false)
@@ -187,7 +187,7 @@ type createRequest struct {
 func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	raw, err := parseBody(r)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	if !h.authorize(w, r, stringField(raw, "setup_token")) {
@@ -196,7 +196,7 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	rawID := strings.TrimSpace(stringField(raw, "id"))
 	if rawID == "" {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "id is required")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	// Slug validation runs on the raw input so uppercase or underscores
@@ -204,8 +204,7 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// convention (AUTH_PROVIDER_{ID}_*) is lowercased when loaded, but
 	// operator-typed ids must already match the canonical shape.
 	if !providerIDPattern.MatchString(rawID) {
-		server.Error(w, http.StatusBadRequest, "invalid_input",
-			"id must be 2-32 chars, lowercase letters/digits/dashes, no leading or trailing dash")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	id := rawID
@@ -215,11 +214,15 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// to override an env-declared provider for the first time); a PUT
 	// handles that path.
 	if _, err := h.deps.Queries.GetOIDCProvider(r.Context(), id); err == nil {
+		// Documented exception (followup ZVum): apiresp exposes no public
+		// detail/message-carrying constructor for ErrConflict, so this actionable
+		// 409 message cannot be routed through apiresp.WriteError without losing it.
+		// Mirrors the writeServiceError/svc.ErrEmailTaken precedent. Collapse this
+		// once mod-core adds apiresp.Conflict(...).
 		server.Error(w, http.StatusConflict, "conflict", "provider id already exists; use PUT to update")
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		slog.ErrorContext(r.Context(), "oidc provider create: preflight", "error", err, "id", id)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to check provider")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider create preflight %q: %w", id, err))
 		return
 	}
 
@@ -236,19 +239,17 @@ func (h *ProvidersHandler) Revert(w http.ResponseWriter, r *http.Request) {
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
 	if !providerIDPattern.MatchString(id) {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid provider id format")
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
 	if _, err := h.deps.Queries.DeleteOIDCProvider(r.Context(), id); err != nil {
-		slog.ErrorContext(r.Context(), "oidc provider delete: db error", "error", err, "id", id)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to delete provider")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider delete %q: %w", id, err))
 		return
 	}
 
 	if err := h.rebuildAndRefresh(r.Context()); err != nil {
-		slog.ErrorContext(r.Context(), "oidc provider delete: rebuild failed", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to reload providers")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider delete: rebuild: %w", err))
 		return
 	}
 
@@ -269,8 +270,7 @@ func (h *ProvidersHandler) upsertAndRespond(w http.ResponseWriter, r *http.Reque
 		existing = row
 		existingLoaded = true
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		slog.ErrorContext(r.Context(), "oidc provider upsert: preflight", "error", err, "id", id)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load provider")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider upsert preflight %q: %w", id, err))
 		return
 	}
 
@@ -295,27 +295,24 @@ func (h *ProvidersHandler) upsertAndRespond(w http.ResponseWriter, r *http.Reque
 	}
 
 	if _, err := h.deps.Queries.UpsertOIDCProvider(r.Context(), params); err != nil {
-		slog.ErrorContext(r.Context(), "oidc provider upsert: db error", "error", err, "id", id)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to persist provider")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider upsert %q: %w", id, err))
 		return
 	}
 
 	if err := h.rebuildAndRefresh(r.Context()); err != nil {
-		slog.ErrorContext(r.Context(), "oidc provider upsert: rebuild failed", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to reload providers")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider upsert %q: rebuild: %w", id, err))
 		return
 	}
 
 	// Respond with the merged view so the GUI sees init_ok + error live.
 	view, ok, err := h.buildView(r.Context(), id)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc provider upsert: post-write view", "error", err, "id", id)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "persisted but failed to respond")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider upsert %q: post-write view: %w", id, err))
 		return
 	}
 	if !ok {
 		// Paranoia: we just wrote it.
-		server.Error(w, http.StatusInternalServerError, "internal_error", "provider disappeared after write")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider upsert %q: provider disappeared after write", id))
 		return
 	}
 	status := http.StatusOK
@@ -403,12 +400,11 @@ func (h *ProvidersHandler) rebuildAndRefresh(ctx context.Context) error {
 func (h *ProvidersHandler) authorize(w http.ResponseWriter, r *http.Request, submittedToken string) bool {
 	ok, err := h.deps.Confirmer.authorizeConfirm(r, submittedToken)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc provider: admin check failed", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to authorize request")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc provider: authorize: %w", err))
 		return false
 	}
 	if !ok {
-		server.Error(w, http.StatusUnauthorized, "unauthenticated", "admin session or setup token required")
+		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
 		return false
 	}
 	return true
