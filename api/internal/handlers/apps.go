@@ -58,13 +58,13 @@ func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	req.Slug = strings.TrimSpace(req.Slug)
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Slug == "" {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
 			{Field: "slug", Code: "users.slug_required", Message: "slug is required"},
 		})
 		return
 	}
 	if req.Name == "" {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
 			{Field: "name", Code: "users.name_required", Message: "name is required"},
 		})
 		return
@@ -302,7 +302,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.UserUUID == "" {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "one or more fields are invalid", []apiresp.FieldError{
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "One or more fields are invalid.", []apiresp.FieldError{
 			{Field: "user_uuid", Code: "users.user_uuid_required", Message: "user_uuid is required"},
 		})
 		return
