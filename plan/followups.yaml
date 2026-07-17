@@ -85,11 +85,6 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Task doc Requirement 3 doesn''t specify literal lead-sentence copy for the ''Back to sign in'' prompt (only button text/styling/behavior) — rendered just the button with no prefix text; if the app-mfdemo reference page has specific lead copy, worth confirming against the source page directly.'
-    - title: Full interactive Ladle 'no console error at m
-      id: 2I8N
-      date: "2026-07-05"
-      tag: forgot-reset-email-code-ui
-      text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Full interactive Ladle ''no console error at mount'' verification wasn''t possible in this environment (no browser/headless-browser tool); substituted a clean production build as the closest available proxy.'
     - title: 'Unrelated to this task: flow-mcp d/s/t docume'
       id: GgF5
       date: "2026-07-05"
