@@ -23,7 +23,7 @@ phases:
           slug: migrate-oidc-handlers
           title: Migrate oidc_providers.go and oidc_config.go server.Error Sites
           path: phase-01-centralize-server-error/002-migrate-oidc-handlers.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Collapsed 33 literal server.Error sites across oidc_providers.go(20)/oidc_config.go(13) onto apiresp.WriteError. Single carve-out at oidc_providers.go:218 (409 conflict) preserved with ZVum justification comment. Build, vet, gofmt, unit tests all clean.
           git:
