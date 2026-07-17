@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/moduleforge/core-api/apiresp"
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	db "github.com/moduleforge/mod-users/model/db"
@@ -34,7 +35,7 @@ type passwordResetConfirmBody struct {
 func (h *Handler) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
 	var req passwordResetRequestBody
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
@@ -92,16 +93,17 @@ func (h *Handler) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 	var req passwordResetConfirmBody
 	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
 		return
 	}
 
 	if req.Token == "" {
-		server.Error(w, http.StatusBadRequest, "bad_request", "token is required")
+		server.Error(w, http.StatusBadRequest, "invalid_input", "token is required")
 		return
 	}
 	if len(req.Password) < 12 {
-		server.Error(w, http.StatusBadRequest, "validation_error", "password must be at least 12 characters")
+		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "password must be at least 12 characters",
+			[]apiresp.FieldError{{Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters"}})
 		return
 	}
 
@@ -111,7 +113,7 @@ func (h *Handler) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 
 	reset, err := h.queries.GetActivePasswordReset(r.Context(), tokenHash)
 	if err == pgx.ErrNoRows {
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired reset token")
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired reset token")
 		return
 	}
 	if err != nil {
