@@ -50,4 +50,4 @@ phases:
             branch: phase-01-task-04-migrate-self-assume-account-ha
             commit:
                 - d3f6bd4
-            merge: null
+            merge: 29e1093
