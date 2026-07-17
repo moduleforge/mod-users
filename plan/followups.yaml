@@ -65,11 +65,6 @@ items:
       date: "2026-07-05"
       tag: forgot-reset-email-code-ui
       text: '[phase-01-forgot-reset-email-code-ui/001-forgot-password-page.md] Task doc Requirement 3 doesn''t specify literal lead-sentence copy for the ''Back to sign in'' prompt (only button text/styling/behavior) — rendered just the button with no prefix text; if the app-mfdemo reference page has specific lead copy, worth confirming against the source page directly.'
-    - title: 'Unrelated to this task: plan worktree shows t'
-      id: MCVQ
-      date: "2026-07-05"
-      tag: doc-updates
-      text: '[phase-02-doc-updates/001-update-architecture-docs.md] Unrelated to this task: plan worktree shows three other uncommitted modified files (phase-01 tasks'' own Status sections) predating this session; manager should commit those too.'
     - title: 5 flat-envelope sites deferred
       id: eiF8
       date: "2026-07-14"
