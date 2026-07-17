@@ -30,7 +30,7 @@ phases:
             branch: phase-01-task-02-migrate-oidc-handlers
             commit:
                 - b29c0b9
-            merge: null
+            merge: 7bf624c
         - number: 3
           slug: migrate-identities-handler
           title: Migrate identities.go server.Error Sites
