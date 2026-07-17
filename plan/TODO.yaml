@@ -24,7 +24,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: phase-01-task-02-migrate-oidc-auth-handler-apir
             commit: []
             merge: null
     - number: 2
