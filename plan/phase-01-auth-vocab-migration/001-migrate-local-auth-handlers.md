@@ -209,3 +209,45 @@ architectural_impact: false
   plus `reset.go`'s one `validation_error` site).
 - After `anonymous.go`.
 - After the two test-file updates (`guards_test.go`, `anonymous_test.go`).
+
+## Status
+
+**Outcome:** succeeded. **Date:** 2026-07-16.
+
+All 18 mechanical swaps (Requirement 1), the 6 `validation_error` → `invalid_input` + `details[]`
+sites (Requirement 2), the `email_taken` → `conflict` + `details[]` site (Requirement 3), and the
+`guards_test.go`/`anonymous_test.go` assertion updates (Requirement 5) are implemented exactly per
+the task doc's mapping tables. Requirement 4 (no `details[]` on the six generic
+`unauthorized`→`unauthenticated` sites) verified by inspection — none of those six sites gained a
+`details[]` argument.
+
+**Validation summary:**
+- `make build.api` — passed.
+- `cd api && go vet ./...` — clean.
+- `make test.unit` — passed (all packages, including `TestLogin_AnonymousAccount` and `TestAnonymous`).
+- Residual-literal grep across the seven in-scope files — zero matches.
+- Manual diff read confirms every `server.Error(...)`/new `server.ErrorWithDetails(...)` call form is
+  preserved; no site was converted to `apiresp.WriteError(w, r, err)`.
+- Manual anti-enumeration check: `login.go`'s not-found-vs-bad-password branch already returned (and
+  still returns) an identical message/status/code for both sub-cases. `emailcode.go`'s three
+  `unauthorized`→`unauthenticated` sites all now carry the identical code `unauthenticated`/401 across
+  the "user not found" and "credential wrong" sub-cases, same as before this diff — this diff did not
+  introduce a new divergence. One **pre-existing** condition was noted, not introduced by this diff:
+  `emailcode.go`'s "user not found" site (line ~140, message "invalid code") and its "credential
+  wrong" sites (lines ~154/164, message "invalid or expired code") carry different message text,
+  which could let a caller distinguish the two sub-cases by response body content even though
+  status/code now match. The task doc's Requirement 1 explicitly instructs keeping message text
+  unchanged at these sites, so it was left as-is and is flagged to the manager rather than silently
+  fixed or silently left unmentioned.
+- `make lint` — `lint.model`'s `shadow-db-lint` step failed with a Docker/Postgres networking timeout
+  (environment limitation, not a code issue; `model/` is untouched by this task). This matches prior
+  plan history (`followups.yaml` id `0x4L`). `lint.api` (`go vet` + `gofmt -l`) ran clean in isolation.
+- Nested `review-changes-correctness`/`review-changes-security` lens dispatch (per `review_focus`) was
+  not performed via the `Task` tool — that tool was not available in this task agent's toolset. The
+  two lenses' checklists were instead applied manually against the diff; no correctness or security
+  findings beyond the pre-existing anti-enumeration message-text note above.
+
+**Assumptions applied:** the `docs/mf-standards` submodule was uninitialized at task start;
+initialized read-only per the task doc's Assumptions. The `go.work` workaround (with explicit
+`-replace` overrides) was applied verbatim from the task doc's Assumptions section and confirmed
+working; `go.work`/`go.work.sum` remain gitignored and were not committed.
