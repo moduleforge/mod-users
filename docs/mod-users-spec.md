@@ -111,13 +111,13 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 10. Admin: manage applications
+### 10. Admin: manage application membership
 
 **Actor:** Authenticated admin user.
 
-**Action:** Calls any of the `/v1/apps` endpoints: list, create, retrieve, update, archive (soft-delete), plus membership operations (`GET /v1/apps/{uuid}/members`, `POST /v1/apps/{uuid}/members`, `DELETE /v1/apps/{uuid}/members/{user_uuid}`).
+**Action:** Calls the `/v1/apps/{uuid}/user-accounts` membership endpoints: `POST` to assign a user account to an app (with optional roles), `GET` to list an app's members, `DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid}` to remove a member, and `PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles` to update a member's roles. The `{uuid}` path param is resolved to the app's internal id via mod-core's shared `entityResolver` service.
 
-**Outcome:** Applications are tenant-like groupings that users can be assigned to with roles. An archived application is soft-deleted (`archived_at` set). Members can be added or removed; each membership record carries a `roles` array.
+**Outcome:** Applications are tenant-like groupings, now owned and CRUD-managed by mod-core (list, create, retrieve, update, archive live there — not in this module). This module retains only the `apps_user_accounts` membership join: users can be assigned to an app with roles, listed, removed, or have their roles updated. Each membership record carries a `roles` array.
 
 ---
 
@@ -189,18 +189,17 @@ The module owns nine Postgres tables. All are managed by goose migrations under 
 
 | Table | Purpose |
 |---|---|
-| `apps` | Application tenants (name, slug, soft-delete). |
-| `user_accounts` | One row per user. References `legal_entities(entity_id)` (mod-core); holds the canonical email (nullable — NULL for anonymous accounts), email-verified timestamp, and default-app FK. The derived boolean `is_anonymous` (email IS NULL) is exposed in Go types and API responses. |
+| `user_accounts` | One row per user. References `legal_entities(entity_id)` (mod-core); holds the canonical email (nullable — NULL for anonymous accounts), email-verified timestamp, and default-app FK (against mod-core's `apps` table). The derived boolean `is_anonymous` (email IS NULL) is exposed in Go types and API responses. |
 | `anon_tokens` | Device continuity tokens for anonymous users. Maps `device_id` + SHA-256-hashed `session_token` → `user_account`. Rows are cascade-deleted when the parent `user_account` is hard-deleted, and are explicitly deleted by the service when an anonymous account is upgraded (email patched from NULL to a real value). |
 | `auth_local` | Local credential (argon2id hash) for email+password login. One row per user account, optional. |
 | `email_codes` | Time-limited, single-use codes for email-code login and email verification. |
 | `password_resets` | Time-limited, single-use tokens for password reset. |
-| `apps_user_accounts` | Membership join table: app ↔ user account, with a `roles` text array. |
+| `apps_user_accounts` | Membership join table: mod-core's `apps` ↔ this module's `user_accounts`, with a `roles` text array. This is the only apps-related table this module owns — application CRUD (`apps` itself) has moved to mod-core. |
 | `oidc_config` | Singleton operator-level OIDC configuration (opt-out flag, setup-token hash). |
 | `oidc_providers` | Per-provider DB overrides (display name, issuer URL, client ID/secret, scopes, enabled flag). |
 | `auth_oidc_identities` | OIDC identity links: `(issuer, subject)` pairs keyed to a user account. Many per account (one per provider). |
 
-The `legal_entities` table referenced by `user_accounts.account_holder` is defined in `mod-core/model`; it is composed into the migration set at the application level, not duplicated here.
+The `legal_entities` table referenced by `user_accounts.account_holder`, and the `apps` table referenced by `user_accounts.default_app_id` and `apps_user_accounts.app_id`, are both defined in `mod-core/model`; they are composed into the migration set at the application level, not duplicated here. `apps` was previously owned by this module directly; now that application tenancy lives in mod-core as an entity subtype, this module's manifest declares `after: [core]` so mod-core's `apps` migration runs before this module's, and these two FKs resolve at composition time the same way the `legal_entities` FK does.
 
 ## API definition
 
@@ -239,16 +238,14 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 - [ ] `POST /v1/users/{uuid}/grant` — grant or revoke admin privileges.
 - [ ] `POST /v1/users/{uuid}/assume` — obtain a JWT scoped to the user; original admin identity embedded.
 
-### Admin: applications (admin auth required)
+### Admin: app membership (admin auth required)
 
-- [ ] `GET /v1/apps` — list applications.
-- [ ] `POST /v1/apps` — create application (name, slug).
-- [ ] `GET /v1/apps/{uuid}` — retrieve application detail.
-- [ ] `PUT /v1/apps/{uuid}` — update application name.
-- [ ] `DELETE /v1/apps/{uuid}` — archive application (soft-delete).
-- [ ] `GET /v1/apps/{uuid}/members` — list application members.
-- [ ] `POST /v1/apps/{uuid}/members` — add a member with optional roles.
-- [ ] `DELETE /v1/apps/{uuid}/members/{user_uuid}` — remove a member.
+App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served by mod-core, not this module. This module serves only the membership endpoints below, against its own `apps_user_accounts` join table; the `{uuid}` path param is resolved to the app's internal id via mod-core's shared `entityResolver` service.
+
+- [ ] `GET /v1/apps/{uuid}/user-accounts` — list an app's user-account members.
+- [ ] `POST /v1/apps/{uuid}/user-accounts` — assign a user account to an app, with optional roles.
+- [ ] `DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid}` — remove a user account from an app.
+- [ ] `PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles` — update a member's roles.
 
 ### Admin: audit log (admin auth required)
 
@@ -284,7 +281,7 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 
 - **User interface routing and application shell.** The `gui/` component library provides components; it does not provide routing, navigation state, or an app shell. The `app-mfdemo` Next.js project (at the aggregate level) shows one way to compose the components but is not production application code.
 
-- **Multi-tenancy beyond app membership.** Application-level tenancy (the `apps` / `apps_user_accounts` model) is available, but the module does not enforce cross-tenant data isolation; that is an application composition concern.
+- **Multi-tenancy beyond app membership.** Application-level tenancy (mod-core's `apps` entity plus this module's `apps_user_accounts` membership join) is available, but the module does not enforce cross-tenant data isolation; that is an application composition concern.
 
 ## Pointers to deeper docs
 

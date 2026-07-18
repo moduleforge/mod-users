@@ -19,10 +19,9 @@ The Postgres schema lives in `model/migrations/` (managed with goose) and `model
 
 | Table | Purpose |
 |---|---|
-| `apps` | Application tenants — a host app may register one or more named apps |
 | `user_accounts` | Core user entity; promoted to `Entity` status for authorization (see [entity-typing](./mf-standards/architecture/entity-typing.md)). `email` is nullable — NULL indicates an anonymous account |
 | `anon_tokens` | Maps `device_id` + `session_token` (SHA-256 hashed) to a `user_account`; enables cross-session identity continuity for anonymous users. Rows are deleted when the account is upgraded to a named account |
-| `apps_user_accounts` | Many-to-many join between apps and user accounts |
+| `apps_user_accounts` | Many-to-many join between mod-core's `apps` and this module's `user_accounts` — the membership record; carries a `roles` text array. `apps` itself is not a mod-users table (see below) |
 | `auth_local` | Email + argon2id password credentials for a user account |
 | `email_codes` | Short-lived one-time codes used for email verification and passwordless login |
 | `password_resets` | Pending password-reset tokens |
@@ -30,7 +29,7 @@ The Postgres schema lives in `model/migrations/` (managed with goose) and `model
 | `oidc_providers` | Per-provider OIDC overrides (issuer URL, client ID/secret, stored in DB or env) |
 | `auth_oidc_identities` | OIDC identity records linking an external subject (`sub`) to a `user_account` |
 
-Internal IDs are integers (joins only, never sent in responses). External IDs are UUIDs. Cross-module schema dependencies (e.g., the `legal_entities` table from mod-core) are resolved by the host application's migration composition step, not by tight coupling.
+Internal IDs are integers (joins only, never sent in responses). External IDs are UUIDs. Cross-module schema dependencies (e.g., the `legal_entities` table from mod-core, referenced by `user_accounts.account_holder`) are resolved by the host application's migration composition step, not by tight coupling. `apps` is a second instance of this same pattern: it was previously a table this module owned outright, but application tenancy now lives in mod-core as an entity subtype, so `apps` is defined and CRUD-managed there. `user_accounts.default_app_id` and `apps_user_accounts.app_id` remain as tolerated cross-module FKs against mod-core's `apps` table — this module's manifest declares `after: [core]` (see `moduleforge.module.yaml`) so mod-core's migrations, including `apps`, run before this module's, satisfying those FKs at composition time. mod-users no longer retains any local `apps` table or query; it keeps only the `apps_user_accounts` membership join, whose handler resolves the `{uuid}` path param via mod-core's shared `entityResolver` service rather than a local lookup.
 
 ## API layer
 
@@ -44,7 +43,7 @@ API surface by tag group:
 | **Auth** | `/v1/auth/register`, `/v1/auth/login`, `/v1/auth/anonymous`, `/v1/auth/email-code`, `/v1/auth/password-reset`, `/v1/auth/providers`, `/v1/auth/oidc/{provider}/start`, `/v1/auth/oidc/{provider}/callback` | All authentication flows |
 | **Self** | `GET /v1/self`, `PUT /v1/self` | Authenticated user reads and updates their own profile. `GET` is reachable to accounts with an unverified email (so the GUI can render the "verify your email" page); `PUT` requires a verified email |
 | **Users** | CRUD on `/v1/users`, `/v1/users/{uuid}`, grant/assume sub-routes | Admin user management |
-| **Apps** | CRUD on `/v1/apps`, member management | Admin application and tenancy management |
+| **Apps** | Membership only: `POST`/`GET /v1/apps/{uuid}/user-accounts` (assign/list members), `DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid}` (remove), `PUT .../roles` (update roles) | Admin app-membership management. App CRUD (`/v1/apps`, `/v1/apps/{uuid}`) is no longer served by this module — it is served by mod-core when composed into a host application |
 | **Audit** | `/v1/audit`, `/v1/audit/{resource_type}/{resource_uuid}`, `/v1/users/{uuid}/audit` | Audit log access |
 
 Routes are wired into the generated server via `moduleforge.module.yaml`'s `provides.routes` entries (consumed by the ModuleForge mfgen codegen). Per-route middleware differentiation is expressed by giving the affected route its own manifest entry with its own `middleware:` list — as seen in the account-routes entry and, for the GET/PUT split above, the two self-routes entries — rather than by any register-time conditional.
