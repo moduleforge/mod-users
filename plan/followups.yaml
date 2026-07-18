@@ -100,11 +100,6 @@ items:
       date: "2026-07-17"
       tag: centralize-server-error
       text: '[phase-01-centralize-server-error/002-migrate-oidc-handlers.md] Two rebuild-failure sites in oidc_providers.go now carry an id field in the wrapped error even though the original slog.ErrorContext call at that exact site didn''t log one — purely additive diagnostic context within the same line being edited, not a scope change.'
-    - title: No lint guardrail vs server.Error drift
-      id: Wkx3
-      date: "2026-07-17"
-      tag: centralize-server-error
-      text: 'Phase-01 architecture-conformance review (centralize-server-error plan) found: this phase collapsed 92 of 96 literal server.Error/server.ErrorWithDetails call sites onto apiresp.WriteError, but nothing (lint rule, forbidigo/staticcheck config, CI check) prevents a newly-added handler from reintroducing a literal server.Error/server.ErrorWithDetails call outside the four documented carve-outs (oidc_providers.go:222, identities.go:310/389/407). The invariant this phase established is enforced by convention and this one-time sweep, not tooling, so it can silently erode — including in the already-known handlers/auth/*.go files (followup biPE, ~10+ of its own literal sites) once that migration happens. Recommend adding a forbidigo pattern (or equivalent) banning server.Error(/server.ErrorWithDetails( outside an explicit allowlist of the four carve-out lines, wired into make lint, so any future literal site fails CI instead of silently drifting back.'
     - title: Carve-out grep check is comment-fragile
       id: 6vir
       date: "2026-07-17"
