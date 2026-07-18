@@ -11,14 +11,6 @@
         "scored_at": "2026-07-17T16:10:00Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
-      "twPi": {
-        "sig": "4613ad8444801cff3b903c1dd61b6e60",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "CI bun install lacks dependency caching; pre-existing, moderate effort to add actions/cache step, moderate payoff via CI wall-clock savings.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
       "0PHW": {
         "sig": "103a0c6e58dbf12e80fb933acd84e661",
         "effort_bucket": "medium",
@@ -160,14 +152,6 @@
         "effort_bucket": "low",
         "utility_bucket": "low",
         "rationale": "Purely additive diagnostic id field on two rebuild-failure sites in oidc_providers.go, called out as an incidental scope note rather than an actionable gap; no follow-up action implied.",
-        "scored_at": "2026-07-17T22:43:00Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "6vir": {
-        "sig": "ae8105f388a9a556565a186639cb8d1b",
-        "effort_bucket": "low",
-        "utility_bucket": "medium",
-        "rationale": "Task 003s completion-check greps comment text for server.ErrorWithDetails, which is brittle and could desync if a carve-out comment is reworded; switching to a call-site-anchored grep pattern is a small, self-contained fix that protects future site-migration batches reusing this pattern.",
         "scored_at": "2026-07-17T22:43:00Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       }
