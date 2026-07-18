@@ -1,15 +1,15 @@
 {
-  "generated_at_commit": "dfef767",
-  "generated_at": "2026-07-06T01:51:59Z",
+  "generated_at_commit": "627d069",
+  "generated_at": "2026-07-18T23:43:52Z",
   "method": "self-compute",
   "command_run": null,
   "metrics": {
-    "go": { "files": 105, "loc": 22402, "complexity_estimate": 2376 },
-    "bash": { "files": 2, "loc": 92, "complexity_estimate": 19 },
-    "markdown": { "files": 18, "loc": 1577, "complexity_estimate": 0 },
-    "typescript": { "files": 34, "loc": 3038, "complexity_estimate": 252 },
+    "go": { "files": 113, "loc": 23331, "complexity_estimate": 2487 },
+    "bash": { "files": 3, "loc": 246, "complexity_estimate": 46 },
+    "markdown": { "files": 25, "loc": 2848, "complexity_estimate": 0 },
+    "typescript": { "files": 34, "loc": 3052, "complexity_estimate": 253 },
     "javascript": { "files": 1, "loc": 8, "complexity_estimate": 0 },
-    "sql": { "files": 11, "loc": 493, "complexity_estimate": 12 },
-    "totals": { "files": 171, "loc": 27610, "complexity_estimate": 2659 }
+    "sql": { "files": 10, "loc": 469, "complexity_estimate": 14 },
+    "totals": { "files": 186, "loc": 29954, "complexity_estimate": 2800 }
   }
 }
