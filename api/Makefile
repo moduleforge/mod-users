@@ -42,9 +42,10 @@ test.integration: ## Run integration tests (none yet)
 	@echo "api: no integration tests yet"
 
 .PHONY: lint
-lint: ## Run go vet and check gofmt
+lint: ## Run go vet, check gofmt, and check for server.Error literal-call drift
 	go vet ./...
 	@test -z "$$(gofmt -l .)" || { echo "Files need gofmt:"; gofmt -l .; exit 1; }
+	@./scripts/check-server-error-literals.sh
 
 .PHONY: lint-fix
 lint-fix: ## Run gofmt -w on the source tree
