@@ -5,11 +5,6 @@ items:
       date: "2026-07-03"
       tag: phase-02-gate
       text: 'Discovered during the phase-02 gate review: when a task''s Requirements call for removing untracked/stray filesystem artifacts (not git-tracked), dispatching that task into an isolated task worktree does not work as expected — `git worktree add` doesn''t copy untracked files from the main checkout, so the fresh task worktree never contains the stray artifacts in the first place, and the task agent''s rm -rf + verification silently checks an already-clean location rather than actually cleaning the project root. This happened in phase-02-stale-artifact-cleanup/001-remove-nextjs-scaffold.md''s Requirement 3 (stray empty dirs + gui/.next/ build cache) — caught by the style review lens, fixed directly by the manager against the actual project root. Future plan tasks that include untracked-file/stray-directory cleanup should either target project_root directly (bypassing worktree isolation for that step) or have the manager independently re-verify against project_root after merge, not just trust the task worktree''s self-reported validation.'
-    - title: No dependency cache in CI bun install
-      id: twPi
-      date: "2026-07-03"
-      tag: phase-04-gate
-      text: 'Noted by the phase-04 gate review (efficiency lens): the migrated ci.yml has no actions/cache step for the bun install across CI runs. Pre-existing condition (the prior pnpm workflow had no cache step either), not a regression introduced by phase-04 — but worth a follow-up for CI wall-clock time if the manager wants to optimize further. Out of scope for the pnpm-to-bun migration itself.'
     - title: 'Per the task doc''s explicit instruction, the '
       id: 0PHW
       date: "2026-07-03"
