@@ -12,7 +12,6 @@ import (
 )
 
 type Querier interface {
-	ArchiveApp(ctx context.Context, id int64) error
 	AssignUserAccountToApp(ctx context.Context, arg AssignUserAccountToAppParams) error
 	// Clear the setup token once the operator has confirmed configuration.
 	// Idempotent — safe to call on every confirmed boot.
@@ -21,7 +20,6 @@ type Querier interface {
 	ConsumePasswordReset(ctx context.Context, id int64) error
 	CountOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CreateAnonToken(ctx context.Context, arg CreateAnonTokenParams) (AnonToken, error)
-	CreateApp(ctx context.Context, arg CreateAppParams) (App, error)
 	CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams) (EmailCode, error)
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
 	CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (UserAccount, error)
@@ -37,8 +35,6 @@ type Querier interface {
 	GetActivePasswordReset(ctx context.Context, tokenHash string) (PasswordReset, error)
 	GetAnonTokenBySessionToken(ctx context.Context, sessionToken string) (AnonToken, error)
 	GetAnonTokensByDeviceID(ctx context.Context, deviceID string) ([]AnonToken, error)
-	GetAppBySlug(ctx context.Context, slug string) (App, error)
-	GetAppByUUID(ctx context.Context, argUuid uuid.UUID) (App, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (AuthLocal, error)
 	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
 	GetOIDCIdentityByIssuerSubject(ctx context.Context, arg GetOIDCIdentityByIssuerSubjectParams) (AuthOidcIdentity, error)
@@ -50,7 +46,6 @@ type Querier interface {
 	GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (UserAccount, error)
 	InsertOIDCIdentity(ctx context.Context, arg InsertOIDCIdentityParams) (AuthOidcIdentity, error)
 	ListAppUserAccounts(ctx context.Context, appID int64) ([]AppsUserAccount, error)
-	ListApps(ctx context.Context) ([]App, error)
 	ListOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) ([]AuthOidcIdentity, error)
 	// Return every provider override row, sorted by id for stable output.
 	ListOIDCProviders(ctx context.Context) ([]OidcProvider, error)
@@ -69,7 +64,6 @@ type Querier interface {
 	// when the state is unconfirmed and no hash is already present.
 	SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error
 	TouchOIDCIdentityLastSeen(ctx context.Context, id int64) error
-	UpdateApp(ctx context.Context, arg UpdateAppParams) error
 	// Persist the operator's opt-out choice (called from POST /v1/oidc-config/confirm).
 	// Per-provider enable flags live in the oidc_providers table and are
 	// upserted directly — no JSONB column on this singleton since 9.16.
