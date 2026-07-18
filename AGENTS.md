@@ -105,7 +105,7 @@ goose -dir migrations postgres "$DB_URL" up
 goose -dir migrations postgres "$DB_URL" down
 ```
 
-Each module numbers its own migrations independently starting from 1, isolated in its own `goose_db_version_<module>` table — modules no longer coordinate a shared global numbering space. Cross-module ordering (when one module's migrations depend on another's schema) is carried by the manifest's `migrations.after` field, not by range allocation. `mod-users` declares `after: [core]` because its migrations FK `mod-core`'s `legal_entities` table. See `docs-mf-standards/manifest-spec.md` §5 for the full convention.
+Each module numbers its own migrations independently starting from 1, isolated in its own `goose_db_version_<module>` table — modules no longer coordinate a shared global numbering space. Cross-module ordering (when one module's migrations depend on another's schema) is carried by the manifest's `migrations.after` field, not by range allocation. `mod-users` declares `after: [core]` because its migrations FK `mod-core`'s `legal_entities` table and, as of the apps-decoupling rewire, `mod-core`'s `apps` table too (`user_accounts.default_app_id`, `apps_user_accounts.app_id`) — `apps` moved from mod-users to mod-core as an entity subtype, and mod-users retains only the `apps_user_accounts` membership join against it. See `docs-mf-standards/manifest-spec.md` §5 for the full convention.
 
 ## Code generation (sqlc)
 
