@@ -472,7 +472,8 @@ func main() {
 	usersHandler := handlers.NewUserAccountsHandler(uaSvc, grantAdminFn, revokeAdminFn)
 	_ = usersHandler // wired via RegisterAccountRoutes in generated main.go
 	assumeHandler := handlers.NewAssumeHandler(uaSvc, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
-	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup)
+	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup, entityResolver, coreQueries)
+	_ = appsHandler // wired via RegisterAccountRoutes in generated main.go
 
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
 		Queries:      queries,
@@ -575,14 +576,10 @@ func main() {
 
 				// TODO(generated): account routes wired here by mfgen — see phase-3 codegen-main
 				// handlers.RegisterAccountRoutes(r, usersHandler, assumeHandler, appsHandler)
-
-				// Apps (multi-tenancy). Authorization is enforced at the handler layer
-				// via Authorize calls; RequireAdmin middleware has been removed.
-				r.Post("/apps", appsHandler.Create)
-				r.Get("/apps", appsHandler.List)
-				r.Get("/apps/{uuid}", appsHandler.GetApp)
-				r.Put("/apps/{uuid}", appsHandler.UpdateApp)
-				r.Delete("/apps/{uuid}", appsHandler.DeleteApp)
+				//
+				// This registers the /user-accounts, assume-identity, and
+				// apps/user-accounts membership routes. Top-level /apps CRUD is not
+				// part of this group — it now lives in mod-core.
 			})
 		})
 	})

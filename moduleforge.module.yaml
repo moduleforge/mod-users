@@ -129,8 +129,12 @@ provides:
         - field:cfg.LocalAuth.JWTSecret
         - field:cfg.LocalAuth.LocalIssuer
 
-    # appsHandler — apps/user-accounts handler; serves apps routes under /v1.
-    # Depends on authorizer and observerGroup in addition to pool and queries.
+    # appsHandler — apps/user-accounts membership handler; serves the
+    # /v1/apps/{uuid}/user-accounts routes. Top-level /apps CRUD lives in
+    # mod-core. Depends on authorizer and observerGroup in addition to pool
+    # and queries:usersdb; entityResolver + queries:coredb resolve the
+    # {uuid} path param to the app's internal id (mod-users no longer has
+    # its own apps query).
     - name: appsHandler
       type: "*handlers.AppsHandler"
       constructor: handlers.NewAppsHandler
@@ -139,6 +143,8 @@ provides:
         - queries:usersdb
         - service:authorizer
         - service:observerGroup
+        - service:entityResolver
+        - queries:coredb              # *coredb.Queries
 
     # oidcHandler — OIDC callback and token-exchange handler; serves /v1/auth OIDC routes.
     # Depends on userResolver, userAccountService, oauthOrchestrator, and observerGroup.
@@ -306,6 +312,7 @@ requires:
     - name: typeResolver           # *types.Resolver from core-module
     - name: coreServices           # *coreservice.Services from core-module
     - name: grantService           # GrantServicer from authz-module
+    - name: entityResolver         # *entity.Resolver from core-module — resolves apps.{uuid} to internal id
     # operationRegistry moved to requires.infra as opReg (infra singleton in app manifest)
     # grantAdminFn/revokeAdminFn: composition-root closures; deferred to phase-4 compiler (JEDl)
   infra:

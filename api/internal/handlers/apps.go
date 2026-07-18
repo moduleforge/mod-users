@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -12,261 +10,54 @@ import (
 
 	"github.com/moduleforge/core-api/apiresp"
 	coreAuthz "github.com/moduleforge/core-api/authz"
+	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/observer"
 	"github.com/moduleforge/core-api/txhelper"
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
-// AppsHandler serves /v1/apps endpoints.
+// AppsHandler serves the apps/user-accounts membership endpoints under
+// /v1/apps/{uuid}/user-accounts. Top-level /apps CRUD (Create/List/GetApp/
+// UpdateApp/DeleteApp) has moved to mod-core (apps are now entities there);
+// this handler retains only the membership operations, which continue to
+// operate on mod-users' own apps_user_accounts join table.
 type AppsHandler struct {
-	pool       txhelper.DB
-	q          db.Querier
-	newQuerier func(pgx.Tx) db.Querier // factory for tx-scoped querier; defaults to db.New
-	az         coreAuthz.Authorizer
-	observers  *observer.ObserverGroup
+	pool           txhelper.DB
+	q              db.Querier
+	az             coreAuthz.Authorizer
+	observers      *observer.ObserverGroup
+	entityResolver *entity.Resolver
+	coreQ          *coredb.Queries
 }
 
-// NewAppsHandler creates an AppsHandler.
+// NewAppsHandler creates an AppsHandler. entityResolver resolves the
+// {uuid} path param to the app's internal id (apps.id == entities.id,
+// per mod-core's FK-anchor entity-subtype pattern) since mod-users no
+// longer has its own apps table/query to look the row up directly.
+//
+// entityResolver.AllowNotFound("app") is set here so an unknown app uuid
+// continues to surface as ErrNotFound (the resolver's default policy masks
+// a missing entity as ErrForbidden), preserving this handler's original
+// not-found behavior.
 func NewAppsHandler(
 	pool txhelper.DB,
 	q *db.Queries,
 	az coreAuthz.Authorizer,
 	observers *observer.ObserverGroup,
+	entityResolver *entity.Resolver,
+	coreQ *coredb.Queries,
 ) *AppsHandler {
+	entityResolver.AllowNotFound("app")
 	return &AppsHandler{
-		pool:       pool,
-		q:          q,
-		newQuerier: func(tx pgx.Tx) db.Querier { return db.New(tx) },
-		az:         az,
-		observers:  observers,
+		pool:           pool,
+		q:              q,
+		az:             az,
+		observers:      observers,
+		entityResolver: entityResolver,
+		coreQ:          coreQ,
 	}
-}
-
-type createAppRequest struct {
-	Slug string `json:"slug"`
-	Name string `json:"name"`
-}
-
-// Create handles POST /v1/apps (admin).
-func (h *AppsHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req createAppRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
-	req.Slug = strings.TrimSpace(req.Slug)
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Slug == "" {
-		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
-			Field: "slug", Code: "users.slug_required", Message: "slug is required",
-		}))
-		return
-	}
-	if req.Name == "" {
-		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
-			Field: "name", Code: "users.name_required", Message: "name is required",
-		}))
-		return
-	}
-
-	// 1. Authorize: create is admin-only.
-	if err := h.az.Authorize(r.Context(), "create", nil); err != nil {
-		writeAuthzError(w, r, err)
-		return
-	}
-
-	var app db.App
-	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
-		qtx := h.newQuerier(tx)
-		var err error
-		app, err = qtx.CreateApp(ctx, db.CreateAppParams{
-			Slug: req.Slug,
-			Name: req.Name,
-		})
-		if err != nil {
-			return err
-		}
-
-		after := map[string]any{
-			"uuid": app.Uuid.String(),
-			"slug": app.Slug,
-			"name": app.Name,
-		}
-		// Apps are not registered in core's entities table, so target_entity_id is nil.
-		return h.observers.Observe(ctx, tx, "create", "app", nil, nil, after)
-	})
-	if txErr != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("apps.create: %w", txErr))
-		return
-	}
-
-	// Audit limitation: apps are not core entities (no row in core's entities table),
-	// so audit_log.target_entity_id is nil for all app events. As a result,
-	// audit-module's AuditService.ListByEntity cannot return app events; callers
-	// must use ListRecent and filter by resource = "app" instead.
-	// Future fix: register apps as entities, or add app_uuid/subject_uuid to
-	// audit_log (decision deferred; see users-module/next-steps.md).
-	after := map[string]any{
-		"uuid": app.Uuid.String(),
-		"slug": app.Slug,
-		"name": app.Name,
-	}
-	h.observers.ObserveAfterCommit(r.Context(), "create", "app", nil, after)
-
-	server.JSON(w, http.StatusCreated, appResponse(app))
-}
-
-// List handles GET /v1/apps (admin).
-func (h *AppsHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Authorize: list is admin-only.
-	if err := h.az.Authorize(r.Context(), "list", nil); err != nil {
-		writeAuthzError(w, r, err)
-		return
-	}
-
-	apps, err := h.q.ListApps(r.Context())
-	if err != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("apps.list: %w", err))
-		return
-	}
-
-	resp := make([]map[string]any, 0, len(apps))
-	for _, a := range apps {
-		resp = append(resp, appResponse(a))
-	}
-	server.JSON(w, http.StatusOK, map[string]any{"apps": resp})
-}
-
-// GetApp handles GET /v1/apps/{uuid} (admin).
-func (h *AppsHandler) GetApp(w http.ResponseWriter, r *http.Request) {
-	app, ok := h.loadAppByUUIDParam(w, r)
-	if !ok {
-		return
-	}
-
-	// Authorize: read — admin only for apps.
-	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
-		writeAuthzError(w, r, err)
-		return
-	}
-
-	server.JSON(w, http.StatusOK, appResponse(app))
-}
-
-type updateAppRequest struct {
-	Slug string `json:"slug"`
-	Name string `json:"name"`
-}
-
-// UpdateApp handles PUT /v1/apps/{uuid} (admin).
-func (h *AppsHandler) UpdateApp(w http.ResponseWriter, r *http.Request) {
-	app, ok := h.loadAppByUUIDParam(w, r)
-	if !ok {
-		return
-	}
-
-	// Authorize: update — admin only for apps.
-	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, r, err)
-		return
-	}
-
-	var req updateAppRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
-
-	newSlug := app.Slug
-	if strings.TrimSpace(req.Slug) != "" {
-		newSlug = strings.TrimSpace(req.Slug)
-	}
-	newName := app.Name
-	if strings.TrimSpace(req.Name) != "" {
-		newName = strings.TrimSpace(req.Name)
-	}
-
-	before := map[string]any{
-		"uuid": app.Uuid.String(),
-		"slug": app.Slug,
-		"name": app.Name,
-	}
-
-	var updated db.App
-	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
-		qtx := h.newQuerier(tx)
-		if err := qtx.UpdateApp(ctx, db.UpdateAppParams{
-			ID:   app.ID,
-			Slug: newSlug,
-			Name: newName,
-		}); err != nil {
-			return err
-		}
-
-		var err error
-		updated, err = qtx.GetAppByUUID(ctx, app.Uuid)
-		if err != nil {
-			// Best-effort: use computed values.
-			updated = app
-			updated.Slug = newSlug
-			updated.Name = newName
-		}
-
-		after := map[string]any{
-			"uuid": updated.Uuid.String(),
-			"slug": updated.Slug,
-			"name": updated.Name,
-		}
-		return h.observers.Observe(ctx, tx, "update", "app", nil, before, after)
-	})
-	if txErr != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("apps.update: %w", txErr))
-		return
-	}
-
-	after := map[string]any{
-		"uuid": updated.Uuid.String(),
-		"slug": updated.Slug,
-		"name": updated.Name,
-	}
-	h.observers.ObserveAfterCommit(r.Context(), "update", "app", nil, after)
-	server.JSON(w, http.StatusOK, appResponse(updated))
-}
-
-// DeleteApp handles DELETE /v1/apps/{uuid} (admin).
-func (h *AppsHandler) DeleteApp(w http.ResponseWriter, r *http.Request) {
-	app, ok := h.loadAppByUUIDParam(w, r)
-	if !ok {
-		return
-	}
-
-	// Authorize: delete — admin only for apps.
-	if err := h.az.Authorize(r.Context(), "delete", nil); err != nil {
-		writeAuthzError(w, r, err)
-		return
-	}
-
-	before := map[string]any{
-		"uuid": app.Uuid.String(),
-		"slug": app.Slug,
-		"name": app.Name,
-	}
-
-	txErr := txhelper.Run(r.Context(), h.pool, func(ctx context.Context, tx pgx.Tx) error {
-		qtx := h.newQuerier(tx)
-		if err := qtx.ArchiveApp(ctx, app.ID); err != nil {
-			return err
-		}
-		return h.observers.Observe(ctx, tx, "delete", "app", nil, before, nil)
-	})
-	if txErr != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("apps.delete: %w", txErr))
-		return
-	}
-
-	h.observers.ObserveAfterCommit(r.Context(), "delete", "app", nil, nil)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- apps_users endpoints ---
@@ -281,7 +72,7 @@ type assignUserRequest struct {
 
 // AssignUser handles POST /v1/apps/{uuid}/user-accounts (admin).
 func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
-	app, ok := h.loadAppByUUIDParam(w, r)
+	appID, appUUID, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
 		return
 	}
@@ -326,7 +117,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.q.AssignUserAccountToApp(r.Context(), db.AssignUserAccountToAppParams{
-		AppID:         app.ID,
+		AppID:         appID,
 		UserAccountID: ua.ID,
 		Roles:         roles,
 	}); err != nil {
@@ -335,7 +126,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.JSON(w, http.StatusCreated, map[string]any{
-		"app_uuid":  app.Uuid.String(),
+		"app_uuid":  appUUID.String(),
 		"user_uuid": ua.Uuid.String(),
 		"roles":     roles,
 	})
@@ -343,7 +134,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 
 // ListAppUsers handles GET /v1/apps/{uuid}/user-accounts (admin).
 func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
-	app, ok := h.loadAppByUUIDParam(w, r)
+	appID, _, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
 		return
 	}
@@ -354,7 +145,7 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	members, err := h.q.ListAppUserAccounts(r.Context(), app.ID)
+	members, err := h.q.ListAppUserAccounts(r.Context(), appID)
 	if err != nil {
 		apiresp.WriteError(w, r, fmt.Errorf("apps.list_users: %w", err))
 		return
@@ -372,7 +163,7 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 
 // RemoveUser handles DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid} (admin).
 func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
-	app, ok := h.loadAppByUUIDParam(w, r)
+	appID, _, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
 		return
 	}
@@ -401,7 +192,7 @@ func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.q.RemoveUserAccountFromApp(r.Context(), db.RemoveUserAccountFromAppParams{
-		AppID:         app.ID,
+		AppID:         appID,
 		UserAccountID: ua.ID,
 	}); err != nil {
 		apiresp.WriteError(w, r, fmt.Errorf("apps.remove_user: %w", err))
@@ -417,7 +208,7 @@ type updateRolesRequest struct {
 
 // UpdateUserRoles handles PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles (admin).
 func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
-	app, ok := h.loadAppByUUIDParam(w, r)
+	appID, appUUID, ok := h.loadAppByUUIDParam(w, r)
 	if !ok {
 		return
 	}
@@ -455,7 +246,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.q.SetAppUserAccountRoles(r.Context(), db.SetAppUserAccountRolesParams{
-		AppID:         app.ID,
+		AppID:         appID,
 		UserAccountID: ua.ID,
 		Roles:         req.Roles,
 	}); err != nil {
@@ -464,37 +255,29 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server.JSON(w, http.StatusOK, map[string]any{
-		"app_uuid":  app.Uuid.String(),
+		"app_uuid":  appUUID.String(),
 		"user_uuid": ua.Uuid.String(),
 		"roles":     req.Roles,
 	})
 }
 
-// loadAppByUUIDParam extracts the {uuid} chi param and loads the app.
-func (h *AppsHandler) loadAppByUUIDParam(w http.ResponseWriter, r *http.Request) (db.App, bool) {
+// loadAppByUUIDParam extracts the {uuid} chi param and resolves it to the
+// app's internal id via entityResolver (apps.id == entities.id, per
+// mod-core's FK-anchor entity-subtype pattern for apps). Returns the
+// resolved id, the parsed uuid (echoed back in responses), and whether
+// resolution succeeded. An unknown app uuid writes ErrNotFound (see
+// NewAppsHandler's AllowNotFound("app") call).
+func (h *AppsHandler) loadAppByUUIDParam(w http.ResponseWriter, r *http.Request) (int64, uuid.UUID, bool) {
 	rawUUID := chi.URLParam(r, "uuid")
 	parsed, err := uuid.Parse(rawUUID)
 	if err != nil {
 		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return db.App{}, false
+		return 0, uuid.UUID{}, false
 	}
-	app, err := h.q.GetAppByUUID(r.Context(), parsed)
-	if err == pgx.ErrNoRows {
-		apiresp.WriteError(w, r, apiresp.ErrNotFound)
-		return db.App{}, false
-	}
+	appID, err := h.entityResolver.Resolve(r.Context(), h.coreQ, parsed, "app")
 	if err != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("apps: load by uuid: %w", err))
-		return db.App{}, false
+		apiresp.WriteError(w, r, err)
+		return 0, uuid.UUID{}, false
 	}
-	return app, true
-}
-
-func appResponse(a db.App) map[string]any {
-	return map[string]any{
-		"uuid":       a.Uuid.String(),
-		"slug":       a.Slug,
-		"name":       a.Name,
-		"created_at": a.CreatedAt.Time,
-	}
+	return appID, parsed, true
 }

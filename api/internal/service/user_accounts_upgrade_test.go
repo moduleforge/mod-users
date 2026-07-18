@@ -166,18 +166,6 @@ func (s *stubUAQuerier) GetSetupTokenHash(_ context.Context) (pgtype.Text, error
 }
 func (s *stubUAQuerier) SetSetupTokenHash(_ context.Context, _ pgtype.Text) error { return nil }
 func (s *stubUAQuerier) ClearSetupTokenHash(_ context.Context) error              { return nil }
-func (s *stubUAQuerier) CreateApp(_ context.Context, _ db.CreateAppParams) (db.App, error) {
-	return db.App{}, nil
-}
-func (s *stubUAQuerier) GetAppByUUID(_ context.Context, _ uuid.UUID) (db.App, error) {
-	return db.App{}, pgx.ErrNoRows
-}
-func (s *stubUAQuerier) GetAppBySlug(_ context.Context, _ string) (db.App, error) {
-	return db.App{}, pgx.ErrNoRows
-}
-func (s *stubUAQuerier) ListApps(_ context.Context) ([]db.App, error)            { return nil, nil }
-func (s *stubUAQuerier) UpdateApp(_ context.Context, _ db.UpdateAppParams) error { return nil }
-func (s *stubUAQuerier) ArchiveApp(_ context.Context, _ int64) error             { return nil }
 func (s *stubUAQuerier) AssignUserAccountToApp(_ context.Context, _ db.AssignUserAccountToAppParams) error {
 	return nil
 }
