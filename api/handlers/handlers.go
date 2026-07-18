@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	coreAuthz "github.com/moduleforge/core-api/authz"
+	"github.com/moduleforge/core-api/entity"
 	"github.com/moduleforge/core-api/observer"
 	coreservice "github.com/moduleforge/core-api/service"
 	coredb "github.com/moduleforge/core-model/db"
@@ -90,14 +91,20 @@ func NewAssumeHandler(
 	return inner.NewAssumeHandler(svc, jwtSecret, issuer)
 }
 
-// NewAppsHandler constructs the apps handler.
+// NewAppsHandler constructs the apps handler, which serves the
+// apps/user-accounts membership endpoints (/v1/apps/{uuid}/user-accounts).
+// Top-level /apps CRUD lives in mod-core; entityResolver resolves the
+// {uuid} path param to the app's internal id since mod-users no longer
+// owns an apps query of its own.
 func NewAppsHandler(
 	pool *pgxpool.Pool,
 	queries *usersdb.Queries,
 	az coreAuthz.Authorizer,
 	observers *observer.ObserverGroup,
+	entityResolver *entity.Resolver,
+	coreQ *coredb.Queries,
 ) *AppsHandler {
-	return inner.NewAppsHandler(pool, queries, az, observers)
+	return inner.NewAppsHandler(pool, queries, az, observers, entityResolver, coreQ)
 }
 
 // RegisterOIDCConfigRoutes mounts the OIDC-config endpoints on r.
@@ -105,8 +112,10 @@ func RegisterOIDCConfigRoutes(r chi.Router, h *OIDCConfigHandler, p *ProvidersHa
 	inner.RegisterOIDCConfigRoutes(r, h, p)
 }
 
-// RegisterAccountRoutes mounts the user-accounts, assume-identity, and apps
-// endpoints on r. assume and apps may be nil for partial deployments.
+// RegisterAccountRoutes mounts the user-accounts, assume-identity, and
+// apps/user-accounts membership endpoints on r. assume and apps may be nil
+// for partial deployments. Top-level /apps CRUD is not part of this
+// registrar — it now lives in mod-core.
 func RegisterAccountRoutes(r chi.Router, h *UserAccountsHandler, assume *AssumeHandler, apps *AppsHandler) {
 	inner.RegisterAccountRoutes(r, h, assume, apps)
 }
