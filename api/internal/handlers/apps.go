@@ -72,14 +72,19 @@ type assignUserRequest struct {
 
 // AssignUser handles POST /v1/apps/{uuid}/user-accounts (admin).
 func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
-	appID, appUUID, ok := h.loadAppByUUIDParam(w, r)
-	if !ok {
+	// Authorize before resolving the {uuid} path param: this uses a nil
+	// target (wildcard-admin check, like the rest of this handler), so it
+	// does not need any data from the app row. Running it first means a
+	// caller without the required grant is rejected with 403 before any
+	// entity resolution occurs, so an arbitrary uuid can't be used as a
+	// cross-entity existence probe against the shared entities table.
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
+		writeAuthzError(w, r, err)
 		return
 	}
 
-	// Authorize: update (assigning a user to an app is an app mutation).
-	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, r, err)
+	appID, appUUID, ok := h.loadAppByUUIDParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -134,14 +139,15 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 
 // ListAppUsers handles GET /v1/apps/{uuid}/user-accounts (admin).
 func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
-	appID, _, ok := h.loadAppByUUIDParam(w, r)
-	if !ok {
+	// Authorize before resolving the {uuid} path param — see AssignUser's
+	// comment above for why this ordering matters.
+	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
+		writeAuthzError(w, r, err)
 		return
 	}
 
-	// Authorize: read (listing app members).
-	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
-		writeAuthzError(w, r, err)
+	appID, _, ok := h.loadAppByUUIDParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -163,14 +169,15 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 
 // RemoveUser handles DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid} (admin).
 func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
-	appID, _, ok := h.loadAppByUUIDParam(w, r)
-	if !ok {
+	// Authorize before resolving the {uuid} path param — see AssignUser's
+	// comment above for why this ordering matters.
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
+		writeAuthzError(w, r, err)
 		return
 	}
 
-	// Authorize: update (removing a user from an app is an app mutation).
-	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, r, err)
+	appID, _, ok := h.loadAppByUUIDParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -208,14 +215,15 @@ type updateRolesRequest struct {
 
 // UpdateUserRoles handles PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles (admin).
 func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
-	appID, appUUID, ok := h.loadAppByUUIDParam(w, r)
-	if !ok {
+	// Authorize before resolving the {uuid} path param — see AssignUser's
+	// comment above for why this ordering matters.
+	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
+		writeAuthzError(w, r, err)
 		return
 	}
 
-	// Authorize: update (changing roles is an app mutation).
-	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, r, err)
+	appID, appUUID, ok := h.loadAppByUUIDParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -267,6 +275,18 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 // resolved id, the parsed uuid (echoed back in responses), and whether
 // resolution succeeded. An unknown app uuid writes ErrNotFound (see
 // NewAppsHandler's AllowNotFound("app") call).
+//
+// entityResolver.Resolve only confirms that the uuid exists somewhere in the
+// shared, cross-module entities table — it has no notion of "app" beyond the
+// not-found policy slug, so it resolves equally well for a natural_person,
+// corporation, or service_account uuid. Previously this method queried
+// mod-users' own apps table directly (SELECT ... FROM apps WHERE uuid = $1),
+// which was inherently type-scoped: a uuid naming a real but differently-
+// typed entity could never match. To preserve that type-scoping now that
+// resolution goes through the shared table, this method does a supplementary
+// lookup against mod-core's apps table (via coreQ.GetAppByUUID, which joins
+// apps to entities) and treats a miss there the same as an unresolvable uuid:
+// ErrNotFound.
 func (h *AppsHandler) loadAppByUUIDParam(w http.ResponseWriter, r *http.Request) (int64, uuid.UUID, bool) {
 	rawUUID := chi.URLParam(r, "uuid")
 	parsed, err := uuid.Parse(rawUUID)
@@ -279,5 +299,15 @@ func (h *AppsHandler) loadAppByUUIDParam(w http.ResponseWriter, r *http.Request)
 		apiresp.WriteError(w, r, err)
 		return 0, uuid.UUID{}, false
 	}
+
+	if _, err := h.coreQ.GetAppByUUID(r.Context(), parsed); err != nil {
+		if err == pgx.ErrNoRows {
+			apiresp.WriteError(w, r, apiresp.ErrNotFound)
+			return 0, uuid.UUID{}, false
+		}
+		apiresp.WriteError(w, r, fmt.Errorf("apps.load_app: %w", err))
+		return 0, uuid.UUID{}, false
+	}
+
 	return appID, parsed, true
 }
