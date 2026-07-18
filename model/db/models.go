@@ -21,16 +21,6 @@ type AnonToken struct {
 	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
 }
 
-type App struct {
-	ID         int64              `json:"id"`
-	Uuid       uuid.UUID          `json:"uuid"`
-	Slug       string             `json:"slug"`
-	Name       string             `json:"name"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	ArchivedAt *time.Time         `json:"archived_at"`
-}
-
 type AppsUserAccount struct {
 	AppID         int64              `json:"app_id"`
 	UserAccountID int64              `json:"user_account_id"`

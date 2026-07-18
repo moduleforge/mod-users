@@ -1,23 +1,6 @@
 -- +goose Up
 
 -- ---------------------------------------------------------------------------
--- apps
--- ---------------------------------------------------------------------------
-CREATE TABLE apps (
-  id          BIGSERIAL PRIMARY KEY,
-  uuid        UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  slug        TEXT NOT NULL UNIQUE,
-  name        TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  archived_at TIMESTAMPTZ
-);
-
-CREATE TRIGGER apps_set_updated_at
-  BEFORE UPDATE ON apps
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
--- ---------------------------------------------------------------------------
 -- user_accounts
 -- ---------------------------------------------------------------------------
 -- user_accounts: an interactive login identity tied to a Legal Entity.
@@ -199,6 +182,29 @@ CREATE TABLE auth_oidc_identities (
   UNIQUE (issuer, subject)
 );
 CREATE INDEX auth_oidc_identities_user_account_idx ON auth_oidc_identities(user_account_id);
+
+-- ---------------------------------------------------------------------------
+-- anon_tokens
+-- ---------------------------------------------------------------------------
+-- anon_tokens: short-lived session tokens for anonymous (non-authenticated)
+-- users. session_token stores the SHA-256 hex hash of the opaque bearer token
+-- (consistent with the password_resets pattern above). The user_account_id FK
+-- cascades deletes so tokens are cleaned up automatically if the parent
+-- user_account row is hard-deleted. user_accounts.email is already nullable
+-- above to support anonymous accounts.
+CREATE TABLE anon_tokens (
+  id              BIGSERIAL PRIMARY KEY,
+  uuid            UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+  device_id       TEXT NOT NULL,
+  session_token   TEXT NOT NULL UNIQUE,
+  user_account_id BIGINT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at      TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX anon_tokens_device_id_idx       ON anon_tokens(device_id);
+CREATE INDEX anon_tokens_session_token_idx   ON anon_tokens(session_token);
+CREATE INDEX anon_tokens_user_account_id_idx ON anon_tokens(user_account_id);
 
 -- +goose Down
 -- intentionally omitted — base schema, no rollback
