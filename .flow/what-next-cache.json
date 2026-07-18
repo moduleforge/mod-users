@@ -155,27 +155,11 @@
         "scored_at": "2026-07-17T16:10:00Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
-      "3atD": {
-        "sig": "b348aa885c678eec12d2ca6fd117a027",
-        "effort_bucket": "low",
-        "utility_bucket": "medium",
-        "rationale": "go.mod replace directives break for any worktree nested one level under mod-users/worktrees/ (relative ../../ path depth); worked around this session with symlinks at worktrees/{mod-core,mod-audit,mod-authz}. Self-contained within mod-users: a single AGENTS.md 'Working in worktrees' doc addition (alongside existing .yalc/ and .env steps) prevents future nested-worktree tasks from rediscovering this.",
-        "scored_at": "2026-07-17T16:10:00Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
       "Z6Vf": {
         "sig": "99032e4b3ebbc03ef886a83e641ebd33",
         "effort_bucket": "low",
         "utility_bucket": "low",
         "rationale": "Purely additive diagnostic id field on two rebuild-failure sites in oidc_providers.go, called out as an incidental scope note rather than an actionable gap; no follow-up action implied.",
-        "scored_at": "2026-07-17T22:43:00Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "Wkx3": {
-        "sig": "996b871dd64a6e279618926613661772",
-        "effort_bucket": "medium",
-        "utility_bucket": "high",
-        "rationale": "No forbidigo/lint/CI guardrail stops a future handler from reintroducing literal server.Error(/WithDetails() calls outside the four carve-outs, so the phase-01 centralize-server-error invariant can silently erode (including when the ~10+ known handlers/auth/*.go sites from followup biPE migrate). Self-contained lint-rule addition wired into make lint; protects a just-established, explicitly-tracked architecture goal.",
         "scored_at": "2026-07-17T22:43:00Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
