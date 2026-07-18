@@ -122,6 +122,7 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 - Copy `.yalc/` from the main checkout into the worktree before building `gui/`.
 - Copy `.env` from the main checkout (it is gitignored).
 - Go sub-projects (`model/`, `api/`) built inside a task worktree may hit a `go.work` "conflicting replacements" error; the [fix recipe](./docs/mf-standards/building-common.md#building-inside-a-task-worktree) needs `go work edit -replace` overrides for sibling modules (`core-model`, `core-api`, `audit-model`, `audit-api`, `authz-model`, `authz-api`).
+- Separately, `api/go.mod`'s own `replace` directives (`../../mod-core/{api,model}`, `../../mod-audit/*`, `../../mod-authz/*`) resolve fine from the main checkout but break entirely for any worktree nested one level deeper under `mod-users/worktrees/`, since the extra path depth throws off the relative paths; the workaround is symlinking `mod-core`, `mod-audit`, and `mod-authz` at `mod-users/worktrees/` to the real sibling repos under the parent `moduleforge/` directory.
 
 ## Key files and directories
 
