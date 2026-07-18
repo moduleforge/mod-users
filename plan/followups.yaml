@@ -60,11 +60,6 @@ items:
       date: "2026-07-16"
       tag: gui-core-gui-adoption
       text: '[phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] Pre-existing, not investigated further: mod-core/gui''s built dist/ has no dist/index.css despite package.json''s ./styles.css export - not touched by this task since error-message.tsx needed no styling changes.'
-    - title: ErrorBanner drops AlertCircle icon vs old UI
-      id: ygBr
-      date: "2026-07-16"
-      tag: gui-core-gui-adoption
-      text: 'Phase-03 architecture-conformance review (users-apiresp-migration plan) found: gui/src/components/error-message.tsx''s delegation to core-gui''s <ErrorBanner error={message} /> drops the AlertCircle icon the old hand-rolled Alert/AlertDescription markup rendered. Not a functional defect (null/non-null contract parity confirmed exact), and adopting the shared widget is the correct move per the task doc - but it''s core-gui''s own widget design, not something mod-users should independently patch. Worth a quick manual/Ladle visual check if icon presence in destructive banners matters to the design system; if so, raise with whoever owns @moduleforge/core-gui''s ErrorBanner component.'
     - title: details[] shape not runtime-validated
       id: L92R
       date: "2026-07-16"
