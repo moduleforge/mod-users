@@ -99,15 +99,6 @@ items:
         - effort:unspecified
         - plan/phase:doc-updates
       text: '[phase-04-doc-updates/001-update-architecture-docs.md] Likely pre-existing, unrelated behavioral/doc mismatch: anonymous_account does not appear anywhere in api/internal Go source; login/email-code/password-reset show no IsAnonymous guard logic matching the documented ''400 anonymous_account'' behavior. Not fixed - out of scope for a docs-only task; worth a dedicated doc-accuracy pass separate from this plan.'
-    - title: building-common.md missing -replace recipe
-      id: ll4D
-      date: "2026-07-16"
-      tags:
-        - type:documentation
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:agents-md-go-work-pointer
-      text: '[followup 9EBV follow-through] Added an AGENTS.md "Working in worktrees" pointer to docs/mf-standards/building-common.md''s "Building inside a task worktree" section for the go.work worktree-build fix. However, that section''s actual current content (as of commit 7daa56a in the docs-mf-standards submodule, pinned at a8bc74955) only documents `go work init && go work use ...` — it does not yet document the "conflicting replacements" error or the `go work edit -replace <module>@v0.0.0=<corrected-path>` overrides needed for sibling modules (core-model, core-api, audit-model, audit-api, authz-model, authz-api), which is the actual fix confirmed working in the users-apiresp-migration plan (originally followup 9EBV, part 1). The AGENTS.md pointer is accurate as a pointer (the section exists and is topically correct) but currently points to incomplete content. Cross-repo: docs-mf-standards repo owns building-common.md and must add the -replace recipe; not fixable from mod-users.'
     - title: make lint's sequential run fails at lint.mode
       id: DQU4
       date: "2026-07-17"
