@@ -72,3 +72,11 @@ items:
         - effort:unspecified
         - plan/phase:auth-vocab-migration
       text: '[phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md] make lint''s sequential run fails at lint.model due to an ephemeral-Postgres/Docker networking timeout - environmental, pre-existing, unrelated to this diff (model/ untouched). lint.api was run directly as substitute and passed clean. Likely affects any task running make lint in this environment.'
+    - title: shadow-db-lint missing cross-module prereqs
+      id: LnMH
+      date: "2026-07-19"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Discovered while fixing followup DQU4 (Docker networking in model/scripts/shadow-db-lint.sh): after fixing the networking issue (script now connects via a published host port instead of an unreachable Docker Desktop bridge IP), `make lint.model` still fails — but for a distinct, pre-existing reason: goose errors on `0100_schema.sql` with `relation "legal_entities" does not exist (SQLSTATE 42P01)`. mod-users'' migrations declare `after: [core]` (AGENTS.md:108) because they FK into mod-core''s `legal_entities`/`apps` tables, but shadow-db-lint.sh only applies model/migrations against a bare empty Postgres — it has no mechanism to provision mod-core''s prerequisite schema first. Confirmed present on main (same file/lines) and not addressed by .github/workflows/ci.yml''s lint job either (which only checks out mod-core/gui for yalc, not mod-core''s migrations) — so `make lint` likely fails in CI today for this same reason, unrelated to the networking bug just fixed. Needs a decision: should shadow-db-lint stitch in cross-module prerequisite migrations per the manifest''s migrations.after ordering, or should this validation gap be handled another way (e.g. a documented known-limitation, or CI-level orchestration)?'
