@@ -59,6 +59,7 @@ export function AuthPage({
           </CardHeader>
           <CardContent>
             <LoginForm
+              idPrefix="login"
               onSuccess={onAuthenticated}
               initialError={initialError}
               returnPath={returnPath}
@@ -83,7 +84,7 @@ export function AuthPage({
             <CardDescription>Fill in your details to get started</CardDescription>
           </CardHeader>
           <CardContent>
-            <RegisterForm onSuccess={onAuthenticated} />
+            <RegisterForm idPrefix="register" onSuccess={onAuthenticated} />
           </CardContent>
           <CardFooter className="text-sm text-center">
             <p className="text-muted-foreground">
