@@ -46,6 +46,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: migrate-identities-step-up-and-last-identity
+          title: Migrate Identities Step-Up And Last-Identity Responses
+          path: phase-01-go-action-required-migration/005-migrate-identities-step-up-and-last-identity.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
