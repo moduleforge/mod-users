@@ -63,15 +63,6 @@ items:
         - effort:unspecified
         - plan/phase:doc-updates
       text: '[phase-04-doc-updates/001-update-architecture-docs.md] Likely pre-existing, unrelated behavioral/doc mismatch: anonymous_account does not appear anywhere in api/internal Go source; login/email-code/password-reset show no IsAnonymous guard logic matching the documented ''400 anonymous_account'' behavior. Not fixed - out of scope for a docs-only task; worth a dedicated doc-accuracy pass separate from this plan.'
-    - title: make lint's sequential run fails at lint.mode
-      id: DQU4
-      date: "2026-07-17"
-      tags:
-        - type:bug
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:auth-vocab-migration
-      text: '[phase-01-auth-vocab-migration/002-migrate-oidc-auth-handler.md] make lint''s sequential run fails at lint.model due to an ephemeral-Postgres/Docker networking timeout - environmental, pre-existing, unrelated to this diff (model/ untouched). lint.api was run directly as substitute and passed clean. Likely affects any task running make lint in this environment.'
     - title: shadow-db-lint missing cross-module prereqs
       id: LnMH
       date: "2026-07-19"
