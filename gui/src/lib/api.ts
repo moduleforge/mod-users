@@ -95,6 +95,7 @@ export interface ResetPasswordRequest {
 
 export interface UserAccountSelf {
   uuid: string;
+  entity_uuid: string;
   email: string;
   given_name: string;
   family_name: string;
