@@ -36,6 +36,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: migrate-require-oidc-confirmed-middleware
+          title: Migrate RequireOIDCConfirmed Middleware To Apiresp
+          path: phase-01-go-action-required-migration/004-migrate-require-oidc-confirmed-middleware.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
