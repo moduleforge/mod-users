@@ -27,15 +27,6 @@ items:
         - effort:unspecified
         - plan/phase:users-apiresp-migration
       text: '[users-apiresp-migration planning] The apiresp-migration plan''s Go vocab migration (phase-02) deliberately excludes 5 sites that use server.JSON directly to emit bespoke, non-standard flat response bodies rather than going through the standard error trio: api/internal/auth/require_verified.go:24,34 (internal_error flat, email_unverified), require_confirmed.go:36 (oidc_not_confirmed, drives an auth-flow redirect), and identities.go:626 (step_up_required, carries an extra challenge_path field), :646 (last_identity). These are the module''s most non-conformant sites, but migrating them to the standard nested envelope is a breaking change to consuming apps'' GUI code (app-mfdemo/app-mftodo), which keys off these bespoke shapes directly (confirmed: writeStepUpRequired''s own comment says the GUI reads error as a string). Deferred as an explicit follow-up rather than expanding this plan''s scope into a coordinated cross-repo GUI change. Recommend a dedicated future plan spanning mod-users + the consuming apps'' GUI code once this migration''s core scope has landed and the pattern for coordinated cross-repo breaking changes is established.'
-    - title: Pre-existing doc-graph orphans (not from ph1)
-      id: rmQ5
-      date: "2026-07-16"
-      tags:
-        - type:documentation
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:go-apiresp-foundation
-      text: 'Phase-01 boundary review''s link-chain check (README-rooted reachability) found several project docs not reachable from README.md: api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md (plan/*.md, .flow/binding.md, and CLAUDE.md files under plan/ are expected exclusions — transient plan artifacts / agent-context files, not persistent project documentation). None of these orphaned files were touched by phase-01''s diff (which only touched api/*.go, plan/TODO.yaml, plan/followups.yaml, and the phase-01 task doc), so this predates this plan and is not a regression it introduced. No broken links were found otherwise (a python link-checker script; one run produced false-positive broken links for docs/architecture.md and docs/mod-users-spec.md''s ./mf-standards/... links, but a clean re-run confirmed those targets exist and resolve fine). Recommend a manager/tech-writer pass to either link these orphans from README.md (if they should be part of the discoverable doc graph) or confirm they''re intentionally out-of-band (e.g. deploy runbooks meant to be found by directory browsing, not README links).'
     - title: apiresp needs public Conflict() constructor
       id: ZVum
       date: "2026-07-16"
