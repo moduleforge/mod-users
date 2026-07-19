@@ -99,14 +99,6 @@
         "scored_at": "2026-07-17T00:29:44Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
-      "ygBr": {
-        "sig": "a982abd9d6faad8a9e5d24d9a20b051c",
-        "effort_bucket": "low",
-        "utility_bucket": "low",
-        "rationale": "Cross-repo (core-gui) visual-design decision (missing icon); not something mod-users should independently patch.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
       "L92R": {
         "sig": "25c31956bb5233ded5a586dfd65c78aa",
         "effort_bucket": "medium",
