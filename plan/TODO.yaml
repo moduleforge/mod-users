@@ -16,6 +16,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: fold-in-zvum-email-taken-conflict
+          title: Fold In ZVum Email Taken Conflict
+          path: phase-01-go-action-required-migration/002-fold-in-zvum-email-taken-conflict.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
