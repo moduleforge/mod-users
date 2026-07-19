@@ -73,8 +73,8 @@ build: preflight ## Build the component library (tsup: JS/TS + DTS)
 test: test.unit ## Alias for test.unit
 
 .PHONY: test.unit
-test.unit: preflight ## Run unit tests (none yet — placeholder passes)
-	@echo "gui: no unit tests configured yet"
+test.unit: preflight ## Run unit tests (bun test, happy-dom + testing-library)
+	$(PM) run test
 
 .PHONY: test.integration
 test.integration: ## Run integration tests (none yet)
