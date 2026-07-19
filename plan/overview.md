@@ -45,28 +45,38 @@ Detailed findings and the resolved design decisions (D1–D10) are in
 
 ## Current status
 
-**Status: ready for phase-decomposition.** Planning has investigated all five sites, the ZVum
-fold-in, the mod-core `apiresp` API surface, the go.mod/build-environment reality, and the GUI call
-sites. Two phases are registered (`go-action-required-migration`, `gui-action-required-handling`),
-and they are **parallel-eligible** — the GUI phase depends only on the finalized action-code contract
-(fully specified by the design doc), not on the Go build output.
-
-**The sole blocking decision is now resolved.** The `action.path` values for `users.email_unverified`
-and `users.step_up_required` were the one open question. The user selected **Reading A** (adopt
-GUI-navigation semantics per D1): `users.email_unverified` → `/verify-email` and
-`users.step_up_required` → `/step-up` (matching the design doc's worked examples); see the
-[Answer](./notes/action-path-values-and-decisions.md#answer). `users.oidc_not_confirmed` →
+**Status: phase-decomposition complete; paused before the architectural-implications check.**
+Planning has investigated all five sites, the ZVum fold-in, the mod-core `apiresp` API surface, the
+go.mod/build-environment reality, and the GUI call sites. The sole blocking decision (the
+`action.path` values for `users.email_unverified` and `users.step_up_required`) is resolved — the user
+selected **Reading A** (adopt GUI-navigation semantics per D1): `users.email_unverified` →
+`/verify-email` and `users.step_up_required` → `/step-up` (matching the design doc's worked examples);
+see the [Answer](./notes/action-path-values-and-decisions.md#answer). `users.oidc_not_confirmed` →
 `/oidc-config` was already resolved (D2). Requiring the consuming apps (`app-mfdemo`/`app-mftodo`) to
 mount `/verify-email` and `/step-up` is a cross-repo coordination item flagged for the manager, not
 built in this plan (those repos are out of this worktree's reach).
 
-With no open questions remaining, both phases are ready for concurrent phase-decomposition (one agent
-per phase, authoring the task documents). **After** decomposition, the architectural-implications
-check should register a `doc-updates` phase — this migration changes the wire shape of five endpoints
+Both phases have been decomposed into registered, committed task documents (7 tasks total, verified
+via `todo_list_all`):
+
+- **Phase 1 — `go-action-required-migration`** (5 tasks): `add-action-code-registry` (foundation, no
+  deps) → `fold-in-zvum-email-taken-conflict`, `migrate-require-verified-middleware`,
+  `migrate-require-oidc-confirmed-middleware`, `migrate-identities-step-up-and-last-identity` (all
+  depend on task 1; mutually parallel-eligible once it lands). The decomposing agent marked all five
+  task documents `architectural_impact: true` by analogy with the `centralize-server-error` phase's
+  precedent (wire-shape changes to five live endpoints plus auth-middleware surface) — **flagged for
+  manager confirmation that a full phase-review gate is intended**, not dictated verbatim by the phase
+  file.
+- **Phase 2 — `gui-action-required-handling`** (2 tasks): `fix-api-action-discrimination` →
+  `wire-auth-context-action-navigation` (depends on task 1's new exports).
+
+**Paused here at the user's request** (to resume after a plugin update) rather than proceeding
+automatically. **Next step when work resumes:** run the architectural-implications check and register
+the anticipated `doc-updates` phase below — this migration changes the wire shape of five endpoints
 (spec/openapi-documented behavior), so `docs/mod-users-spec.md`, `docs/architecture.md`, and
-`api/openapi.yaml` will need review for the new action-required envelope and the two reserved-mechanism
-changes. That check is deferred to after decomposition because it must reference the implementation
-task-doc paths that the phase-decomposition agents author.
+`api/openapi.yaml` will need review for the new action-required envelope and the two
+reserved-mechanism changes. This was deferred specifically because it must reference the
+now-authored implementation task-doc paths above. After that, proceed to `execute-implementation-plan`.
 
 ## Overview
 
