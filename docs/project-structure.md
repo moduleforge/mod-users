@@ -10,7 +10,7 @@ This document maps every significant directory and key root-level file. After re
 | `package.json` | Bun workspace root. Declares `gui/` as a workspace member and pins `"engines": { "bun": ">=1.0" }`. |
 | `bun.lock` | Workspace lockfile for root + `gui/`. Committed; do not delete. |
 | `.env.example` | Template for all environment variables consumed by Docker Compose, the API server, and the GUI. Copy to `.env` before running the dev stack. |
-| `.gitignore` | Repo-wide ignore rules. Notable entries: `node_modules/`, `dist/`, `worktree/`, `.env`, `CLAUDE.md` (root-level, not `.claude/CLAUDE.md`). |
+| `.gitignore` | Repo-wide ignore rules. Notable entries: `node_modules/`, `dist/`, `worktrees/`, `.env`, `CLAUDE.md` (root-level, not `.claude/CLAUDE.md`). |
 | `.ko.yaml` | Ko (Go container image builder) configuration for the API server. |
 | `.mcp.json` | MCP server configuration for Claude Code (gitignored; generated per session). |
 
@@ -113,5 +113,5 @@ plan/
   CLAUDE.md               # Claude Code project configuration (committed)
   settings.json           # Claude Code permissions and hooks
 
-worktree/                 # git worktree roots for plan branches (gitignored)
+worktrees/                # git worktree roots for plan branches (gitignored)
 ```

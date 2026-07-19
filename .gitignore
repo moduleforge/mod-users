@@ -2,7 +2,7 @@
 .pnpm-store/
 deploy/local/authelia/certs/
 node_modules/
-worktree/
+worktrees/
 dist/
 
 # files
