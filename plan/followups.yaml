@@ -27,15 +27,6 @@ items:
         - effort:unspecified
         - plan/phase:login-register-ui-consumer-migration
       text: '[plan/login-register-ui] Once the login-register-ui plan lands, app-mfdemo''s bespoke pages (src/app/auth/login/page.tsx, src/app/auth/register/page.tsx, src/app/auth/oidc/return/page.tsx) could be replaced with the new AuthPage/OidcCallbackPage exports from @moduleforge/users-gui. Not done as part of this plan: app-mfdemo is a separate git repository outside mod-users'' project_root, so a task dispatched from this plan''s worktree cannot reach it (same precedent as follow-up 0PHW from gui-lib-conversion). Migrating also requires yalc-linking the freshly built users-gui package into app-mfdemo, which hits the same yalc/sandbox-permission friction already logged in follow-ups ThVz/HSiS.'
-    - title: No Task tool was available for independent se
-      id: Tn8F
-      date: "2026-07-05"
-      tags:
-        - type:ambiguity
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:auth-ui-components
-      text: '[phase-01-auth-ui-components/002-oidc-callback-page.md] No Task tool was available for independent security/correctness sub-agent review; both lenses were applied inline by the same implementing agent instead (no findings).'
     - title: No Task tool was available to sub-dispatch re
       id: s5fu
       date: "2026-07-05"
