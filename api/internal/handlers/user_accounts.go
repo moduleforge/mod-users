@@ -43,27 +43,17 @@ func NewUserAccountsHandler(service *svc.UserAccountService, grantAdmin, revokeA
 // localAuthz.ErrUnauthenticated/ErrForbidden and svc.ErrInvalidInput are
 // promoted aliases of apiresp's canonical sentinels, so apiresp.WriteError
 // classifies them correctly with no local switch. svc.ErrEmailTaken is the
-// one case apiresp.WriteError alone cannot fully render: it wraps
-// apiresp.ErrConflict (so apiresp.WriteError would already classify it as
-// 409 conflict), but apiresp exposes no public detail-carrying constructor
-// for the conflict sentinel (only InvalidInput). The users.email_taken
-// field-level detail is attached here, at the mapping point, using
-// apiresp's own envelope/writer types directly — the sentinel
-// classification itself still comes from apiresp (errors.Is against
-// svc.ErrEmailTaken, which wraps apiresp.ErrConflict). Per the design doc
-// this is a deliberate plain 409 (create-time uniqueness), not a masked
-// 403 — no masking logic applies to this path.
+// one case that needs a local branch: it wraps apiresp.ErrConflict, but the
+// users.email_taken field-level detail must be attached at the mapping
+// point, so this builds an apiresp.Conflict error carrying that detail and
+// routes it through apiresp.WriteError like any other detail-carrying
+// error. Per the design doc this is a deliberate plain 409 (create-time
+// uniqueness), not a masked 403 — no masking logic applies to this path.
 func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, svc.ErrEmailTaken) {
-		apiresp.WriteJSON(w, http.StatusConflict, apiresp.Envelope{
-			Error: apiresp.ErrorBody{
-				Code:    "conflict",
-				Message: "the request conflicts with the current state",
-				Details: []apiresp.FieldError{
-					{Field: "email", Code: "users.email_taken", Message: "email is already registered"},
-				},
-			},
-		})
+		apiresp.WriteError(w, r, apiresp.Conflict(apiresp.FieldError{
+			Field: "email", Code: "users.email_taken", Message: "email is already registered",
+		}))
 		return
 	}
 	apiresp.WriteError(w, r, err)
