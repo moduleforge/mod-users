@@ -20,3 +20,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: wire-auth-context-action-navigation
+          title: Wire Auth Context Action Navigation
+          path: phase-02-gui-action-required-handling/002-wire-auth-context-action-navigation.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
