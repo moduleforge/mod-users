@@ -7,8 +7,13 @@
 #
 # Usage:  shadow-db-lint.sh <migrations-dir>
 #
-# Connectivity: connects via the container's Docker IP rather than relying on
-# host port forwarding (which doesn't work in some sandboxed CI environments).
+# Connectivity: the container publishes 5432 to an OS-assigned free port on
+# 127.0.0.1 (`-p 127.0.0.1:0:5432`), and the script connects to that mapped
+# host port. This works uniformly on both native Linux Docker Engine and
+# Docker Desktop (macOS/Windows) — Docker Desktop runs containers inside a
+# VM, so the container's bridge-network IP is not reachable from the host;
+# only published ports are. Using an OS-assigned ephemeral port also avoids
+# clashing with any real Postgres already listening on 5432.
 
 set -u
 set -o pipefail
@@ -36,21 +41,22 @@ trap 'docker rm -f "$CNAME" >/dev/null 2>&1 || true' EXIT
 echo "shadow-db-lint: starting ephemeral Postgres ($CNAME)..."
 if ! docker run -d --rm --name "$CNAME" \
        -e POSTGRES_PASSWORD=lint \
+       -p 127.0.0.1:0:5432 \
        postgres:16 >/dev/null; then
   echo "shadow-db-lint: failed to start container" >&2
   exit 2
 fi
 
-# Resolve container IP rather than relying on host port forwarding.
-IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CNAME")
-if [[ -z "$IP" ]]; then
-  echo "shadow-db-lint: could not resolve container IP" >&2
+# Resolve the OS-assigned host port that 5432 was published to.
+PORT=$(docker port "$CNAME" 5432/tcp | head -n1 | sed -E 's/.*:([0-9]+)$/\1/')
+if [[ -z "$PORT" ]]; then
+  echo "shadow-db-lint: could not resolve published host port" >&2
   exit 2
 fi
 
-URL="postgres://postgres:lint@${IP}:5432/postgres?sslmode=disable"
+URL="postgres://postgres:lint@127.0.0.1:${PORT}/postgres?sslmode=disable"
 
-echo "shadow-db-lint: waiting for Postgres at ${IP}:5432..."
+echo "shadow-db-lint: waiting for Postgres on 127.0.0.1:${PORT}..."
 for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
   if docker exec "$CNAME" pg_isready -U postgres >/dev/null 2>&1; then
     break
