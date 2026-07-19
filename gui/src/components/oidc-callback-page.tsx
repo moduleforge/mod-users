@@ -31,6 +31,12 @@ export interface OidcCallbackPageProps {
  */
 function isSafeReturnPath(candidate: string | null): candidate is string {
   if (!candidate) return false;
+  // Reject embedded C0 control characters (tab, LF, CR, etc.). The WHATWG
+  // URL parser strips these from raw URL text at parse time, so a candidate
+  // like `/\t/evil.com` collapses into a protocol-relative `//evil.com` when
+  // later passed to `new URL(...)` or similar, bypassing the `//`-prefix and
+  // `\`-character checks below.
+  if (/[\x00-\x1F\x7F]/.test(candidate)) return false;
   // Must start with exactly one '/'.
   if (!candidate.startsWith('/')) return false;
   // Reject protocol-relative paths like `//evil.com/foo`.
