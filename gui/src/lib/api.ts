@@ -18,6 +18,28 @@ import { ApiRequestError } from '@moduleforge/core-gui';
 export type { ApiError, ApiErrorResponse, FieldErrorData };
 export { ApiRequestError };
 
+/**
+ * Runtime shape check for a single `FieldErrorData` entry. The server
+ * envelope is not user input, but a malformed/unexpected body should degrade
+ * gracefully rather than making React throw at render time ("Objects are not
+ * valid as a React child") wherever `<FieldError>`/`<ErrorBanner>` render
+ * `details` entries.
+ */
+function isFieldErrorData(value: unknown): value is FieldErrorData {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).field === 'string' &&
+    typeof (value as Record<string, unknown>).code === 'string' &&
+    typeof (value as Record<string, unknown>).message === 'string'
+  );
+}
+
+/** Runtime shape check for `ApiError.details`: an array of `FieldErrorData`. */
+function isFieldErrorDataArray(value: unknown): value is FieldErrorData[] {
+  return Array.isArray(value) && value.every(isFieldErrorData);
+}
+
 export interface RequestOptions extends RequestInit {
   /**
    * When true, a 401 response is surfaced to the caller as an
@@ -234,7 +256,20 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         if (errorBody.error) {
           errorCode = errorBody.error.code;
           errorMessage = errorBody.error.message;
-          errorDetails = errorBody.error.details;
+          const { details } = errorBody.error;
+          if (details !== undefined) {
+            if (isFieldErrorDataArray(details)) {
+              errorDetails = details;
+            } else {
+              // Malformed body: degrade gracefully (treat details as absent)
+              // rather than passing through a shape that could crash a
+              // FieldError/ErrorBanner render downstream.
+              console.error(
+                '[api] malformed error.details in response body',
+                details,
+              );
+            }
+          }
         }
       } catch {
         // ignore JSON parse errors
