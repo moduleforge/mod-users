@@ -18,6 +18,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "test": "bun test --pass-with-no-tests",
     "clean": "rm -rf dist build .yalc yalc.lock",
     "dev": "ladle serve --port 61002",
     "preview:build": "ladle build"
@@ -41,8 +42,13 @@
     }
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20",
     "@ladle/react": "^5",
     "@tailwindcss/vite": "^4",
+    "@testing-library/dom": "^10",
+    "@testing-library/jest-dom": "^6",
+    "@testing-library/react": "^16",
+    "@types/bun": "^1",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
