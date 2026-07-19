@@ -9,4 +9,14 @@ phases:
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fix-api-action-discrimination
+          title: Fix Api Action Discrimination
+          path: phase-02-gui-action-required-handling/001-fix-api-action-discrimination.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
