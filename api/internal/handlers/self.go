@@ -106,10 +106,11 @@ func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[strin
 		emailVal = ua.Email.String
 	}
 	resp := map[string]any{
-		"uuid":       ua.Uuid.String(),
-		"email":      emailVal,
-		"created_at": ua.CreatedAt.Time,
-		"updated_at": ua.UpdatedAt.Time,
+		"uuid":        ua.Uuid.String(),
+		"entity_uuid": profile.Entity.Uuid.String(),
+		"email":       emailVal,
+		"created_at":  ua.CreatedAt.Time,
+		"updated_at":  ua.UpdatedAt.Time,
 	}
 
 	switch profile.Kind {

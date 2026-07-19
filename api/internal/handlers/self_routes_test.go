@@ -23,6 +23,10 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	coreservice "github.com/moduleforge/core-api/service"
+	coredb "github.com/moduleforge/core-model/db"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // handlerReachedStatus is written by recoverToSentinel when the wrapped
@@ -129,5 +133,44 @@ func TestSelfRoutes_GetPutSplit(t *testing.T) {
 				t.Errorf("status = %d, want %d", rr.Code, tt.wantStatus)
 			}
 		})
+	}
+}
+
+// TestBuildSelfResponse_EntityUUID asserts that GET /v1/self's response body
+// (built by buildSelfResponse) carries entity_uuid — sourced from
+// profile.Entity.Uuid, the caller's underlying entity/person UUID used to
+// scope requests in other modules (e.g. mod-tags, mod-tasks) — as a field
+// distinct from the pre-existing "uuid" (the user_accounts row's own UUID).
+func TestBuildSelfResponse_EntityUUID(t *testing.T) {
+	userUUID := uuid.New()
+	entityUUID := uuid.New()
+
+	ua := db.UserAccount{Uuid: userUUID}
+	profile := coreservice.Profile{
+		Kind: "natural_person",
+		Entity: coredb.GetEntityByUUIDRow{
+			Uuid: entityUUID,
+		},
+	}
+
+	resp := buildSelfResponse(ua, profile)
+
+	gotEntityUUID, ok := resp["entity_uuid"].(string)
+	if !ok {
+		t.Fatalf("entity_uuid missing or not a string in response: %#v", resp)
+	}
+	if gotEntityUUID != entityUUID.String() {
+		t.Errorf("entity_uuid = %q, want %q", gotEntityUUID, entityUUID.String())
+	}
+
+	gotUUID, ok := resp["uuid"].(string)
+	if !ok {
+		t.Fatalf("uuid missing or not a string in response: %#v", resp)
+	}
+	if gotUUID != userUUID.String() {
+		t.Errorf("uuid = %q, want %q", gotUUID, userUUID.String())
+	}
+	if gotUUID == gotEntityUUID {
+		t.Errorf("uuid and entity_uuid unexpectedly equal (%q); they must be distinct fields", gotUUID)
 	}
 }
