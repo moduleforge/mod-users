@@ -6,3 +6,7 @@ phases:
       slug: go-action-required-migration
       title: Go Backend Action-Required Migration
       tasks: []
+    - number: 2
+      slug: gui-action-required-handling
+      title: GUI Action-Required Client And Wiring
+      tasks: []
