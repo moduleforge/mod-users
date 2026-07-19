@@ -36,15 +36,6 @@ items:
         - effort:unspecified
         - plan/phase:gui-core-gui-adoption
       text: '[phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] Pre-existing, not investigated further: mod-core/gui''s built dist/ has no dist/index.css despite package.json''s ./styles.css export - not touched by this task since error-message.tsx needed no styling changes.'
-    - title: details[] shape not runtime-validated
-      id: L92R
-      date: "2026-07-16"
-      tags:
-        - type:security
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:gui-core-gui-adoption
-      text: 'Phase-03 security review (users-apiresp-migration plan) found: gui/src/lib/api.ts''s request() casts the parsed error JSON body directly to ApiErrorResponse and assigns errorBody.error.details straight into errorDetails: FieldErrorData[] | undefined with no runtime check that details is actually an array or that its elements have field/message as strings. Low-confidence, suggestion-level, non-blocking: not an XSS/injection risk (JSX children are always text-escaped, no dangerouslySetInnerHTML anywhere in @moduleforge/core-gui or mod-users/gui), but a malformed/unexpected-shape body could make React throw at render time ("Objects are not valid as a React child") in <FieldError>/<ErrorBanner>. Mirrors an existing pattern already in @moduleforge/core-gui''s own canonical request() (gui/src/lib/api-client.ts in mod-core), so this diff doesn''t introduce a new risk class - just extends an existing accepted trust assumption. Optional hardening: validate/coerce details shape after parsing so a malformed envelope degrades to "no field details" instead of crashing.'
     - title: shadow-db-lint missing cross-module prereqs
       id: LnMH
       date: "2026-07-19"
