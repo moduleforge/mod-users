@@ -5,7 +5,17 @@
 # instance, runs every migration in $1 against it, and tears down regardless
 # of outcome. Exit code matches goose's exit code.
 #
-# Usage:  shadow-db-lint.sh <migrations-dir>
+# Usage:  shadow-db-lint.sh <migrations-dir> [prereq-migrations-dir ...]
+#
+# Prereq dirs: a module's migrations may declare `migrations.after:
+# [other-module]` in its manifest when they FK into that other module's
+# tables. `mfgen` resolves this ordering for real deploys via its migration
+# resolver, but this standalone lint script has no access to that resolver,
+# so callers (e.g. CI) must supply prerequisite migration directories
+# explicitly, in dependency order. Each prereq dir is applied in order
+# before the primary dir, all against the same ephemeral database (sharing
+# one goose_db_version tracking table — safe as long as version numbers
+# don't collide across modules).
 #
 # Connectivity: the container publishes 5432 to an OS-assigned free port on
 # 127.0.0.1 (`-p 127.0.0.1:0:5432`), and the script connects to that mapped
@@ -19,10 +29,21 @@ set -u
 set -o pipefail
 
 DIR="${1:-migrations}"
+shift || true
+PREREQ_DIRS=("$@")
 
 if [[ ! -d "$DIR" ]]; then
   echo "shadow-db-lint: directory not found: $DIR" >&2
   exit 2
+fi
+
+if [[ ${#PREREQ_DIRS[@]} -gt 0 ]]; then
+  for pdir in "${PREREQ_DIRS[@]}"; do
+    if [[ ! -d "$pdir" ]]; then
+      echo "shadow-db-lint: directory not found: $pdir" >&2
+      exit 2
+    fi
+  done
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -67,6 +88,18 @@ done
 if ! docker exec "$CNAME" pg_isready -U postgres >/dev/null 2>&1; then
   echo "shadow-db-lint: Postgres did not become ready in time" >&2
   exit 2
+fi
+
+if [[ ${#PREREQ_DIRS[@]} -gt 0 ]]; then
+  for pdir in "${PREREQ_DIRS[@]}"; do
+    echo "shadow-db-lint: applying prereq $pdir via goose..."
+    goose -dir "$pdir" postgres "$URL" up
+    RC=$?
+    if [[ $RC -ne 0 ]]; then
+      echo "shadow-db-lint: prereq apply failed: $pdir" >&2
+      exit $RC
+    fi
+  done
 fi
 
 echo "shadow-db-lint: applying $DIR via goose..."

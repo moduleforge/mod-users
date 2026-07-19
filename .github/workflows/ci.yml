@@ -74,6 +74,8 @@ jobs:
         run: bun install
 
       - name: Lint (all sub-projects)
+        env:
+          SHADOW_DB_PREREQ_DIRS: ${{ github.workspace }}/mod-core/model/migrations
         run: make lint
 
   test:

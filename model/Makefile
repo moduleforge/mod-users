@@ -109,7 +109,7 @@ test.integration: ## Run integration tests (migration apply against live DB)
 
 .PHONY: lint
 lint: ## Apply migrations to an ephemeral shadow Postgres (replaces atlas migrate lint)
-	@./scripts/shadow-db-lint.sh migrations
+	@./scripts/shadow-db-lint.sh migrations $(SHADOW_DB_PREREQ_DIRS)
 
 .PHONY: lint-fix
 lint-fix: ## Lint-fix (no-op for model)
