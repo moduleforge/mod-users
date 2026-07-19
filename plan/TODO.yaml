@@ -9,14 +9,4 @@ phases:
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
-      tasks:
-        - number: 2
-          slug: wire-auth-context-action-navigation
-          title: Wire Auth Context Action-Required Navigation
-          path: phase-02-gui-action-required-handling/002-wire-auth-context-action-navigation.md
-          done: false
-          tier: sonnet-med
-          git:
-            branch: null
-            commit: []
-            merge: null
+      tasks: []
