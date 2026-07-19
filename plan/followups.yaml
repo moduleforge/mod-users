@@ -18,15 +18,6 @@ items:
         - effort:unspecified
         - plan/phase:preview-and-readme
       text: '[phase-05-preview-and-readme/001-add-preview-target.md] Per the task doc''s explicit instruction, the cross-repo aggregate-README correction (/Users/zane/playground/moduleforge/README.md module-table cell mod-users -> yes (tsup lib), and GUI workbench row) lives outside project_root in a separate git repo and was intentionally not touched. Remains outstanding for the manager to route to the aggregate-repo process.'
-    - title: app-mfdemo migration to new auth-ui exports
-      id: nzlS
-      date: "2026-07-05"
-      tags:
-        - type:enhancement
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:login-register-ui-consumer-migration
-      text: '[plan/login-register-ui] Once the login-register-ui plan lands, app-mfdemo''s bespoke pages (src/app/auth/login/page.tsx, src/app/auth/register/page.tsx, src/app/auth/oidc/return/page.tsx) could be replaced with the new AuthPage/OidcCallbackPage exports from @moduleforge/users-gui. Not done as part of this plan: app-mfdemo is a separate git repository outside mod-users'' project_root, so a task dispatched from this plan''s worktree cannot reach it (same precedent as follow-up 0PHW from gui-lib-conversion). Migrating also requires yalc-linking the freshly built users-gui package into app-mfdemo, which hits the same yalc/sandbox-permission friction already logged in follow-ups ThVz/HSiS.'
     - title: 5 flat-envelope sites deferred
       id: eiF8
       date: "2026-07-14"
