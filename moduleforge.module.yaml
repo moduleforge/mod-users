@@ -204,6 +204,11 @@ provides:
     # section for the full explanation and the self-route-manifest incident
     # (2026-07-15) this note is here because of.
     # /v1/auth — local login, register, email-code, password-reset, OIDC callback.
+    # NOTE: constructor/args below are informational only — the resolver skips
+    # handler-node creation here because provides.services.authHandler (above)
+    # is the canonical construction site for this same-named handler. Kept in
+    # sync with that entry to avoid documentation drift (same convention as
+    # the /v1/oidc-config entry below).
     - prefix: /v1/auth
       scope: public             # unauthenticated — bearer token not yet issued
       handler: authHandler
