@@ -3,75 +3,11 @@
   "entries": {
     "todo": {},
     "followup": {
-      "de6E": {
-        "sig": "570e154ce23a39e30904246bd8dcb543",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Worktree isolation drops untracked/stray files, so a task worktree dispatched to clean stray artifacts silently checks an already-clean location; recommend targeting project_root directly for untracked-cleanup steps or having the manager re-verify after merge. Gate-tagged (phase-02-gate); moderate effort to write into process guidance, moderate recurring value for future plan authoring.",
-        "scored_at": "2026-07-17T16:10:00Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "0PHW": {
-        "sig": "103a0c6e58dbf12e80fb933acd84e661",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Cross-repo aggregate README correction needed outside project_root; requires routing to a separate repo's process, moderate coordination effort.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "nzlS": {
-        "sig": "aacefa6ff038d4f7454e62bd040f14cd",
-        "effort_bucket": "high",
-        "utility_bucket": "medium",
-        "rationale": "Migrating app-mfdemo to new AuthPage/OidcCallbackPage exports is a cross-repo change blocked on yalc-linking friction already logged elsewhere; substantial coordinated effort.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "Vthh": {
-        "sig": "d2a1fd57c8a86a9d84f26fceeb8ef20b",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Independent review pass for login/register forms wasn't dispatched separately; re-running review lenses is moderate effort, moderate safety-net value (no findings expected from inline pass).",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "Tn8F": {
-        "sig": "c1634199901abcfd457ea4a8dd24dad6",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Same pattern as Vthh — independent review pass not dispatched for OIDC callback page; moderate effort to re-run, moderate safety value.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "s5fu": {
-        "sig": "38d63c5c818cf0f5bd61c85dc574863b",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Same pattern — independent review pass not dispatched for AuthPage; moderate effort, moderate safety value.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
       "eiF8": {
         "sig": "3653b771c6adae462e3b840324edb3ce",
         "effort_bucket": "high",
         "utility_bucket": "high",
         "rationale": "5 flat-envelope error sites deliberately deferred; migrating them is a breaking cross-repo GUI change requiring a dedicated coordinated plan across mod-users + consuming apps.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "rmQ5": {
-        "sig": "9766fd131a3d94184e288e4c84531298",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Several project docs are unreachable from README's link graph; linking them in (or confirming intentional exclusion) is a moderate documentation-graph cleanup.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "ZVum": {
-        "sig": "75c4dd2d2cb5980b780aa64d5a1d554e",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Needs a public apiresp.Conflict() constructor in the cross-repo mod-core package before writeServiceError can fully delegate; moderate cross-repo coordination effort, moderate payoff (removes message-string duplication/drift risk).",
         "scored_at": "2026-07-17T00:29:44Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
@@ -83,14 +19,6 @@
         "scored_at": "2026-07-17T00:29:44Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
-      "KXNZ": {
-        "sig": "4664a3cfc76bd7dba1e0ae200cac9549",
-        "effort_bucket": "high",
-        "utility_bucket": "medium",
-        "rationale": "No test runner exists in gui/ at all — standing up first test infra (bun-types, bunfig, first test convention) is a nontrivial one-time investment before cd gui && bun test becomes satisfiable for any gui/ task.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
       "JFnc": {
         "sig": "896ea794ba88b2953ab7708b2e16cb71",
         "effort_bucket": "low",
@@ -99,53 +27,13 @@
         "scored_at": "2026-07-17T00:29:44Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
-      "L92R": {
-        "sig": "25c31956bb5233ded5a586dfd65c78aa",
-        "effort_bucket": "medium",
-        "utility_bucket": "low",
-        "rationale": "Optional runtime-validation hardening for parsed error-response shape; non-blocking, mirrors an existing accepted trust assumption already in core-gui itself.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "8oow": {
-        "sig": "7fbd4f8738d744de1de6b20117931c9d",
-        "effort_bucket": "low",
-        "utility_bucket": "low",
-        "rationale": "Cross-repo (docs-mf-standards) naming-drift doc fix; mod-users' own usage is already correct.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "nnfn": {
-        "sig": "6a5251b7c652294780e32d675cb1fdae",
+      "LnMH": {
+        "sig": "3427e5959cd7cffe1bc7b77f3e0f850f",
         "effort_bucket": "medium",
         "utility_bucket": "medium",
-        "rationale": "Pre-existing behavioral/doc mismatch (anonymous_account) needs a dedicated doc-accuracy investigation pass; out of scope for the prior docs-only task.",
-        "scored_at": "2026-07-17T00:29:44Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "ll4D": {
-        "sig": "cae413792f8b7ee78beaa59a101d0127",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Cross-repo doc gap: the AGENTS.md pointer added for followup 9EBV now points to docs/mf-standards/building-common.md's worktree Go-build section, but that section doesn't yet contain the go work edit -replace recipe it's supposed to document. Medium effort (owned by docs-mf-standards repo, needs coordination), medium utility (removes real friction for future task worktrees building Go sub-projects, but is documentation-only).",
-        "scored_at": "2026-07-17T01:30:02Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "DQU4": {
-        "sig": "27e0eba7b40918de7c41a39820994748",
-        "effort_bucket": "low",
-        "utility_bucket": "low",
-        "rationale": "make lint's lint.model target hits an ephemeral-Postgres/Docker networking timeout in this environment; pre-existing and environmental, not caused by any diff. lint.api substitutes cleanly. Informational only, no code fix available from mod-users.",
-        "scored_at": "2026-07-17T16:10:00Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "Z6Vf": {
-        "sig": "99032e4b3ebbc03ef886a83e641ebd33",
-        "effort_bucket": "low",
-        "utility_bucket": "low",
-        "rationale": "Purely additive diagnostic id field on two rebuild-failure sites in oidc_providers.go, called out as an incidental scope note rather than an actionable gap; no follow-up action implied.",
-        "scored_at": "2026-07-17T22:43:00Z",
-        "metrics_generated_at": "2026-07-06T01:51:59Z"
+        "rationale": "Real make lint / CI gap: shadow-db-lint.sh provisions only mod-users' own migrations against a bare Postgres, missing mod-core's legal_entities/apps prereq schema that mod-users' migrations FK into; likely already failing CI silently for the same reason. Medium effort (needs a decision among documented-limitation vs. cross-module migration stitching vs. CI-level orchestration, then implementation); medium utility (closes a real dev/CI lint-parity gap, but not user-facing).",
+        "scored_at": "2026-07-19T07:11:00Z",
+        "metrics_generated_at": "2026-07-18T23:43:52Z"
       }
     },
     "roadmap": {}
