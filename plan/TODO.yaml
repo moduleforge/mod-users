@@ -26,6 +26,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: migrate-require-verified-middleware
+          title: Migrate RequireVerifiedEmail Middleware To Apiresp
+          path: phase-01-go-action-required-migration/003-migrate-require-verified-middleware.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
