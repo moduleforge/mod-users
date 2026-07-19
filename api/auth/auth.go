@@ -37,6 +37,16 @@ func NewVerifier(ctx context.Context, issuerURL, clientID, jwtSecret, localIssue
 // RolesPath are set to the fixed "email"/"roles" claim paths used by this
 // module's own locally-minted JWTs (flat "email" + "roles" claims); other
 // styles leave those fields zeroed as before.
+//
+// Scope: this facade exists to construct the mapper used by RequireAuth
+// middleware to decode locally-minted JWTs (see cmd/server/main.go's
+// "generic"-style construction) — it is not a substitute for per-provider
+// OIDC claim mapping. Real external-provider mappers are constructed
+// directly against internal/auth's (unexported-package) NewClaimMapper by
+// internal/auth/oauth.go's initProvider, using each provider's own
+// config.Provider.ClaimStyle and unmodified MapperOptions; that path does
+// not go through this facade and is unaffected by the "generic"-style
+// EmailPath/RolesPath population above.
 func NewClaimMapper(style string, authCfg config.AuthConfig) (ClaimMapper, error) {
 	return inner.NewClaimMapper(style, buildMapperOptions(style, authCfg))
 }

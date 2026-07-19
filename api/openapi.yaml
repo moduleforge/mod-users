@@ -302,34 +302,10 @@ components:
         slug:
           type: string
 
-    AppDetail:
-      allOf:
-        - $ref: "#/components/schemas/AppSummary"
-        - type: object
-          properties:
-            created_at:
-              type: string
-              format: date-time
-            archived_at:
-              type: string
-              format: date-time
-              nullable: true
-
-    AppCreateRequest:
-      type: object
-      required: [name, slug]
-      properties:
-        name:
-          type: string
-        slug:
-          type: string
-          pattern: "^[a-z0-9-]+$"
-
-    AppUpdateRequest:
-      type: object
-      properties:
-        name:
-          type: string
+    # AppDetail/AppCreateRequest/AppUpdateRequest (app CRUD request/response
+    # shapes) were removed here: mod-users no longer serves /v1/apps CRUD
+    # (see the "-- Apps --" path section above). See mod-core's own openapi
+    # contract for the current app CRUD schemas.
 
     AppMemberRequest:
       type: object
@@ -345,14 +321,34 @@ components:
 
     AppMember:
       type: object
+      description: >-
+        Response shape for assign/update-roles operations on the
+        apps/user-accounts membership join.
       properties:
+        app_uuid:
+          type: string
+          format: uuid
         user_uuid:
           type: string
           format: uuid
-        email:
-          type: string
-          format: email
-          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+
+    AppUserAccount:
+      type: object
+      description: >-
+        One row of the apps/user-accounts membership list. NOTE:
+        user_account_id is the module's internal numeric id, not a uuid —
+        this list endpoint pre-dates and does not yet follow this contract's
+        general "internal ids are never exposed in HTTP responses" rule (see
+        AGENTS.md); flagged here as a known, separate defect, not fixed by
+        this schema change.
+      properties:
+        user_account_id:
+          type: integer
+          format: int64
         roles:
           type: array
           items:
@@ -1021,128 +1017,31 @@ paths:
           $ref: "#/components/responses/Forbidden"
 
   # -- Apps --
+  # Top-level /v1/apps CRUD (list/create/get/update/archive) is NOT served by
+  # mod-users. Apps moved to mod-core as an entity subtype (apps-to-core
+  # Phase 02); mod-users retains only the apps/user-accounts membership join
+  # below, served by AppsHandler (api/internal/handlers/apps.go). See
+  # mod-core's own openapi contract for the app CRUD operations.
 
-  /v1/apps:
+  /v1/apps/{app_uuid}/user-accounts:
     get:
-      summary: List applications (admin)
+      summary: List an application's assigned user accounts (admin)
       tags: [Apps]
-      operationId: listApps
-      responses:
-        "200":
-          description: List of applications.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AppSummary"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-    post:
-      summary: Create an application (admin)
-      tags: [Apps]
-      operationId: createApp
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AppCreateRequest"
-      responses:
-        "201":
-          description: Application created.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AppDetail"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-
-  /v1/apps/{app_uuid}:
-    get:
-      summary: Get application detail (admin)
-      tags: [Apps]
-      operationId: getApp
+      operationId: listAppUserAccounts
       parameters:
         - $ref: "#/components/parameters/AppUUID"
       responses:
         "200":
-          description: Application detail.
+          description: Assigned user accounts, each with its per-app roles.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AppDetail"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    put:
-      summary: Update an application (admin)
-      tags: [Apps]
-      operationId: updateApp
-      parameters:
-        - $ref: "#/components/parameters/AppUUID"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AppUpdateRequest"
-      responses:
-        "200":
-          description: Updated application.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AppDetail"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    delete:
-      summary: Archive an application (admin, soft-delete)
-      tags: [Apps]
-      operationId: archiveApp
-      parameters:
-        - $ref: "#/components/parameters/AppUUID"
-      responses:
-        "204":
-          description: Application archived.
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-  /v1/apps/{app_uuid}/members:
-    get:
-      summary: List application members
-      tags: [Apps]
-      operationId: listAppMembers
-      parameters:
-        - $ref: "#/components/parameters/AppUUID"
-      responses:
-        "200":
-          description: List of members.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AppMember"
+                type: object
+                properties:
+                  user_accounts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AppUserAccount"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1150,9 +1049,9 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
     post:
-      summary: Add a member to an application
+      summary: Assign a user account to an application (admin)
       tags: [Apps]
-      operationId: addAppMember
+      operationId: assignAppUserAccount
       parameters:
         - $ref: "#/components/parameters/AppUUID"
       requestBody:
@@ -1163,7 +1062,11 @@ paths:
               $ref: "#/components/schemas/AppMemberRequest"
       responses:
         "201":
-          description: Member added.
+          description: User account assigned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppMember"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1173,17 +1076,52 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /v1/apps/{app_uuid}/members/{user_uuid}:
+  /v1/apps/{app_uuid}/user-accounts/{user_uuid}:
     delete:
-      summary: Remove a member from an application
+      summary: Remove a user account's assignment to an application (admin)
       tags: [Apps]
-      operationId: removeAppMember
+      operationId: removeAppUserAccount
       parameters:
         - $ref: "#/components/parameters/AppUUID"
         - $ref: "#/components/parameters/UserUUID"
       responses:
         "204":
-          description: Member removed.
+          description: Assignment removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/apps/{app_uuid}/user-accounts/{user_uuid}/roles:
+    put:
+      summary: Replace a user account's roles on an application (admin)
+      tags: [Apps]
+      operationId: updateAppUserAccountRoles
+      parameters:
+        - $ref: "#/components/parameters/AppUUID"
+        - $ref: "#/components/parameters/UserUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Updated roles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":

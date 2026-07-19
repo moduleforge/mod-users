@@ -4,6 +4,20 @@
 
 `mod-users` is a ModuleForge module that provides user identity, account management, and authentication as a composable unit. A host application integrates it by mounting the Go model migrations, wiring the Go API services, and importing the React component library. The module ships three sub-projects — `model`, `api`, and `gui` — each independently consumable and built to the ModuleForge module contract described in [mod-core architecture](./mf-standards/architecture.md). A demo application (`app-mfdemo`) that wires the module end-to-end lives in a separate project at the aggregate level.
 
+### Runtime service dependencies
+
+Beyond the cross-module *schema* composition described under [Data model](#data-model) below, `mod-users` also declares runtime *service*-level dependencies in `moduleforge.module.yaml`'s `requires.services` — Go service instances that a composing host application must supply (typically from `mod-core` and `authz-module`) before `mod-users`' own `provides.services` can be constructed. As of this writing, `requires.services` lists:
+
+| Service | Source module | Used by | Purpose |
+|---|---|---|---|
+| `naturalPersonService` | mod-core | `userAccountService` | `coreservice.NaturalPersonServicer` — creates/manages the natural-person entity record backing a user account |
+| `typeResolver` | mod-core | `userAccountService` | `*types.Resolver` — resolves and validates entity-type metadata for accounts |
+| `coreServices` | mod-core | `selfHandler` | `*coreservice.Services` — the composite core-services aggregate; `selfHandler` calls its `Entity.GetSelf` to read the given/family name half of `/v1/self`'s composite identity response |
+| `grantService` | authz-module | `firstUserGrant` hook | `GrantServicer` — issues the wildcard `manage` grant bootstrapped for the first user account created in a fresh database |
+| `entityResolver` | mod-core | `appsHandler` | `*entity.Resolver` — resolves an `apps/{uuid}` path param to the app's internal id, since `mod-users` no longer owns an `apps` table of its own (see [Data model](#data-model)) |
+
+`requires.infra` (`pool`, `opReg`, `smtp`, `cfg`) covers infrastructure singletons rather than services and is not enumerated here; see `moduleforge.module.yaml` directly for the current list. This table reflects the manifest at the time of writing — treat `moduleforge.module.yaml`'s `requires:` block as the source of truth if the two ever disagree.
+
 ## Sub-project layout
 
 | Sub-project | Language | What it owns | What it exposes |

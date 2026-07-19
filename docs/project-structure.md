@@ -45,6 +45,12 @@ api/
   Dockerfile            # production container image
   entrypoint.sh         # container entrypoint
   cmd/server/           # main package — wires deps and starts the HTTP server
+  handlers/             # public facade re-exporting handler types/constructors/
+                         # route-registration functions from internal/handlers/ —
+                         # the only handlers package external modules (host apps)
+                         # can import. See AGENTS.md's Conventions section.
+    authhandlers/        # public facade for internal/handlers/auth (local auth,
+                          # OIDC callback handler)
   internal/
     auth/               # authentication middleware and OIDC integration
     authz/              # authorization helpers
