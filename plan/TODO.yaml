@@ -5,7 +5,17 @@ phases:
     - number: 1
       slug: go-action-required-migration
       title: Go Backend Action-Required Migration
-      tasks: []
+      tasks:
+        - number: 1
+          slug: add-action-code-registry
+          title: Add Action-Code Registry
+          path: phase-01-go-action-required-migration/001-add-action-code-registry.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
