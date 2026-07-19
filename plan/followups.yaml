@@ -18,15 +18,6 @@ items:
         - effort:unspecified
         - plan/phase:gui-core-gui-adoption
       text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] Flow''s mid-task-commit.sh/finalize-task-commit.sh git add -A is not yalc-aware: it repeatedly swept up this worktree''s intentionally-uncommitted local file:.yalc/@moduleforge/core-gui entries in gui/package.json/bun.lock, requiring revert commits mid-task. Friction point for any future gui/-touching task in this repo while the yalc workflow is in place.'
-    - title: gui/ has no test runner set up at all (no tes
-      id: KXNZ
-      date: "2026-07-16"
-      tags:
-        - type:enhancement
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:gui-core-gui-adoption
-      text: '[phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] gui/ has no test runner set up at all (no test files, no bunfig.toml, no bun-types) - the cd gui && bun test validation bullet is currently unsatisfiable for this or any gui/ task without first standing up test infrastructure. Same gap already flagged by sibling task 001.'
     - title: 'Pre-existing, not investigated further: mod-c'
       id: JFnc
       date: "2026-07-16"
