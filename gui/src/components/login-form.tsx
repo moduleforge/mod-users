@@ -69,9 +69,21 @@ export interface LoginFormProps {
    * Defaults to `'/'`.
    */
   returnPath?: string;
+  /**
+   * Namespaces this form's input `id`/`htmlFor` pairs (e.g. `${idPrefix}-email`)
+   * so they stay unique when `LoginForm` and `RegisterForm` are mounted at the
+   * same time (see `AuthPage`). Defaults to `'login'` so the component still
+   * works standalone (Ladle stories, other consumers).
+   */
+  idPrefix?: string;
 }
 
-export function LoginForm({ onSuccess, initialError = null, returnPath = '/' }: LoginFormProps) {
+export function LoginForm({
+  onSuccess,
+  initialError = null,
+  returnPath = '/',
+  idPrefix = 'login',
+}: LoginFormProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -125,9 +137,9 @@ export function LoginForm({ onSuccess, initialError = null, returnPath = '/' }: 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <ErrorMessage message={error} />
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor={`${idPrefix}-email`}>Email</Label>
           <Input
-            id="email"
+            id={`${idPrefix}-email`}
             type="email"
             autoComplete="email"
             required
@@ -137,9 +149,9 @@ export function LoginForm({ onSuccess, initialError = null, returnPath = '/' }: 
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor={`${idPrefix}-password`}>Password</Label>
           <Input
-            id="password"
+            id={`${idPrefix}-password`}
             type="password"
             autoComplete="current-password"
             required

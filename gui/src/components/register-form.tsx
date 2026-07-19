@@ -9,9 +9,16 @@ import { ApiRequestError } from '../lib/api';
 export interface RegisterFormProps {
   /** Called after a successful registration. */
   onSuccess?: () => void;
+  /**
+   * Namespaces this form's input `id`/`htmlFor` pairs (e.g. `${idPrefix}-email`)
+   * so they stay unique when `LoginForm` and `RegisterForm` are mounted at the
+   * same time (see `AuthPage`). Defaults to `'register'` so the component
+   * still works standalone (Ladle stories, other consumers).
+   */
+  idPrefix?: string;
 }
 
-export function RegisterForm({ onSuccess }: RegisterFormProps) {
+export function RegisterForm({ onSuccess, idPrefix = 'register' }: RegisterFormProps) {
   const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,8 +32,10 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     setError(null);
 
     // Mirrors the server-side rule enforced in
-    // api/internal/service/user_accounts.go (len(*in.Password) < 12).
-    if (password.length < 12) {
+    // api/internal/service/user_accounts.go (len(*in.Password) < 12), which
+    // counts UTF-8 bytes — not JS UTF-16 code units, which `.length` counts
+    // and which can undercount multi-byte characters.
+    if (new TextEncoder().encode(password).length < 12) {
       setError('Password must be at least 12 characters.');
       return;
     }
@@ -75,9 +84,9 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor={`${idPrefix}-email`}>Email</Label>
         <Input
-          id="email"
+          id={`${idPrefix}-email`}
           type="email"
           autoComplete="email"
           required
@@ -87,12 +96,12 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="password">
+        <Label htmlFor={`${idPrefix}-password`}>
           Password{' '}
           <span className="text-muted-foreground font-normal">(min 12 chars)</span>
         </Label>
         <Input
-          id="password"
+          id={`${idPrefix}-password`}
           type="password"
           autoComplete="new-password"
           required
