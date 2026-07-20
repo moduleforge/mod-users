@@ -107,3 +107,77 @@ default architect variant applies.)
   `/self` this task mirrors.
 - `plugins/flow/task-procedures/update-architecture-docs/SKILL.md` — the
   task-procedure to run.
+
+## Status
+
+- **Outcome:** succeeded (2026-07-19).
+- **Implementation worktree:** `/Users/zane/playground/moduleforge/mod-users/worktrees/2026-07-20-wire-auth/worktrees/phase-02-task-01-update-architecture-docs`, branch `phase-02-task-01-update-architecture-docs`.
+- **Files modified (repo-relative, inside the implementation worktree):**
+  - `docs/architecture.md` — added an **Identities / Credentials** row to the
+    "API layer" table (all seven endpoints; List-unverified /
+    six-mutating-verified split; step-up gating noted for the four endpoints
+    that actually mutate a credential — link start, unlink, set/remove
+    password). Extended the paragraph following the table to mention the new
+    identities-routes two-entry split alongside the existing self-routes split,
+    and to describe the `stepUpConsumed` `provides.services` entry (constructor
+    starts the janitor as a side effect) as the wiring model — explicitly not
+    an app-level `startupHooks:` mechanism. No new top-level section was added;
+    there is no existing "services/DI wiring" section in this doc to extend
+    (the "Runtime service dependencies" section documents `requires.services`
+    only, not the module's own `provides.services` entries), so the note was
+    folded into the existing API-layer paragraph instead.
+  - `docs/mod-users-spec.md` — inserted a new **Key use case 8** ("Manage
+    identity/credential self-service") after use case 7 (View/update profile),
+    renumbering use cases 8–14 to 9–15 (no other document links to specific
+    use-case numbers or anchors; verified by grep before renumbering). Added an
+    **Identities & credentials (authenticated)** API-definition checklist block
+    after "Self (authenticated)", listing all seven endpoints with their
+    verified-email/step-up requirements. Added a **Security requirements**
+    bullet ("Step-up challenge for credential changes") describing the
+    single-use/anti-replay JTI-cache mechanism and the step-up-request
+    endpoint's constant-time anti-enumeration response.
+- **Validation summary:**
+  - `grep -n "self/identities\|self/credential\|step-up" docs/architecture.md`
+    returns the new API-layer row and paragraph — passed.
+  - `grep -n "self/identities\|self/credential\|step-up\|step_up" docs/mod-users-spec.md`
+    returns the new use case, API-definition block, and security bullet —
+    passed.
+  - Both docs describe the step-up cache as a `provides.services` entry (not
+    `startupHooks:`) and the routes as two per-`middleware:` entries; no
+    `expr:` mention was introduced — confirmed via grep (zero `expr:` hits in
+    either file).
+  - Cross-checked endpoint paths, verbs, and middleware gating against
+    `moduleforge.module.yaml` (lines ~185-329) and `api/cmd/server/main.go`
+    (lines 516-560): all seven paths/verbs/handler-method mappings and the
+    List-unverified / six-mutating-verified split match exactly.
+  - Cross-checked step-up single-use/anti-replay and anti-enumeration-timing
+    claims against `api/internal/auth/stepup.go` (`IssueStepUpToken`,
+    `VerifyStepUpToken`, `StartStepUpJanitor`) and
+    `api/internal/handlers/identities.go` (`StepUpRequest`'s 200ms
+    constant-time response, `requireStepUp`'s four call sites in `StartLink`,
+    `Unlink`, `SetPassword`, `RemovePassword` — confirmed the two step-up
+    endpoints themselves are not step-up-gated).
+  - Markdown structural sanity checked manually (table pipe-count parity
+    across all "API layer" table rows; heading-level and use-case numbering
+    checked with grep after renumbering; no markdown lint target exists in
+    this repo's `Makefile` to run automatically).
+  - `api/openapi.yaml` cross-check: confirmed the identity/credential surface
+    is **absent** from `api/openapi.yaml` (`grep -in "identit\|credential\|step.up"`
+    returns only unrelated hits — the anonymous-account "identity continuity"
+    prose and the admin assume-endpoint's "identity" token description). Per
+    this task's own Validation instruction, this gap is noted for the manager
+    rather than fixed here (out of this task's scope).
+- **Assumptions applied:** none beyond the task doc's own instructions — no
+  `## Assumptions` section was present on this task doc.
+- **Flagged for manager:** `api/openapi.yaml` does not document the
+  identity/credential surface (`GET /v1/self/identities`,
+  `POST /v1/self/identities/oidc/{provider}/start`,
+  `DELETE /v1/self/identities/{identity_uuid}`,
+  `POST`/`DELETE /v1/self/credential/password`,
+  `POST /v1/self/credential/step-up`,
+  `POST /v1/self/credential/step-up/verify`) at all — unlike the `/self`
+  precedent, where the self-route-manifest plan's doc phase confirmed
+  `GET`/`PUT /v1/self` were already present. This is a genuine spec/reality gap
+  outside this task's scope (docs/architecture.md and docs/mod-users-spec.md
+  only); recommend a follow-up task to add these seven paths to
+  `api/openapi.yaml`.
