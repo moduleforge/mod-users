@@ -513,20 +513,30 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth(verifier, localMapper, resolver))
 
-			// GET /v1/self bypasses the email-verification gate. The GUI uses
-			// this endpoint to render the "verify your email" page, so it must
-			// be reachable to unverified accounts.
+			// GET /v1/self and GET /v1/self/identities both bypass the
+			// email-verification gate. The GUI uses GET /self to render the
+			// "verify your email" page, and an unverified account must still be
+			// able to see its own identities/credentials while working through
+			// that flow.
 			//
 			// TODO(generated): this hand-written block mirrors the manifest-driven
-			// wiring — see phase-1 self-route-wiring. GET/PUT /self are now also
-			// expressed via two separate moduleforge.module.yaml /v1 route entries:
-			// one registers handlers.RegisterSelfGetRoute under a middleware group
-			// of requireOIDCConfirmed + requireAuth (no verified-email gate); the
-			// other registers handlers.RegisterSelfPutRoute under a middleware group
-			// that adds requireVerifiedEmail. This file is a non-generated
+			// wiring — see phase-1 self-route-wiring and phase-1 route-wiring
+			// (identities-manifest-wiring). GET/PUT /self and the identities/
+			// credential endpoints are now also expressed via four separate
+			// moduleforge.module.yaml /v1 route entries: handlers.RegisterSelfGetRoute
+			// and handlers.RegisterSelfIdentitiesReadRoute each register under a
+			// middleware group of requireOIDCConfirmed + requireAuth (no
+			// verified-email gate); handlers.RegisterSelfPutRoute and
+			// handlers.RegisterSelfIdentitiesWriteRoutes each register under those
+			// same two plus requireVerifiedEmail. This file is a non-generated
 			// standalone dev server that mfgen does not regenerate, so the
 			// hand-written block below stays.
 			r.Get("/self", selfHandler.Get)
+
+			// GET /self/identities — list own identities (one optional local
+			// credential + zero-or-more OIDC identities). Reachable to
+			// unverified accounts; see the comment above r.Get("/self", ...).
+			r.Get("/self/identities", identitiesHandler.List)
 
 			// Everything else requires a verified email address.
 			r.Group(func(r chi.Router) {
@@ -535,8 +545,9 @@ func main() {
 				// PUT /v1/self — update own profile (verified accounts only).
 				r.Put("/self", selfHandler.Put)
 
-				// Identity-management self-service (Phase 4).
-				r.Get("/self/identities", identitiesHandler.List)
+				// Identity-management self-service (Phase 4). Credential-mutating
+				// endpoints only -- GET /self/identities is mounted above, outside
+				// this verified-email group.
 				r.Post("/self/identities/oidc/{provider}/start", identitiesHandler.StartLink)
 				r.Delete("/self/identities/{identity_uuid}", identitiesHandler.Unlink)
 				r.Post("/self/credential/password", identitiesHandler.SetPassword)
