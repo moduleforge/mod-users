@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: route-wiring
       title: Identities And Credentials Route Wiring
-      tasks: []
+      tasks:
+        - number: 1
+          slug: registrars-and-stepup-cache
+          title: Add Self-Identities Route Registrars And Step-Up Cache Constructor
+          path: phase-01-route-wiring/001-registrars-and-stepup-cache.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
