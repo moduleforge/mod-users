@@ -27,3 +27,12 @@ items:
         - effort:unspecified
         - plan/phase:gui-core-gui-adoption
       text: '[phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] Pre-existing, not investigated further: mod-core/gui''s built dist/ has no dist/index.css despite package.json''s ./styles.css export - not touched by this task since error-message.tsx needed no styling changes.'
+    - title: go.work workaround documented in follow-up oy
+      id: UaNK
+      date: "2026-07-20"
+      tags:
+        - type:ambiguity
+        - plan/phase:route-wiring
+        - priority:unspecified
+        - effort:unspecified
+      text: go.work workaround documented in follow-up oyo6/building-common.md assumes single-level worktree nesting; this task's worktree is double-nested (task worktree carved from a plan worktree) and needed additional go work edit -replace overrides for 6 cross-module deps beyond plain go work use. Worth a doc update / new follow-up so future doubly-nested task worktrees in this repo don't rediscover it.
