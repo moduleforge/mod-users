@@ -1,0 +1,8 @@
+slug: identities-manifest-wiring
+version: 1
+title: ""
+phases:
+    - number: 1
+      slug: route-wiring
+      title: Identities And Credentials Route Wiring
+      tasks: []
