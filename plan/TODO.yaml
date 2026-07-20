@@ -27,7 +27,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-02-wire-identities-manifest
-            commit: []
+            commit:
+                - 8756de1
             merge: null
     - number: 2
       slug: doc-updates
