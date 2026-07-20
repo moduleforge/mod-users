@@ -13,6 +13,7 @@ phases:
           path: phase-01-route-wiring/001-registrars-and-stepup-cache.md
           done: false
           tier: sonnet-high
+          digest: Added RegisterSelfIdentitiesReadRoute (GET /self/identities) and RegisterSelfIdentitiesWriteRoutes (6 credential-mutating endpoints) mirroring self_routes.go's per-verb-registrar convention, plus auth.NewStepUpConsumedCache(ctx) wrapping StartStepUpJanitor as a construction side effect. Non-tautological split test + 3 cache/janitor tests. No manifest/facade/main.go changes (groundwork-only task).
           git:
             branch: phase-01-task-01-registrars-and-stepup-cache
             commit:
