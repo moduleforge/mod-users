@@ -30,3 +30,30 @@ items:
         [phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] Pre-existing, not investigated further: mod-core/gui's built dist/ has no dist/index.css despite package.json's ./styles.css export - not touched by this task since error-message.tsx needed no styling changes.
 
         UPDATE (2026-07-20): Root cause identified — mod-core/gui's tsup build (src/index.ts entry) never processes CSS; the real Tailwind v4 theme source lives at mod-core/gui/.ladle/styles.css but is wired only into the Ladle dev-preview build, not the publish build. A fix is being worked on in mod-core (wiring a Tailwind CSS compile step into gui's build so dist/index.css is actually produced). Remove this followup once that fix lands in mod-core and is verified end-to-end (yalc-linked into a consumer and confirmed dist/index.css resolves with working styles) — do not remove on mod-core's commit alone.
+    - title: go.work workaround documented in follow-up oy
+      id: UaNK
+      date: "2026-07-20"
+      tags:
+        - type:ambiguity
+        - plan/phase:route-wiring
+        - priority:unspecified
+        - effort:unspecified
+      text: 'go.work workaround documented in follow-up oyo6/building-common.md assumes single-level worktree nesting; this task''s worktree is double-nested (task worktree carved from a plan worktree) and needed additional go work edit -replace overrides for 6 cross-module deps beyond plain go work use. Worth a doc update / new follow-up so future doubly-nested task worktrees in this repo don''t rediscover it. (Confirmed reproducible: a second task in the same plan hit and resolved it identically, using 5 "../" plus explicit -replace overrides each qualified with @v0.0.0 to avoid a "replaced at all versions" error — this is a stable, repeatable recipe for the doubly-nested case, not a one-off.)'
+    - title: Pre-existing flaky test TestNewStepUpConsumed
+      id: 5RbD
+      date: "2026-07-20"
+      tags:
+        - type:ambiguity
+        - plan/phase:route-wiring
+        - priority:unspecified
+        - effort:unspecified
+      text: Pre-existing flaky test TestNewStepUpConsumedCache_JanitorStopsOnCancel (api/auth/stepup_cache_test.go, added by task 001, not touched by this task) failed once under full-suite load (goroutine-count timing assertion) but passed reliably in isolation and on repeat full-suite runs. Worth investigating if it recurs; out of this task's scope to fix.
+    - title: api/openapi.yaml missing identities surface
+      id: biJk
+      date: "2026-07-20"
+      tags:
+        - type:documentation
+        - plan/phase:route-wiring
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-route-wiring architecture-conformance gate] api/openapi.yaml (AGENTS.md''s designated "authoritative REST API specification") has zero hits for identities/credential/step-up — the identity/credential self-service surface (list/link/unlink OIDC identities, set/remove password, step-up request/verify) now wired into moduleforge.module.yaml is undocumented there. Pre-existing gap (the endpoints already existed hand-wired in main.go before this plan), not introduced or worsened by phase-01, and explicitly out of this plan''s Phase 2 doc-update scope (docs/architecture.md + docs/mod-users-spec.md only). Recommend a follow-up task to add these endpoints to openapi.yaml.'
