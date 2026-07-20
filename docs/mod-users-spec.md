@@ -91,7 +91,17 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 8. Admin: manage user accounts
+### 8. Manage identity/credential self-service (list, link/unlink OIDC, set/remove password)
+
+**Actor:** Authenticated end user.
+
+**Action:** Calls `GET /v1/self/identities` to view current identities (local password-credential status plus linked OIDC identities); `POST /v1/self/identities/oidc/{provider}/start` to begin linking a new OIDC identity; `DELETE /v1/self/identities/{identity_uuid}` to unlink an existing one; `POST /v1/self/credential/password` to set or change a local password (`DELETE /v1/self/credential/password` to remove it); and, when step-up is enabled, `POST /v1/self/credential/step-up` followed by `POST /v1/self/credential/step-up/verify` to obtain a step-up token before a credential-mutating call.
+
+**Outcome:** `GET /v1/self/identities` is reachable even when the account's email is unverified, matching the `GET /v1/self` rationale. All six remaining endpoints require a verified email. Unlink and remove-password are rejected with `409` (`last_identity`) if the change would leave the account with no remaining sign-in method. When `AUTH_REQUIRE_STEP_UP` (`cfg.Auth.RequireStepUpForCredentialChange`) is enabled, the four credential-mutating calls (link start, unlink, set password, remove password) additionally require a valid, single-use `X-Step-Up-Token` header — obtained by requesting a code via `POST /v1/self/credential/step-up` (always `204`, held to a constant ~200ms response regardless of outcome to avoid a timing side-channel) and exchanging it for the token via `POST /v1/self/credential/step-up/verify` (wrong or expired code → `401`); a missing or invalid step-up token on a gated call is rejected with `409` (`step_up_required`). The two step-up endpoints themselves are not step-up-gated (they are how the token is obtained).
+
+---
+
+### 9. Admin: manage user accounts
 
 **Actor:** Authenticated admin user.
 
@@ -101,7 +111,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 9. Admin: assume a user's identity
+### 10. Admin: assume a user's identity
 
 **Actor:** Authenticated admin user.
 
@@ -111,7 +121,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 10. Admin: manage application membership
+### 11. Admin: manage application membership
 
 **Actor:** Authenticated admin user.
 
@@ -121,7 +131,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 11. Admin: configure OIDC providers
+### 12. Admin: configure OIDC providers
 
 **Actor:** Authenticated admin user (or operator using the setup token flow when no admin account yet exists).
 
@@ -131,7 +141,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 12. View audit log
+### 13. View audit log
 
 **Actor:** Authenticated admin user.
 
@@ -141,7 +151,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 13. GUI component rendering and demo app
+### 14. GUI component rendering and demo app
 
 **Actor:** Developer or AI agent composing a ModuleForge-based application.
 
@@ -151,7 +161,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 ---
 
-### 14. Create an anonymous account and optionally upgrade it
+### 15. Create an anonymous account and optionally upgrade it
 
 **Actor:** Unauthenticated end user (typically a client application acting on behalf of a new visitor with no credentials).
 
@@ -228,6 +238,18 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 - [ ] `GET /v1/self` — retrieve authenticated user's profile. Reachable even when the account's email is unverified.
 - [ ] `PUT /v1/self` — update own given name, family name, or default application. Requires a verified email.
 
+### Identities & credentials (authenticated)
+
+- [ ] `GET /v1/self/identities` — list the caller's identities (local password-credential status plus OIDC identities). Reachable even when the account's email is unverified.
+- [ ] `POST /v1/self/identities/oidc/{provider}/start` — begin linking a new OIDC identity to the caller's account; returns an authorize URL. Requires a verified email.
+- [ ] `DELETE /v1/self/identities/{identity_uuid}` — unlink an OIDC identity. Requires a verified email; rejected with `409` if it would leave the account with no remaining sign-in method.
+- [ ] `POST /v1/self/credential/password` — set or change the caller's local password (current password required when one already exists). Requires a verified email.
+- [ ] `DELETE /v1/self/credential/password` — remove the caller's local password credential. Requires a verified email; rejected with `409` if it would leave the account with no remaining sign-in method.
+- [ ] `POST /v1/self/credential/step-up` — request a step-up verification code by email (always `204`). Requires a verified email.
+- [ ] `POST /v1/self/credential/step-up/verify` — exchange a step-up code for a short-lived, single-use step-up token (`401` on a wrong or expired code). Requires a verified email.
+
+When `AUTH_REQUIRE_STEP_UP` (`cfg.Auth.RequireStepUpForCredentialChange`) is enabled, the link-start, unlink, set-password, and remove-password endpoints above additionally require a valid `X-Step-Up-Token` header obtained from the two step-up endpoints; a missing or invalid token is rejected with `409`.
+
 ### Admin: users (admin auth required)
 
 - [ ] `GET /v1/users` — list/search users with pagination.
@@ -266,6 +288,8 @@ App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served
 - **CSRF / state validation:** The OIDC flow uses a signed state token stored in a scoped cookie (`oidc_state`, scoped to `/v1/auth/oidc/`). The callback validates the cookie before processing the authorization code.
 
 - **Anti-enumeration:** Email-code and password-reset request endpoints return `202` unconditionally to prevent account existence probing.
+
+- **Step-up challenge for credential changes:** When `AUTH_REQUIRE_STEP_UP` (`cfg.Auth.RequireStepUpForCredentialChange`) is enabled, linking/unlinking an OIDC identity and setting/removing a local password additionally require a step-up token: a short-lived (5-minute), purpose-scoped, user-account-bound signed token obtained by verifying an emailed one-time code. The token is single-use — its JTI is recorded in a process-lifetime cache on first successful verification, and a background janitor prunes expired entries, so replaying a consumed or expired token is rejected. The step-up code-request endpoint holds its response to a constant ~200ms regardless of outcome, mirroring the anti-enumeration timing pattern above.
 
 - **Authorization:** Admin-only endpoints enforce admin privilege on the authenticated principal. The assume endpoint additionally enforces that the acting user is an admin. Authorization follows the ModuleForge `Authorizer` pattern described in [mod-core's authorization design](./mf-standards/architecture/authorization-design.md).
 

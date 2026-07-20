@@ -194,6 +194,33 @@ provides:
         - queries:coredb             # *coredb.Queries
         - service:coreServices       # *coreservice.Services (from mod-core)
 
+    # stepUpConsumed — the process-lifetime consumed-JTI cache for step-up
+    # tokens. The constructor starts the janitor goroutine (prunes expired
+    # entries) as a side effect and returns the live *sync.Map; declared here
+    # so the generated composition root builds it without an app-level
+    # startup hook.
+    - name: stepUpConsumed
+      type: "*sync.Map"
+      constructor: auth.NewStepUpConsumedCache
+      args:
+        - context
+
+    # identitiesHandler — identity/credential self-service handler; serves
+    # /v1/self/identities and /v1/self/credential/* (Phase 4). args order is
+    # authoritative and matches handlers.NewIdentitiesHandler one-for-one.
+    - name: identitiesHandler
+      type: "*handlers.IdentitiesHandler"
+      constructor: handlers.NewIdentitiesHandler
+      args:
+        - infra:pool
+        - queries:usersdb
+        - service:oauthOrchestrator
+        - service:observerGroup
+        - infra:smtp                                        # satisfies the Sender interface
+        - field:cfg.LocalAuth.JWTSecret
+        - service:stepUpConsumed
+        - field:cfg.Auth.RequireStepUpForCredentialChange
+
   routes:
     # REMINDER when adding a route entry here: every `constructor:`/`register:`
     # symbol below must also be re-exported (type alias + thin wrapper func)
@@ -274,6 +301,28 @@ provides:
     - prefix: /v1
       handler: selfHandler
       register: handlers.RegisterSelfPutRoute
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
+
+    # /v1/self/identities (GET) — list own identities (one optional local
+    # credential + zero-or-more OIDC identities). Reachable to accounts with
+    # UNVERIFIED email (so the GUI can render the "verify your email" page
+    # from it), matching the GET /self rationale above.
+    - prefix: /v1
+      handler: identitiesHandler
+      register: handlers.RegisterSelfIdentitiesReadRoute
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+
+    # /v1/self/identities, /v1/self/credential/* (six mutating endpoints) —
+    # link/unlink OIDC identities and set/remove/step-up the local password
+    # credential. Requires a verified email.
+    - prefix: /v1
+      handler: identitiesHandler
+      register: handlers.RegisterSelfIdentitiesWriteRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth

@@ -7,6 +7,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -112,4 +113,15 @@ func RequireOIDCConfirmed(statusFn func() config.BootState) func(http.Handler) h
 // HashPassword hashes a plaintext password using Argon2id.
 func HashPassword(plain string) (string, error) {
 	return inner.HashPassword(plain)
+}
+
+// NewStepUpConsumedCache constructs the process-lifetime consumed-JTI cache for
+// step-up tokens and starts the background janitor that prunes expired entries.
+// The janitor runs until ctx is cancelled. Declared as a provides.services entry
+// so the generated composition root constructs the cache and starts the janitor
+// without needing an app-level startup hook.
+func NewStepUpConsumedCache(ctx context.Context) *sync.Map {
+	m := new(sync.Map)
+	inner.StartStepUpJanitor(m, ctx.Done())
+	return m
 }
