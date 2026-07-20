@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,6 +21,7 @@ import (
 	"github.com/moduleforge/mod-users/api/auth"
 	"github.com/moduleforge/mod-users/api/config"
 	inner "github.com/moduleforge/mod-users/api/internal/handlers"
+	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
 	innersvc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
@@ -31,6 +33,7 @@ type AssumeHandler = inner.AssumeHandler
 type AppsHandler = inner.AppsHandler
 type GrantAdminFn = inner.GrantAdminFn
 type SelfHandler = inner.SelfHandler
+type IdentitiesHandler = inner.IdentitiesHandler
 
 // NewOIDCConfigHandler constructs the OIDC config handler from individual
 // dependencies declared in the module manifest.
@@ -139,6 +142,49 @@ func RegisterSelfGetRoute(r chi.Router, h *SelfHandler) {
 // see RegisterSelfGetRoute's doc comment for why this is a separate entry.
 func RegisterSelfPutRoute(r chi.Router, h *SelfHandler) {
 	inner.RegisterSelfPutRoute(r, h)
+}
+
+// NewIdentitiesHandler constructs the identity/credential self-service
+// handler from individually-typed dependencies declared in the module
+// manifest. sender is typed as the exported, method-set-identical
+// authhandlers.Sender interface (rather than inner's unexported emailSender)
+// so the facade can name it; assigning it into the emailSender-typed
+// IdentitiesHandlerDeps.Sender field is valid Go since the method sets are
+// identical.
+func NewIdentitiesHandler(
+	pool *pgxpool.Pool,
+	queries *usersdb.Queries,
+	oauth *auth.OAuth,
+	obs *observer.ObserverGroup,
+	sender authhandlers.Sender,
+	jwtSecret string,
+	consumed *sync.Map,
+	stepUpRequired bool,
+) *IdentitiesHandler {
+	return inner.NewIdentitiesHandlerWithDeps(inner.IdentitiesHandlerDeps{
+		Pool:           pool,
+		Queries:        queries,
+		OAuth:          oauth,
+		Obs:            obs,
+		Sender:         sender,
+		JWTSecret:      jwtSecret,
+		Consumed:       consumed,
+		StepUpRequired: stepUpRequired,
+	})
+}
+
+// RegisterSelfIdentitiesReadRoute mounts GET /self/identities on r. Reachable
+// to accounts with an unverified email -- see RegisterSelfGetRoute's doc
+// comment for the rationale this mirrors.
+func RegisterSelfIdentitiesReadRoute(r chi.Router, h *IdentitiesHandler) {
+	inner.RegisterSelfIdentitiesReadRoute(r, h)
+}
+
+// RegisterSelfIdentitiesWriteRoutes mounts the six credential-mutating
+// identity endpoints on r. Requires a verified email -- see
+// RegisterSelfPutRoute's doc comment for the rationale this mirrors.
+func RegisterSelfIdentitiesWriteRoutes(r chi.Router, h *IdentitiesHandler) {
+	inner.RegisterSelfIdentitiesWriteRoutes(r, h)
 }
 
 // Live is the liveness health-check handler.
