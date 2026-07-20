@@ -15,7 +15,8 @@ phases:
           tier: sonnet-high
           git:
             branch: phase-01-task-01-registrars-and-stepup-cache
-            commit: []
+            commit:
+                - a54e67c
             merge: null
         - number: 2
           slug: wire-identities-manifest
