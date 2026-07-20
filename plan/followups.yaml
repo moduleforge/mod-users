@@ -63,3 +63,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-route-wiring architecture-conformance gate] api/openapi.yaml (AGENTS.md''s designated "authoritative REST API specification") has zero hits for identities/credential/step-up — the identity/credential self-service surface (list/link/unlink OIDC identities, set/remove password, step-up request/verify) now wired into moduleforge.module.yaml is undocumented there. Pre-existing gap (the endpoints already existed hand-wired in main.go before this plan), not introduced or worsened by phase-01, and explicitly out of this plan''s Phase 2 doc-update scope (docs/architecture.md + docs/mod-users-spec.md only). Recommend a follow-up task to add these endpoints to openapi.yaml.'
+    - title: api/openapi.yaml does not document any of the
+      id: EtYq
+      date: "2026-07-20"
+      tags:
+        - type:ambiguity
+        - plan/phase:doc-updates
+        - priority:unspecified
+        - effort:unspecified
+      text: api/openapi.yaml does not document any of the seven identity/credential endpoints (duplicate of already-tracked followup biJk from the phase-01 gate review — not re-added).
