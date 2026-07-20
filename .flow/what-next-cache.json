@@ -4,36 +4,28 @@
     "todo": {},
     "followup": {
       "eiF8": {
-        "sig": "3653b771c6adae462e3b840324edb3ce",
+        "sig": "21be8ea0649d9aeb2be1e46bfbdf0dc9",
         "effort_bucket": "high",
         "utility_bucket": "high",
-        "rationale": "5 flat-envelope error sites deliberately deferred; migrating them is a breaking cross-repo GUI change requiring a dedicated coordinated plan across mod-users + consuming apps.",
-        "scored_at": "2026-07-17T00:29:44Z",
+        "rationale": "5 flat-envelope error sites deliberately deferred; migrating them is a breaking cross-repo GUI change (mod-users + app-mfdemo/app-mftodo) requiring a dedicated coordinated plan.",
+        "scored_at": "2026-07-20T01:51:00Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
       "le59": {
-        "sig": "67e75b5ceae4fcb036ef8a9c61e2895e",
+        "sig": "0238934df68e9e3260e270e05ebb3329",
         "effort_bucket": "medium",
         "utility_bucket": "medium",
-        "rationale": "Flow's commit scripts aren't yalc-aware and repeatedly sweep up intentional local yalc entries; fixing requires updating Flow's own scripts (outside mod-users), moderate effort, recurring friction-reduction payoff for future gui/ tasks.",
-        "scored_at": "2026-07-17T00:29:44Z",
+        "rationale": "Flow's mid-task-commit.sh/finalize-task-commit.sh isn't yalc-aware and repeatedly sweeps up intentional local yalc entries; fix lives in Flow's own scripts (outside mod-users), moderate effort, recurring friction-reduction payoff for future gui/ tasks.",
+        "scored_at": "2026-07-20T01:51:00Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
       },
       "JFnc": {
-        "sig": "896ea794ba88b2953ab7708b2e16cb71",
+        "sig": "7b6eab8213b4107ccc3b751894df0f14",
         "effort_bucket": "low",
         "utility_bucket": "low",
         "rationale": "Pre-existing cross-repo (mod-core) packaging gap, not investigated further; low priority, not owned by mod-users.",
-        "scored_at": "2026-07-17T00:29:44Z",
+        "scored_at": "2026-07-20T01:51:00Z",
         "metrics_generated_at": "2026-07-06T01:51:59Z"
-      },
-      "LnMH": {
-        "sig": "3427e5959cd7cffe1bc7b77f3e0f850f",
-        "effort_bucket": "medium",
-        "utility_bucket": "medium",
-        "rationale": "Real make lint / CI gap: shadow-db-lint.sh provisions only mod-users' own migrations against a bare Postgres, missing mod-core's legal_entities/apps prereq schema that mod-users' migrations FK into; likely already failing CI silently for the same reason. Medium effort (needs a decision among documented-limitation vs. cross-module migration stitching vs. CI-level orchestration, then implementation); medium utility (closes a real dev/CI lint-parity gap, but not user-facing).",
-        "scored_at": "2026-07-19T07:11:00Z",
-        "metrics_generated_at": "2026-07-18T23:43:52Z"
       }
     },
     "roadmap": {}
