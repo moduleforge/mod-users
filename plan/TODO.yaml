@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: wire-identities-manifest
+          title: Wire Identities And Credentials Routes Into The Module Manifest
+          path: phase-01-route-wiring/002-wire-identities-manifest.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
