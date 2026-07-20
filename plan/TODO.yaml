@@ -23,7 +23,7 @@ phases:
           slug: wire-identities-manifest
           title: Wire Identities And Credentials Routes Into The Module Manifest
           path: phase-01-route-wiring/002-wire-identities-manifest.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Wired identitiesHandler + stepUpConsumed into moduleforge.module.yaml (provides.services + 2 provides.routes entries: read requireOIDCConfirmed+requireAuth, write +requireVerifiedEmail), following the /v1/self two-entry convention. Added public-facade re-exports (IdentitiesHandler alias, NewIdentitiesHandler ctor with manifest-matching arg order via exported authhandlers.Sender, 2 registrar wrappers). Reconciled main.go to move GET /self/identities out of the verified-email group. Added facade call-shape test guarding the self-route-manifest-style incident.'
           git:
