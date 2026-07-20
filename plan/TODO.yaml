@@ -30,7 +30,7 @@ phases:
             branch: phase-01-task-02-wire-identities-manifest
             commit:
                 - 8756de1
-            merge: null
+            merge: 8881f4b07415fd27f08b48f6ad0511b6b27e2f7c
     - number: 2
       slug: doc-updates
       title: Documentation Updates
