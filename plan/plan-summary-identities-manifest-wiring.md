@@ -161,3 +161,22 @@ phases (`plan/phase:route-wiring`; the phase-2 doc-updates task logged none):
   explicitly out of this plan's Phase 2 doc-update scope
   (`docs/architecture.md` + `docs/mod-users-spec.md` only). Recommended as
   a follow-up task to add these endpoints to `openapi.yaml`.
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Identities And Credentials Route Wiring
+
+- [x] [001-registrars-and-stepup-cache.md](./phase-01-route-wiring/001-registrars-and-stepup-cache.md) — tier `sonnet-high` · branch `phase-01-task-01-registrars-and-stepup-cache` · commit `a54e67c` · merge `519bf1e2c72dcbc579ebc8cbfca9105fe97405b4`
+- [x] [002-wire-identities-manifest.md](./phase-01-route-wiring/002-wire-identities-manifest.md) — tier `sonnet-high` · branch `phase-01-task-02-wire-identities-manifest` · commit `8756de1` · merge `8881f4b07415fd27f08b48f6ad0511b6b27e2f7c`
+
+### Phase 02 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-02-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `phase-02-task-01-update-architecture-docs` · commit `1a2ca37` · merge `c27d650bfdcf4808ab9b31ce3e2e4a75facaaf30`
