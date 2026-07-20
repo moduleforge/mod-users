@@ -47,4 +47,4 @@ phases:
             branch: phase-02-task-01-update-architecture-docs
             commit:
                 - 1a2ca37
-            merge: null
+            merge: c27d650bfdcf4808ab9b31ce3e2e4a75facaaf30
