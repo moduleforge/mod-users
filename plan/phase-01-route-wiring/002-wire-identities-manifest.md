@@ -272,3 +272,74 @@ architectural_impact: true
   entries.
 - After reconciling `api/cmd/server/main.go`.
 - After adding the facade call-shape test.
+
+## Status
+
+- **Outcome:** succeeded (2026-07-19).
+- **Implementation worktree:** `/Users/zane/playground/moduleforge/mod-users/worktrees/2026-07-20-wire-auth/worktrees/phase-01-task-02-wire-identities-manifest`, branch `phase-01-task-02-wire-identities-manifest`.
+- **Files added/modified (repo-relative, inside the implementation worktree):**
+  - `api/handlers/handlers.go` (modified — added `IdentitiesHandler` type
+    alias, `NewIdentitiesHandler` wrapper (params in manifest `args` order,
+    `sender` typed as the exported `authhandlers.Sender`), and the
+    `RegisterSelfIdentitiesReadRoute`/`RegisterSelfIdentitiesWriteRoutes`
+    wrapper functions; added the `sync` and `authhandlers` imports).
+  - `moduleforge.module.yaml` (modified — added `stepUpConsumed` and
+    `identitiesHandler` `provides.services` entries, declared in that order,
+    plus two `provides.routes` entries registering
+    `handlers.RegisterSelfIdentitiesReadRoute` (no `requireVerifiedEmail`) and
+    `handlers.RegisterSelfIdentitiesWriteRoutes` (with `requireVerifiedEmail`),
+    each with a rationale comment mirroring the `/v1/self` entries' style).
+  - `api/cmd/server/main.go` (modified — moved `GET /self/identities` out of
+    the `requireVerifiedEmail` group to sit alongside `GET /self`; left the
+    six mutating routes in that group; updated the reconciliation comment to
+    describe all four manifest route entries; left the cache/janitor
+    construction at `main.go:457-458` as direct wiring, unchanged, per the
+    task doc's either-is-acceptable note).
+  - `api/handlers/identities_test.go` (new — `package handlers_test`;
+    `TestNewIdentitiesHandler_ConstructsFromManifestShapedArgs` calls the
+    public constructor with manifest-shaped args and asserts non-nil;
+    `TestRegisterSelfIdentitiesReadRoute_MountsGetIdentities` and
+    `TestRegisterSelfIdentitiesWriteRoutes_MountsSixEndpoints` register each
+    wrapper on a bare `chi.NewRouter()` and assert the expected routes are
+    mounted via `chi.Walk`, avoiding invoking `IdentitiesHandler`'s methods
+    directly since they call `localauth.MustFromContext` and would panic
+    without a request-scoped `UserContext`).
+  - `auth.NewStepUpConsumedCache` (task 001) required no new facade wrapper,
+    per the task doc.
+- **`go.work` workaround (follow-up `oyo6`, doubly-nested case per task 001's
+  note):** required the same 5-`../`-up + explicit `go work edit -replace`
+  overrides (for `core-model`, `core-api`, `audit-model`, `authz-model`,
+  `audit-api`, `authz-api`, each qualified with `@v0.0.0` — an unqualified
+  `-replace` produced a "replaced at all versions" error since those modules
+  are also workspace `use` members) that task 001 documented. Local,
+  gitignored, not committed.
+- **Validation summary:** `make build.api` succeeded (after the `go.work`
+  workaround). `make test.unit.api` passed, including the three new facade
+  tests; one pre-existing test in `api/auth/stepup_cache_test.go`
+  (`TestNewStepUpConsumedCache_JanitorStopsOnCancel`, added by task 001, not
+  touched by this task) was observed to fail once on a full-suite run under
+  load (a goroutine-count timing assertion) and passed on immediate re-run
+  (3/3 in isolation, and green again on a second full-suite run) — flagged
+  below rather than treated as a blocker, since it is unrelated to this
+  task's diff. `go vet ./...` / `make lint.api` clean for touched packages
+  (one `gofmt` fix applied to the new test file). `moduleforge.module.yaml`
+  parses (verified with `python3 -c "import yaml; yaml.safe_load(...)"`) and
+  contains the `stepUpConsumed` service, the `identitiesHandler` service with
+  the eight `args` in the specified order, and the two `provides.routes`
+  entries with the correct middleware split — confirmed via the task doc's
+  grep commands. `handlers.NewIdentitiesHandler`,
+  `handlers.RegisterSelfIdentitiesReadRoute`,
+  `handlers.RegisterSelfIdentitiesWriteRoutes`, and
+  `auth.NewStepUpConsumedCache` all resolve, confirmed via grep.
+  `api/cmd/server/main.go`'s `GET /self/identities` is confirmed out of the
+  `requireVerifiedEmail` group; the six mutating routes remain inside it; the
+  reconciliation comment is updated; `make build.api` still builds the dev
+  server. The facade constructor's parameter order was checked one-for-one
+  against the manifest `args` order. `git diff --name-only` against the
+  pre-task commit shows only `api/cmd/server/main.go`,
+  `api/handlers/handlers.go`, `api/handlers/identities_test.go`, and
+  `moduleforge.module.yaml` — confined to the `mod-users/` tree.
+- **Assumptions applied:** all three `## Assumptions` bullets held — task 001
+  had landed with the expected symbols; no `mfgen`-side compile harness exists
+  so the facade call-shape test is the in-repo proxy per the task doc; the
+  `go.work` workaround was required and not committed.
