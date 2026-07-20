@@ -42,6 +42,7 @@ phases:
           path: phase-02-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: 'Documented the identity/credential self-service surface Phase 1 wired into moduleforge.module.yaml: docs/architecture.md gained an Identities/Credentials API-layer table row plus a paragraph on the two-entry route split and stepUpConsumed''s constructor-starts-janitor model; docs/mod-users-spec.md gained a new use case, API-definition block, and security-requirements bullet. All claims verified against actual manifest/source, not just the task doc''s excerpts.'
           git:
             branch: phase-02-task-01-update-architecture-docs
             commit:
