@@ -17,8 +17,9 @@ func RegisterSelfIdentitiesReadRoute(r chi.Router, h *IdentitiesHandler) {
 // entry's manifest middleware group, which adds requireVerifiedEmail on top
 // of the read group's middleware (requireOIDCConfirmed + requireAuth). The
 // step-up request/verify endpoints belong in this verified-email-gated
-// group, exactly as api/cmd/server/main.go mounts them today
-// (main.go:539-549).
+// group, exactly as api/cmd/server/main.go mounts them today inside its
+// hand-written requireVerifiedEmail r.Group (alongside PUT /self and the
+// other identities/credential handlers).
 func RegisterSelfIdentitiesWriteRoutes(r chi.Router, h *IdentitiesHandler) {
 	r.Post("/self/identities/oidc/{provider}/start", h.StartLink)
 	r.Delete("/self/identities/{identity_uuid}", h.Unlink)
