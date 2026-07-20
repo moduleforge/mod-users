@@ -45,3 +45,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Pre-existing flaky test TestNewStepUpConsumedCache_JanitorStopsOnCancel (api/auth/stepup_cache_test.go, added by task 001, not touched by this task) failed once under full-suite load (goroutine-count timing assertion) but passed reliably in isolation and on repeat full-suite runs. Worth investigating if it recurs; out of this task's scope to fix.
+    - title: go.work workaround for this doubly-nested wor
+      id: QKY6
+      date: "2026-07-20"
+      tags:
+        - type:ambiguity
+        - plan/phase:route-wiring
+        - priority:unspecified
+        - effort:unspecified
+      text: go.work workaround for this doubly-nested worktree layout matched task 001's documented recipe exactly (5 "../" + explicit -replace overrides with @v0.0.0 qualifiers), reinforcing that follow-up oyo6/building-common.md guidance should account for this nesting depth.
