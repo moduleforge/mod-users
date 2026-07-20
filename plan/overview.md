@@ -45,8 +45,34 @@ Detailed findings and the resolved design decisions (D1–D10) are in
 
 ## Current status
 
-**Status: phase-decomposition complete; paused before the architectural-implications check.**
-Planning has investigated all five sites, the ZVum fold-in, the mod-core `apiresp` API surface, the
+**Status: refreshed after rebase onto current `main`; architectural-implications check run;
+`doc-updates` phase registered. Plan is ready for `execute-implementation-plan`.**
+
+Update (2026-07-20): the plan branch was rebased onto current `main` (was ~101 commits behind); the
+rebase was clean apart from `plan/followups.yaml` (kept main's already-v2, more up-to-date copy) and
+the `docs/mf-standards` submodule was synced to main's pin (`7f5b6898`, a strict descendant of the
+design-doc dependency pin `07ab37a` — the spec is present and current). All seven original task docs
+were re-verified against current `main` state in this worktree; the concrete file paths, line numbers,
+function/struct names, and referenced `apiresp` symbols still hold (the GUI files are at
+`gui/src/lib/api.ts` and `gui/src/lib/auth-context.tsx`; D2's `/oidc-config` route, D9's core-gui
+surface, and D10's local-path `replace` are all confirmed). Two refinements were recorded: (a) D10 now
+notes the **doubly-nested worktree** build wrinkle (followup `UaNK`) — task worktrees carved from this
+plan worktree need five `../` plus per-dep `go work edit -replace @v0.0.0` overrides, not the plain
+single-nested `building-common.md` recipe; and (b) **task 002 (`fold-in-zvum-email-taken-conflict`) is
+only *partially* satisfied on `main`.** Commit `d91b699` already did the handler-side envelope-mechanism
+swap (`writeServiceError` now calls `apiresp.WriteError(apiresp.Conflict(...))`, no `WriteJSON`/
+`Envelope` literal, wire output already correct), but the mechanical crux of the ZVum fold-in is **not**
+done: `svc.ErrEmailTaken` is still a plain `fmt.Errorf` sentinel carrying no detail, `writeServiceError`
+still has the `errors.Is(err, svc.ErrEmailTaken)` special case (not collapsed to a pass-through), and
+the required service-level `TestErrEmailTaken_ConflictDetail` does not exist. **Task 002 therefore
+stays `done: false`** — a "Pre-implementation state" note in its task doc records exactly what remains.
+
+The architectural-implications check was run and, as anticipated, a **Phase 3 — `doc-updates`** is now
+registered with two task documents (see below): the migration changes spec-defined response behavior on
+five endpoints, so `docs/mod-users-spec.md`/`docs/architecture.md` (prose) and `api/openapi.yaml`
+(schema) need the new action-required envelope and the two reserved-mechanism changes documented.
+
+Planning had investigated all five sites, the ZVum fold-in, the mod-core `apiresp` API surface, the
 go.mod/build-environment reality, and the GUI call sites. The sole blocking decision (the
 `action.path` values for `users.email_unverified` and `users.step_up_required`) is resolved — the user
 selected **Reading A** (adopt GUI-navigation semantics per D1): `users.email_unverified` →
@@ -69,14 +95,16 @@ via `todo_list_all`):
   file.
 - **Phase 2 — `gui-action-required-handling`** (2 tasks): `fix-api-action-discrimination` →
   `wire-auth-context-action-navigation` (depends on task 1's new exports).
+- **Phase 3 — `doc-updates`** (2 tasks, registered 2026-07-20 after the architectural-implications
+  check): `document-action-required-in-spec-and-architecture` (prose: `docs/mod-users-spec.md` +
+  `docs/architecture.md`) and `document-action-required-in-openapi` (`api/openapi.yaml` schema +
+  responses; the identities/credential `409` OpenAPI coverage is deferred to the pre-existing followup
+  `biJk` gap). Both depend on Phase 1 having landed (they document the shipped shapes).
 
-**Paused here at the user's request** (to resume after a plugin update) rather than proceeding
-automatically. **Next step when work resumes:** run the architectural-implications check and register
-the anticipated `doc-updates` phase below — this migration changes the wire shape of five endpoints
-(spec/openapi-documented behavior), so `docs/mod-users-spec.md`, `docs/architecture.md`, and
-`api/openapi.yaml` will need review for the new action-required envelope and the two
-reserved-mechanism changes. This was deferred specifically because it must reference the
-now-authored implementation task-doc paths above. After that, proceed to `execute-implementation-plan`.
+**Next step:** proceed to `execute-implementation-plan`. The `architectural_impact: true` marking on
+all five Phase 1 task docs (a full phase-review gate, marked by analogy with the `centralize-server-error`
+precedent rather than dictated verbatim by the phase file) remains **flagged for manager confirmation**
+— it has not been resolved here, only carried forward.
 
 ## Overview
 
@@ -106,10 +134,24 @@ follow-up. Depends only on the finalized action codes (design doc), so **paralle
 1**; the `action.path` values it navigates to are now resolved (`/verify-email`, `/step-up`,
 `/oidc-config`).
 
-### Anticipated Phase — Documentation Updates (`doc-updates`)
+### Phase 3 — Documentation Updates (`doc-updates`)
 
-Registered after phase-decomposition, per the architectural-implications check: the migration changes
-spec-defined response behavior for five endpoints, so `docs/mod-users-spec.md`, `docs/architecture.md`,
-and `api/openapi.yaml` need review for the new action-required envelope and the two reserved-mechanism
-changes.
+Registered 2026-07-20 per the architectural-implications check: the migration changes spec-defined
+response behavior for five endpoints, so the docs need the new action-required envelope and the two
+reserved-mechanism changes documented. Two tasks:
+
+- **`document-action-required-in-spec-and-architecture`** — updates `docs/mod-users-spec.md` (adds the
+  action-required response-kind description parallel to the error-envelope bullet; updates use case 9's
+  `step_up_required`/`last_identity` response wording) and `docs/architecture.md` (the
+  Identities/Credentials row and, where present, the auth-middleware/response-contract notes), and
+  retires the old flat field names (`verify_path`/`challenge_path`/`config_path`).
+- **`document-action-required-in-openapi`** — adds an `Action` envelope schema to `api/openapi.yaml`
+  mirroring the `Error`/`FieldError` convention and wires the middleware-level `403`
+  (`users.email_unverified`) and `503` (`users.oidc_not_confirmed`, with `data.state`) responses it can
+  express today. The `409` `step_up_required`/`last_identity` OpenAPI responses live on the
+  `/v1/self/identities` + `/v1/self/credential/*` surface, which is entirely absent from
+  `api/openapi.yaml` (pre-existing followup `biJk`); documenting them is deferred to that gap, with the
+  new `Action` schema made ready for when those endpoints are added.
+
+Both depend on Phase 1 having landed (they reference the shipped shapes from tasks 003/004/005).
 </content>

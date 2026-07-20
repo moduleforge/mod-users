@@ -80,3 +80,27 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 3
+      slug: doc-updates
+      title: Documentation Updates
+      tasks:
+        - number: 1
+          slug: document-action-required-in-spec-and-architecture
+          title: Document Action-Required Envelope In Spec And Architecture
+          path: phase-03-doc-updates/001-document-action-required-in-spec-and-architecture.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: document-action-required-in-openapi
+          title: Document Action-Required Envelope In OpenAPI
+          path: phase-03-doc-updates/002-document-action-required-in-openapi.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null

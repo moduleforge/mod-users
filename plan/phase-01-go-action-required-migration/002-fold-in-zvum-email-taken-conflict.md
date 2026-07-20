@@ -11,6 +11,37 @@ construction. Scope: `api/internal/service/user_accounts.go` (`ErrEmailTaken` de
 email-taken response body. This task has no dependency on the action-code registry task and can
 run in parallel with every other task in this phase.
 
+## Pre-implementation state (re-verified 2026-07-20, after main rebase)
+
+This task is **partially, but not fully, satisfied on `main`**. Commit `d91b699` ("Use apiresp.Conflict
+for email_taken 409 response") — landed independently of this plan — already did the *handler-side*
+mechanism swap: `writeServiceError` no longer hand-builds an `apiresp.Envelope{}`/`apiresp.WriteJSON`
+literal; its `svc.ErrEmailTaken` branch now calls
+`apiresp.WriteError(w, r, apiresp.Conflict(apiresp.FieldError{Field:"email", Code:"users.email_taken",
+Message:"email is already registered"}))`, and the stale "no such constructor exists" comment is gone.
+So the wire output is already correct (`grep "apiresp.Envelope{"` is already clean) and the two
+handler-level tests (`user_accounts_authz_test.go` `email_taken` case + `TestShim_Create_EmailTaken`)
+already pass.
+
+**Still outstanding (the actual mechanical crux of the ZVum fold-in — do these):**
+1. `svc.ErrEmailTaken` is **not** yet redefined — it is still
+   `var ErrEmailTaken = fmt.Errorf("%w: email already registered", apiresp.ErrConflict)` at
+   `api/internal/service/user_accounts.go:108`, carrying no field detail. Redefine it via
+   `apiresp.Conflict(...)` per the requirement below.
+2. `writeServiceError` still has the `errors.Is(err, svc.ErrEmailTaken)` **special case** (it only
+   changed *how* that branch builds the response, not that it exists). Collapse it to a plain
+   pass-through so email-taken flows through the same `apiresp.WriteError(w, r, err)` as everything
+   else — which is only correct *after* outstanding item 1 moves the detail onto the sentinel.
+3. The doc comments above `ErrEmailTaken` (`user_accounts.go:96-107`) and `writeServiceError`
+   (`handlers/user_accounts.go:41-51`) still describe the old "detail attached at the handler mapping
+   point / no public detail-carrying constructor" framing — both are now stale and must be revised.
+4. The service-level direct test (`TestErrEmailTaken_ConflictDetail`) does **not** exist yet — only
+   `user_accounts_anon_test.go:59`'s non-wrapping identity check references `ErrEmailTaken`. Add it.
+
+The requirement prose below still describes the correct end state; note only that the handler-side
+`WriteJSON`/`Envelope` construction it says to remove is *already* removed by `d91b699` — the
+remaining handler work is collapsing the special-case branch, not deleting a `WriteJSON` call.
+
 ## Requirements
 
 - In `api/internal/service/user_accounts.go`, redefine `ErrEmailTaken` (currently

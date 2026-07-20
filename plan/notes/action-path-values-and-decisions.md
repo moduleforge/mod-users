@@ -95,6 +95,17 @@ merged:
   worktree-local `go.work` with three-`../`-corrected sibling paths plus `go work edit -replace`
   overrides for `core-model`/`core-api`. Each Go task worktree must run this recipe before building;
   no committed `go.mod`/`go.sum` change results.
+  - **Nested-worktree wrinkle (re-verified 2026-07-20; followup `UaNK`).** `building-common.md`'s
+    recipe still documents only the *single*-nested case (worktree directly under
+    `worktrees/<branch>/`, three `../` up). It has **not** changed. But this plan's worktrees are
+    *doubly* nested: task worktrees are carved from a **plan** worktree
+    (`mod-users/worktrees/plan/<slug>/` → then `worktrees/<task-branch>/`), so the sibling-module
+    paths resolve one level deeper. Per `UaNK` (already on `main`, filed 2026-07-20 and confirmed
+    reproducible), a doubly-nested Go task worktree needs **five** `../` and, beyond a plain
+    `go work use`, explicit `go work edit -replace <module>@v0.0.0=<five-dot-dot path>` overrides for
+    each cross-module dep (each qualified with `@v0.0.0` to avoid a "replaced at all versions" error).
+    Go-migration task implementers (tasks 001, 003, 004, 005) must apply this doubly-nested recipe,
+    not the plain single-nested recipe, when building inside a task worktree cut from this plan.
 
 ## The OPEN QUESTION (blocks precise Go task content)
 
