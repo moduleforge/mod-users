@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: route-wiring
       title: Identities And Credentials Route Wiring
+      diff_base: 5c5606ad3f20e40d4a8fc98338af14e3454662c8
       tasks:
         - number: 1
           slug: registrars-and-stepup-cache
