@@ -18,7 +18,7 @@ phases:
             branch: phase-01-task-01-registrars-and-stepup-cache
             commit:
                 - a54e67c
-            merge: null
+            merge: 519bf1e2c72dcbc579ebc8cbfca9105fe97405b4
         - number: 2
           slug: wire-identities-manifest
           title: Wire Identities And Credentials Routes Into The Module Manifest
