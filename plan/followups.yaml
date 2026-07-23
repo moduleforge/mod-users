@@ -18,18 +18,6 @@ items:
         - effort:unspecified
         - plan/phase:gui-core-gui-adoption
       text: '[phase-03-gui-core-gui-adoption/001-reconcile-api-client-types.md] Flow''s mid-task-commit.sh/finalize-task-commit.sh git add -A is not yalc-aware: it repeatedly swept up this worktree''s intentionally-uncommitted local file:.yalc/@moduleforge/core-gui entries in gui/package.json/bun.lock, requiring revert commits mid-task. Friction point for any future gui/-touching task in this repo while the yalc workflow is in place.'
-    - title: 'Pre-existing, not investigated further: mod-c'
-      id: JFnc
-      date: "2026-07-16"
-      tags:
-        - type:bug
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:gui-core-gui-adoption
-      text: |-
-        [phase-03-gui-core-gui-adoption/002-adopt-error-banner-widget.md] Pre-existing, not investigated further: mod-core/gui's built dist/ has no dist/index.css despite package.json's ./styles.css export - not touched by this task since error-message.tsx needed no styling changes.
-
-        UPDATE (2026-07-20): Root cause identified — mod-core/gui's tsup build (src/index.ts entry) never processes CSS; the real Tailwind v4 theme source lives at mod-core/gui/.ladle/styles.css but is wired only into the Ladle dev-preview build, not the publish build. A fix is being worked on in mod-core (wiring a Tailwind CSS compile step into gui's build so dist/index.css is actually produced). Remove this followup once that fix lands in mod-core and is verified end-to-end (yalc-linked into a consumer and confirmed dist/index.css resolves with working styles) — do not remove on mod-core's commit alone.
     - title: go.work workaround documented in follow-up oy
       id: UaNK
       date: "2026-07-20"
