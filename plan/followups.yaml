@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 5 flat-envelope sites deferred
-      id: eiF8
-      date: "2026-07-14"
-      tags:
-        - type:enhancement
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:users-apiresp-migration
-      text: '[users-apiresp-migration planning] The apiresp-migration plan''s Go vocab migration (phase-02) deliberately excludes 5 sites that use server.JSON directly to emit bespoke, non-standard flat response bodies rather than going through the standard error trio: api/internal/auth/require_verified.go:24,34 (internal_error flat, email_unverified), require_confirmed.go:36 (oidc_not_confirmed, drives an auth-flow redirect), and identities.go:626 (step_up_required, carries an extra challenge_path field), :646 (last_identity). These are the module''s most non-conformant sites, but migrating them to the standard nested envelope is a breaking change to consuming apps'' GUI code (app-mfdemo/app-mftodo), which keys off these bespoke shapes directly (confirmed: writeStepUpRequired''s own comment says the GUI reads error as a string). Deferred as an explicit follow-up rather than expanding this plan''s scope into a coordinated cross-repo GUI change. Recommend a dedicated future plan spanning mod-users + the consuming apps'' GUI code once this migration''s core scope has landed and the pattern for coordinated cross-repo breaking changes is established.'
     - title: Flow's mid-task-commit.sh/finalize-task-commi
       id: le59
       date: "2026-07-16"
