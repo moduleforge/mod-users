@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: go.work workaround documented in follow-up oy
-      id: UaNK
-      date: "2026-07-20"
-      tags:
-        - type:ambiguity
-        - plan/phase:route-wiring
-        - priority:unspecified
-        - effort:unspecified
-      text: 'go.work workaround documented in follow-up oyo6/building-common.md assumes single-level worktree nesting; this task''s worktree is double-nested (task worktree carved from a plan worktree) and needed additional go work edit -replace overrides for 6 cross-module deps beyond plain go work use. Worth a doc update / new follow-up so future doubly-nested task worktrees in this repo don''t rediscover it. (Confirmed reproducible: a second task in the same plan hit and resolved it identically, using 5 "../" plus explicit -replace overrides each qualified with @v0.0.0 to avoid a "replaced at all versions" error — this is a stable, repeatable recipe for the doubly-nested case, not a one-off.)'
     - title: Pre-existing flaky test TestNewStepUpConsumed
       id: 5RbD
       date: "2026-07-20"
