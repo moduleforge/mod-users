@@ -78,7 +78,16 @@ func buildStubOpReg() *authzapi.OperationRegistry {
 	return reg
 }
 
-// standardOps mirrors the seed data from 0500_authz_operations.sql.
+// StandardOpRegistry returns the *authzapi.OperationRegistry built from
+// standardOps, for use by the external test package (package authz_test).
+func StandardOpRegistry() *authzapi.OperationRegistry {
+	return buildStubOpReg()
+}
+
+// standardOps mirrors the seed data from mod-authz's
+// model/migrations/0500_authz_operations.sql, as amended by
+// model/migrations/0506_authz_create_operation.sql (which registers the
+// "create" operation and extends manage's implies to include it).
 // IDs must match the seeded values so that SatisfiedBy closures are correct.
 var standardOps = []authzapi.SeedOperation{
 	{ID: 1, Slug: "read", Implies: nil},
@@ -86,10 +95,12 @@ var standardOps = []authzapi.SeedOperation{
 	{ID: 3, Slug: "list", Implies: []int32{1}},
 	{ID: 4, Slug: "update", Implies: []int32{1}},
 	{ID: 5, Slug: "delete", Implies: []int32{1}},
-	{ID: 6, Slug: "swrite", Implies: []int32{2, 4}},
-	{ID: 7, Slug: "manage", Implies: []int32{1, 2, 3, 4, 5, 6, 8, 9, 10, 11}},
+	{ID: 6, Slug: "supdate", Implies: []int32{2, 4}},
+	{ID: 7, Slug: "manage", Implies: []int32{1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13}},
 	{ID: 8, Slug: "assume", Implies: nil},
 	{ID: 9, Slug: "login", Implies: nil},
 	{ID: 10, Slug: "grant", Implies: nil},
 	{ID: 11, Slug: "revoke", Implies: nil},
+	{ID: 12, Slug: "connect", Implies: nil},
+	{ID: 13, Slug: "create", Implies: nil},
 }
