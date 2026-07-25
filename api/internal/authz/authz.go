@@ -9,7 +9,7 @@
 // The implementation resolves the acting user from ctx via opctx.ActorEntityID
 // (and opctx.SudoActorEntityID for assume sessions).
 //
-// Operations with a nil target (create, list, or admin-only operations) are
+// Operations with a nil target (list, or other admin-only operations) are
 // denied for non-wildcard-admin actors. A wildcard grant satisfies nil-target
 // operations because the wildcard check runs before the nil-target denial.
 //
@@ -88,7 +88,9 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 //  2. Compute opIDs via opReg.SatisfiedBy(operation).
 //  3. checkWildcardGrant — if any (actor-chain, operation, NULL-target) grant
 //     exists, return nil immediately (wildcard admin short-circuit).
-//  4. If target == nil: return ErrForbidden (type-level grants not yet supported).
+//  4. If target == nil: return ErrForbidden (no entity to resolve a grant
+//     against; only a wildcard grant, already checked in step 3, can satisfy
+//     a nil-target operation).
 //  5. If target != nil: run checkGrant (recursive-CTE) and per-resource own-
 //     predicate checks.
 func (a *Authorizer) Authorize(ctx context.Context, operation string, target *int64) error {
@@ -102,10 +104,12 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 	// by both the wildcard check and the targeted grant check.
 	//
 	// SatisfiedBy may return an error if the operation slug is not in the registry.
-	// Some callers pass semantic labels like "create" that are not registered
-	// operations (they rely on the admin short-circuit). For the wildcard check,
-	// we fall back to the "manage" opIDs if the slug is unknown — a wildcard
-	// manage grant means full control over any operation.
+	// As of this writing, every in-tree caller passes a registered operation slug
+	// (verified across mod-authz, mod-users, mod-tasks, mod-tags, and mod-core);
+	// this branch is defense-in-depth against an uninitialized or lagging
+	// registry, not a documented reliance on an unregistered slug. For the
+	// wildcard check, we fall back to the "manage" opIDs if the slug is
+	// unknown — a wildcard manage grant means full control over any operation.
 	opIDs, err := a.opReg.SatisfiedBy(operation)
 	if err != nil {
 		// Unknown slug: use "manage" opIDs for the wildcard check.
@@ -138,9 +142,13 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 
 	// Non-wildcard-admin. Check target.
 	if target == nil {
-		// Nil target means create, list, or other admin-only gated operations.
-		// Type-level grants (grants over a type entity ID) are not yet
-		// supported; admin-only via wildcard grant.
+		// Nil target means list or other operations with no entity to resolve
+		// a grant or own-predicate against. Type-level checks — a non-nil
+		// target that is a type entity ID rather than an owned resource, e.g.
+		// registered actor-group/target-group "create" calls — are supported;
+		// they fall through to checkGrant below like any other non-nil target.
+		// With a nil target there is nothing to resolve a grant against, so
+		// only a wildcard grant (already checked above) can satisfy this call.
 		return ErrForbidden
 	}
 
