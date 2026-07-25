@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	authzapi "github.com/moduleforge/authz-api/authz"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/authz"
 )
@@ -196,4 +197,74 @@ func TestAuthorize_SudoActor_WildcardDoesNotEscalate(t *testing.T) {
 // which requires the pool. This scenario is covered by the integration test suite.
 func TestAuthorize_OwnEntity_Allowed(t *testing.T) {
 	t.Skip("own-predicate check (target == actor) runs after checkGrant which requires a live pool; covered by integration tests")
+}
+
+// TestStandardOpRegistry_Create_Registered is a registry-level regression test
+// for the "create" operation registered by mod-authz migration
+// 0506_authz_create_operation.sql. It asserts that standardOps (the
+// hand-maintained mirror of the migration's seed data) registers "create" —
+// SatisfiedBy("create") must not return authz.ErrUnknownOperation — and that
+// the returned closure includes both create's own ID and manage's ID (7),
+// which is the piece a missing manage-implies update would break.
+func TestStandardOpRegistry_Create_Registered(t *testing.T) {
+	reg := authz.StandardOpRegistry()
+
+	ids, err := reg.SatisfiedBy("create")
+	if errors.Is(err, authzapi.ErrUnknownOperation) {
+		t.Fatalf(`SatisfiedBy("create") returned ErrUnknownOperation: %v`, err)
+	}
+	if err != nil {
+		t.Fatalf(`SatisfiedBy("create") returned unexpected error: %v`, err)
+	}
+
+	createID, err := reg.IDForSlug("create")
+	if err != nil {
+		t.Fatalf(`IDForSlug("create") returned error: %v`, err)
+	}
+	manageID, err := reg.IDForSlug("manage")
+	if err != nil {
+		t.Fatalf(`IDForSlug("manage") returned error: %v`, err)
+	}
+	if manageID != 7 {
+		t.Fatalf("expected manage's ID to be 7, got %d", manageID)
+	}
+
+	got := make(map[int32]bool, len(ids))
+	for _, id := range ids {
+		got[id] = true
+	}
+	if !got[createID] {
+		t.Errorf(`SatisfiedBy("create") = %v; missing create's own ID %d`, ids, createID)
+	}
+	if !got[manageID] {
+		t.Errorf(`SatisfiedBy("create") = %v; missing manage's ID %d (manage-implies-create update)`, ids, manageID)
+	}
+}
+
+// TestAuthorize_WildcardAdmin_Create_InspectsOpIDs is an authorizer-level
+// regression test that, unlike TestAuthorize_WildcardAdmin_AllowsAnything's
+// "create nil-target" case, actually inspects opIDs in its wildcard stub: it
+// returns true only when opIDs contains manage's ID (7). This is the shape
+// needed to catch a missing manage-implies-create update — a stub that
+// ignores opIDs (like wildcardAllowFn) would pass even if manage's implies
+// never included create's ID, silently masking the regression task 001's
+// migration fixes.
+func TestAuthorize_WildcardAdmin_Create_InspectsOpIDs(t *testing.T) {
+	const manageID = int32(7)
+
+	wildcardGrantFn := func(_ context.Context, _ int64, opIDs []int32) (bool, error) {
+		for _, id := range opIDs {
+			if id == manageID {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	az := authz.NewWithStubOpReg(wildcardGrantFn)
+	ctx := ctxWithActor(1)
+
+	if err := az.Authorize(ctx, "create", nil); err != nil {
+		t.Errorf(`expected wildcard-manage actor to be allowed "create", got: %v`, err)
+	}
 }
