@@ -2,7 +2,6 @@
 .pnpm-store/
 deploy/local/authelia/certs/
 node_modules/
-worktrees/
 dist/
 
 # files
@@ -28,3 +27,10 @@ CLAUDE.md
 # at the repo root in commit 9680136 and purged from git history).
 client_secret_*.apps.googleusercontent.com.json
 ms-secret-*.token
+
+# flow stuff
+worktrees/
+.flow/*
+!.flow/plans
+!.flow/project-analysis.json
+!.flow/what-next-cache.json
