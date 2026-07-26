@@ -29,13 +29,14 @@ SUBPROJECTS := model api gui
 # ---------------------------------------------------------------------------
 
 .PHONY: preflight
-preflight: preflight.model preflight.api preflight.gui ## Verify tools and fix stale deps
+preflight: preflight.siblings preflight.model preflight.api preflight.gui ## Verify tools and fix stale deps
 	@echo "  preflight complete."
 
-.PHONY: preflight.model preflight.api preflight.gui
-preflight.model:   ; @$(MAKE) -C model   preflight
-preflight.api:     ; @$(MAKE) -C api     preflight
-preflight.gui:     ; @$(MAKE) -C gui     preflight
+.PHONY: preflight.siblings preflight.model preflight.api preflight.gui
+preflight.siblings: ; @bash scripts/link-siblings.sh
+preflight.model:     ; @$(MAKE) -C model   preflight
+preflight.api:       ; @$(MAKE) -C api     preflight
+preflight.gui:       ; @$(MAKE) -C gui     preflight
 
 # ---------------------------------------------------------------------------
 # Aggregate / canonical targets
@@ -48,13 +49,13 @@ build: preflight build.model build.api build.gui ## Build all sub-projects (defa
 test: test.unit ## Alias for test.unit
 
 .PHONY: test.unit
-test.unit: test.unit.model test.unit.api test.unit.gui ## Run unit tests across all sub-projects
+test.unit: preflight test.unit.model test.unit.api test.unit.gui ## Run unit tests across all sub-projects
 
 .PHONY: test.integration
-test.integration: test.integration.model test.integration.api test.integration.gui ## Run integration tests across all sub-projects
+test.integration: preflight test.integration.model test.integration.api test.integration.gui ## Run integration tests across all sub-projects
 
 .PHONY: lint
-lint: lint.model lint.api lint.gui ## Lint all sub-projects (read-only)
+lint: preflight lint.model lint.api lint.gui ## Lint all sub-projects (read-only)
 
 .PHONY: lint-fix
 lint-fix: lint-fix.model lint-fix.api lint-fix.gui ## Apply lint fixes across all sub-projects
