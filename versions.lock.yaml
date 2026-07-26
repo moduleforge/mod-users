@@ -1,0 +1,48 @@
+# mod-users/versions.lock.yaml
+#
+# The commit of each sibling repo that this repo's CI and
+# `scripts/checkout-deps.sh --pinned` build against.
+#
+# This file belongs to mod-users's build, the way bun.lock belongs to its
+# GUI build. Sibling repos carry their own lockfiles for their own builds;
+# those are NOT consulted here. That is what makes the pin set flat by
+# construction: app-mftodo depends on both mod-users and mod-core, and
+# mod-users itself depends on mod-core, but only this file is read, so
+# mod-core can only ever resolve to one SHA -- which is all Go `replace`
+# (one path per module) can honor. app-mftodo/versions.lock.yaml also pins
+# mod-core, independently -- that is intentional, not drift; each lockfile
+# answers "which mod-core does *this* repo's build use."
+#
+# Keys are authored intent: this repo's real sibling set, derived from
+# api/go.mod's replace directives (core-model, core-api, audit-model,
+# audit-api, authz-model, authz-api -- the intra-repo
+# `mod-users/model => ../model` replace is not a sibling key). The source
+# `scripts/link-siblings.sh`'s SIBLINGS array and CI's sibling checkouts are
+# generated from these same keys. SHAs are derived -- never hand-edit them;
+# run `make pins.update` (see docs/mf-standards/versions-lockfile.md).
+#
+# Local and worktree builds deliberately float against whatever is checked
+# out on disk; these pins govern CI and fresh clones only. `make pins.check`
+# reports the difference without changing anything.
+#
+# Deliberately absent:
+#   docs-mf-standards -- a git submodule at docs/mf-standards, already pinned
+#     by this repo's own tree. A key here would be a second, conflicting pin.
+#   mfgen             -- a build tool, out of scope for this plan.
+#
+# Orthogonal to manifest-spec.md's reserved published-mode design: these are
+# git commits of repositories consumed by shell/CI provisioning, not Go module
+# versions consumed by mfgen codegen. See docs/mf-standards/versions-lockfile.md.
+
+lockfileVersion: 1
+
+# Clone URLs are composed as <host>/<owner>/<key>. checkout-deps.sh uses the
+# SSH form locally and the token-authenticated HTTPS form when
+# MODULEFORGE_READ_TOKEN is set. No credential is stored in this file.
+host:  github.com
+owner: moduleforge
+
+pins:
+  mod-core:  14fa8f5a59e4350be6a14477d425e604eab1b44f  # 2026-07-23 plan: remove followup [Yghm]
+  mod-audit: 49498bfec4733df0a51e54a64933498411e71519  # 2026-07-25 update gitignore
+  mod-authz: 35fbcc8ab6519070bab717e25cb73d80a9813d55  # 2026-07-25 removed unecessary package.json

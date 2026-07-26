@@ -8,12 +8,16 @@
 # wiring convention (make preflight as a prerequisite of build/test/lint):
 # docs/mf-standards/building-common.md#building-inside-a-task-worktree
 #
-# SIBLINGS below is derived from api/go.mod's replace directives:
-# core-model => ../../mod-core/model, core-api => ../../mod-core/api,
-# audit-model => ../../mod-audit/model, audit-api => ../../mod-audit/api,
-# authz-model => ../../mod-authz/model, authz-api => ../../mod-authz/api.
-# (The mod-users/model => ../model replace is intra-repo and needs no
-# symlink.)
+# SIBLINGS is read from versions.lock.yaml's `pins:` keys rather than
+# hand-maintained here -- the lockfile is the single generation source for
+# this repo's sibling set (go-module-ci-pinning plan, decision D3), so this
+# script and checkout-deps.sh/update-pins.sh can never drift apart on which
+# siblings exist. The lockfile's key set matches api/go.mod's replace
+# directives: core-model => ../../mod-core/model, core-api =>
+# ../../mod-core/api, audit-model => ../../mod-audit/model, audit-api =>
+# ../../mod-audit/api, authz-model => ../../mod-authz/model, authz-api =>
+# ../../mod-authz/api. (The mod-users/model => ../model replace is
+# intra-repo and needs no symlink, and correctly has no lockfile key.)
 #
 # Env:
 #   MODULEFORGE_SIBLINGS_DIR — override the aggregate directory that holds
@@ -22,12 +26,6 @@
 
 set -euo pipefail
 
-# TRANSIENT: mod-users will carry a versions.lock.yaml (Phase 3 of the
-# go-module-ci-pinning plan). Phase 3 replaces this literal array with a
-# read of the lockfile's `pins:` keys — that becomes the single generation
-# source; this is the one-phase gap before it exists, not a regression.
-SIBLINGS=(mod-core mod-audit mod-authz)
-
 # git rev-parse --git-common-dir always points at the *main* checkout's .git
 # directory, even when invoked from inside a linked worktree — this is what
 # lets the script find the aggregate root and the one shared `worktrees/`
@@ -35,6 +33,30 @@ SIBLINGS=(mod-core mod-audit mod-authz)
 GIT_COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir)"
 MAIN_REPO_ROOT="$(dirname "$GIT_COMMON_DIR")"
 WORKTREES_DIR="$MAIN_REPO_ROOT/worktrees"
+
+# versions.lock.yaml lives at the main checkout's root regardless of how
+# deep this invocation is nested (same reasoning as MAIN_REPO_ROOT above) --
+# a worktree does not carry its own copy of the lockfile.
+LOCKFILE="$MAIN_REPO_ROOT/versions.lock.yaml"
+if [ ! -f "$LOCKFILE" ]; then
+	echo "link-siblings: ERROR: lockfile not found: $LOCKFILE" >&2
+	exit 1
+fi
+
+# Pin lines are the only lines indented by exactly two spaces (host/owner/
+# lockfileVersion are top-level, zero-indent) -- the same plain regex scan
+# checkout-deps.sh and update-pins.sh use, deliberately not a YAML library.
+declare -a SIBLINGS
+while IFS= read -r line; do
+	if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+[0-9a-fA-F]{40} ]]; then
+		SIBLINGS+=("${BASH_REMATCH[1]}")
+	fi
+done <"$LOCKFILE"
+
+if [ "${#SIBLINGS[@]}" -eq 0 ]; then
+	echo "link-siblings: ERROR: no pins found in $LOCKFILE" >&2
+	exit 1
+fi
 
 if [ -n "${MODULEFORGE_SIBLINGS_DIR:-}" ]; then
 	AGGREGATE_DIR="$(cd "$MODULEFORGE_SIBLINGS_DIR" && pwd)"

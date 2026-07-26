@@ -39,6 +39,32 @@ preflight.api:       ; @$(MAKE) -C api     preflight
 preflight.gui:       ; @$(MAKE) -C gui     preflight
 
 # ---------------------------------------------------------------------------
+# Pins — versions.lock.yaml bootstrap
+# ---------------------------------------------------------------------------
+
+.PHONY: pins.check
+# pins.check reports pin-vs-HEAD drift for every sibling in
+# versions.lock.yaml. Read-only; exits 0 even when drift is found -- local
+# checkouts deliberately float, pins govern CI and fresh clones only. See
+# docs/mf-standards/versions-lockfile.md.
+pins.check:
+	./scripts/checkout-deps.sh --verify
+
+.PHONY: pins.update
+# pins.update rewrites versions.lock.yaml's SHAs from each pinned sibling's
+# current origin/main (never local HEAD). REPOS restricts to a subset, e.g.
+# make pins.update REPOS="mod-core".
+pins.update:
+	./scripts/update-pins.sh $(REPOS)
+
+.PHONY: pins.sync
+# pins.sync materializes the pinned siblings into an isolated tree via
+# checkout-deps.sh --pinned. Never touches an existing checkout -- pass
+# INTO=<dir> to choose where (default: next to this repo's checkout).
+pins.sync:
+	./scripts/checkout-deps.sh --pinned $(if $(INTO),--into $(INTO))
+
+# ---------------------------------------------------------------------------
 # Aggregate / canonical targets
 # ---------------------------------------------------------------------------
 
