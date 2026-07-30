@@ -3,8 +3,11 @@
 // Policy: actors with a wildcard grant in the grants table can perform any
 // operation (checkWildcardGrant short-circuit, replacing the previous is_admin
 // column-based approach). All other actors must have an explicit grant in the
-// grants table, resolved via recursive actor/target group CTEs, OR satisfy the
-// per-resource "own" predicate (actor IS the entity).
+// grants table, resolved via recursive actor/target group CTEs, OR own the
+// target entity outright (entities.owner_id equals the effective actor's
+// entity id). Ownership is a single, resource-agnostic predicate: it is not
+// scoped per resource type, and owning the target satisfies every operation
+// on that entity, not just reads.
 //
 // The implementation resolves the acting user from ctx via opctx.ActorEntityID
 // (and opctx.SudoActorEntityID for assume sessions).
@@ -13,11 +16,14 @@
 // denied for non-wildcard-admin actors. A wildcard grant satisfies nil-target
 // operations because the wildcard check runs before the nil-target denial.
 //
-// The Authorizer's single-row check issues a recursive-CTE SQL query that walks
-// UP from the actor through actor groups, then checks for a grant between any
-// actor-chain member and any target-chain member (target walking UP to target
-// groups), for any operation in the SatisfiedBy closure. If no grant is found,
-// a per-resource own-predicate check is performed in Go.
+// The Authorizer's single-row check issues one recursive-CTE SQL query
+// (checkGrantOrOwn) that walks UP from the actor through actor groups, checks
+// for a grant between any actor-chain member and any target-chain member
+// (target walking UP to target groups) for any operation in the SatisfiedBy
+// closure, OR-ed with a check that the target entity's owner_id equals the
+// effective actor's entity id. A NULL owner_id matches no actor, so entities
+// that keep a NULL owner by design (corporation, authz_actor_group,
+// authz_target_group) stay inaccessible via this predicate.
 package authz
 
 import (
@@ -64,6 +70,11 @@ type Authorizer struct {
 	// check without requiring a live database. If nil, checkWildcardGrant is
 	// used instead. Only set this field in tests.
 	wildcardGrantFn func(ctx context.Context, actorEntityID int64, opIDs []int32) (bool, error)
+
+	// grantOrOwnFn is used internally by tests to stub the combined grant-or-
+	// own check without requiring a live database. If nil, checkGrantOrOwn is
+	// used instead. Only set this field in tests.
+	grantOrOwnFn func(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error)
 }
 
 // New constructs an Authorizer.
@@ -91,8 +102,9 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 //  4. If target == nil: return ErrForbidden (no entity to resolve a grant
 //     against; only a wildcard grant, already checked in step 3, can satisfy
 //     a nil-target operation).
-//  5. If target != nil: run checkGrant (recursive-CTE) and per-resource own-
-//     predicate checks.
+//  5. If target != nil: run checkGrantOrOwn — a single recursive-CTE query
+//     that resolves a grant via the actor/target group chains, OR-ed with an
+//     entities.owner_id ownership check against the target.
 func (a *Authorizer) Authorize(ctx context.Context, operation string, target *int64) error {
 	// Resolve effective actor. Assumed actor takes priority over real actor.
 	actorEntityID, ok := effectiveActor(ctx)
@@ -146,45 +158,27 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 		// a grant or own-predicate against. Type-level checks — a non-nil
 		// target that is a type entity ID rather than an owned resource, e.g.
 		// registered actor-group/target-group "create" calls — are supported;
-		// they fall through to checkGrant below like any other non-nil target.
+		// they fall through to checkGrantOrOwn below like any other non-nil
+		// target.
 		// With a nil target there is nothing to resolve a grant against, so
 		// only a wildcard grant (already checked above) can satisfy this call.
 		return ErrForbidden
 	}
 
-	// Run the recursive-CTE grant check.
-	granted, err := a.checkGrant(ctx, actorEntityID, *target, opIDs)
+	// Run the recursive-CTE grant check, OR-ed with an entities.owner_id
+	// ownership check against the target — one query, one DB round-trip.
+	// Owning the target satisfies every operation on that entity (read,
+	// update, delete, assume, grant, revoke, ...); the own arm is not gated
+	// on the operation or on opIDs, mirroring the list-side own-arm in
+	// mod-core/api/authz/setup/grant_table.go, which is scoped only by the
+	// caller's op_ids closure and never by op identity within the arm
+	// itself. A genuine DB error propagates to the caller rather than being
+	// swallowed into a denial.
+	granted, err := a.checkGrantOrOwnDispatch(ctx, actorEntityID, *target, opIDs)
 	if err != nil {
 		return err
 	}
 	if granted {
-		return nil
-	}
-
-	// Per-resource own-predicate: check if the actor IS the target entity.
-	// For natural_person, corporation, service_account, legal_entity: the actor's
-	// entity_id equals the target's entity_id when it's their own row.
-	//
-	// Per-resource own semantics (matches GrantTableGenerator and AdminOrOwnGenerator):
-	//   - natural_person, service_account: entity_id = actor (covered here).
-	//   - corporation: no own predicate; non-admins are never corporations.
-	//   - legal_entity: delegates to natural_person/corporation — covered via
-	//     entity_id equality for natural_persons.
-	//   - tag: owner_id or subject_id = actor. Requires a separate tag query;
-	//     covered by the tagOwnsCheck below.
-	if *target == actorEntityID {
-		return nil // actor IS the entity (natural_person / service_account own-predicate)
-	}
-
-	// Tag own-predicate: check if actor owns or is subject of the tag.
-	// This requires a tag table lookup, which we perform via the authzQ pool.
-	// If the lookup returns no-rows, the entity is not a tag — deny.
-	tagOwned, err := a.checkTagOwnership(ctx, actorEntityID, *target)
-	if err != nil {
-		// Lookup failure or entity-not-a-tag maps to forbidden (deny-safe).
-		return ErrForbidden
-	}
-	if tagOwned {
 		return nil
 	}
 
@@ -210,15 +204,25 @@ func (a *Authorizer) checkWildcardGrantDispatch(ctx context.Context, actorEntity
 	return a.checkWildcardGrant(ctx, actorEntityID, opIDs)
 }
 
+// checkGrantOrOwnDispatch calls grantOrOwnFn if set (test stub), otherwise
+// delegates to checkGrantOrOwn.
+func (a *Authorizer) checkGrantOrOwnDispatch(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error) {
+	if a.grantOrOwnFn != nil {
+		return a.grantOrOwnFn(ctx, actorEntityID, targetEntityID, opIDs)
+	}
+	return a.checkGrantOrOwn(ctx, actorEntityID, targetEntityID, opIDs)
+}
+
 // checkWildcardGrant queries the grants table for a wildcard grant:
 // a row where actor_id is in the actor's transitive group chain and
 // target_id IS NULL and operation_id is in the opIDs closure.
 //
 // This implements the B4 mechanism from the Final design: a Go-side
-// EXISTS query before checkGrant, replacing the is_admin column short-circuit.
+// EXISTS query before checkGrantOrOwn, replacing the is_admin column
+// short-circuit.
 //
-// The query uses the same ActorChain CTE as checkGrant for consistency and
-// so that actor-group-based wildcard grants work correctly.
+// The query uses the same ActorChain CTE as checkGrantOrOwn for consistency
+// and so that actor-group-based wildcard grants work correctly.
 func (a *Authorizer) checkWildcardGrant(ctx context.Context, actorEntityID int64, opIDs []int32) (bool, error) {
 	const wildcardCheckSQL = `
 WITH RECURSIVE
@@ -244,7 +248,8 @@ SELECT EXISTS(
 	return exists, nil
 }
 
-// checkGrant runs the recursive-CTE grant check:
+// checkGrantOrOwn runs the recursive-CTE grant check, OR-ed with a generic,
+// resource-agnostic ownership check against entities.owner_id:
 //
 //	WITH RECURSIVE
 //	    ActorChain AS (
@@ -257,16 +262,37 @@ SELECT EXISTS(
 //	        UNION
 //	        SELECT atgm.group_id FROM authz_target_group_members atgm JOIN TargetChain tc ON atgm.member_id = tc.tid
 //	    )
-//	SELECT EXISTS(
-//	    SELECT 1 FROM grants g
-//	    JOIN ActorChain ac ON g.actor_id = ac.aid
-//	    JOIN TargetChain tc ON g.target_id = tc.tid
-//	    WHERE g.operation_id = ANY(opIDs)
-//	)
+//	SELECT
+//	    EXISTS (
+//	        SELECT 1 FROM grants g
+//	        JOIN ActorChain ac ON g.actor_id = ac.aid
+//	        JOIN TargetChain tc ON g.target_id = tc.tid
+//	        WHERE g.operation_id = ANY(opIDs)
+//	    )
+//	    OR EXISTS (
+//	        SELECT 1 FROM entities e
+//	        WHERE e.id = targetEntityID
+//	          AND e.owner_id = actorEntityID
+//	    )
 //
-// Returns true if a matching grant exists.
-func (a *Authorizer) checkGrant(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error) {
-	const grantCheckSQL = `
+// The ownership arm is a single, resource-agnostic predicate — it is not
+// scoped per resource type, and it is not gated on the operation or on
+// opIDs: owning the target satisfies every operation on that entity. It is
+// also not scoped by type_is_or_descends_from, unlike the analogous
+// list-side own-arm in mod-core/api/authz/setup/grant_table.go — that
+// predicate is load-bearing there only because that arm scans all of
+// entities; here the query already has one specific target entity id, so
+// type scoping would be meaningless.
+//
+// e.owner_id = actorEntityID evaluates to NULL (not true) when owner_id IS
+// NULL, so a NULL-owner entity — corporation, authz_actor_group,
+// authz_target_group, by design — matches no actor and stays inaccessible
+// via this predicate. No COALESCE / IS NOT DISTINCT FROM is used, since
+// either would defeat that semantics.
+//
+// Returns true if a matching grant exists or the actor owns the target.
+func (a *Authorizer) checkGrantOrOwn(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error) {
+	const grantOrOwnCheckSQL = `
 WITH RECURSIVE
     ActorChain AS (
         SELECT $1::bigint AS aid
@@ -282,39 +308,23 @@ WITH RECURSIVE
         FROM authz_target_group_members atgm
         JOIN TargetChain tc ON atgm.member_id = tc.tid
     )
-SELECT EXISTS(
-    SELECT 1 FROM grants g
-    JOIN ActorChain ac ON g.actor_id = ac.aid
-    JOIN TargetChain tc ON g.target_id = tc.tid
-    WHERE g.operation_id = ANY($3::int[])
-)`
+SELECT
+    EXISTS (
+        SELECT 1 FROM grants g
+        JOIN ActorChain ac ON g.actor_id = ac.aid
+        JOIN TargetChain tc ON g.target_id = tc.tid
+        WHERE g.operation_id = ANY($3::int[])
+    )
+    OR EXISTS (
+        SELECT 1 FROM entities e
+        WHERE e.id = $2::bigint
+          AND e.owner_id = $1::bigint
+    )`
 
 	var exists bool
-	err := a.pool.QueryRow(ctx, grantCheckSQL, actorEntityID, targetEntityID, opIDs).Scan(&exists)
+	err := a.pool.QueryRow(ctx, grantOrOwnCheckSQL, actorEntityID, targetEntityID, opIDs).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
 	return exists, nil
-}
-
-// checkTagOwnership checks whether actorEntityID owns the tag with entity_id =
-// targetEntityID (owner_id = actor OR subject_id = actor). Returns false if the
-// entity is not a tag (pgx.ErrNoRows or a non-tag type).
-//
-// This implements the tag own-predicate from AdminOrOwnGenerator:
-//
-//	t.owner_id = p_actor_entity_id OR t.subject_id = p_actor_entity_id
-func (a *Authorizer) checkTagOwnership(ctx context.Context, actorEntityID, targetEntityID int64) (bool, error) {
-	const tagOwnerSQL = `
-SELECT EXISTS(
-    SELECT 1 FROM tags t
-    WHERE t.entity_id = $1
-      AND (t.owner_id = $2 OR t.subject_id = $2)
-)`
-	var owned bool
-	err := a.pool.QueryRow(ctx, tagOwnerSQL, targetEntityID, actorEntityID).Scan(&owned)
-	if err != nil {
-		return false, err
-	}
-	return owned, nil
 }

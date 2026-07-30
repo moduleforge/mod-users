@@ -15,6 +15,14 @@ func (a *Authorizer) SetWildcardGrantFn(fn func(ctx context.Context, actorEntity
 	a.wildcardGrantFn = fn
 }
 
+// SetGrantOrOwnFn sets the grant-or-own override function on the Authorizer.
+// Used by unit tests to inject a grant-or-own outcome (recursive-CTE grant
+// check OR-ed with the entities.owner_id ownership check) without a live
+// Postgres.
+func (a *Authorizer) SetGrantOrOwnFn(fn func(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error)) {
+	a.grantOrOwnFn = fn
+}
+
 // stubOpReg is a minimal OperationRegistry that accepts any operation slug and
 // returns a slice containing a dummy op ID. Used by unit tests that need to
 // exercise the Authorize flow without a real authz_operations table.
@@ -52,7 +60,8 @@ var errUnknownOp = ErrForbidden
 // NewWithStubOpReg builds an Authorizer suitable for unit tests.
 // It uses a real OperationRegistry loaded from in-memory stubs, and sets
 // wildcardGrantFn to the given function. Pool is nil; tests that reach
-// checkGrant or checkTagOwnership will panic (those paths require a DB).
+// checkGrantOrOwn without first calling SetGrantOrOwnFn will panic (that
+// path requires a DB).
 //
 // The stub OperationRegistry contains the standard seed operations so that
 // SatisfiedBy("read"), SatisfiedBy("manage"), etc. all return non-error results.
