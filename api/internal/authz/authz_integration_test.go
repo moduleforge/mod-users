@@ -3,19 +3,35 @@
 package authz_test
 
 // authz_integration_test.go verifies the wildcard-grant admin policy after
-// the removal of the is_admin column (Task 2 of the is_admin-removal phase).
+// the removal of the is_admin column (Task 2 of the is_admin-removal phase),
+// and (scenario 9) the generic entities.owner_id own-predicate that folded
+// into checkGrantOrOwn (see the authz-single-row-own plan, Phase 1 Task 1).
 //
 // Run with:
 //
-//	cd users-module/api && \
-//	  AUTHZ_DEV_PG_HOST=$(docker inspect users-module-postgres | \
-//	    grep -m1 '"IPAddress"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1) \
+//	cd mod-users && make dev.start   # or an equivalent Postgres; see below
+//	cd mod-users/api && \
+//	  AUTHZ_DEV_PG_HOST=localhost \
 //	  go test -tags=integration -p 1 -v ./internal/authz/...
 //
-// Container-IP convention: "localhost:5432" resolves to the test-process loopback,
-// not the Docker container. Use AUTHZ_DEV_PG_HOST set to the container's
-// Docker-network IP (e.g. 172.x.x.x), or let the fallback resolve it via
-// docker inspect. See project MEMORY.md reference_atlas_dev_shadow.md.
+// Host-resolution convention: on a Docker Desktop for macOS host, the shared
+// "users-module-postgres" container (reused by mod-core, mod-audit,
+// mod-authz, and mod-users' own integration suites — see
+// mod-core/api/authz/setup/grant_table_integration_test.go) is reachable at
+// "localhost" and NOT at the container's docker-network IP; the opposite of
+// what resolveHost's docker-inspect fallback below assumes. Set
+// AUTHZ_DEV_PG_HOST=localhost explicitly rather than relying on the
+// fallback. This cost prior tasks real time (authz-entity-ownership
+// follow-ups 4gUq, GBUZ) — do not rediscover it.
+//
+// Migrations: this suite migrates mod-users' own composed schema
+// (model/schema/migrations, core + authz + users, produced by
+// `mod-users/model/Makefile`'s `compose` target), resolved relative to this
+// file's own location (see migrationsDir below) rather than a hard-coded
+// absolute path. If the composed dir is missing, checkPrereqs treats it as
+// a missing prerequisite and the suite skips with a clear message; run
+// `make -C model compose` (or `make dev.start`, which builds it as a
+// dependency) first.
 //
 // Scenarios verified (per Final design step 9):
 //  1. Wildcard manage admin — passes every Authorize check including nil-target.
@@ -26,20 +42,30 @@ package authz_test
 //  6. Revocation — deleting the wildcard manage grant demotes the user immediately.
 //  7. Nil-target Authorize — wildcard admins pass; non-wildcards are denied.
 //  8. OIDC-role admin path removed — JWT roles claim does NOT confer admin privileges.
+//  9. Generic owner predicate — a corporation entity (a type that never
+//     self-owns) created with an explicit owner_id is accessible to its
+//     owner for every operation and denied to everyone else; a NULL-owner
+//     corporation is denied to all; ownership does not leak across entities;
+//     and single-row Authorize agrees with the list-side access function
+//     when the real access functions are installed.
 
 import (
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authzapi "github.com/moduleforge/authz-api/authz"
 	authzdb "github.com/moduleforge/authz-model/db"
+	authzsetup "github.com/moduleforge/core-api/authz/setup"
 	"github.com/moduleforge/core-api/opctx"
 	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/mod-users/api/internal/authz"
@@ -57,8 +83,26 @@ var (
 
 const integDevDB = "authz_integ_users"
 
-// integMigrationsDir is the composed schema (core + authz + users + ...).
-const integMigrationsDir = "/Users/zane/playground/user-components/users-module/model/schema/migrations"
+// integMigrationsDirEnvVar overrides migrationsDir()'s resolved path, for
+// environments where the test binary does not run from its normal location
+// inside a mod-users checkout. Unset by default.
+const integMigrationsDirEnvVar = "AUTHZ_INTEG_MIGRATIONS_DIR"
+
+// migrationsDir resolves the composed schema dir (core + authz + users,
+// produced by mod-users/model/Makefile's `compose` target) relative to this
+// source file's own location, rather than a hard-coded, machine-specific
+// absolute path (the prior convention, which broke on every checkout but
+// the one it was authored on). This file lives at
+// <repo>/api/internal/authz/authz_integration_test.go; the composed schema
+// lives at <repo>/model/schema/migrations. Mirrors the precedent fix in
+// mod-core/api/authz/setup/grant_table_integration_test.go (migrationsDir).
+func migrationsDir() string {
+	if d := os.Getenv(integMigrationsDirEnvVar); d != "" {
+		return d
+	}
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "model", "schema", "migrations")
+}
 
 // ---------------------------------------------------------------------------
 // TestMain
@@ -108,7 +152,18 @@ func checkPrereqs() error {
 	if _, err := exec.LookPath("goose"); err != nil {
 		return fmt.Errorf("goose not in PATH: %w", err)
 	}
+	if dir := migrationsDir(); !dirExists(dir) {
+		return fmt.Errorf(
+			"composed migrations dir %s not found — run `make -C model compose` (or `make dev.start`, which builds it as a dependency) first, or set %s",
+			dir, integMigrationsDirEnvVar)
+	}
 	return nil
+}
+
+// dirExists reports whether path exists and is a directory.
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func resolveHost() string {
@@ -147,7 +202,7 @@ func resetDB(pgHost string) error {
 	}
 
 	dsn := fmt.Sprintf("postgres://users:users@%s:5432/%s?sslmode=disable", pgHost, integDevDB)
-	cmd := exec.Command("goose", "-dir", integMigrationsDir, "postgres", dsn, "up") //nolint:gosec
+	cmd := exec.Command("goose", "-dir", migrationsDir(), "postgres", dsn, "up") //nolint:gosec // fixed args/resolved paths, not user input
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("goose up: %w\n%s", err, out)
 	}
@@ -162,6 +217,16 @@ func wireServices(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	integOpReg = opReg
 	integAZ = authz.New(authzQ, opReg, pool)
+
+	// Install the real accessible_corporation_ids_for_actor access function
+	// (0099_access_function_stubs.sql ships an empty-set stub; app startup
+	// normally replaces it via setup.ApplyFuncs). Scenario 9's list/single-row
+	// symmetry assertion runs this function directly, so it must be the real
+	// generic three-arm body, not the stub — otherwise the assertion would
+	// pass vacuously against an always-empty result set.
+	if err := authzsetup.ApplyFuncs(ctx, pool, authzsetup.NewGrantTableGenerator(), []string{"corporation"}); err != nil {
+		return fmt.Errorf("apply access functions: %w", err)
+	}
 	return nil
 }
 
@@ -265,6 +330,105 @@ ON CONFLICT DO NOTHING`
 // actorCtx returns a context with the given entity ID set as actor.
 func actorCtx(entityID int64) context.Context {
 	return opctx.WithActor(context.Background(), entityID)
+}
+
+// ---------------------------------------------------------------------------
+// Owner-predicate seed helpers (Scenario 9)
+// ---------------------------------------------------------------------------
+//
+// corporation is the subject: a concrete type that never self-owns (the
+// entities_owner_default_self trigger, migration 0013, matches only
+// natural_person and service_account descendants), and it exists in
+// mod-users' own composed schema, so these scenarios prove type-agnostic
+// ownership without depending on mod-tags or mod-tasks.
+
+// corporationTypeID resolves the 'corporation' type's internal ID.
+func corporationTypeID(t *testing.T) int64 {
+	t.Helper()
+	ctx := context.Background()
+	const typeSQL = `SELECT id FROM types WHERE slug = 'corporation'`
+	var typeID int64
+	if err := integPool.QueryRow(ctx, typeSQL).Scan(&typeID); err != nil {
+		t.Fatalf("corporationTypeID: resolve type: %v", err)
+	}
+	return typeID
+}
+
+// seedOwnedCorporation inserts entity -> legal_entity -> corporation with
+// owner_id set to ownerEntityID at INSERT time via CreateEntityWithOwner,
+// and returns the entity's internal ID.
+//
+// owner_id must be set at INSERT time, not via a follow-up UPDATE:
+// entities_owner_immutable (migration 0013) fires on any UPDATE OF
+// owner_id, including the first NULL -> value write, so a
+// CreateEntity-then-UPDATE seeding helper would fail with "entities:
+// owner_id is immutable after insert".
+func seedOwnedCorporation(t *testing.T, ownerEntityID int64, legalName string) (entityID int64) {
+	t.Helper()
+	ctx := context.Background()
+	coreQ := coredb.New(integPool)
+
+	ent, err := coreQ.CreateEntityWithOwner(ctx, coredb.CreateEntityWithOwnerParams{
+		FundamentalTypeID: corporationTypeID(t),
+		OwnerID:           pgtype.Int8{Int64: ownerEntityID, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("seedOwnedCorporation: create entity: %v", err)
+	}
+	entityID = ent.ID
+
+	if _, err := coreQ.CreateLegalEntity(ctx, entityID); err != nil {
+		t.Fatalf("seedOwnedCorporation: create legal_entity: %v", err)
+	}
+	if _, err := coreQ.CreateCorporation(ctx, coredb.CreateCorporationParams{EntityID: entityID, LegalName: legalName}); err != nil {
+		t.Fatalf("seedOwnedCorporation: create corporation: %v", err)
+	}
+	return entityID
+}
+
+// seedUnownedCorporation inserts entity -> legal_entity -> corporation via
+// plain CreateEntity (no owner argument), so owner_id stays NULL — matching
+// every real corporation-creation path in the system (see
+// mod-core/api/service/corporation.go, and the single-row-own-predicate
+// investigation note's per-type owner_id table: no creation path ever sets
+// a corporation's owner_id).
+func seedUnownedCorporation(t *testing.T, legalName string) (entityID int64) {
+	t.Helper()
+	ctx := context.Background()
+	coreQ := coredb.New(integPool)
+
+	ent, err := coreQ.CreateEntity(ctx, corporationTypeID(t))
+	if err != nil {
+		t.Fatalf("seedUnownedCorporation: create entity: %v", err)
+	}
+	entityID = ent.ID
+
+	if _, err := coreQ.CreateLegalEntity(ctx, entityID); err != nil {
+		t.Fatalf("seedUnownedCorporation: create legal_entity: %v", err)
+	}
+	if _, err := coreQ.CreateCorporation(ctx, coredb.CreateCorporationParams{EntityID: entityID, LegalName: legalName}); err != nil {
+		t.Fatalf("seedUnownedCorporation: create corporation: %v", err)
+	}
+	return entityID
+}
+
+// assertOwnerIDNull asserts, via direct SQL against entities, that
+// entityID's owner_id is NULL. Scenarios that depend on a NULL owner call
+// this before exercising Authorize, so a future change to
+// entities_owner_default_self's type matching (e.g. if 'corporation' were
+// ever added to the self-owning types) cannot make the scenario pass
+// vacuously.
+func assertOwnerIDNull(t *testing.T, entityID int64) {
+	t.Helper()
+	ctx := context.Background()
+	const ownerSQL = `SELECT owner_id FROM entities WHERE id = $1`
+	var ownerID *int64
+	if err := integPool.QueryRow(ctx, ownerSQL, entityID).Scan(&ownerID); err != nil {
+		t.Fatalf("assertOwnerIDNull: query entity %d: %v", entityID, err)
+	}
+	if ownerID != nil {
+		t.Fatalf("assertOwnerIDNull: entity %d has owner_id = %d, want NULL", entityID, *ownerID)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -504,8 +668,167 @@ func TestInteg_OIDCRoleAdminPathRemoved(t *testing.T) {
 		t.Errorf("OIDC role path: update other user: got nil, want ErrForbidden")
 	}
 
-	// Own entity (entity_id == actor) should still pass for read (own-predicate).
+	// Own entity read should still pass — but now because oidcUserID's
+	// natural_person entity self-owns via entities_owner_default_self
+	// (migration 0013: NEW.owner_id := NEW.id for natural_person /
+	// service_account descendants), which checkGrantOrOwn's generic
+	// entities.owner_id own-arm resolves like any other ownership, not
+	// because target == actor. Before task 001, the old code recognized
+	// this case via a hardcoded `*target == actorEntityID` identity check;
+	// that check is gone, and this assertion now exercises the same
+	// generic own-arm Scenario 9 proves against a corporation (a type that
+	// never self-owns), so the coincidence that oidcUserID's target equals
+	// its own actor ID is no longer load-bearing for this assertion to
+	// pass.
 	if err := integAZ.Authorize(ctx, "read", &oidcUserID); err != nil {
 		t.Errorf("OIDC role path: own entity read: got %v, want nil (own-predicate)", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 9: Generic owner predicate (entities.owner_id), proved against a
+// corporation — a concrete type that never self-owns via
+// entities_owner_default_self. Task 001 folded a generic "OR EXISTS (...
+// e.owner_id = actorEntityID)" arm into checkGrantOrOwn, replacing the old
+// *target == actorEntityID identity check and checkTagOwnership. Task 001's
+// unit seam proves the Go-side branching against a stubbed grantOrOwnFn;
+// only a live DB — here — proves the SQL, the NULL-owner semantics, and
+// that the predicate is genuinely type-agnostic.
+// ---------------------------------------------------------------------------
+
+// TestInteg_OwnerPredicate_OwnerAllowedAnyOperation seeds actor A and a
+// corporation entity with owner_id = A via seedOwnedCorporation, records no
+// grant of any kind, and asserts Authorize returns nil for read, update,
+// delete, and a non-CRUD verb (assume) — operation by operation, so the
+// requirement that the own-arm is not gated on the operation or on opIDs is
+// pinned per-operation rather than by a single passing call. This is
+// exactly the case that returned ErrForbidden before task 001: corporation
+// is not natural_person or service_account, so the old identity check never
+// matched, and checkTagOwnership cannot even run in mod-users' own schema
+// (no tags table).
+func TestInteg_OwnerPredicate_OwnerAllowedAnyOperation(t *testing.T) {
+	ownerID := seedUser(t, "owner-s9a@example.com", false)
+	corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9A")
+	ctx := actorCtx(ownerID)
+
+	for _, op := range []string{"read", "update", "delete", "assume"} {
+		if err := integAZ.Authorize(ctx, op, &corpID); err != nil {
+			t.Errorf("owner predicate: owner op=%q: got %v, want nil", op, err)
+		}
+	}
+}
+
+// TestInteg_OwnerPredicate_NonOwnerDenied is the non-owner mirror of
+// TestInteg_OwnerPredicate_OwnerAllowedAnyOperation: a second actor B, with
+// no grants and no ownership of A's corporation, is denied every operation
+// A is allowed on that same entity.
+func TestInteg_OwnerPredicate_NonOwnerDenied(t *testing.T) {
+	ownerID := seedUser(t, "owner-s9b@example.com", false)
+	nonOwnerID := seedUser(t, "nonowner-s9b@example.com", false)
+	corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9B")
+	ctx := actorCtx(nonOwnerID)
+
+	for _, op := range []string{"read", "update", "delete", "assume"} {
+		if err := integAZ.Authorize(ctx, op, &corpID); err == nil {
+			t.Errorf("owner predicate: non-owner op=%q: got nil, want ErrForbidden", op)
+		}
+	}
+}
+
+// TestInteg_OwnerPredicate_NullOwnerDenied seeds a corporation via
+// seedUnownedCorporation (plain CreateEntity — owner_id stays NULL, matching
+// every real corporation-creation path), asserts the NULL precondition by
+// direct SQL first via assertOwnerIDNull, then asserts both actor A and
+// actor B are denied read. e.owner_id = actorEntityID evaluates to NULL
+// (not true) when owner_id IS NULL, so the own-arm's EXISTS is false and a
+// NULL-owner entity matches no actor — see checkGrantOrOwn's doc comment in
+// authz.go.
+func TestInteg_OwnerPredicate_NullOwnerDenied(t *testing.T) {
+	actorA := seedUser(t, "actor-a-s9c@example.com", false)
+	actorB := seedUser(t, "actor-b-s9c@example.com", false)
+	corpID := seedUnownedCorporation(t, "Acme Corp S9C")
+
+	assertOwnerIDNull(t, corpID)
+
+	for _, actor := range []struct {
+		name string
+		id   int64
+	}{{"A", actorA}, {"B", actorB}} {
+		ctx := actorCtx(actor.id)
+		if err := integAZ.Authorize(ctx, "read", &corpID); err == nil {
+			t.Errorf("null-owner corporation: actor %s: got nil, want ErrForbidden", actor.name)
+		}
+	}
+}
+
+// TestInteg_OwnerPredicate_DoesNotLeakAcrossEntities seeds actor A owning
+// corporation X, and asserts A is denied read on both an unowned corporation
+// Y and a corporation Z owned by a different actor — guarding against a
+// mis-parameterized query that ignores the target id (the failure mode that
+// would make the own-arm allow everything, not just the actor's own row).
+func TestInteg_OwnerPredicate_DoesNotLeakAcrossEntities(t *testing.T) {
+	ownerID := seedUser(t, "owner-s9d@example.com", false)
+	otherOwnerID := seedUser(t, "other-owner-s9d@example.com", false)
+	ownedID := seedOwnedCorporation(t, ownerID, "Acme Corp S9D Owned")
+	unownedID := seedUnownedCorporation(t, "Acme Corp S9D Unowned")
+	otherOwnedID := seedOwnedCorporation(t, otherOwnerID, "Acme Corp S9D OtherOwned")
+	ctx := actorCtx(ownerID)
+
+	if err := integAZ.Authorize(ctx, "read", &ownedID); err != nil {
+		t.Errorf("cross-entity isolation: owned entity: got %v, want nil", err)
+	}
+	if err := integAZ.Authorize(ctx, "read", &unownedID); err == nil {
+		t.Errorf("cross-entity isolation: unowned entity: got nil, want ErrForbidden")
+	}
+	if err := integAZ.Authorize(ctx, "read", &otherOwnedID); err == nil {
+		t.Errorf("cross-entity isolation: other-owned entity: got nil, want ErrForbidden")
+	}
+}
+
+// TestInteg_OwnerPredicate_ListSingleRowSymmetry is the plan's headline
+// claim: for the owned corporation, single-row Authorize("read", &owned)
+// succeeds, and the SAME row is returned by the list-side
+// accessible_corporation_ids_for_actor access function. wireServices
+// installs the REAL generic three-arm function body via
+// setup.ApplyFuncs/GrantTableGenerator (not the empty-set stub
+// 0099_access_function_stubs.sql ships, which app startup normally replaces
+// via setup.ApplyFuncs) — so this assertion cannot pass vacuously against
+// an always-empty result set.
+func TestInteg_OwnerPredicate_ListSingleRowSymmetry(t *testing.T) {
+	ownerID := seedUser(t, "owner-s9e@example.com", false)
+	corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9E")
+	ctx := actorCtx(ownerID)
+
+	if err := integAZ.Authorize(ctx, "read", &corpID); err != nil {
+		t.Fatalf("list/single-row symmetry: single-row Authorize: got %v, want nil", err)
+	}
+
+	readOpIDs, err := integOpReg.SatisfiedBy("read")
+	if err != nil {
+		t.Fatalf("list/single-row symmetry: SatisfiedBy(read): %v", err)
+	}
+
+	const accessSQL = `SELECT entity_id FROM accessible_corporation_ids_for_actor($1, $2)`
+	rows, err := integPool.Query(context.Background(), accessSQL, ownerID, readOpIDs)
+	if err != nil {
+		t.Fatalf("list/single-row symmetry: query access function: %v", err)
+	}
+	defer rows.Close()
+
+	found := false
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("list/single-row symmetry: scan: %v", err)
+		}
+		if id == corpID {
+			found = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("list/single-row symmetry: rows: %v", err)
+	}
+	if !found {
+		t.Errorf("list/single-row symmetry: accessible_corporation_ids_for_actor(%d, ...) did not include owned corporation %d — single-row Authorize and the list-side access function disagree", ownerID, corpID)
 	}
 }
