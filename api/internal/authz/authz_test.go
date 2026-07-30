@@ -273,8 +273,9 @@ func TestAuthorize_NullOwnerTarget_Denied(t *testing.T) {
 
 // TestAuthorize_GrantOrOwnDBError verifies that a genuine DB error from the
 // combined grant-or-own check propagates to the caller rather than being
-// silently mapped to ErrForbidden (the old checkTagOwnership swallow-and-
-// deny behavior this task removes).
+// silently mapped to ErrForbidden (the old removed per-type tag-ownership
+// query used to swallow its lookup error into a deny; this replacement does
+// not).
 func TestAuthorize_GrantOrOwnDBError(t *testing.T) {
 	dbErr := errors.New("pool connection lost")
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
