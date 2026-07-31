@@ -97,11 +97,17 @@ make clean           # remove build artifacts, DB data, and locally-built images
 
 ## Database migrations
 
-Migrations are managed with goose in `model/migrations/`. They run automatically at host-app startup, via the `model/migrations` package's embedded `//go:embed` filesystem and `Migrate` function — the host app's generated `main.go` invokes it against this module's own dedicated `goose_db_version_users` tracking table. To run or roll back manually:
+Migrations are managed with goose. The `.sql` migration files live in `model/migrations/sql/`;
+`model/migrations/migrate.go` (one level up) embeds them and exposes the `Migrate` function the
+host app's generated `main.go` invokes at startup against this module's own dedicated
+`goose_db_version_users` tracking table. The two are split into separate directories because
+`goose validate`'s CLI globs every `*.go`/`*.sql` file in the directory it is pointed at and
+hard-fails on any non-migration `.go` helper file it finds there — `sql/` keeps that directory
+migration-only. To run or roll back manually:
 ```sh
 cd model
-goose -dir migrations postgres "$DB_URL" up
-goose -dir migrations postgres "$DB_URL" down
+goose -dir migrations/sql postgres "$DB_URL" up
+goose -dir migrations/sql postgres "$DB_URL" down
 ```
 
 Each module numbers its own migrations independently starting from 1, isolated in its own `goose_db_version_<module>` table — modules no longer coordinate a shared global numbering space. Cross-module ordering (when one module's migrations depend on another's schema) is carried by the manifest's `migrations.after` field, not by range allocation. `mod-users` declares `after: [core]` because its migrations FK `mod-core`'s `legal_entities` table and, as of the apps-decoupling rewire, `mod-core`'s `apps` table too (`user_accounts.default_app_id`, `apps_user_accounts.app_id`) — `apps` moved from mod-users to mod-core as an entity subtype, and mod-users retains only the `apps_user_accounts` membership join against it. See `docs-mf-standards/manifest-spec.md` §5 for the full convention.
@@ -152,7 +158,8 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 | `api/openapi.yaml` | Authoritative REST API specification |
 | `api/handlers/handlers.go` | Public facade re-exporting handler types/constructors/route-registration functions from `api/internal/handlers/` — the only handlers package external modules (host apps) can import. See Conventions below. |
 | `model/schema/` | Postgres schema definitions (source of truth for table structure) |
-| `model/migrations/` | goose migration files (numbered, in order) |
+| `model/migrations/sql/` | goose migration files (numbered, in order) |
+| `model/migrations/migrate.go` | Embeds `model/migrations/sql/*.sql` and exposes `Migrate` |
 | `model/queries/` | SQL queries consumed by sqlc |
 | `model/db/` | sqlc-generated Go query code (committed; do not edit by hand) |
 | `gui/src/components/` | React UI components |
