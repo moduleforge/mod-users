@@ -13,7 +13,7 @@ This file covers Claude Code-specific configuration and guidance. For build comm
 ## Known gotchas
 
 - **`make clean.build` removes `model/db/`** — restore with `git checkout HEAD -- model/db/` before running Go builds.
-- **yalc link required for gui/ builds/typecheck** — `gui/package.json` declares `@moduleforge/core-gui` only as an optional peer dependency, so a fresh `bun install` succeeds without it. But `src` still imports `@moduleforge/core-gui` (sidebar-nav, ui/dialog, error-message), so `make build.gui` and `make lint.gui` still need it resolved via the `yalc add` step from AGENTS.md First-time setup.
+- **`mod-core/gui` must be built before `gui/` builds/typechecks** — `gui/package.json` declares `@moduleforge/core-gui` only as an optional peer dependency, so a fresh `bun install` succeeds without it. But `src` imports `@moduleforge/core-gui` directly in over a dozen files (sidebar-nav, ui/dialog, error-message, auth-page, login-form, register-form, forgot/reset-password pages, email-code-page, oidc-callback-page, lib/api.ts), so `make build.gui` and `make lint.gui` still need it resolved. This repo's own root `package.json` is a bun workspace whose `workspaces` array includes `../mod-core/gui` as a sibling member — bun resolves the peer against that member directly, no yalc, no registry lookup. Run `bun run build` in the sibling `mod-core/gui` (not bare `tsup` — `dist/index.css` needs the `build:css` step) before building/linting this repo's `gui/`. See AGENTS.md First-time setup.
 
 ## File-editing scope
 
