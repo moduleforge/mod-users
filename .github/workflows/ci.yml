@@ -122,7 +122,7 @@ jobs:
       # assumed -- a `bun install` with no core-gui resolution (core-gui is only an
       # *optional* peer dependency, so bare install succeeds) still leaves `make
       # lint.gui`/`make build.gui` failing. `gui/src` imports @moduleforge/core-gui
-      # directly in a dozen-plus files (sidebar-nav, ui/dialog, error-message, auth-page,
+      # directly in eleven files (sidebar-nav, ui/dialog, error-message, auth-page,
       # login-form, register-form, forgot/reset-password pages, email-code-page,
       # oidc-callback-page, lib/api.ts -- not just the three a prior CLAUDE.md gotcha note
       # named): `tsc --noEmit` reports TS2307 on every one of them, and tsup's DTS build
@@ -203,12 +203,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with: { path: mod-users }
 
-      - name: Materialize pinned siblings
-        working-directory: mod-users
-        env:
-          MODULEFORGE_READ_TOKEN: ${{ secrets.MODULEFORGE_READ_PAT }}
-        run: ./scripts/checkout-deps.sh --pinned
-
+      # No sibling materializer here: `goose validate` only globs filenames inside
+      # this repo's own model/migrations/sql/ directory -- it touches no sibling
+      # path, no go.mod replace directive, and no CORE_DIR/AUTHZ_DIR Makefile
+      # fallback. `needs: pins` above is sufficient gating; a credentialed
+      # checkout-deps.sh --pinned clone here would be unnecessary network I/O and
+      # an unnecessary use of MODULEFORGE_READ_PAT for a job that never needs it.
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
