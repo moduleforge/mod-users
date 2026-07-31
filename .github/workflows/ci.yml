@@ -218,7 +218,7 @@ jobs:
 
       - name: Validate migration directory
         working-directory: mod-users
-        run: goose -dir model/migrations validate
+        run: goose -dir model/migrations/sql validate
 
   build:
     name: Build

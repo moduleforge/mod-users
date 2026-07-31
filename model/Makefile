@@ -19,7 +19,7 @@ compose: ## Assemble composed migrations dir from core-model + authz-model + use
 	@mkdir -p schema/migrations
 	@cp $(CORE_DIR)/migrations/*.sql schema/migrations/
 	@cp $(AUTHZ_DIR)/migrations/*.sql schema/migrations/
-	@cp migrations/*.sql schema/migrations/
+	@cp migrations/sql/*.sql schema/migrations/
 
 build: compose
 migrate.up: compose
@@ -65,15 +65,15 @@ build: preflight ## Generate Go code from queries
 .PHONY: migrate.new
 migrate.new: ## Create a new migration file (usage: make migrate.new NAME=foo)
 	@test -n "$(NAME)" || (echo "ERROR: NAME is required (e.g. make migrate.new NAME=create_users)" && exit 1)
-	goose -dir migrations -s create $(NAME) sql
+	goose -dir migrations/sql -s create $(NAME) sql
 
 .PHONY: migrate.up
 migrate.up: ## Apply pending migrations to DATABASE_URL
-	goose -dir migrations postgres "$(DATABASE_URL)" up
+	goose -dir migrations/sql postgres "$(DATABASE_URL)" up
 
 .PHONY: migrate.status
 migrate.status: ## Show migration status
-	goose -dir migrations postgres "$(DATABASE_URL)" status
+	goose -dir migrations/sql postgres "$(DATABASE_URL)" status
 
 # ---------------------------------------------------------------------------
 # Code generation
@@ -89,7 +89,7 @@ gen: ## Generate Go packages from sqlc queries
 
 .PHONY: verify
 verify: ## Validate migration file format + compile-check queries (sqlc)
-	goose -dir migrations validate
+	goose -dir migrations/sql validate
 	sqlc compile
 
 # ---------------------------------------------------------------------------
@@ -105,11 +105,11 @@ test.unit: ## Run unit tests
 
 .PHONY: test.integration
 test.integration: ## Run integration tests (migration apply against live DB)
-	goose -dir migrations postgres "$(DATABASE_URL)" up
+	goose -dir migrations/sql postgres "$(DATABASE_URL)" up
 
 .PHONY: lint
 lint: ## Apply migrations to an ephemeral shadow Postgres (replaces atlas migrate lint)
-	@./scripts/shadow-db-lint.sh migrations $(SHADOW_DB_PREREQ_DIRS)
+	@./scripts/shadow-db-lint.sh migrations/sql $(SHADOW_DB_PREREQ_DIRS)
 
 .PHONY: lint-fix
 lint-fix: ## Lint-fix (no-op for model)

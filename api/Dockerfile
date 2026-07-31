@@ -40,7 +40,7 @@ RUN CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@latest
 # Assemble composed migrations directly from the local source paths.
 RUN mkdir -p /app/schema/migrations \
     && cp /src/mod-core/model/migrations/*.sql /app/schema/migrations/ \
-    && cp /src/mod-users/model/migrations/*.sql /app/schema/migrations/
+    && cp /src/mod-users/model/migrations/sql/*.sql /app/schema/migrations/
 
 # --- Runtime stage ---
 FROM alpine:3.21
