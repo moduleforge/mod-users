@@ -43,6 +43,6 @@ host:  github.com
 owner: moduleforge
 
 pins:
-  mod-core:  14fa8f5a59e4350be6a14477d425e604eab1b44f  # 2026-07-23 plan: remove followup [Yghm]
+  mod-core:  deadbeefdeadbeefdeadbeefdeadbeefdeadbeef  # THROWAWAY: pins-job smoke test, must not land
   mod-audit: 49498bfec4733df0a51e54a64933498411e71519  # 2026-07-25 update gitignore
   mod-authz: 35fbcc8ab6519070bab717e25cb73d80a9813d55  # 2026-07-25 removed unecessary package.json
