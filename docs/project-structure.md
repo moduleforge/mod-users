@@ -13,6 +13,7 @@ This document maps every significant directory and key root-level file. After re
 | `.gitignore` | Repo-wide ignore rules. Notable entries: `node_modules/`, `dist/`, `worktrees/`, `.env`, `CLAUDE.md` (root-level, not `.claude/CLAUDE.md`). |
 | `.ko.yaml` | Ko (Go container image builder) configuration for the API server. |
 | `.mcp.json` | MCP server configuration for Claude Code (gitignored; generated per session). |
+| `versions.lock.yaml` | Pins the commit of each sibling repo (`mod-core`, `mod-audit`, `mod-authz`) this repo's CI and fresh-clone builds check out. Documented in the `docs-mf-standards` submodule's `versions-lockfile.md`. |
 
 ## Sub-project directories
 
@@ -108,6 +109,14 @@ docs/
 ## Workflow and tooling directories
 
 ```
+scripts/
+  link-siblings.sh        # plants sibling-repo symlinks for local/worktree builds
+                           # (floats against the live checkout); wired into `make preflight`
+  checkout-deps.sh        # reads versions.lock.yaml; --verify (default) reports drift,
+                           # --pinned clones each pinned sibling at its exact SHA (CI/fresh clones)
+  update-pins.sh          # rewrites versions.lock.yaml's SHAs from each sibling's origin/main;
+                           # wrapped by the `pins.check` / `pins.update` / `pins.sync` make targets
+
 plan/
   next-steps.yaml         # tracked follow-up items (open issues, blockers)
   summary-bun-migration.md # completed bun migration session summary
