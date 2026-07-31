@@ -1,10 +1,32 @@
 # CI pipeline for mod-users monorepo.
 #
-# Triggers on pushes to main and pull requests. Runs lint, test, migration
-# validation, build, and container image build (no push).
+# Triggers on pushes to main and pull requests. Runs a fast pin-verification
+# gate (pins), lint, unit tests, migration validation, a Go/GUI build, and a
+# local (no-push) container image build.
+#
+# --- Multi-repo layout (constraint C2) and private-repo credential (F3) ---
+# mod-users is one of several sibling repos in the moduleforge aggregate.
+# There is no committed go.work, so api/go.mod's `replace` directives only
+# resolve once mod-core, mod-audit, and mod-authz are checked out as
+# siblings on disk. Every sibling-consuming job (pins, lint, test,
+# migrate-check, build, image) checks out mod-users itself with
+# `path: mod-users`, then runs `./scripts/checkout-deps.sh`, which
+# materializes (--pinned) or verifies (--verify --remote --strict, in the
+# pins job) every sibling pinned in mod-users/versions.lock.yaml -- the same
+# script a contributor runs on a bare machine to reproduce this layout
+# locally. The sibling repos are private, so every materializer/verify step
+# is credentialed via the MODULEFORGE_READ_PAT organization secret, injected
+# only through `env:`, never interpolated into a `run:` string. See
+# docs/mf-standards/versions-lockfile.md for why this multi-repo checkout
+# exists, how the pinning mechanism works, and the credential's scope and
+# expiry -- this file does not restate that rationale. See
+# app-mftodo/.github/workflows/ci.yml for the sibling consumer this pattern
+# was first proven on.
 #
 # Security: This workflow does not interpolate any user-controlled inputs
-# (issue titles, PR bodies, commit messages, etc.) into run: commands.
+# (issue titles, PR bodies, commit messages, etc.) into run: commands. The
+# MODULEFORGE_READ_PAT credential above is injected only via env:, never
+# interpolated into a run: string.
 
 name: CI
 
@@ -24,40 +46,59 @@ env:
   BUN_VERSION: "1.3.4"
 
 jobs:
+  pins:
+    name: Verify pins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with: { path: mod-users }
+
+      - name: Verify every pin resolves on its remote
+        working-directory: mod-users
+        env:
+          MODULEFORGE_READ_TOKEN: ${{ secrets.MODULEFORGE_READ_PAT }}
+        run: ./scripts/checkout-deps.sh --verify --remote --strict
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    needs: pins
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with: { path: mod-users }
 
-      - uses: actions/setup-go@v5
+      - name: Materialize pinned siblings
+        working-directory: mod-users
+        env:
+          MODULEFORGE_READ_TOKEN: ${{ secrets.MODULEFORGE_READ_PAT }}
+        run: ./scripts/checkout-deps.sh --pinned
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # gui/ imports @moduleforge/core-gui directly; it's resolved locally via yalc
-      # per AGENTS.md, and CI must replicate that since the package isn't published to a registry.
-      - name: Checkout core-gui (moduleforge/mod-core)
-        uses: actions/checkout@v4
-        with:
-          repository: moduleforge/mod-core
-          path: mod-core
-
       - name: Cache bun install cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
 
+      # gui/ imports @moduleforge/core-gui directly; it's resolved locally via yalc
+      # per AGENTS.md, and CI must replicate that since the package isn't published to a
+      # registry. mod-core lands as a sibling of mod-users (materialized above), not
+      # nested under it, so this step deliberately has no working-directory override --
+      # it resolves relative to the job's default $GITHUB_WORKSPACE, i.e. the aggregate
+      # root both mod-users/ and mod-core/ sit under.
       - name: Build core-gui and publish to local yalc store
         run: |
           cd mod-core/gui
@@ -66,14 +107,17 @@ jobs:
           npx --yes yalc publish
 
       - name: Link core-gui into gui/ via yalc
+        working-directory: mod-users
         run: |
           cd gui
           npx --yes yalc add @moduleforge/core-gui
 
       - name: Install dependencies
+        working-directory: mod-users
         run: bun install
 
       - name: Lint (all sub-projects)
+        working-directory: mod-users
         env:
           SHADOW_DB_PREREQ_DIRS: ${{ github.workspace }}/mod-core/model/migrations
         run: make lint
@@ -81,23 +125,31 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    needs: pins
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with: { path: mod-users }
 
-      - uses: actions/setup-go@v5
+      - name: Materialize pinned siblings
+        working-directory: mod-users
+        env:
+          MODULEFORGE_READ_TOKEN: ${{ secrets.MODULEFORGE_READ_PAT }}
+        run: ./scripts/checkout-deps.sh --pinned
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Cache bun install cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
@@ -105,18 +157,33 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies
+        working-directory: mod-users
         run: bun install --frozen-lockfile
 
+      # api/go.mod's six replace directives (mod-core, mod-audit, mod-authz) mean `go
+      # test ./...` cannot even compile without all three siblings materialized above --
+      # confirmed empirically against a real (non-worktree) checkout during this task:
+      # `go vet ./...`/`go test ./...` fail at package-load time on the unresolved
+      # replace paths with only mod-core present, and succeed once all three are.
       - name: Unit tests
+        working-directory: mod-users
         run: make test.unit
 
   migrate-check:
     name: Validate migrations
     runs-on: ubuntu-latest
+    needs: pins
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with: { path: mod-users }
 
-      - uses: actions/setup-go@v5
+      - name: Materialize pinned siblings
+        working-directory: mod-users
+        env:
+          MODULEFORGE_READ_TOKEN: ${{ secrets.MODULEFORGE_READ_PAT }}
+        run: ./scripts/checkout-deps.sh --pinned
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -124,42 +191,46 @@ jobs:
         run: go install github.com/pressly/goose/v3/cmd/goose@latest
 
       - name: Validate migration directory
+        working-directory: mod-users
         run: goose -dir model/migrations validate
 
   build:
     name: Build
     runs-on: ubuntu-latest
+    needs: pins
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with: { path: mod-users }
 
-      - uses: actions/setup-go@v5
+      - name: Materialize pinned siblings
+        working-directory: mod-users
+        env:
+          MODULEFORGE_READ_TOKEN: ${{ secrets.MODULEFORGE_READ_PAT }}
+        run: ./scripts/checkout-deps.sh --pinned
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # gui/ imports @moduleforge/core-gui directly; it's resolved locally via yalc
-      # per AGENTS.md, and CI must replicate that since the package isn't published to a registry.
-      - name: Checkout core-gui (moduleforge/mod-core)
-        uses: actions/checkout@v4
-        with:
-          repository: moduleforge/mod-core
-          path: mod-core
-
       - name: Cache bun install cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
 
+      # gui/ imports @moduleforge/core-gui directly; see the lint job's identical step
+      # for the working-directory rationale (mod-core is a sibling checkout, not nested
+      # under mod-users).
       - name: Build core-gui and publish to local yalc store
         run: |
           cd mod-core/gui
@@ -168,40 +239,56 @@ jobs:
           npx --yes yalc publish
 
       - name: Link core-gui into gui/ via yalc
+        working-directory: mod-users
         run: |
           cd gui
           npx --yes yalc add @moduleforge/core-gui
 
       - name: Install dependencies
+        working-directory: mod-users
         run: bun install
 
       - name: Install sqlc
         run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v${{ env.SQLC_VERSION }}
 
       - name: Generate model code
+        working-directory: mod-users
         run: make build.model
 
       - name: Build API
+        working-directory: mod-users
         run: make build.api
 
       - name: Build GUI
+        working-directory: mod-users
         run: make build.gui
 
   image:
     name: Container image (ko)
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build, pins]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with: { path: mod-users }
 
-      - uses: actions/setup-go@v5
+      - name: Materialize pinned siblings
+        working-directory: mod-users
+        env:
+          MODULEFORGE_READ_TOKEN: ${{ secrets.MODULEFORGE_READ_PAT }}
+        run: ./scripts/checkout-deps.sh --pinned
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Install ko
         run: go install github.com/google/ko@latest
 
-      - name: Build OCI image (local only, no push)
-        env:
-          KO_DOCKER_REPO: ko.local
-        run: ko build --local ./api/cmd/server
+      # `make image.build` is the existing Makefile target (no prerequisite chain) and
+      # already sets KO_DOCKER_REPO=ko.local itself -- invoking it here, rather than
+      # re-deriving the ko command in the workflow, keeps this job and `make image.build`
+      # from drifting apart, matching the anti-drift discipline app-mftodo's `image` job
+      # already uses deliberately for the same reason.
+      - name: Build image (local only, no push)
+        working-directory: mod-users
+        run: make image.build
