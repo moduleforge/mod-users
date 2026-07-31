@@ -10,7 +10,7 @@
     "url": "https://github.com/moduleforge/mod-users/issues"
   },
   "homepage": "https://github.com/moduleforge/mod-users#readme",
-  "workspaces": ["gui"],
+  "workspaces": ["gui", "../mod-core/gui"],
   "engines": {
     "bun": ">=1.0"
   }

@@ -39,15 +39,14 @@ This file is the canonical reference for contributors and AI agents working on t
    echo "127.0.0.1  authelia" | sudo tee -a /etc/hosts
    ```
 
-4. **Set up yalc for gui/ peer dependency** (required for `gui/` builds):
+4. **Build `mod-core/gui`, mod-users' bun-workspace sibling** (required for `gui/` builds):
 
-   `gui/` declares `@moduleforge/core-gui` as an optional peer dependency, resolved locally via a `file:.yalc/` link that `yalc add` adds to `gui/package.json` (gitignored, never committed). The `.yalc/` directory is gitignored and must be populated manually in fresh checkouts or worktrees:
+   `gui/` declares `@moduleforge/core-gui` as an optional peer dependency, resolved via a bun workspace rather than a registry package: this repo's root `package.json` declares `"workspaces": ["gui", "../mod-core/gui"]`, so `bun install` at the repo root links `mod-core/gui` in directly (requires the sibling repo `mod-core` checked out alongside `mod-users`, e.g. `../mod-core` relative to this repo's root). `mod-core/gui` must be built once before `gui/`'s own build/typecheck can resolve `@moduleforge/core-gui`:
    ```sh
-   # From the core-gui package directory (sibling repo):
-   yalc publish
+   # From the mod-core repo (sibling of this repo):
+   cd ../mod-core/gui && bun run build   # not bare `tsup` -- dist/index.css needs the build:css step
    # Then from mod-users root:
-   cd gui && yalc add @moduleforge/core-gui && cd ..
-   bun install
+   bun install --frozen-lockfile
    ```
    If you don't need to work on `gui/`, skip this step — `make build.api` and `make test` work without it.
 
@@ -63,7 +62,7 @@ This file is the canonical reference for contributors and AI agents working on t
 make build           # build all sub-projects (default target)
 make build.model     # model/ only
 make build.api       # api/ only
-make build.gui       # gui/ only (requires yalc setup)
+make build.gui       # gui/ only (requires mod-core/gui built first — see First-time setup)
 make preflight       # verify tool versions and fix stale deps across all sub-projects
 ```
 
@@ -119,7 +118,6 @@ The generated files are committed to the repo. `make clean.build` removes `model
 
 This repo uses git worktrees for isolated plan branches. When working in a worktree:
 - Run `bun install` at the worktree root (the lockfile is checked in but `node_modules` is gitignored).
-- Copy `.yalc/` from the main checkout into the worktree before building `gui/`.
 - Copy `.env` from the main checkout (it is gitignored).
 - `api/go.mod`'s `replace` directives (`../../mod-core/{api,model}`, `../../mod-audit/*`,
   `../../mod-authz/*`) resolve fine from the main checkout but break for any worktree nested deeper
@@ -129,6 +127,19 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
   parent directory — no manual `go work` step needed. See
   [Building inside a task worktree](./docs/mf-standards/building-common.md#building-inside-a-task-worktree)
   for the mechanism.
+- `gui/`'s `@moduleforge/core-gui` peer resolves through the root `package.json`'s bun workspace
+  (`"workspaces": ["gui", "../mod-core/gui"]`), which composes with `link-siblings.sh`'s
+  compatibility symlinks the same way the Go `replace` paths do — verified for the workspace
+  member itself. **Known gap:** building `mod-core/gui` *through* the worktree's `../mod-core`
+  compatibility symlink can leave `mod-core/gui`'s own devDependencies (e.g. `style-dictionary`,
+  needed only for its `build:tokens` step) unresolvable — bun computes their hoisted-store
+  symlinks relative to the symlink's apparent nesting depth under `mod-users/worktrees/`, which
+  does not match the real, shallower depth of `mod-core`'s actual checkout the symlink points at.
+  Workaround: build `mod-core/gui` once from `mod-core`'s own real checkout (`cd
+  <aggregate-root>/mod-core/gui && bun install && bun run build`, not through the worktree's
+  `../mod-core` path) before building/linting `gui/` from inside a task worktree. CI is
+  unaffected — `checkout-deps.sh` materializes `mod-core` as a real, flatly-nested sibling
+  directory there, never through this compatibility-symlink layer.
 
 ## Key files and directories
 

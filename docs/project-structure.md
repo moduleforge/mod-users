@@ -84,7 +84,7 @@ gui/
     stories/            # Ladle story files (exploratory; not the primary showcase)
 ```
 
-> `gui/` depends on `@moduleforge/core-gui` via a `file:.yalc/` link. The `.yalc/` directory is gitignored and must be set up manually in fresh checkouts. See [AGENTS.md](../AGENTS.md#first-time-setup).
+> `gui/` depends on `@moduleforge/core-gui` via a bun workspace: this repo's root `package.json` declares `"workspaces": ["gui", "../mod-core/gui"]`, so `bun install` at the repo root links the sibling repo's `mod-core/gui` in directly (requires `mod-core` checked out alongside this repo). `mod-core/gui` must be built once before `gui/`'s own build/typecheck resolves it. See [AGENTS.md](../AGENTS.md#first-time-setup).
 
 ### `deploy/` — deployment configuration
 
