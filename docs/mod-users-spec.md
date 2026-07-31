@@ -155,7 +155,11 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Actor:** Developer or AI agent composing a ModuleForge-based application.
 
-**Action:** Imports components from `@moduleforge/users-gui` (via npm, Bun workspace, or yalc local link) and composes them into an application shell.
+**Action:** Imports components from `@moduleforge/users-gui` — via a **bun workspace** the
+composing app owns (e.g. `app-mftodo`; see
+[`docs/mf-standards/building-applications.md`'s First-time setup
+section](./mf-standards/building-applications.md#first-time-setup)), or via npm if this package
+is ever published to a registry — and composes them into an application shell.
 
 **Outcome:** Components render the auth, profile, admin, and OIDC-config surfaces. The `app-mfdemo` Next.js project (at the aggregate level) demonstrates all components in a working context; it is the component showcase (the role Ladle plays in other projects). The demo app requires the API running locally.
 

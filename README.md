@@ -18,15 +18,19 @@ go get github.com/moduleforge/mod-users/model
 go get github.com/moduleforge/mod-users/api
 ```
 
-**React component library** (TypeScript/React, requires Bun workspace or yalc for local development):
+**React component library** (TypeScript/React):
 
 ```sh
 npm install @moduleforge/users-gui
-# or, within a Bun workspace:
-bun add @moduleforge/users-gui
 ```
 
-> The GUI package depends on `@moduleforge/core-gui` (a peer dependency). For local development the package is linked via yalc rather than published to a registry.
+> The GUI package depends on `@moduleforge/core-gui` (a peer dependency), and is not published to
+> any registry today. An app that composes this module (e.g. `app-mftodo`) wires
+> `@moduleforge/users-gui` and its `core-gui` peer in together through a **bun workspace** it
+> owns — a root `package.json` listing this repo's `gui/` among its `workspaces`, with the app's
+> own `gui/package.json` referring to it as `workspace:*`. See
+> [`docs/mf-standards/building-applications.md`'s First-time setup
+> section](./docs/mf-standards/building-applications.md#first-time-setup) for the mechanism.
 
 ## Additional documentation
 
