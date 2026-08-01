@@ -137,13 +137,19 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       givenName: string,
       familyName: string,
     ) => {
-      const response = await api.auth.register({
+      await api.auth.register({
         email,
         password,
         given_name: givenName,
         family_name: familyName,
       });
-      setTokenAndUser(response.token, response.user);
+      // Register intentionally returns no session (no token/user) — email
+      // verification runs asynchronously and isn't required to sign in.
+      // Login has no verification gate, so chain an explicit login call to
+      // auto-authenticate, mirroring what a user doing a follow-up login
+      // already gets today.
+      const loginResponse = await api.auth.login(email, password);
+      setTokenAndUser(loginResponse.token, loginResponse.user);
     },
     [setTokenAndUser],
   );

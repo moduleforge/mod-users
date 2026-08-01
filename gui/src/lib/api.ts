@@ -73,6 +73,17 @@ export interface RegisterRequest {
   family_name: string;
 }
 
+/**
+ * Response shape for `/v1/auth/register`. Unlike `LoginResponse`, this
+ * intentionally carries no token/user — registration does not establish a
+ * session because email verification runs asynchronously.
+ */
+export interface RegisterResponse {
+  uuid: string;
+  email: string;
+  email_verification_required: boolean;
+}
+
 export interface EmailCodeRequest {
   email: string;
 }
@@ -297,7 +308,7 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         }),
 
       register: (data: RegisterRequest) =>
-        request<LoginResponse>('/v1/auth/register', {
+        request<RegisterResponse>('/v1/auth/register', {
           method: 'POST',
           body: JSON.stringify(data),
         }),
