@@ -194,7 +194,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("non-serverless mode sets MaxConns=20", func(t *testing.T) {
-		for _, mode := range []string{"local", "k8s"} {
+		for _, mode := range []string{"local", "k8s", "container-host"} {
 			mode := mode
 			t.Run(mode, func(t *testing.T) {
 				clearProviderEnv(t)
@@ -209,6 +209,32 @@ func TestLoad(t *testing.T) {
 					t.Errorf("DB.MaxConns = %d, want 20 for mode %q", cfg.DB.MaxConns, mode)
 				}
 			})
+		}
+	})
+
+	// container-host names an unorchestrated container deployment: one host
+	// running the stack under a container runtime, with no orchestrator. It
+	// carries no relaxed defaults of its own, so the assertions here are that
+	// it is accepted at all, that it round-trips verbatim onto Config (the
+	// OTel deployment.environment attribute is set from this string), and
+	// that it takes the non-serverless pool default.
+	t.Run("container-host mode loads and carries no relaxed defaults", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("DEPLOY_MODE", "container-host")
+
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.DeployMode != config.DeployModeContainerHost {
+			t.Errorf("DeployMode = %q, want %q", cfg.DeployMode, config.DeployModeContainerHost)
+		}
+		if cfg.DeployMode == config.DeployModeLocal {
+			t.Error("container-host must not collapse onto local; the local-only relaxations key off this comparison")
+		}
+		if cfg.DB.MaxConns != 20 {
+			t.Errorf("DB.MaxConns = %d, want 20 for container-host", cfg.DB.MaxConns)
 		}
 	})
 
@@ -318,6 +344,10 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
+	// The fixture value is deliberately "docker-compose": it is the name the
+	// unorchestrated-container mode was NOT given (that is "container-host"),
+	// precisely because naming it "docker-compose" would have silently
+	// inverted this test instead of failing it loudly. Leave it invalid.
 	t.Run("invalid DEPLOY_MODE produces validation error", func(t *testing.T) {
 		clearProviderEnv(t)
 		setEnv(t, requiredEnv)
@@ -332,6 +362,13 @@ func TestLoad(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "docker-compose") {
 			t.Errorf("error should include the bad value %q, got: %v", "docker-compose", err)
+		}
+		// The message is an operator's only hint at what to set instead, so
+		// it must name every accepted value.
+		for _, mode := range []string{"local", "serverless", "k8s", "container-host"} {
+			if !strings.Contains(err.Error(), mode) {
+				t.Errorf("error should enumerate the accepted value %q, got: %v", mode, err)
+			}
 		}
 	})
 }

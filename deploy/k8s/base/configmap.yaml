@@ -12,7 +12,9 @@ kind: ConfigMap
 metadata:
   name: users-api-config
 data:
-  DEPLOY_MODE: cloud
+  # Must be one of local, serverless, k8s, container-host — anything else is
+  # rejected at boot by config.Load and the process exits.
+  DEPLOY_MODE: k8s
   SERVER_ADDR: ":8080"
   LOG_LEVEL: info
   AUTH_ADMIN_ROLE: admin

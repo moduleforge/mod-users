@@ -23,9 +23,10 @@ type Provider = inner.Provider
 
 // Re-export constants.
 const (
-	DeployModeLocal      = inner.DeployModeLocal
-	DeployModeServerless = inner.DeployModeServerless
-	DeployModeK8s        = inner.DeployModeK8s
+	DeployModeLocal         = inner.DeployModeLocal
+	DeployModeServerless    = inner.DeployModeServerless
+	DeployModeK8s           = inner.DeployModeK8s
+	DeployModeContainerHost = inner.DeployModeContainerHost
 
 	TokenDisplayBoth      = inner.TokenDisplayBoth
 	TokenDisplayStderr    = inner.TokenDisplayStderr

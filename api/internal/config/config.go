@@ -18,9 +18,26 @@ import (
 type DeployMode string
 
 const (
-	DeployModeLocal      DeployMode = "local"
+	// DeployModeLocal is a developer machine or CI checkout. It is the
+	// only mode that relaxes defaults for convenience — notably the
+	// allow-all CORS origin list in api/internal/server.
+	DeployModeLocal DeployMode = "local"
+
+	// DeployModeServerless is a scale-to-zero runtime (Cloud Run, Lambda
+	// and friends) where many short-lived instances share one database,
+	// so the connection pool defaults small.
 	DeployModeServerless DeployMode = "serverless"
-	DeployModeK8s        DeployMode = "k8s"
+
+	// DeployModeK8s is an orchestrated container deployment.
+	DeployModeK8s DeployMode = "k8s"
+
+	// DeployModeContainerHost is an unorchestrated container deployment:
+	// a single host running the stack under a container runtime (Docker,
+	// Podman, plain containerd) with no orchestrator. It is the
+	// counterpart to DeployModeK8s and carries no relaxed defaults — it
+	// takes the non-serverless connection-pool default and does not get
+	// DeployModeLocal's allow-all CORS origin list.
+	DeployModeContainerHost DeployMode = "container-host"
 )
 
 // TokenDisplay controls how the OIDC onboarding setup token is
@@ -73,11 +90,14 @@ type OnboardingConfig struct {
 	TokenDisplay TokenDisplay
 }
 
-// validDeployModes is the set of accepted DEPLOY_MODE values.
+// validDeployModes is the set of accepted DEPLOY_MODE values. Load's
+// rejection message in this same package spells the set out in prose; keep
+// the two in sync when adding a mode.
 var validDeployModes = map[DeployMode]bool{
-	DeployModeLocal:      true,
-	DeployModeServerless: true,
-	DeployModeK8s:        true,
+	DeployModeLocal:         true,
+	DeployModeServerless:    true,
+	DeployModeK8s:           true,
+	DeployModeContainerHost: true,
 }
 
 // DBConfig holds connection pool settings for the Postgres backend.
@@ -175,7 +195,7 @@ func Load() (*Config, error) {
 	mode := DeployMode(rawMode)
 	if !validDeployModes[mode] {
 		parseErrors = append(parseErrors,
-			fmt.Sprintf("DEPLOY_MODE: invalid value %q (must be local, serverless, or k8s)", rawMode))
+			fmt.Sprintf("DEPLOY_MODE: invalid value %q (must be local, serverless, k8s, or container-host)", rawMode))
 		// Fall back to local so the rest of Load can proceed.
 		mode = DeployModeLocal
 	}
