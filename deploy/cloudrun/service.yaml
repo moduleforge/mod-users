@@ -39,8 +39,11 @@ spec:
               memory: 512Mi
           env:
             # Non-secret configuration.
+            # Must be one of local, serverless, k8s, container-host — anything
+            # else is rejected at boot by config.Load and the process exits.
+            # Cloud Run is a scale-to-zero runtime, hence serverless.
             - name: DEPLOY_MODE
-              value: cloud
+              value: serverless
             - name: SERVER_ADDR
               value: ":8080"
             - name: LOG_LEVEL
