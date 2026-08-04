@@ -72,7 +72,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: plan/anonymous-actor-01-006
             commit: []
             merge: null
     - number: 2
