@@ -46,3 +46,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: facade-and-manifest-wiring
+          title: Facade Manifest And Dev Server Wiring
+          path: phase-01-anonymous-actor/005-facade-and-manifest-wiring.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
