@@ -109,3 +109,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'make lint does not pass as a whole: lint.model''s shadow-db-lint fails applying mod-users'' 0100_schema.sql against an ephemeral Postgres with no mod-core migrations (legal_entities missing). Reproduced identically at branch base commit a2432dc; this task touches no model/ file. Task 003 reported the same. Standing tooling gap, candidate followup.'
+    - title: Not a defect but load-bearing for task 005/do
+      id: 0EsQ
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Not a defect but load-bearing for task 005/doc phase: Authorization header present but empty is indistinguishable from absent via r.Header.Get, so it takes the anonymous branch - consistent with RequireAuth''s own behavior, unchanged per task doc instruction. Worth a sentence in phase-02 docs.'
