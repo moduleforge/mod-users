@@ -64,3 +64,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Task doc's Down-migration prose and one Validation bullet claim the system_actor row in types will be gone after rollback; this is unachievable given mod-core's pre-existing types_no_delete trigger. Resolved by following mod-authz/0501's established precedent (documented inline in migration and task doc Status section). Recommend correcting the architecture proposal (plan/notes/anonymous-actor-architecture-proposal.md, Migration/rollout notes section) and this task doc's wording in a follow-up.
+    - title: 'Environment: a stale, orphaned Postgres conta'
+      id: edGE
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Environment: a stale, orphaned Postgres container (users-module-postgres, docker-compose project users-module, working dir pointing at a now-nonexistent path predating a repo rename from users-module to mod-users) is bound to host port 5432 with credentials that do not match this repo''s .env. Blocks normal make dev.start port binding. Not touched (destructive host-level docker actions correctly denied). Validation used a throwaway docker run Postgres on port 5433, torn down after use. Recommend the stale container/volume (users-module-postgres / users-module_postgres-data) be cleaned up or renamed.'
