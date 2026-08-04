@@ -73,7 +73,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/anonymous-actor-01-006
-            commit: []
+            commit:
+                - 3d2ee15
             merge: null
     - number: 2
       slug: doc-updates
