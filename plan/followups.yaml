@@ -37,3 +37,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: make lint (full) fails on pre-existing model/ shadow-db-lint Postgres schema issue, unrelated to this diff, not previously tracked in plan/followups.yaml
+    - title: make test.unit (full) fails on already-tracke
+      id: cDFE
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: make test.unit (full) fails on already-tracked flaky TestNewStepUpConsumedCache_JanitorStopsOnCancel (followup id 5RbD in mod-users followups.yaml), recurred here
