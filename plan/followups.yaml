@@ -136,3 +136,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Minor note: lint.model''s shadow-db-lint step fully succeeded this run rather than reproducing the legal_entities-missing failure flagged by tasks 001/003/004 as expected-and-non-blocking. Nothing was suppressed to achieve this - the step simply passed. Worth noting in case that pre-existing issue is intermittent/environment-dependent.'
+    - title: 'Environmental: this host''s native postgresql@'
+      id: EMIS
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Environmental: this host''s native postgresql@14 (Homebrew, launchd homebrew.mxcl.postgresql@14) intercepts localhost:5432 ahead of the users-module-postgres container''s Docker port-forward - a distinct issue from the credential-mismatch scenario task 001''s dispatch note described. Future tasks on this host needing the literal AUTHZ_DEV_PG_HOST=localhost invocation will hit the same conflict; task doc''s Status section documents the container-network-namespace workaround used here so it doesn''t need rediscovery.'
