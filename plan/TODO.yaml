@@ -26,3 +26,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: requireauth-helper-extraction
+          title: Requireauth Characterization Tests And Helper Extraction
+          path: phase-01-anonymous-actor/003-requireauth-helper-extraction.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
