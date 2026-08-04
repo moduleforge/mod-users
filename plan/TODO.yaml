@@ -35,7 +35,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/anonymous-actor-01-003
-            commit: []
+            commit:
+                - 7cc3ea7
             merge: null
         - number: 4
           slug: resolve-actor-or-anonymous-middleware
