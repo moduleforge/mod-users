@@ -1,0 +1,8 @@
+slug: anonymous-actor
+version: 1
+title: ""
+phases:
+    - number: 1
+      slug: anonymous-actor
+      title: Anonymous System Actor
+      tasks: []
