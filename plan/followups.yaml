@@ -73,3 +73,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Environment: a stale, orphaned Postgres container (users-module-postgres, docker-compose project users-module, working dir pointing at a now-nonexistent path predating a repo rename from users-module to mod-users) is bound to host port 5432 with credentials that do not match this repo''s .env. Blocks normal make dev.start port binding. Not touched (destructive host-level docker actions correctly denied). Validation used a throwaway docker run Postgres on port 5433, torn down after use. Recommend the stale container/volume (users-module-postgres / users-module_postgres-data) be cleaned up or renamed.'
+    - title: 'Blocking, out-of-scope fix needed: add a GetS'
+      id: 714s
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Blocking, out-of-scope fix needed: add a GetSystemActorBySlug(ctx context.Context, slug string) (db.GetSystemActorBySlugRow, error) method to stubUAQuerier in api/internal/service/user_accounts_upgrade_test.go (mechanical, one method, matching neighboring stubs'' pattern). This is what''s currently failing make lint/make test.unit for the whole api module and will keep failing for every subsequent task in this phase until fixed. Recommend a fast follow-up task landing this before/alongside task 002.'
