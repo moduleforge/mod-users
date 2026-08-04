@@ -45,7 +45,7 @@ phases:
           slug: resolve-actor-or-anonymous-middleware
           title: Resolveactororanonymous Middleware
           path: phase-01-anonymous-actor/004-resolve-actor-or-anonymous-middleware.md
-          done: false
+          done: true
           tier: opus-high
           digest: 'Added ResolveActorOrAnonymous in api/internal/auth/anonymous_actor.go with the exact signature the proposal specifies, plus WithAnonymousActor/IsAnonymousActor context pair. Delegates every non-diverging outcome to task 003''s shared helpers; body contains exactly one branch RequireAuth lacks: missing Authorization header -> anonymous actor + marker + next. Malformed header, bad signature, expired token, ErrUserGone, mapper/resolver faults all keep pre-existing 401/500 responses - confused-deputy downgrade closed and mutation-tested. principal.go''s context-key declaration became one grouped iota block so the new key cannot alias userContextKey, with a test that actually detects aliasing. Sixteen test functions/rows cover all nine required cases plus the key hazard. No facade re-export, manifest entry, or dev-server wiring added - that is task 005''s.'
           git:
