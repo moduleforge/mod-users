@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: anonymous-actor
       title: Anonymous System Actor
-      tasks: []
+      tasks:
+        - number: 1
+          slug: system-actor-migration
+          title: System Actor Migration And Sqlc Query
+          path: phase-01-anonymous-actor/001-system-actor-migration.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
