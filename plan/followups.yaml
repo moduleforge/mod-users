@@ -118,3 +118,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Not a defect but load-bearing for task 005/doc phase: Authorization header present but empty is indistinguishable from absent via r.Header.Get, so it takes the anonymous branch - consistent with RequireAuth''s own behavior, unchanged per task doc instruction. Worth a sentence in phase-02 docs.'
+    - title: 'Coupling note: anonymous_actor_test.go delibe'
+      id: W9Er
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Coupling note: anonymous_actor_test.go deliberately consumes middleware_test.go''s and resolver_test.go''s helpers - intentional but means a future rename in middleware_test.go breaks this file. Documented in a header comment in the new test file.'
