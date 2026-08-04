@@ -28,3 +28,12 @@ items:
         - plan/phase:tags-frontend-foundation
         - cross-repo/origin:app-mftodo
       text: '[Moved from app-mftodo followups, originally id BIAB] @moduleforge/users-gui''s shared fetch helper hard-navigates to the literal /auth/login path on 401, which app-mftodo compensates for via its own redirect route rather than an upstream fix. Pre-existing behavior in users-gui itself; the proper fix (if wanted) belongs here rather than in each consuming app.'
+    - title: make lint (full) fails on pre-existing model/
+      id: t5ut
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: make lint (full) fails on pre-existing model/ shadow-db-lint Postgres schema issue, unrelated to this diff, not previously tracked in plan/followups.yaml
