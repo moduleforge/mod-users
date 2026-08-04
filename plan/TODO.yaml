@@ -56,3 +56,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 6
+          slug: db-invariant-integration-tests
+          title: Database Invariant Integration Tests
+          path: phase-01-anonymous-actor/006-db-invariant-integration-tests.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
