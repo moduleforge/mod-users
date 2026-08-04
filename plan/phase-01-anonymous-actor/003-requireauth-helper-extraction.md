@@ -140,3 +140,36 @@ architectural_impact: true
 - `api/internal/auth/require_verified_test.go` — the `captureHandler` + `httptest` style.
 - `api/internal/auth/jwt_test.go` — minting HS256 tokens with `jwt.NewWithClaims`.
 - `api/internal/auth/resolver_test.go` — the nil-pool injectable-stub `UserResolver` pattern.
+
+## Status
+
+- **Outcome:** succeeded. 2026-08-04.
+- Added `api/internal/auth/middleware_test.go` (`TestRequireAuth`, table-driven, `t.Parallel()`
+  subtests) covering all nine characterization cases from the requirements table. Confirmed the
+  tests pass against the unmodified `middleware.go` first (checkpoint commit `88d8692`), then
+  extracted `writeAuthError` (error-mapping) and `contextWithAuthenticatedActor`
+  (success-population) as unexported helpers in `middleware.go`, both unchanged in logic — the
+  diff is pure code motion plus the two new helper signatures/doc comments (verified via
+  `git diff 88d8692 429a5db -- api/internal/auth/middleware.go`; no status code, message string,
+  or log call changed). All nine tests still pass unchanged after the refactor
+  (checkpoint commit `429a5db`); the test file was not edited to make the refactor pass.
+- **AssumedUser case note:** `resolver.buildUserContext` populates `uc.AssumedUser` only via
+  `UserResolver.queries.GetUserAccountByUUID` (a direct call, not the injectable `uuidLookup`
+  stub `resolver_test.go` uses for the primary-user lookup). To exercise this branch without a
+  real database, the test file adds a minimal test-only `db.DBTX`/`pgx.Row` fake
+  (`sudoAccountDBTX`/`sudoAccountRow`) that answers `GetUserAccountByUUID` with a fixed row. This
+  wasn't spelled out in the task doc's "resolver: the injectable-stub pattern from
+  resolver_test.go" guidance (that pattern alone only covers the `uuidLookup`-driven cases); flagged
+  for awareness in case task 004 hits the same gap.
+- **Validation:** `go build ./...`, `go vet ./...`, `go test -race ./internal/auth/...`, and
+  `make lint.api` all pass cleanly. `grep -n "func RequireAuth" api/internal/auth/middleware.go`
+  confirms the exported signature is byte-identical to the required signature.
+  `make lint` (full) and `make test.unit` (full) each fail, but only on pre-existing,
+  out-of-scope conditions unrelated to this diff — see `flagged_for_manager` in the task
+  report for detail (a `model/` shadow-db-lint schema issue reproduced on the unmodified main
+  checkout, and the already-tracked flaky `TestNewStepUpConsumedCache_JanitorStopsOnCancel` in
+  the unrelated `api/auth` package, followup id `5RbD`).
+- **Security review:** self-performed `review-changes-security` lens pass (no `Task` tool
+  available in this environment) against `git diff a1c438c..429a5db` — no findings; the change is
+  a pure behavior-preserving refactor of an unexported code path plus additive test coverage.
+  See the task report's `review_reports` for the full structured review.
