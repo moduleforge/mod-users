@@ -157,3 +157,54 @@ architectural_impact: true
 - `mod-authz/model/migrations/0505_grants.sql` — `grants.actor_id` column.
 - `plan/phase-01-anonymous-actor/001-system-actor-migration.md` — the query and table this task
   consumes.
+
+## Status
+
+- **Outcome:** validation failed
+- **Date:** 2026-08-04
+- **Files:**
+  - `api/internal/auth/anonymous_actor_service.go` (new)
+  - `api/internal/auth/anonymous_actor_service_test.go` (new)
+- **Validation summary:**
+  - PASS — `api/internal/auth/anonymous_actor_service.go` and its `_test.go` exist; `git status`
+    confirms no other file under `api/internal/auth/` was touched.
+  - PASS — `cd api && go build ./...` succeeds.
+  - PASS — `cd api && go vet ./...` reports nothing new: `go vet ./internal/auth/...` is clean,
+    and the one pre-existing failure the full `go vet ./...` surfaces
+    (`internal/service/user_accounts_upgrade_test.go:188` — `stubUAQuerier` does not implement
+    the `Querier` interface's `GetSystemActorBySlug` method added by task 001) reproduces
+    identically on the pre-task branch HEAD (verified via `git stash`), so nothing new was
+    introduced.
+  - PASS — `cd api && go test ./internal/auth/...` passes (`ok`, includes all 5 new table-driven
+    subtests plus every pre-existing test in the package, unchanged).
+  - PASS — `grep -n "grants" api/internal/auth/anonymous_actor_service.go` shows the grants
+    query bound via `$1`, no string interpolation.
+  - PASS — `grep -rn "AnonymousActorEntityID\|= -1\|const.*[Aa]nonymous.*int64" api/` finds no
+    matches (no hardcoded entity-id constant).
+  - **FAILED** — `make lint`: `lint.api`'s `go vet ./...` step fails on the same pre-existing
+    `internal/service` stub gap described above (not caused by this task's diff; confirmed via
+    `git stash` reproduction against branch HEAD before this task's changes). `lint.model` also
+    requires `SHADOW_DB_PREREQ_DIRS=<mod-core>/model/migrations` to be set explicitly (matching
+    `.github/workflows/ci.yml`, not the bare `make lint` default) — same pre-existing environment
+    quirk task 001's own Status section already documented; with that var set, `lint.model`
+    itself passes.
+  - **FAILED** — `make test.unit`: `test.unit.api` runs `go test ./...`, which fails to build
+    `internal/service` for the same pre-existing reason, and additionally hits one flaky,
+    unrelated pre-existing failure, `TestNewStepUpConsumedCache_JanitorStopsOnCancel` in package
+    `api/auth` (goroutine-count timing test). Both reproduce identically on branch HEAD before
+    this task's changes (verified via `git stash`).
+- **Root cause of the two failing checks (out of this task's scope):** task 001 added
+  `GetSystemActorBySlug` to the generated `model/db.Querier` interface. `stubUAQuerier` in
+  `api/internal/service/user_accounts_upgrade_test.go` hand-implements `db.Querier` for that
+  package's tests and was not updated to add the new method, so the whole `api` module fails to
+  `go vet`/`go test`/`go build ./...` (tests) as soon as the interface grows — independent of
+  anything this task touches. This task's own scope is `api/internal/auth/` only, per this
+  document's "Purpose and scope"; fixing `internal/service`'s stub is out of that scope, so per
+  the `implement-task` procedure this halts as `validation failed` rather than expanding scope.
+  The fix is mechanical: add a `GetSystemActorBySlug(ctx context.Context, slug string)
+  (db.GetSystemActorBySlugRow, error)` method to `stubUAQuerier` returning a zero value (or
+  `pgx.ErrNoRows`), matching the pattern of its neighboring stub methods.
+- **Recommendation:** land a small follow-up (ideally before or alongside this task) updating
+  `stubUAQuerier` so `make lint`/`make test.unit` are green module-wide again; the
+  `TestNewStepUpConsumedCache_JanitorStopsOnCancel` flake is unrelated and pre-existing, noted
+  for awareness only.
