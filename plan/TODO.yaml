@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: anonymous-actor-service
+          title: Anonymous Actor Startup Service
+          path: phase-01-anonymous-actor/002-anonymous-actor-service.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
