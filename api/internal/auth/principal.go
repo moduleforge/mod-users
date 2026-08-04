@@ -37,9 +37,21 @@ type AssumedUserInfo struct {
 	Email         string
 }
 
+// contextKey is the unexported key type for every value this package stores on
+// a context.Context. All of its values live in the one grouped const block
+// below so that iota gives each key a distinct value — a key declared in a
+// separate const block would restart iota at 0 and silently alias
+// userContextKey.
 type contextKey int
 
-const userContextKey contextKey = iota
+const (
+	// userContextKey addresses the *UserContext stored by WithUserContext.
+	userContextKey contextKey = iota
+	// anonymousActorKey addresses the marker stored by WithAnonymousActor
+	// (anonymous_actor.go) on requests that resolved to the shared anonymous
+	// system actor rather than to an authenticated principal.
+	anonymousActorKey
+)
 
 // WithUserContext stores a UserContext on the provided context.
 func WithUserContext(ctx context.Context, uc *UserContext) context.Context {

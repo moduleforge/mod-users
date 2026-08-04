@@ -221,3 +221,57 @@ architectural_impact: true
   comment, which anticipated exactly this extension point.
 - `api/internal/auth/principal.go` — the `contextKey` declaration to extend carefully.
 - `api/internal/auth/require_verified.go` — the fail-closed 500 the composition test asserts.
+
+## Status
+
+- **Outcome:** succeeded. 2026-08-04.
+- **Files:** created `api/internal/auth/anonymous_actor.go` (`ResolveActorOrAnonymous`,
+  `WithAnonymousActor`, `IsAnonymousActor`) and `api/internal/auth/anonymous_actor_test.go`;
+  modified `api/internal/auth/principal.go` — context-key declaration only, converted to one
+  grouped `const (...)` block so `userContextKey` (0) and the new `anonymousActorKey` (1) cannot
+  alias. No other production file touched; `middleware_test.go` is unmodified and still passes.
+- **Reuse of task 003's helpers:** every non-diverging row goes through `writeAuthError` and
+  `contextWithAuthenticatedActor`, so the middleware body contains exactly one branch that
+  `RequireAuth` does not have — the genuinely-absent-header fall-through, gated on
+  `errors.Is(err, ErrNoAuthHeader) && r.Header.Get("Authorization") == ""`.
+- **Test-name → required case mapping** (all in `anonymous_actor_test.go`):
+  1. `TestResolveActorOrAnonymous_NoAuthHeader_SetsAnonymousActor`
+  2. `TestResolveActorOrAnonymous_PresentedCredentialFailuresAreRejected/invalid token: bad signature`
+  3. `TestResolveActorOrAnonymous_PresentedCredentialFailuresAreRejected/expired token`
+  4. `TestResolveActorOrAnonymous_ValidToken_UsesResolvedActor/ordinary local JWT` and
+     `.../guest-account JWT carrying the inert anonymity claim` (the guest token is minted by the
+     real `IssueAnonymousJWT`, so it genuinely carries the inert claim)
+  5. `TestResolveActorOrAnonymous_SudoActorNeverSetOnAnonymousBranch` plus
+     `TestResolveActorOrAnonymous_SudoActorStillSetForAssumedUser` (invariant is "never on the
+     anonymous branch", not "never")
+  6. `TestResolveActorOrAnonymous_NoUserContextOnAnonymousBranch` plus
+     `TestResolveActorOrAnonymous_ComposedWithRequireVerifiedEmailFailsClosed` (500 "server
+     misconfiguration")
+  7. `TestResolveActorOrAnonymous_PresentedCredentialFailuresAreRejected/malformed header: Basic scheme`
+     and `.../malformed header: bare Bearer with no token`
+  8. `TestResolveActorOrAnonymous_PresentedCredentialFailuresAreRejected/resolver reports ErrUserGone`,
+     `.../claim mapper fault: missing sub claim`, `.../resolver internal fault`
+  9. `TestResolveActorOrAnonymous_NoJWTResolvesToAnonymousActor`
+  Context-key hazard: `TestAnonymousActorKeyDoesNotAliasUserContextKey` (plus
+  `TestIsAnonymousActor_FalseOnUntouchedContext`).
+- **Mutation-checked, then reverted:** deleting the `r.Header.Get("Authorization") == ""` guard
+  fails exactly the two malformed-header rows; collapsing the two context keys back onto separate
+  `iota` blocks fails the non-aliasing test. Both hazard tests are therefore load-bearing rather
+  than tautological.
+- **Validation:** `cd api && go build ./...`, `go vet ./...`, `go test ./internal/auth/...`, and
+  `go test -race -count=1 ./internal/auth/...` all pass; `make lint.api`, `make lint.gui`, and the
+  full `make test.unit` (model + api + gui) pass. `make lint` as a whole fails only in
+  `lint.model`'s `shadow-db-lint`, which cannot apply `0100_schema.sql` because mod-core's
+  `legal_entities` is absent from the ephemeral shadow DB — reproduced identically at this
+  branch's base commit (`a2432dc`), and no `model/` file is touched by this task.
+  `grep -n "WithSudoActor\|WithUserContext" api/internal/auth/anonymous_actor.go` matches only the
+  two doc-comment lines describing the *success* row (the shared helper's behavior); neither
+  identifier appears in executable code in this file, so neither can appear on the anonymous
+  branch. `grep -n "is_anonymous\|IsAnonymous\b" api/internal/auth/anonymous_actor.go` returns no
+  matches: the doc comment disambiguates against the guest-account boolean and the inert JWT claim
+  by naming `toUserAccount` and `IssueAnonymousJWT` rather than the literal identifiers, which
+  keeps the grep gate meaningful.
+- **Note (unchanged behavior, worth knowing):** a request sending `Authorization:` with an *empty*
+  value is indistinguishable from an absent header via `r.Header.Get`, so it takes the anonymous
+  branch. That matches `RequireAuth`'s own classification (it reports "missing Authorization
+  header" for the same input), so the two middlewares stay consistent; no code changed for it.
