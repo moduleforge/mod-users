@@ -25,6 +25,7 @@ phases:
           path: phase-01-anonymous-actor/002-anonymous-actor-service.md
           done: false
           tier: sonnet-high
+          digest: Retry made no changes to the task's actual scope (api/internal/auth/) - that work was already complete and intact from the prior attempt (commit 7644a30). The single blocking issue was a stale hand-written db.Querier-implementing test stub (stubUAQuerier) that hadn't been updated to satisfy the GetSystemActorBySlug method task 001 added to the generated interface, breaking go vet/go build(test)/make lint/make test.unit module-wide. Added one mechanical stub method matching the file's existing convention. Full validation suite now passes end to end.
           git:
             branch: plan/anonymous-actor-01-002
             commit:
