@@ -11,7 +11,7 @@ phases:
           slug: system-actor-migration
           title: System Actor Migration And Sqlc Query
           path: phase-01-anonymous-actor/001-system-actor-migration.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Added model/migrations/sql/0101_system_actors.sql seeding the system_actor type, the system_actors CTI table with its type-check trigger, the single anonymous seed row, and the entities_no_system_actor_owner ownership-guard trigger, plus the GetSystemActorBySlug sqlc query and regenerated model/db/ output. Every behavioral claim in the task doc - seed values, type shape, ownership-guard firing, type-check firing, and the two alphabetical trigger-ordering facts on INSERT and UPDATE - was independently verified against a live Postgres instance and matched exactly. The one divergence: Down migration cannot delete the seeded types row due to a pre-existing, out-of-scope, unconditional append-only trigger on types (mod-core''s 0002_types.sql); resolved by following established mod-authz/0501 precedent, documented inline in the migration and the task doc''s Status section.'
           git:
