@@ -69,7 +69,7 @@ phases:
           slug: db-invariant-integration-tests
           title: Database Invariant Integration Tests
           path: phase-01-anonymous-actor/006-db-invariant-integration-tests.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Added a build-tag-gated integration test file proving every DB-level invariant that makes the anonymous system actor zero-authority: ownership guard firing on INSERT and UPDATE (alphabetical trigger-order message pinned), regression guard that ordinary entity writes still succeed, actor-group-membership rejection via type-check trigger, structural impossibility of a user_accounts row (FK violation), Authorize returning ErrForbidden not ErrUnauthenticated for nil and real targets, and list/single-row symmetry of zero grants and empty accessible-ids. All 8 new tests pass alongside the full pre-existing suite (29 total), go vet clean, diff confined to one new file.'
           git:
