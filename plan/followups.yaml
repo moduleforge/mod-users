@@ -127,3 +127,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Coupling note: anonymous_actor_test.go deliberately consumes middleware_test.go''s and resolver_test.go''s helpers - intentional but means a future rename in middleware_test.go breaks this file. Documented in a header comment in the new test file.'
+    - title: Task 002 (AnonymousActor/NewAnonymousActor) w
+      id: VgLt
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: Task 002 (AnonymousActor/NewAnonymousActor) was not needed and is not referenced anywhere in this diff - no blocking dependency materialized on task 002.
