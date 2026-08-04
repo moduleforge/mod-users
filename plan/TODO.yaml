@@ -15,7 +15,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/anonymous-actor-01-001
-            commit: []
+            commit:
+                - a6eefc0
             merge: null
         - number: 2
           slug: anonymous-actor-service
