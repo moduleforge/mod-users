@@ -36,3 +36,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: resolve-actor-or-anonymous-middleware
+          title: Resolveactororanonymous Middleware
+          path: phase-01-anonymous-actor/004-resolve-actor-or-anonymous-middleware.md
+          done: false
+          tier: opus-high
+          git:
+            branch: null
+            commit: []
+            merge: null
