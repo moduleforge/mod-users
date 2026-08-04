@@ -18,7 +18,7 @@ phases:
             branch: plan/anonymous-actor-01-001
             commit:
                 - a6eefc0
-            merge: null
+            merge: 6ec008c2bafa1edb469aff43f34d524f474943ad
         - number: 2
           slug: anonymous-actor-service
           title: Anonymous Actor Startup Service
