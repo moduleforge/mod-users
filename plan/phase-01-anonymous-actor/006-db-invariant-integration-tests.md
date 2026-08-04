@@ -155,3 +155,73 @@ architectural_impact: true
 - `mod-authz/model/migrations/0502_authz_actor_group_members.sql` — the member-type trigger and
   its exact exception text for assertion (e).
 - `plan/phase-01-anonymous-actor/001-system-actor-migration.md` — the migration under test.
+
+## Status
+
+**Outcome:** succeeded. Date: 2026-08-04.
+
+Added `api/internal/authz/anonymous_actor_integration_test.go` (new file, `//go:build integration`,
+package `authz_test`), reusing `authz_integration_test.go`'s `TestMain`, seeding helpers
+(`seedUser`, `corporationTypeID`, `seedOwnedCorporation`, `seedUnownedCorporation`, `actorCtx`),
+and package-level state (`integPool`, `integAZ`, `integOpReg`). No second harness was built. Eight
+named tests cover assertions (a)–(h) one-to-one:
+
+- `TestInteg_AnonymousActor_SeededState` — (a)
+- `TestInteg_AnonymousActor_OwnershipGuard_RejectsInsert` — (b)
+- `TestInteg_AnonymousActor_OwnershipGuard_RejectsUpdate` — (c)
+- `TestInteg_AnonymousActor_OwnershipGuard_NormalEntitiesUnaffected` — (d)
+- `TestInteg_AnonymousActor_ActorGroupMembershipRejected` — (e)
+- `TestInteg_AnonymousActor_NoLoginIdentityPossible` — (f)
+- `TestInteg_AnonymousActor_AuthorizeForbiddenNotUnauthenticated` — (g)
+- `TestInteg_AnonymousActor_ZeroPlatformAuthority` — (h)
+
+**Environment note (do not rediscover):** on this host, `localhost:5432` does not reach the
+shared `users-module-postgres` container — a native Homebrew `postgresql@14` service
+(`/opt/homebrew/opt/postgresql@14/bin/postgres`, launchd label
+`homebrew.mxcl.postgresql@14`) independently listens on `127.0.0.1:5432`/`[::1]:5432` and wins
+over Docker's port-forward for connections to `localhost`/`127.0.0.1`/`::1`, so a plain
+`AUTHZ_DEV_PG_HOST=localhost go test -tags=integration ...` on the host hits the wrong Postgres
+(role `users` does not exist there) rather than the intended container. This is a different
+obstacle than the pre-rename-container/credential-mismatch scenario task 001 flagged (whose
+credentials, on inspection, actually match this repo's `.env` — `users`/`users`/`users` — so the
+`users-module-postgres` container itself is correctly configured and is the intended shared dev
+Postgres, reused by mod-core/mod-tags/mod-tasks per its own database list). No host port was
+free to bind a substitute container to (native postgres already holds `127.0.0.1:5432`; Docker's
+proxy for the existing container already holds the wildcard `*:5432`; binding to an alternate
+loopback alias or the LAN interface was not available/permitted in this environment). Workaround
+used: ran `go test`/`go vet` inside an ephemeral `golang:1.26` container started with
+`--network container:users-module-postgres` (shares that container's network namespace, so
+`AUTHZ_DEV_PG_HOST=127.0.0.1` inside the test container reaches Postgres directly on its own
+loopback, bypassing the host port conflict entirely), with the moduleforge aggregate directory
+bind-mounted at an identical path (preserving `link-siblings.sh`'s absolute-path symlinks and
+`api/go.mod`'s relative `replace` directives), a read-only Docker-socket mount plus a
+curl-installed static `docker` CLI (so `checkPrereqs`'s `docker inspect users-module-postgres`
+check still runs for real), and `go install`ed `goose`. No host service, and no pre-existing
+container, was stopped, modified, or touched. All throwaway Docker resources (module/build-cache
+volumes) created for this were removed after use; nothing persists outside the worktree.
+
+**Validation:** `go vet -tags=integration ./internal/authz/...` clean. Full integration suite (21
+pre-existing tests + 8 new) passes: `ok github.com/moduleforge/mod-users/api/internal/authz`,
+`0.253s`, 0 failures. Skip-cleanly path re-verified by temporarily moving
+`model/schema/migrations` aside and running natively on the host (no container workaround
+needed for this check): suite logged `integration: skipping authz users tests — composed
+migrations dir ... not found ...` and exited 0; directory restored (26 files, including
+`0101_system_actors.sql`) immediately after. `grep -rn "system_actor" api/cmd/server/main.go`
+returns no match. `git diff --stat` (and `git status --short`) confine the change to the one new
+file.
+
+**Pre-existing, out-of-scope `make test.unit` failures (flagged, not fixed):** `make test.unit`
+fails for two reasons unrelated to this task's diff (confirmed by temporarily removing the new
+file and re-running — both failures persist identically without it):
+1. `api/internal/service` fails to build: `internal/service/user_accounts_upgrade_test.go`'s
+   `stubUAQuerier` does not implement the `GetSystemActorBySlug` method that task 001 added to
+   `model/db.Querier`. This is a gap left by task 001's merge, in a file this task's scope
+   (`Scope: integration tests only`, confined to `api/internal/authz/`) does not authorize
+   touching.
+2. `api/auth`'s `TestNewStepUpConsumedCache_JanitorStopsOnCancel` failed once under `make
+   test.unit`'s run but passed on two direct reruns (`go test ./auth/... -run
+   TestNewStepUpConsumedCache_JanitorStopsOnCancel`) — a pre-existing, timing-sensitive flake,
+   unrelated to system-actor/authz work.
+
+Neither failure is in a file this task touched or is authorized to touch; both are reported to
+the manager rather than fixed here.
