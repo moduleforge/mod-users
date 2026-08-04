@@ -82,3 +82,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Blocking, out-of-scope fix needed: add a GetSystemActorBySlug(ctx context.Context, slug string) (db.GetSystemActorBySlugRow, error) method to stubUAQuerier in api/internal/service/user_accounts_upgrade_test.go (mechanical, one method, matching neighboring stubs'' pattern). This is what''s currently failing make lint/make test.unit for the whole api module and will keep failing for every subsequent task in this phase until fixed. Recommend a fast follow-up task landing this before/alongside task 002.'
+    - title: 'Pre-existing and unrelated: TestNewStepUpCons'
+      id: ljG1
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Pre-existing and unrelated: TestNewStepUpConsumedCache_JanitorStopsOnCancel in package api/auth is flaky (goroutine-count timing assertion), reproduces on branch HEAD without any changes here. Already tracked as followup 5RbD.'
