@@ -46,3 +46,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: make test.unit (full) fails on already-tracked flaky TestNewStepUpConsumedCache_JanitorStopsOnCancel (followup id 5RbD in mod-users followups.yaml), recurred here
+    - title: 'AssumedUser characterization gap: resolver_te'
+      id: VJg2
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'AssumedUser characterization gap: resolver_test.go''s stub pattern alone doesn''t cover the AssumedUser/sudo-actor branch - relevant if task 004 needs the same coverage'
