@@ -200,3 +200,55 @@ architectural_impact: true
 - `mod-authz/model/migrations/0502_authz_actor_group_members.sql` — the member-type trigger
   that makes actor-group membership structurally impossible for this type.
 - `AGENTS.md` — "Database migrations" and "Code generation (sqlc)".
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-08-04
+- **Files:**
+  - `model/migrations/sql/0101_system_actors.sql` (new)
+  - `model/queries/system_actors.sql` (new)
+  - `model/db/system_actors.sql.go` (generated, new)
+  - `model/db/querier.go` (generated, one interface line added)
+- **Validation summary:** All checks passed. `sqlc generate` produced `GetSystemActorBySlug` on
+  `Querier`/`*Queries` with no hand edits to `model/db/`. `make -C model compose` assembled
+  `schema/migrations/` including `0101_system_actors.sql`. Forward migration
+  (`goose -dir migrations/sql -table goose_db_version_users postgres "$DB_URL" up`, applied on
+  top of mod-core's migrations under `goose_db_version_core` — mirroring how the module's own
+  `migrate.go`/host app apply it at boot) applied cleanly; all four seed/type-shape queries in
+  the task doc returned the expected values. The ownership-guard trigger, the CTI type-check
+  trigger, and the INSERT/UPDATE firing-order claims were all verified directly in psql and
+  matched the doc's claims exactly (UPDATE ... SET owner_id = <anon id> raises the system-actor
+  message, not the immutability message). Rollback
+  (`goose -dir migrations/sql -table goose_db_version_users postgres "$DB_URL" down`) succeeded;
+  `system_actors`, both trigger functions, and both triggers were confirmed gone afterward. `grep
+  -rn "system_actor" api/cmd/server/main.go` returns no match. `make lint` for `model/` passed
+  (using `SHADOW_DB_PREREQ_DIRS=<mod-core>/model/migrations`, matching CI's `ci.yml`
+  configuration — not set by default in the local Makefile).
+- **Deviation from the literal Down-migration validation text (flagged for manager):** the
+  `system_actor` row in `types` is **not** deleted by the Down migration and is confirmed still
+  present after rollback — this contradicts the task doc's literal "the `system_actor` row in
+  `types` are all gone" wording. Root cause: mod-core's `types` table (`0002_types.sql`) carries
+  an unconditional `types_no_delete` / `types_reject_mutation` trigger that rejects every `DELETE
+  FROM types`, with no exception. This is not something within mod-users' migration's power to
+  work around (touching that trigger is out of scope and owned by mod-core), and it is not a
+  defect specific to this migration — the same limitation already applies to every existing
+  type-seed migration in the tree. There is direct, already-merged precedent for this exact
+  resolution: `mod-authz/model/migrations/0501_authz_actor_groups.sql`'s own Down section leaves
+  its seeded type row in place with the comment "types rows are append-only ... they cannot be
+  deleted ... a deprecated type causes no harm." `0101_system_actors.sql`'s Down section follows
+  the same pattern and documents the same rationale inline. One consequence worth calling out
+  explicitly: because the type row survives, a `down` then `up` round-trip against the same
+  database fails on the `INSERT INTO types` statement (`duplicate key value violates unique
+  constraint "types_slug_key"`) — this is inherent to any type-seeding migration in this codebase
+  (not specific to this one) and was not something the task's `## Validation` section asked for;
+  it is noted here only because I exercised it while validating and it surfaces the same
+  append-only constraint. Recommend the architecture proposal and this task doc's Down-migration
+  wording be corrected to match the established `0501` pattern in a follow-up, so future readers
+  don't re-derive this the hard way.
+- **Environment note:** validated against an ephemeral, throwaway `docker run` Postgres container
+  (not `make dev.start`) on an alternate port, because the machine had a stale, differently-named
+  orphaned Postgres container (`users-module-postgres`, from a now-nonexistent path predating a
+  `users-module` → `mod-users` rename) already bound to port 5432 with credentials that did not
+  match this repo's `.env`. That stale container was left untouched (out of this task's scope to
+  remove); the throwaway validation container was torn down after use.
