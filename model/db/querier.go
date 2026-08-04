@@ -40,6 +40,7 @@ type Querier interface {
 	GetOIDCIdentityByIssuerSubject(ctx context.Context, arg GetOIDCIdentityByIssuerSubjectParams) (AuthOidcIdentity, error)
 	// Fetch one provider override row by id.
 	GetOIDCProvider(ctx context.Context, id string) (OidcProvider, error)
+	GetSystemActorBySlug(ctx context.Context, slug string) (GetSystemActorBySlugRow, error)
 	GetUserAccountByAccountHolder(ctx context.Context, accountHolder int64) (UserAccount, error)
 	GetUserAccountByEmail(ctx context.Context, lower string) (UserAccount, error)
 	GetUserAccountByID(ctx context.Context, id int64) (UserAccount, error)
