@@ -91,3 +91,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Pre-existing and unrelated: TestNewStepUpConsumedCache_JanitorStopsOnCancel in package api/auth is flaky (goroutine-count timing assertion), reproduces on branch HEAD without any changes here. Already tracked as followup 5RbD.'
+    - title: Re-confirming (already noted by task 001's ow
+      id: WAvY
+      date: "2026-08-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Re-confirming (already noted by task 001''s own Status): bare make lint from repo root does not pass SHADOW_DB_PREREQ_DIRS to lint.model, so lint.model fails unless invoked with SHADOW_DB_PREREQ_DIRS=<mod-core>/model/migrations.'
