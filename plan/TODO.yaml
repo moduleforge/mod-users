@@ -27,7 +27,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/anonymous-actor-01-002
-            commit: []
+            commit:
+                - 8b6b7b4
             merge: null
         - number: 3
           slug: requireauth-helper-extraction
