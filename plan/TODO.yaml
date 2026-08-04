@@ -33,6 +33,7 @@ phases:
           path: phase-01-anonymous-actor/003-requireauth-helper-extraction.md
           done: false
           tier: sonnet-high
+          digest: Added nine characterization tests pinning every branch of RequireAuth's pre-refactor behavior, confirmed green against original code, then extracted error-mapping and success-population blocks into two unexported helpers (writeAuthError, contextWithAuthenticatedActor) with zero behavioral change - verified by explicit diff review and unmodified test suite passing unchanged post-refactor. RequireAuth is now a thin composition of AuthenticateRequest plus the two helpers, ready for task 004's ResolveActorOrAnonymous to reuse.
           git:
             branch: plan/anonymous-actor-01-003
             commit:
