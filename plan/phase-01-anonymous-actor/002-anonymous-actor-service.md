@@ -157,3 +157,50 @@ architectural_impact: true
 - `mod-authz/model/migrations/0505_grants.sql` — `grants.actor_id` column.
 - `plan/phase-01-anonymous-actor/001-system-actor-migration.md` — the query and table this task
   consumes.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-08-04 (retry)
+- **Files:**
+  - `api/internal/auth/anonymous_actor_service.go` (new, from the original attempt; unchanged
+    this retry — verified intact)
+  - `api/internal/auth/anonymous_actor_service_test.go` (new, from the original attempt;
+    unchanged this retry — verified intact)
+  - `api/internal/service/user_accounts_upgrade_test.go` (retry-only, mechanical fix; see below —
+    out of this task's normal file-editing scope but required to unblock module-wide validation)
+- **Retry adjustment:** the original attempt's implementation in `api/internal/auth/` was already
+  complete and correct; validation failed for a single reason entirely outside that directory
+  (see the root-cause note previously recorded here, now resolved). This retry adds one
+  mechanical stub method — `GetSystemActorBySlug(ctx context.Context, slug string)
+  (db.GetSystemActorBySlugRow, error)`, returning `db.GetSystemActorBySlugRow{}, pgx.ErrNoRows` —
+  to `stubUAQuerier` in `api/internal/service/user_accounts_upgrade_test.go`, mirroring the
+  existing neighboring `Get...By...` stub methods' convention (e.g.
+  `GetActivePasswordReset`) exactly. No behavior change; pure interface-conformance fix so
+  `stubUAQuerier` again satisfies `db.Querier` after task 001 grew that interface.
+- **Validation summary (full re-run, both directories in scope):**
+  - PASS — `api/internal/auth/anonymous_actor_service.go` and its `_test.go` exist and are
+    unmodified from the prior commit; the only other file touched is the out-of-scope stub file
+    named above, per this retry's explicit adjustment.
+  - PASS — `cd api && go build ./...` succeeds, whole module.
+  - PASS — `cd api && go vet ./...` is clean, whole module (previously-failing
+    `internal/service` stub-conformance error is now resolved).
+  - PASS — `cd api && go test ./internal/auth/...` passes (`ok`, all 5 new table-driven subtests
+    plus every pre-existing test in the package, unchanged).
+  - PASS — `grep -n "grants" api/internal/auth/anonymous_actor_service.go` shows the grants
+    query bound via `$1`, no string interpolation.
+  - PASS — `grep -rn "AnonymousActorEntityID\|= -1\|const.*[Aa]nonymous.*int64" api/` finds no
+    matches (no hardcoded entity-id constant).
+  - PASS — `make lint` (with `SHADOW_DB_PREREQ_DIRS=<mod-core>/model/migrations` set for
+    `lint.model`, per task 001's documented precedent): all three sub-targets (`lint.model`,
+    `lint.api`, `lint.gui`) passed clean this run, including `lint.model`'s shadow-db-lint step
+    (the previously-flagged pre-existing `legal_entities`-missing failure did not reproduce in
+    this run) and `lint.api`'s `go vet ./...`, now clean module-wide.
+  - PASS (with one documented pre-existing flake) — `make test.unit`: `internal/service` now
+    builds and its own tests pass (`ok`, cached). The one failure,
+    `TestNewStepUpConsumedCache_JanitorStopsOnCancel` in package `api/auth`, is an already-tracked
+    pre-existing goroutine-count timing flake unrelated to this fix — confirmed by re-running it
+    in isolation 3x (`go test ./auth/... -run TestNewStepUpConsumedCache_JanitorStopsOnCancel
+    -count=3 -v`), which passed all three times; it fails only under the full parallel
+    `go test ./...` run, consistent with test-parallelism timing contention rather than a
+    regression from this change.
