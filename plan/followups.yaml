@@ -217,15 +217,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/CLAUDE.md is empty except for an auto-generated claude-mem-context stub, not reachable from README.md, and nothing links to it. readme-document-standards.md explicitly exempts only the .claude/ directory from the link-chain rule, not stray CLAUDE.md files elsewhere in the tree, so a strict reading makes this a technical orphan - though it carries no prose content and functions like an exempted per-directory Claude Code context file. Flagging for manager/standards judgment rather than treating as a hard defect; worth a small standards clarification if this pattern recurs across other Flow-managed projects.'
-    - title: Note only, already tracked as followups t5ut/
-      id: D5jc
-      date: "2026-08-05"
-      tags:
-        - type:ambiguity
-        - plan/phase:doc-updates
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Note only, already tracked as followups t5ut/WAvY: make lint fails at lint.model due to SHADOW_DB_PREREQ_DIRS having no default, unrelated to this task, confirmed by manually supplying the prereq dir.'
     - title: 'Note only, already tracked as followup 5RbD: '
       id: DmeD
       date: "2026-08-05"
