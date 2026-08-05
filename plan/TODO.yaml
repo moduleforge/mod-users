@@ -92,5 +92,6 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/anonymous-actor-02-001
-            commit: []
+            commit:
+                - 0ecdd72
             merge: null
