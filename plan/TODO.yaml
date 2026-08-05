@@ -90,6 +90,7 @@ phases:
           path: phase-02-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: 'Updated docs/architecture.md and docs/mod-users-spec.md to document the anonymous-system-actor subsystem shipped in phase-01, cross-checked directly against the merged code. Added the guest-account vs anonymous-actor terminology split with comparison table, the system_actors data-model entry and enforcement rationale, the middleware''s opt-in wiring and never-downgrade-a-bad-token behavior, the per-IP rate-limiting and max-page-size preconditions, the Vary: Authorization caching note, the composition rule and its fail-closed 500, and the audit-attribution collapse. Corrected the two stale is_anonymous JWT-claim claims at all four cited doc locations plus the matching code comment (comment-only). All task-specified grep validations pass; this completes the anonymous-actor plan.'
           git:
             branch: plan/anonymous-actor-02-001
             commit:
