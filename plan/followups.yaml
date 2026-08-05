@@ -226,3 +226,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Note only, already tracked as followup Hzvv: plan/notes/anonymous-actor-architecture-proposal.md''s Down-migration rollback description (claims the seeded type row is dropped) is inaccurate - not in this task''s editable scope (docs/architecture.md and docs/mod-users-spec.md don''t discuss migration rollback at all, so nothing to correct there).'
+    - title: Note only, already tracked as followups t5ut/
+      id: D5jc
+      date: "2026-08-05"
+      tags:
+        - type:ambiguity
+        - plan/phase:doc-updates
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Note only, already tracked as followups t5ut/WAvY: make lint fails at lint.model due to SHADOW_DB_PREREQ_DIRS having no default, unrelated to this task, confirmed by manually supplying the prereq dir.'
