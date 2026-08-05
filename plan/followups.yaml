@@ -55,15 +55,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Environment: a stale, orphaned Postgres container (users-module-postgres, docker-compose project users-module, working dir pointing at a now-nonexistent path predating a repo rename from users-module to mod-users) is bound to host port 5432 with credentials that do not match this repo''s .env. Blocks normal make dev.start port binding. Not touched (destructive host-level docker actions correctly denied). Validation used a throwaway docker run Postgres on port 5433, torn down after use. Recommend the stale container/volume (users-module-postgres / users-module_postgres-data) be cleaned up or renamed.'
-    - title: 'Pre-existing and unrelated: TestNewStepUpCons'
-      id: ljG1
-      date: "2026-08-04"
-      tags:
-        - type:ambiguity
-        - plan/phase:anonymous-actor
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Pre-existing and unrelated: TestNewStepUpConsumedCache_JanitorStopsOnCancel in package api/auth is flaky (goroutine-count timing assertion), reproduces on branch HEAD without any changes here. Already tracked as followup 5RbD.'
     - title: 'make lint does not pass as a whole: lint.mode'
       id: nAXW
       date: "2026-08-04"
