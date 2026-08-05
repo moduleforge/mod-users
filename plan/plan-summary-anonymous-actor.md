@@ -250,3 +250,26 @@ Filtered to items tagged `plan/phase:anonymous-actor` or `plan/phase:doc-updates
 Not carried forward here (out of this plan's own phase tags): `5RbD` (`route-wiring`
 phase — duplicate of `ljG1`/`cDFE` already listed above), `biJk` (`route-wiring` phase,
 openapi.yaml gap), `HPJi` (`tags-frontend-foundation` phase, cross-repo `app-mftodo` issue).
+
+## Final Task State
+
+# TODO
+
+## Purpose and scope
+
+Tracking document for the active plan.
+
+## Tasks
+
+### Phase 01 — Anonymous System Actor
+
+- [x] [001-system-actor-migration.md](./phase-01-anonymous-actor/001-system-actor-migration.md) — tier `sonnet-high` · branch `plan/anonymous-actor-01-001` · commit `a6eefc0` · merge `6ec008c2bafa1edb469aff43f34d524f474943ad`
+- [x] [002-anonymous-actor-service.md](./phase-01-anonymous-actor/002-anonymous-actor-service.md) — tier `sonnet-high` · branch `plan/anonymous-actor-01-002` · commit `8b6b7b4` · merge `da425de5facd4315c72245ae3ec5f07d5f708525`
+- [x] [003-requireauth-helper-extraction.md](./phase-01-anonymous-actor/003-requireauth-helper-extraction.md) — tier `sonnet-high` · branch `plan/anonymous-actor-01-003` · commit `7cc3ea7` · merge `835d6ff05c369d856b26611f8faa5aee897d59a8`
+- [x] [004-resolve-actor-or-anonymous-middleware.md](./phase-01-anonymous-actor/004-resolve-actor-or-anonymous-middleware.md) — tier `opus-high` · branch `plan/anonymous-actor-01-004` · commit `944b717` · merge `9746b136db81e4026a507785ec8e24942619a380`
+- [x] [005-facade-and-manifest-wiring.md](./phase-01-anonymous-actor/005-facade-and-manifest-wiring.md) — tier `sonnet-high` · branch `plan/anonymous-actor-01-005` · commit `5dcd438` · merge `7fe3a564e85e4268972217a0a91def0da0e2de14`
+- [x] [006-db-invariant-integration-tests.md](./phase-01-anonymous-actor/006-db-invariant-integration-tests.md) — tier `sonnet-high` · branch `plan/anonymous-actor-01-006` · commit `3d2ee15` · merge `297e43b71709e4d0bbbf0a221cda9b92da917916`
+
+### Phase 02 — Documentation Updates
+
+- [x] [001-update-architecture-docs.md](./phase-02-doc-updates/001-update-architecture-docs.md) — tier `sonnet-high` · branch `plan/anonymous-actor-02-001` · commit `0ecdd72` · merge `56ca5b25454b98fb5aaa394e6749ac3e4f931f47`
