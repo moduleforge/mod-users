@@ -22,12 +22,16 @@ const anonymousActorSlug = "anonymous"
 //
 // This is a shared identity, not a per-caller one: every tokenless request
 // that authenticates as the anonymous actor resolves to the same entities.id.
-// It owns nothing, holds no grants, and can never acquire either (enforced by
-// the no-grants boot assertion below and by database constraints elsewhere).
-// It is distinct from a *guest account* — the per-device, stateful identity
-// produced by POST /v1/auth/anonymous, which does own things and can hold
-// grants. See the anonymous-actor architecture proposal's "Composition with
-// POST /v1/auth/anonymous" section for the full terminology split.
+// It owns nothing: that property is continuously enforced by a database
+// constraint (a Postgres trigger). It holds no grants as of the last boot,
+// verified once by the no-grants boot assertion below (see
+// newAnonymousActor) — that check is not backed by a database constraint, so
+// it does not continuously prevent a grant from being inserted for this
+// actor's entity id after boot. It is distinct from a *guest account* — the
+// per-device, stateful identity produced by POST /v1/auth/anonymous, which
+// does own things and can hold grants. See the anonymous-actor architecture
+// proposal's "Composition with POST /v1/auth/anonymous" section for the full
+// terminology split.
 type AnonymousActor struct {
 	entityID int64
 }

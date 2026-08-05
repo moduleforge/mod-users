@@ -151,6 +151,9 @@ func NewAnonymousActor(ctx context.Context, pool *pgxpool.Pool) (*AnonymousActor
 // list, with requireOIDCConfirmed listed first. It must never be combined
 // with requireAuth or requireVerifiedEmail on the same route group.
 func NewResolveActorOrAnonymous(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver, anon *AnonymousActor) func(http.Handler) http.Handler {
+	if anon == nil {
+		panic("auth: NewResolveActorOrAnonymous: anon must not be nil")
+	}
 	return inner.ResolveActorOrAnonymous(verifier, mapper, resolver, anon.EntityID())
 }
 
