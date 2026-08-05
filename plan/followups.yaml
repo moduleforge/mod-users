@@ -37,15 +37,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'AssumedUser characterization gap: resolver_test.go''s stub pattern alone doesn''t cover the AssumedUser/sudo-actor branch - relevant if task 004 needs the same coverage'
-    - title: Task doc's Down-migration prose and one Valid
-      id: b1vv
-      date: "2026-08-04"
-      tags:
-        - type:ambiguity
-        - plan/phase:anonymous-actor
-        - priority:unspecified
-        - effort:unspecified
-      text: Task doc's Down-migration prose and one Validation bullet claim the system_actor row in types will be gone after rollback; this is unachievable given mod-core's pre-existing types_no_delete trigger. Resolved by following mod-authz/0501's established precedent (documented inline in migration and task doc Status section). Recommend correcting the architecture proposal (plan/notes/anonymous-actor-architecture-proposal.md, Migration/rollout notes section) and this task doc's wording in a follow-up.
     - title: 'Environment: a stale, orphaned Postgres conta'
       id: edGE
       date: "2026-08-04"
