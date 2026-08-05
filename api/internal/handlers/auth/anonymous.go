@@ -43,9 +43,13 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Issue a JWT for the new anonymous account. The token carries is_anonymous=true
-	// so middleware (e.g. RequireVerifiedEmail) can distinguish anonymous sessions
-	// without a database round-trip.
+	// Issue a JWT for the new guest account. The token carries is_anonymous=true
+	// for forward-compatibility, but the claim is not read by any middleware
+	// today — RequireVerifiedEmail (and everything else in the claim-mapping /
+	// resolve pipeline) decides purely from the account's EmailVerifiedAt
+	// timestamp, not this claim. This is unrelated to the separate, shared
+	// anonymous system actor (api/internal/auth/anonymous_actor.go), which has
+	// no JWT at all.
 	//
 	// IssueAnonymousJWT only reads ua.Uuid, so we build a minimal db.UserAccount
 	// from the service result UUID — no additional DB round-trip is required.

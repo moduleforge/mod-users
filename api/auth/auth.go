@@ -110,6 +110,71 @@ func RequireOIDCConfirmed(statusFn func() config.BootState) func(http.Handler) h
 	return inner.RequireOIDCConfirmed(statusFn)
 }
 
+// AnonymousActor holds the entity id of the seeded, zero-authority anonymous
+// system actor, resolved once at startup. See inner.AnonymousActor's doc
+// comment (api/internal/auth/anonymous_actor.go) for the full anonymous-actor
+// / guest-account terminology split.
+type AnonymousActor = inner.AnonymousActor
+
+// NewAnonymousActor resolves the anonymous system actor's entity id by slug
+// and asserts, at boot, that it holds zero grants — refusing to start if it
+// finds any. Matches moduleforge.module.yaml's anonymousActor provides.services
+// entry (constructor: auth.NewAnonymousActor, args: [context, infra:pool]).
+func NewAnonymousActor(ctx context.Context, pool *pgxpool.Pool) (*AnonymousActor, error) {
+	return inner.NewAnonymousActor(ctx, pool)
+}
+
+// NewResolveActorOrAnonymous returns opt-in middleware that behaves exactly
+// like RequireAuth except on one branch: a request that presents no
+// Authorization header at all falls through to the shared anonymous system
+// actor instead of being rejected with 401. See
+// inner.ResolveActorOrAnonymous's doc comment (api/internal/auth/anonymous_actor.go)
+// for the full branch table and the hard preconditions every opting-in route
+// group must satisfy (per-IP rate limiting, never composing with requireAuth
+// or requireVerifiedEmail, requireOIDCConfirmed outermost, Vary: Authorization,
+// and no audit attribution for the anonymous actor).
+//
+// This is the adapter between the anonymous-actor architecture proposal's §3
+// internal signature (inner.ResolveActorOrAnonymous, which takes a bare int64
+// entity id) and its §5 manifest wiring (which passes service:anonymousActor,
+// a *AnonymousActor holder). moduleforge.module.yaml's resolveActorOrAnonymous
+// provides.middleware entry names this function as its constructor; it
+// unwraps the holder via anon.EntityID() and delegates to
+// inner.ResolveActorOrAnonymous. inner.ResolveActorOrAnonymous keeps its
+// plain int64 signature — the unwrapping happens only here, at the facade
+// boundary — because that internal function also has callers that already
+// hold a bare entity id (see the plain ResolveActorOrAnonymous re-export
+// below).
+//
+// Consuming modules opt in by referencing this middleware by name
+// (resolveActorOrAnonymous) from a scope: public route group's middleware:
+// list, with requireOIDCConfirmed listed first. It must never be combined
+// with requireAuth or requireVerifiedEmail on the same route group.
+func NewResolveActorOrAnonymous(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver, anon *AnonymousActor) func(http.Handler) http.Handler {
+	if anon == nil {
+		panic("auth: NewResolveActorOrAnonymous: anon must not be nil")
+	}
+	return inner.ResolveActorOrAnonymous(verifier, mapper, resolver, anon.EntityID())
+}
+
+// ResolveActorOrAnonymous is a plain re-export of the internal form, matching
+// how RequireAuth is re-exported above, for callers (including the dev
+// server) that already hold the anonymous actor's entity id rather than the
+// *AnonymousActor holder.
+func ResolveActorOrAnonymous(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver, anonActorEntityID int64) func(http.Handler) http.Handler {
+	return inner.ResolveActorOrAnonymous(verifier, mapper, resolver, anonActorEntityID)
+}
+
+// IsAnonymousActor reports whether ctx was populated by
+// ResolveActorOrAnonymous's (or NewResolveActorOrAnonymous's) anonymous
+// branch — i.e. the actor on ctx is the shared, zero-authority anonymous
+// system actor rather than an authenticated principal. Re-exported so
+// handlers and observers in other modules can call it without reaching into
+// internal/auth.
+func IsAnonymousActor(ctx context.Context) bool {
+	return inner.IsAnonymousActor(ctx)
+}
+
 // HashPassword hashes a plaintext password using Argon2id.
 func HashPassword(plain string) (string, error) {
 	return inner.HashPassword(plain)

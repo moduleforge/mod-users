@@ -115,6 +115,9 @@ func (s *stubUAQuerier) CreatePasswordReset(_ context.Context, _ db.CreatePasswo
 func (s *stubUAQuerier) GetActivePasswordReset(_ context.Context, _ string) (db.PasswordReset, error) {
 	return db.PasswordReset{}, pgx.ErrNoRows
 }
+func (s *stubUAQuerier) GetSystemActorBySlug(_ context.Context, _ string) (db.GetSystemActorBySlugRow, error) {
+	return db.GetSystemActorBySlugRow{}, pgx.ErrNoRows
+}
 func (s *stubUAQuerier) ConsumePasswordReset(_ context.Context, _ int64) error { return nil }
 func (s *stubUAQuerier) CreateAnonToken(_ context.Context, _ db.CreateAnonTokenParams) (db.AnonToken, error) {
 	return db.AnonToken{}, nil

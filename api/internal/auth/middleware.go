@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -63,6 +64,57 @@ func AuthenticateRequest(r *http.Request, verifier *Verifier, mapper ClaimMapper
 	return uc, nil
 }
 
+// writeAuthError maps an AuthenticateRequest error to the appropriate HTTP
+// response, preserving the exact status codes, error codes, and messages
+// callers may already assert on. It is shared by every middleware that
+// authenticates via AuthenticateRequest and needs to reject the request on
+// error (currently RequireAuth; ResolveActorOrAnonymous reuses it for its
+// own non-ErrNoAuthHeader error paths).
+func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, ErrNoAuthHeader):
+		// Preserve the pre-9.10a distinction between missing
+		// header and malformed header for any callers that
+		// assert on the message.
+		if r.Header.Get("Authorization") == "" {
+			server.Error(w, http.StatusUnauthorized, "unauthorized", "missing Authorization header")
+		} else {
+			server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid Authorization header format")
+		}
+	case errors.Is(err, ErrInvalidToken):
+		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired token")
+	case errors.Is(err, ErrUserGone):
+		server.Error(w, http.StatusUnauthorized, "unauthorized", "user no longer exists")
+	default:
+		// Classify mapper vs resolver so ops can tell them
+		// apart; the helper doesn't differentiate but the
+		// error message does.
+		if strings.HasPrefix(err.Error(), "claim map:") {
+			slog.ErrorContext(r.Context(), "claim mapper error", "error", err)
+			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process authentication claims")
+		} else {
+			slog.ErrorContext(r.Context(), "user resolve error", "error", err)
+			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve user")
+		}
+	}
+}
+
+// contextWithAuthenticatedActor populates opctx values so downstream
+// service code and the Authorizer can read actor identity via
+// opctx.ActorEntityID. WithUserContext preserves the richer UserContext for
+// handler-level code that needs fields beyond what opctx exposes (email,
+// roles, etc.). Shared by every middleware that authenticates a request
+// successfully via AuthenticateRequest (currently RequireAuth;
+// ResolveActorOrAnonymous reuses it for its own authenticated-actor path).
+func contextWithAuthenticatedActor(ctx context.Context, uc *UserContext) context.Context {
+	ctx = WithUserContext(ctx, uc)
+	ctx = opctx.WithActor(ctx, uc.EntityID)
+	if uc.AssumedUser != nil {
+		ctx = opctx.WithSudoActor(ctx, uc.AssumedUser.EntityID)
+	}
+	return ctx
+}
+
 // RequireAuth returns middleware that validates the Authorization header,
 // maps claims to a Principal, resolves/creates the user, and stores
 // *UserContext on the request context.
@@ -71,43 +123,10 @@ func RequireAuth(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			uc, err := AuthenticateRequest(r, verifier, mapper, resolver)
 			if err != nil {
-				switch {
-				case errors.Is(err, ErrNoAuthHeader):
-					// Preserve the pre-9.10a distinction between missing
-					// header and malformed header for any callers that
-					// assert on the message.
-					if r.Header.Get("Authorization") == "" {
-						server.Error(w, http.StatusUnauthorized, "unauthorized", "missing Authorization header")
-					} else {
-						server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid Authorization header format")
-					}
-				case errors.Is(err, ErrInvalidToken):
-					server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired token")
-				case errors.Is(err, ErrUserGone):
-					server.Error(w, http.StatusUnauthorized, "unauthorized", "user no longer exists")
-				default:
-					// Classify mapper vs resolver so ops can tell them
-					// apart; the helper doesn't differentiate but the
-					// error message does.
-					if strings.HasPrefix(err.Error(), "claim map:") {
-						slog.ErrorContext(r.Context(), "claim mapper error", "error", err)
-						server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process authentication claims")
-					} else {
-						slog.ErrorContext(r.Context(), "user resolve error", "error", err)
-						server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve user")
-					}
-				}
+				writeAuthError(w, r, err)
 				return
 			}
-			// Populate opctx values so downstream service code and the
-			// Authorizer can read actor identity via opctx.ActorEntityID.
-			// WithUserContext preserves the richer UserContext for handler-level
-			// code that needs fields beyond what opctx exposes (email, roles, etc.).
-			ctx := WithUserContext(r.Context(), uc)
-			ctx = opctx.WithActor(ctx, uc.EntityID)
-			if uc.AssumedUser != nil {
-				ctx = opctx.WithSudoActor(ctx, uc.AssumedUser.EntityID)
-			}
+			ctx := contextWithAuthenticatedActor(r.Context(), uc)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

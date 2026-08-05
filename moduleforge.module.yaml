@@ -60,6 +60,29 @@ provides:
         - expr:"generic"         # mapperStyle hardcoded for demo deployment
         - field:cfg.Auth         # config.AuthConfig — public wrapper maps to MapperOptions
 
+    # anonymousActor — the shared, zero-authority anonymous system actor.
+    # Resolved once at startup by slug (system_actors.slug = 'anonymous',
+    # seeded by migration 0101_system_actors.sql); NewAnonymousActor asserts
+    # at boot that the actor holds zero grants and refuses to start if it
+    # finds any. Consumed only by resolveActorOrAnonymous below — this
+    # service entry has no other consumer.
+    #
+    # provides.middleware nodes are unconditional reachability roots in
+    # mfgen (internal/resolver/reachability.go), so resolveActorOrAnonymous
+    # — and therefore this service — is constructed in *every* consuming
+    # app's composition root, whether or not that app uses the middleware.
+    # That means every consuming app now hard-fails at boot if this module's
+    # 0101_system_actors.sql has not been applied. This is intentional
+    # fail-fast design, and it is safe because generated composition roots
+    # run all module migrations before constructing services.
+    - name: anonymousActor
+      type: "*auth.AnonymousActor"
+      constructor: auth.NewAnonymousActor
+      returnsError: true
+      args:
+        - context
+        - infra:pool
+
     # userResolver resolves a JWT Principal to an internal UserAccount / entity.
     # Receives observerGroup directly (it is declared before non-observer services).
     - name: userResolver
@@ -348,6 +371,36 @@ provides:
       constructor: auth.RequireOIDCConfirmed
       args:
         - method:onboardingHandler.CurrentState
+
+    # resolveActorOrAnonymous is opt-in middleware: it behaves exactly like
+    # requireAuth except a request presenting no Authorization header at all
+    # resolves to the shared, zero-authority anonymousActor instead of being
+    # rejected with 401. A presented-but-bad credential is never downgraded —
+    # only a genuinely absent header falls through.
+    #
+    # Consuming modules reference this middleware by name from a
+    # scope: public route group's middleware: list, with
+    # requireOIDCConfirmed listed first (e.g.
+    # middleware: [requireOIDCConfirmed, resolveActorOrAnonymous]). It must
+    # never be combined with requireAuth or requireVerifiedEmail on the same
+    # route group: composing with requireAuth is contradictory, and
+    # composing with requireVerifiedEmail fails closed with a 500 (no
+    # UserContext is placed on the anonymous branch).
+    #
+    # provides.middleware nodes are unconditional reachability roots in
+    # mfgen (internal/resolver/reachability.go): this middleware — and
+    # therefore the anonymousActor service it depends on — is constructed in
+    # every consuming app's composition root whether or not that app opts
+    # in, so every consuming app now hard-fails at boot if this module's
+    # 0101_system_actors.sql has not been applied. See the anonymousActor
+    # service entry's comment above for why this is intentional and safe.
+    - name: resolveActorOrAnonymous
+      constructor: auth.NewResolveActorOrAnonymous
+      args:
+        - service:verifier
+        - service:claimMapper
+        - service:userResolver
+        - service:anonymousActor
 
 hooks:
   # firstUserGrant bootstraps the wildcard manage grant for the first created user.
