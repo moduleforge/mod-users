@@ -208,3 +208,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor security-lens gate finding, security-004, informational] ResolveActorOrAnonymous''s documented hard preconditions (per-IP rate limiting, never composing with requireAuth/requireVerifiedEmail, Vary: Authorization on caching responses) are enforced by neither the middleware nor any code in phase-01 - by design, per its doc comment. No consuming route opts in yet, so no current exposure. Track as a checklist item for the first real route that adopts resolveActorOrAnonymous (e.g. the mod-repos consumer per the architecture proposal): confirm a per-IP rate limiter sits in front of it, confirm it is never combined with requireAuth/requireVerifiedEmail, and confirm the handler sets Vary: Authorization.'
+    - title: docs/CLAUDE.md orphan - exemption question
+      id: 1ZLT
+      date: "2026-08-04"
+      tags:
+        - plan/phase:anonymous-actor
+        - type:documentation
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-anonymous-actor gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/CLAUDE.md is empty except for an auto-generated claude-mem-context stub, not reachable from README.md, and nothing links to it. readme-document-standards.md explicitly exempts only the .claude/ directory from the link-chain rule, not stray CLAUDE.md files elsewhere in the tree, so a strict reading makes this a technical orphan - though it carries no prose content and functions like an exempted per-directory Claude Code context file. Flagging for manager/standards judgment rather than treating as a hard defect; worth a small standards clarification if this pattern recurs across other Flow-managed projects.'
