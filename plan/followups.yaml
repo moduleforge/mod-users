@@ -163,3 +163,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor correctness-lens gate finding] Task 001''s task doc (plan/phase-01-anonymous-actor/001-system-actor-migration.md) Validation section states the seeded system_actor row in `types` will be gone after `goose down`. This is unsatisfiable: mod-core''s 0002_types.sql installs an unconditional types_reject_mutation trigger rejecting every DELETE FROM types. The Down migration correctly leaves the row in place (following established mod-authz/0501_authz_actor_groups.sql precedent, documented inline), but the task doc''s Validation wording and the architecture proposal''s (plan/notes/anonymous-actor-architecture-proposal.md) Down-migration description should be corrected to state the type row persists after rollback, so a future reader doesn''t need to re-derive this. No code change needed - documentation wording only. Also note: a down-then-up round-trip against the same DB fails on a duplicate-key violation for types_slug_key given the row survives rollback.'
+    - title: Duplicate header lookup on anon hot path
+      id: 9PN1
+      date: "2026-08-04"
+      tags:
+        - plan/phase:anonymous-actor
+        - type:optimization
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-anonymous-actor efficiency-lens gate finding, efficiency-001] ResolveActorOrAnonymous''s no-Authorization-header fallback branch (api/internal/auth/anonymous_actor.go:139) re-reads r.Header.Get("Authorization") even though AuthenticateRequest (api/internal/auth/middleware.go:41) already read the identical header one call earlier and returned ErrNoAuthHeader precisely because it was empty. Every tokenless request to a route mounting this middleware performs two separate header lookups against the same key. Cost is small (Go''s textproto canonicalization fast-paths an already-canonical key) but duplicated work on a stated hot path. Recommend: have AuthenticateRequest communicate the header state it already computed back to the caller (e.g. split ErrNoAuthHeader into two sentinels, or add a second return value) rather than making ResolveActorOrAnonymous re-derive it. Not blocking; candidate for a follow-up task.'
