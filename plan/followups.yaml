@@ -154,3 +154,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: make dev.start cannot be run from inside a task worktree (only from the main checkout) due to its Docker build context (../../..) assuming a fixed checkout depth; pre-existing infrastructure limitation, not introduced by this task, worth a follow-up if task worktrees are expected to support this validation step directly in the future.
+    - title: Task 001 Down-migration validation text wrong
+      id: Hzvv
+      date: "2026-08-04"
+      tags:
+        - plan/phase:anonymous-actor
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-anonymous-actor correctness-lens gate finding] Task 001''s task doc (plan/phase-01-anonymous-actor/001-system-actor-migration.md) Validation section states the seeded system_actor row in `types` will be gone after `goose down`. This is unsatisfiable: mod-core''s 0002_types.sql installs an unconditional types_reject_mutation trigger rejecting every DELETE FROM types. The Down migration correctly leaves the row in place (following established mod-authz/0501_authz_actor_groups.sql precedent, documented inline), but the task doc''s Validation wording and the architecture proposal''s (plan/notes/anonymous-actor-architecture-proposal.md) Down-migration description should be corrected to state the type row persists after rollback, so a future reader doesn''t need to re-derive this. No code change needed - documentation wording only. Also note: a down-then-up round-trip against the same DB fails on a duplicate-key violation for types_slug_key given the row survives rollback.'
