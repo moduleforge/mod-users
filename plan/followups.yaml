@@ -199,3 +199,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor security-lens gate finding, security-002] Task 005 added /v1/anonymous-demo (api/cmd/server/main.go:541-549), gated only by requireConfirmed + resolveActorOrAnonymous (no RequireAuth), echoing IsAnonymousActor and the resolved opctx actor entity id to any caller. Commented as a "dev-server-only demonstration mount" but api/cmd/server is a real, independently buildable binary (make image.build produces a genuine OCI image via ko) with no build tag or config flag excluding this route from that build. Disclosed info is low-sensitivity (internal non-secret integer id + boolean), but the route confirms the anonymous-actor mechanism is live to any unauthenticated caller with zero rate limiting of its own. Recommend: gate behind an explicit dev/local-only config flag, or remove once a real consuming route exists, so make image.build never ships an unauthenticated, undocumented endpoint into a deployable artifact by accident. Needs a manager/team decision on gate-vs-remove, not purely mechanical - not auto-fixed.'
+    - title: First anon-middleware consumer needs preconds
+      id: w4ob
+      date: "2026-08-04"
+      tags:
+        - plan/phase:anonymous-actor
+        - type:security
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-anonymous-actor security-lens gate finding, security-004, informational] ResolveActorOrAnonymous''s documented hard preconditions (per-IP rate limiting, never composing with requireAuth/requireVerifiedEmail, Vary: Authorization on caching responses) are enforced by neither the middleware nor any code in phase-01 - by design, per its doc comment. No consuming route opts in yet, so no current exposure. Track as a checklist item for the first real route that adopts resolveActorOrAnonymous (e.g. the mod-repos consumer per the architecture proposal): confirm a per-IP rate limiter sits in front of it, confirm it is never combined with requireAuth/requireVerifiedEmail, and confirm the handler sets Vary: Authorization.'
