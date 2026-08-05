@@ -163,3 +163,41 @@ has no JWT at all, so a JWT claim is the wrong carrier by definition. Say so in 
 - [mod-repos consumer context](../notes/mod-repos-consumer-context.md) — why the capability
   exists and what the consuming module owes in return.
 - `plan/overview.md` — plan scope, constraints, and the out-of-scope list.
+
+## Status
+
+**Outcome:** succeeded. Date: 2026-08-04.
+
+`docs/architecture.md` and `docs/mod-users-spec.md` were updated in place (no restructuring,
+no new top-level sections) to cover all eight content items: the guest-account vs.
+anonymous-actor terminology split with the proposal's comparison table (added to
+`docs/architecture.md`'s Authentication flow and referenced from `docs/mod-users-spec.md`'s
+use case 15 and Security requirements); the `system_actor`/`system_actors` subsystem
+(type hierarchy, ownership guard rationale, `authzSlugs` omission, actor-group ineligibility,
+boot-time slug resolution + no-grants assertion) in both docs' Data model sections; the
+`resolveActorOrAnonymous` middleware behavior (missing-header fallthrough vs. 401 on bad
+credentials, no sudo/`UserContext`, `IsAnonymousActor` accessor, opt-in wiring, no new
+`scope:` vocabulary); the per-IP rate-limiting precondition and max-page-size note; the
+`Vary: Authorization` caching note; the `requireAuth`/`requireVerifiedEmail` composition rule
+and its fail-closed 500; and the audit-attribution collapse. The two stale `is_anonymous`
+claims were corrected at all four cited locations (`docs/architecture.md:70` and `:91` at the
+time of research, `docs/mod-users-spec.md:174`, `:231`, `:284`) plus the code comment at
+`api/internal/handlers/auth/anonymous.go:46-48` (comment-only change, verified via
+`git diff`). All validation grep checks pass; `make lint.api` (the only sub-project touched by
+this task's one Go-file comment edit) and the full `api` unit-test suite pass — see
+`flagged_for_manager` in this task's structured report for two pre-existing, unrelated
+environment/flake notes surfaced while running `make lint`/`make test.unit` at the repo-root
+target level.
+
+Two additional documentation-accuracy items from the phase-01 boundary review were checked
+against this task's target files and found not to apply within scope: (1) the Down-migration
+rollback description — `docs/architecture.md` and `docs/mod-users-spec.md` do not describe
+migration rollback behavior at all, so there was no in-scope claim to correct; the inaccurate
+claim lives only in `plan/notes/anonymous-actor-architecture-proposal.md` (a plan artifact
+outside this task's editable scope), flagged for the manager. (2) The no-grants-is-boot-time-only
+distinction was written precisely into the new content from the start (ownership: continuous
+DB trigger; no-grants: boot-time assertion only) rather than needing correction of an existing
+claim, since none of this content existed in the docs before this task.
+
+Affected files: `docs/architecture.md`, `docs/mod-users-spec.md`,
+`api/internal/handlers/auth/anonymous.go` (comment-only), and this task document.
