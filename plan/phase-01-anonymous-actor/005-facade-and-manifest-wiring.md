@@ -209,3 +209,98 @@ architectural_impact: true
 - `api/cmd/server/main.go` — `main.go:502` (`requireConfirmed`), `main.go:511-596` (the
   three-tier nesting that must not change), `main.go:522-533` (the not-regenerated-by-mfgen
   note), `main.go:285-293` (`authzSlugs`, which must not gain `system_actor`).
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-08-04
+- **Files:**
+  - `api/auth/auth.go` — added the five new facade exports (`AnonymousActor` type alias,
+    `NewAnonymousActor`, `NewResolveActorOrAnonymous`, `ResolveActorOrAnonymous`,
+    `IsAnonymousActor`).
+  - `api/auth/anonymous_actor_test.go` (new) — compile-time signature assertions for all five
+    new exports, plus a dependency-free behavioral test of `ResolveActorOrAnonymous`'s anonymous
+    fallback branch and `IsAnonymousActor`'s negative case.
+  - `moduleforge.module.yaml` — added the `anonymousActor` `provides.services` entry and the
+    `resolveActorOrAnonymous` `provides.middleware` entry, each with an explanatory comment
+    matching the neighbouring entries' style, including the unconditional-reachability-root
+    consequence.
+  - `api/cmd/server/main.go` — added a `pubauth "github.com/moduleforge/mod-users/api/auth"`
+    import, the `anonActor`/`resolveActorOrAnonymous` construction, and a dev-server-only
+    `/v1/anonymous-demo` demonstration route. No existing line was modified (see decision on the
+    facade import alias below).
+- **Decision — facade import alias in `main.go`:** `main.go` already imports
+  `api/internal/auth` under the default alias `auth` (both packages are named `auth`, so they
+  cannot share that alias). `NewResolveActorOrAnonymous` exists only on the facade (by design —
+  it is the holder-unwrapping adapter; `inner.ResolveActorOrAnonymous` keeps its plain `int64`
+  signature), so the dev server needs the facade specifically for that constructor. Resolved by
+  importing the facade under a second alias, `pubauth`, and using `pubauth.NewAnonymousActor` /
+  `pubauth.NewResolveActorOrAnonymous` / `pubauth.IsAnonymousActor` for the three symbols this
+  task's requirement 3 code sample designated `auth.*`, while leaving every pre-existing `auth.*`
+  reference (internal package) untouched. This keeps `git diff main.go` purely additive, per the
+  task's own validation check, and both packages' `Verifier`/`ClaimMapper`/`UserResolver`/
+  `AnonymousActor` types are identical under Go's type-alias equivalence, so no conversion is
+  needed at the call sites.
+- **Decision — construction placement in `main.go`:** `anonActor` is constructed right after
+  `localMapper` (needs only `ctx`+`pool`, both already in scope); `resolveActorOrAnonymous` is
+  constructed right after `resolver` (the last of its four dependencies to become available). The
+  demonstration route is placed as a sibling of the existing `/v1/auth` `r.Route` block, after
+  `requireConfirmed` is built and before the existing `/v1` block, so it doesn't touch either.
+- **Decision — facade test scope:** per Requirement 4's explicit escape hatch, no dependency-free
+  seam exists for constructing a `*AnonymousActor` with a chosen entity id (its only field is
+  unexported; its only constructor needs a live `*pgxpool.Pool`). The test file instead pins all
+  five exports' exact signatures at compile time and behaviorally exercises the plain
+  `ResolveActorOrAnonymous` re-export end-to-end (verifier/mapper/resolver deliberately `nil`,
+  since `AuthenticateRequest` short-circuits on an empty header before touching any of them).
+  `NewResolveActorOrAnonymous`'s own body is a one-line pass-through
+  (`inner.ResolveActorOrAnonymous(verifier, mapper, resolver, anon.EntityID())`), so this test
+  plus task 004's exhaustive suite in `api/internal/auth/anonymous_actor_test.go` covers the
+  delegation it adds; no seam was added to `internal/`.
+- **Validation summary:**
+  - PASS — `cd api && go build ./...` clean.
+  - PASS — `cd api && go vet ./...` clean.
+  - PASS — `cd api && go test ./...` — all packages pass, including `internal/auth` (task 004)
+    and `internal/handlers/auth` (task 003) unmodified.
+  - PASS — `grep -n "NewAnonymousActor\|NewResolveActorOrAnonymous\|IsAnonymousActor\|AnonymousActor =" api/auth/auth.go`
+    shows all five new exports.
+  - PASS — the manifest's `anonymousActor`/`resolveActorOrAnonymous` entries resolve correctly:
+    `mfgen` turned out to be reachable in this environment (a sibling checkout at
+    `../mfgen/bin/mfgen`, built). Ran `mfgen generate` against a scratch copy of
+    `app-mftodo/moduleforge.app.yaml` with the `mod-users` module's `localPath` pointed at this
+    worktree; manifest loading, validation, and dependency-graph resolution all succeeded and the
+    generated `main.go` contained exactly
+    `anonymousActor, err := auth.NewAnonymousActor(ctx, pool)` and
+    `resolveActorOrAnonymous := auth.NewResolveActorOrAnonymous(verifier, claimMapper, userResolver, anonymousActor)`
+    — matching this task's Requirement 3 sample verbatim. (The subsequent `go mod tidy` step
+    failed on an unrelated missing app-local package, `mftodo/cmd/server/appsetup`, an artifact
+    of running the generator outside its own app checkout — not a manifest defect.) The scratch
+    manifest copy and generated output were both discarded; no file outside this worktree was
+    left modified.
+  - PASS — `grep -n "system_actor" api/cmd/server/main.go` — no match.
+  - PASS — `git diff api/cmd/server/main.go` — 40 insertions, 0 deletions; the existing `/v1`
+    nesting and `/v1/auth` mount are byte-for-byte unchanged.
+  - PASS (substitute method) — dev-server boot behavior. `make dev.start` itself cannot run from
+    inside this task worktree: its Docker build `context: ../../..` (relative to
+    `deploy/local/docker-compose.yml`) assumes the checkout sits directly at
+    `.../moduleforge/mod-users/`, but this worktree sits three levels deeper
+    (`mod-users/worktrees/plan/<task>/`), so the context path resolves to a nonexistent
+    directory — a pre-existing worktree/docker-compose layout mismatch, unrelated to this task's
+    changes, and out of this task's scope to fix. Instead validated the two required boot
+    behaviors directly against the built `api/bin/server` binary and a throwaway Postgres
+    container (migrated with mod-core, mod-authz, mod-audit, and mod-users' own goose
+    migrations): (1) with mod-users migrated only through `0100_schema.sql` (0101 pending), the
+    server logged `"anonymous actor init failed"` with the underlying `system_actors` error and
+    exited 1, immediately, before touching OAuth/onboarding; (2) with `0101_system_actors.sql`
+    also applied, the server booted cleanly (`"users-api starting"`), `/healthz` returned 200, and
+    `/v1/anonymous-demo/` returned the same `503 oidc_not_confirmed` response every other `/v1/*`
+    route returns pre-confirmation — confirming `resolveActorOrAnonymous` is correctly gated
+    behind `requireConfirmed`, matching the manifest's ordering requirement. The throwaway
+    container, binary process, and generated TLS cert were all torn down afterward; the worktree
+    is clean (`git status` — nothing to commit).
+  - PASS — `make lint` (with `SHADOW_DB_PREREQ_DIRS=<mod-core>/model/migrations`, per task 002's
+    documented precedent): `lint.model`, `lint.api` (`go vet` + `check-server-error-literals`),
+    and `lint.gui` all passed clean.
+  - PASS — `make test.unit`: `api` (`go test ./...`, all packages ok) and `gui` (9/9) passed; no
+    flake reproduced this run (the pre-existing, already-tracked
+    `TestNewStepUpConsumedCache_JanitorStopsOnCancel` flake — followup 5RbD — did not trigger).
+  - PASS — `make build.api` clean.
