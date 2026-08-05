@@ -190,3 +190,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] next-steps.md (repo root) is a substantive prose "next steps" tracking document not linked from README.md, AGENTS.md, or any doc in the reachable chain, and nothing links to it. Not covered by the plan/ link-chain exemption since it lives at repo root. Recommend linking it from README.md''s "Additional documentation" section or AGENTS.md, or relocating it under plan/ or docs/ if it''s meant to be exempt.'
+    - title: Unauthenticated demo route in real image
+      id: 3QbL
+      date: "2026-08-04"
+      tags:
+        - plan/phase:anonymous-actor
+        - type:security
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-anonymous-actor security-lens gate finding, security-002] Task 005 added /v1/anonymous-demo (api/cmd/server/main.go:541-549), gated only by requireConfirmed + resolveActorOrAnonymous (no RequireAuth), echoing IsAnonymousActor and the resolved opctx actor entity id to any caller. Commented as a "dev-server-only demonstration mount" but api/cmd/server is a real, independently buildable binary (make image.build produces a genuine OCI image via ko) with no build tag or config flag excluding this route from that build. Disclosed info is low-sensitivity (internal non-secret integer id + boolean), but the route confirms the anonymous-actor mechanism is live to any unauthenticated caller with zero rate limiting of its own. Recommend: gate behind an explicit dev/local-only config flag, or remove once a real consuming route exists, so make image.build never ships an unauthenticated, undocumented endpoint into a deployable artifact by accident. Needs a manager/team decision on gate-vs-remove, not purely mechanical - not auto-fixed.'
