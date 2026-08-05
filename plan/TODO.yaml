@@ -63,7 +63,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/anonymous-actor-01-005
-            commit: []
+            commit:
+                - 5dcd438
             merge: null
         - number: 6
           slug: db-invariant-integration-tests
