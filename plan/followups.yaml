@@ -145,3 +145,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Environmental: this host''s native postgresql@14 (Homebrew, launchd homebrew.mxcl.postgresql@14) intercepts localhost:5432 ahead of the users-module-postgres container''s Docker port-forward - a distinct issue from the credential-mismatch scenario task 001''s dispatch note described. Future tasks on this host needing the literal AUTHZ_DEV_PG_HOST=localhost invocation will hit the same conflict; task doc''s Status section documents the container-network-namespace workaround used here so it doesn''t need rediscovery.'
+    - title: make dev.start cannot be run from inside a ta
+      id: MwXo
+      date: "2026-08-05"
+      tags:
+        - type:ambiguity
+        - plan/phase:anonymous-actor
+        - priority:unspecified
+        - effort:unspecified
+      text: make dev.start cannot be run from inside a task worktree (only from the main checkout) due to its Docker build context (../../..) assuming a fixed checkout depth; pre-existing infrastructure limitation, not introduced by this task, worth a follow-up if task worktrees are expected to support this validation step directly in the future.
