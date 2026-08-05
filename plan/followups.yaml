@@ -217,15 +217,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/CLAUDE.md is empty except for an auto-generated claude-mem-context stub, not reachable from README.md, and nothing links to it. readme-document-standards.md explicitly exempts only the .claude/ directory from the link-chain rule, not stray CLAUDE.md files elsewhere in the tree, so a strict reading makes this a technical orphan - though it carries no prose content and functions like an exempted per-directory Claude Code context file. Flagging for manager/standards judgment rather than treating as a hard defect; worth a small standards clarification if this pattern recurs across other Flow-managed projects.'
-    - title: 'Note only, already tracked as followup Hzvv: '
-      id: fGHb
-      date: "2026-08-05"
-      tags:
-        - type:ambiguity
-        - plan/phase:doc-updates
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Note only, already tracked as followup Hzvv: plan/notes/anonymous-actor-architecture-proposal.md''s Down-migration rollback description (claims the seeded type row is dropped) is inaccurate - not in this task''s editable scope (docs/architecture.md and docs/mod-users-spec.md don''t discuss migration rollback at all, so nothing to correct there).'
     - title: Note only, already tracked as followups t5ut/
       id: D5jc
       date: "2026-08-05"
