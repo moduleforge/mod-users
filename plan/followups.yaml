@@ -181,3 +181,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor efficiency-lens gate finding, efficiency-002, informational] The entities_no_system_actor_owner trigger (model/migrations/sql/0101_system_actors.sql:106-138) is BEFORE INSERT OR UPDATE ON entities FOR EACH ROW with no column scoping, so it runs on every entities-table write across the ENTIRE composed platform (not just mod-users) whenever NEW.owner_id is non-NULL. Per-invocation cost is one indexed EXISTS lookup against the one-row system_actors table (small), and the trade-off is already reasoned in the migration''s own comment, consistent with the pre-existing entities_owner_default_self trigger. No code change requested - just worth confirming whoever tracks the feature''s performance envelope accounts for this platform-wide (every module''s entities writes) blast radius, since it extends beyond the "entirely within mod-users" framing.'
+    - title: next-steps.md orphaned from README link chain
+      id: npOU
+      date: "2026-08-04"
+      tags:
+        - plan/phase:anonymous-actor
+        - type:documentation
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-anonymous-actor gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] next-steps.md (repo root) is a substantive prose "next steps" tracking document not linked from README.md, AGENTS.md, or any doc in the reachable chain, and nothing links to it. Not covered by the plan/ link-chain exemption since it lives at repo root. Recommend linking it from README.md''s "Additional documentation" section or AGENTS.md, or relocating it under plan/ or docs/ if it''s meant to be exempt.'
