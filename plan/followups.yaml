@@ -28,15 +28,6 @@ items:
         - plan/phase:tags-frontend-foundation
         - cross-repo/origin:app-mftodo
       text: '[Moved from app-mftodo followups, originally id BIAB] @moduleforge/users-gui''s shared fetch helper hard-navigates to the literal /auth/login path on 401, which app-mftodo compensates for via its own redirect route rather than an upstream fix. Pre-existing behavior in users-gui itself; the proper fix (if wanted) belongs here rather than in each consuming app.'
-    - title: make test.unit (full) fails on already-tracke
-      id: cDFE
-      date: "2026-08-04"
-      tags:
-        - type:ambiguity
-        - plan/phase:anonymous-actor
-        - priority:unspecified
-        - effort:unspecified
-      text: make test.unit (full) fails on already-tracked flaky TestNewStepUpConsumedCache_JanitorStopsOnCancel (followup id 5RbD in mod-users followups.yaml), recurred here
     - title: 'AssumedUser characterization gap: resolver_te'
       id: VJg2
       date: "2026-08-04"
