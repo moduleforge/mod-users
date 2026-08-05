@@ -61,6 +61,7 @@ phases:
           path: phase-01-anonymous-actor/005-facade-and-manifest-wiring.md
           done: false
           tier: sonnet-high
+          digest: 'Wired the anonymous-actor capability through to the outside world: api/auth/auth.go re-exports AnonymousActor, NewAnonymousActor, the manifest-facing adapter NewResolveActorOrAnonymous (unwraps holder to bare entity id), the plain ResolveActorOrAnonymous re-export, and IsAnonymousActor. moduleforge.module.yaml gained the anonymousActor service and resolveActorOrAnonymous middleware entries verbatim to the proposal. The hand-written dev server got the equivalent construction plus a minimal demonstration route, added without touching any existing route or the authzSlugs list. mfgen confirmed the manifest resolves exactly as specified; a live boot test confirmed both fail-fast-on-missing-seed-row and successful-boot-with-correct-middleware-gating behaviors. All validation passed - this completes phase-01.'
           git:
             branch: plan/anonymous-actor-01-005
             commit:
