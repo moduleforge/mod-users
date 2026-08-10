@@ -5,7 +5,17 @@ phases:
     - number: 3
       slug: db-url-fallback
       title: Database URL Env Var Fallback
-      tasks: []
+      tasks:
+        - number: 1
+          slug: add-database-url-env-fallback
+          title: Add MFAPP_DATABASE_URL / DB_URL Fallback
+          path: phase-03-db-url-fallback/001-add-database-url-env-fallback.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: jwt-secret-bootstrap
       title: Durable JWT Secret Bootstrap
