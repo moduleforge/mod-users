@@ -30,3 +30,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: implement-jwt-secret-bootstrap
+          title: Implement JWT Secret Bootstrap
+          path: phase-04-jwt-secret-bootstrap/002-implement-jwt-secret-bootstrap.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
