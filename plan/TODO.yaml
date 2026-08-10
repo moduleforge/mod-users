@@ -19,4 +19,14 @@ phases:
     - number: 4
       slug: jwt-secret-bootstrap
       title: Durable JWT Secret Bootstrap
-      tasks: []
+      tasks:
+        - number: 1
+          slug: add-auth-jwt-secrets-schema
+          title: Add Auth JWT Secrets Schema
+          path: phase-04-jwt-secret-bootstrap/001-add-auth-jwt-secrets-schema.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
