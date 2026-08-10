@@ -40,3 +40,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: test-jwt-secret-race-and-corruption-paths
+          title: Test JWT Secret Race And Corruption Paths
+          path: phase-04-jwt-secret-bootstrap/003-test-jwt-secret-race-and-corruption-paths.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
