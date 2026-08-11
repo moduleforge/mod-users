@@ -190,3 +190,47 @@ architectural_impact: true
   it.
 - After writing the query file and running `sqlc generate`, before moving
   on to validate the full `model/` build.
+
+## Status
+
+**Outcome:** succeeded (2026-08-10).
+
+- Added `model/migrations/sql/0102_auth_jwt_secrets.sql` (goose, `CREATE
+  TABLE IF NOT EXISTS auth_jwt_secrets`, `id`/`secret`/`created_at`,
+  `-- +goose Down` drop) exactly per Requirement 1, including the header
+  comment preserving the `IF NOT EXISTS` deviation.
+- Added `model/queries/auth_jwt_secrets.sql` (`GetJWTSecret`,
+  `InsertJWTSecretIfAbsent`) exactly per Requirement 2.
+- Ran `cd model && sqlc generate`; regenerated `model/db/auth_jwt_secrets.sql.go`
+  (new file) and `model/db/querier.go` (two new interface methods) — no
+  other generated file changed.
+- Validation:
+  - `cd model && make verify` — passed (`goose ... validate` + `sqlc compile`).
+  - `cd model && make lint` — passed once invoked with
+    `SHADOW_DB_PREREQ_DIRS=<mod-core/model/migrations>` (mirroring the
+    CI job's own env var, per `.github/workflows/ci.yml`); a bare
+    `make lint` from `model/` fails for the pre-existing, unrelated
+    reason already tracked in `plan/plan-summary-anonymous-actor.md`
+    (`WAvY`/`nAXW` — no `SHADOW_DB_PREREQ_DIRS` set, so `0100_schema.sql`
+    can't resolve its `legal_entities`/`apps` FKs). `0102` applied
+    cleanly on top of `0100`-`0101`.
+  - Manually verified (goose `down`, one step, against the same ephemeral
+    Postgres) that `0102`'s `-- +goose Down` reverses cleanly and drops
+    `auth_jwt_secrets` — `make lint`'s shadow script only exercises `up`,
+    so this check needed a separate manual run.
+  - `git diff --stat` shows exactly the new migration file, the new
+    query file, and the two touched/new files under `model/db/`.
+  - `grep -n "auth_jwt_secrets" model/db/querier.go` shows both
+    `GetJWTSecret` and `InsertJWTSecretIfAbsent`.
+  - `cd api && go build ./...` succeeds.
+  - Manual read-through confirms `CREATE TABLE IF NOT EXISTS` (not a bare
+    `CREATE TABLE`) is present in the migration file.
+- Assumptions from `## Assumptions` relied on as written; no
+  reconciliation was needed on `sqlc generate` output beyond the expected
+  new file/interface additions.
+
+Affected files (repo-relative):
+- `model/migrations/sql/0102_auth_jwt_secrets.sql`
+- `model/queries/auth_jwt_secrets.sql`
+- `model/db/auth_jwt_secrets.sql.go`
+- `model/db/querier.go`
