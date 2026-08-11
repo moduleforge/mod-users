@@ -44,7 +44,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/catalog-readiness-04-002
-            commit: []
+            commit:
+                - b851668
             merge: null
         - number: 3
           slug: test-jwt-secret-race-and-corruption-paths
