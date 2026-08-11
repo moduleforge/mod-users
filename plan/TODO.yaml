@@ -31,7 +31,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: plan/catalog-readiness-04-001
             commit: []
             merge: null
         - number: 2
