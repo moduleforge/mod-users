@@ -192,3 +192,11 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Task doc Requirement 2's code block used a different import alias (usersdb) than its own accompanying prose instructed (db) — resolved per the prose instruction; worth correcting the task-doc template's illustrative snippet for future readers.
+    - title: Stale KNOWN LIMITATION refs in 2 test docs
+      id: dcIF
+      date: "2026-08-11"
+      tags:
+        - type:documentation
+        - priority:unspecified
+        - effort:small
+      text: jwtsecret_bootstrap_integration_test.go's TestInteg_BootstrapJWTSecret_ConcurrentFirstBoot_SingleWinnerAcrossAllCallers and TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret still have doc comments literally referencing "this file's KNOWN LIMITATION" -- that header section was removed when the migration-composition fix landed (the limitation it described no longer exists). Left untouched per the fix task's explicit instruction to not modify those two tests; minor doc-comment staleness worth a follow-up cleanup pass whenever that file is next touched.
