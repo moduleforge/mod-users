@@ -22,6 +22,7 @@ phases:
     - number: 4
       slug: jwt-secret-bootstrap
       title: Durable JWT Secret Bootstrap
+      diff_base: 47217fc84987d491732445c8b81927cf033b2dbf
       tasks:
         - number: 1
           slug: add-auth-jwt-secrets-schema
