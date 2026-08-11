@@ -87,3 +87,54 @@ central change is `Load()`'s behavior, not the schema.
   dual-name support, env-var-always-wins, fetch-or-generate-and-persist
   fallback, fail-loudly corruption handling, the new DB-dependent failure
   mode) as implemented by Phases 3-4's tasks, not merely as planned.
+
+## Status
+
+- **Outcome:** succeeded (2026-08-10).
+- **Validation summary:**
+  - `docs/architecture.md`'s Data model table now includes an
+    `auth_jwt_secrets` row (matching the `system_actors` row's
+    "operational, not domain data" framing) and a new `### Configuration
+    and secrets bootstrap` subsection (nested under `## Overview`,
+    alongside the existing `### Runtime service dependencies`) describes
+    both the permanent `MFAPP_DATABASE_URL`/`DB_URL` precedence and the
+    `JWT_SECRET` fetch-or-generate-persist fallback, framed explicitly as
+    a new pre-pool, per-boot Postgres dependency inside `Load()` (not
+    merely "a new table exists") — per the phase-4 gate's architecture-
+    conformance finding F1.
+  - `grep -n "auth_jwt_secrets\|MFAPP_DATABASE_URL" docs/architecture.md`
+    returns matches for both (lines 23 and 50 post-edit).
+  - Per finding F2, the `## API layer` section now names
+    `config.Load()`'s JWT-secret bootstrap as the one deliberate exception
+    to this module's `requires.infra: pool`-mediated Postgres access
+    pattern, and explains why (`Load()` runs before the pool exists in
+    every generated `main.go`).
+  - `AGENTS.md`'s "Database migrations" section reviewed: left unchanged.
+    It already documents the mechanism generically (no enumerated
+    migration-file list, no per-file callouts for `0100`/`0101`), so
+    adding a `0102`-specific mention would break that established style
+    rather than match it — no change warranted.
+  - `.env.example` reviewed: left unchanged. Phase 3's task already
+    updated the `DB_URL`/`MFAPP_DATABASE_URL` trailing comments
+    (confirmed accurate against the shipped `resolveDBURL()` behavior);
+    the `JWT_SECRET` line was not touched, since the task's own
+    Requirements scope the `.env.example` review to the `DB_URL`/
+    `MFAPP_DATABASE_URL` comments only, and the existing `JWT_SECRET` line
+    makes no claim (e.g. "required") that the new DB-bootstrap fallback
+    contradicts.
+  - Confirmed no other in-repo doc contradicts the shipped behavior:
+    `README.md`, `next-steps.md`, `docs/project-structure.md`, and
+    `docs/oidc-troubleshooting.md` make no mention of `DB_URL` or
+    `JWT_SECRET`; `docs/mod-users-spec.md` still makes no mention of
+    `JWT_SECRET`/`DB_URL`/`config.Load` (re-confirmed via grep, matching
+    the task doc's own prediction).
+  - Final read-through of the two new/edited `docs/architecture.md`
+    passages against Phase 3's and Phase 4's task-doc `## Status` sections
+    confirms the description matches shipped behavior (permanent
+    dual-name support, env-var-always-wins, fetch-or-generate-and-persist,
+    fail-loudly corruption handling, the new DB-dependent failure mode),
+    not merely what was planned.
+- **Affected files:**
+  - `docs/architecture.md`
+  - `plan/phase-05-doc-updates/001-update-architecture-docs.md` (this
+    file — `## Status` added)
