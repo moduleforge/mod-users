@@ -40,7 +40,7 @@ phases:
           slug: implement-jwt-secret-bootstrap
           title: Implement JWT Secret Bootstrap
           path: phase-04-jwt-secret-bootstrap/002-implement-jwt-secret-bootstrap.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Implemented the JWT-secret DB bootstrap per the task doc''s prescriptive code: jwtsecret_bootstrap.go carrying JWTSecretQuerier, fetchOrGeneratePersistedJWTSecret, and bootstrapJWTSecretFromDB (advisory lock, idempotent DDL byte-identical to migration 0102). Wired into Load() with exported signature unchanged. Resolved a task-doc inconsistency (import alias) in favor of the explicit prose instruction (db alias, matching provider_merge.go). Fixed a pre-existing go-vet gap from task 001 (stubUAQuerier missing two new Querier methods) as a single-file carve-out since it blocked this task''s own make lint validation. All builds/vet/lint/tests green; DDL constant verified byte-for-byte identical to the migration via scripted comparison.'
           git:
