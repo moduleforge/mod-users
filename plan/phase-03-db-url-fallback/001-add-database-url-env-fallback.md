@@ -150,3 +150,24 @@ architectural_impact: false
    confirm every existing subtest still passes unmodified.
 5. Run the Validation commands; fix and re-run until green.
 6. Commit all changed files together as this task's change.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-08-10
+- **Validation summary:** `cd api && go build ./...` passed; `cd api &&
+  make lint` (go vet + gofmt check + check-server-error-literals) passed;
+  `cd api && go test ./internal/config/...` passed, including the
+  unmodified `"missing required fields produces aggregated error"`
+  subtest and the three new `MFAPP_DATABASE_URL`/`DB_URL` subtests; the
+  `grep -n "resolveDBURL\|MFAPP_DATABASE_URL"` check found the new
+  symbol/name in both `api/internal/config/config.go` and `.env.example`.
+- **Affected source files:**
+  - `api/internal/config/config.go`
+  - `api/internal/config/config_test.go`
+  - `.env.example`
+- **Assumptions applied:** Per `## Assumptions`, `DB_URL` was not removed
+  and no removal TODO / sunset date / deprecation-warning language was
+  added anywhere in these changes; the `api/config` facade (`api/config/config.go`)
+  was read and confirmed to need no change, since its doc comments do not
+  mention `DB_URL` specifically.
