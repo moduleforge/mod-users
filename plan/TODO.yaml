@@ -18,7 +18,7 @@ phases:
             branch: plan/catalog-readiness-03-001
             commit:
                 - 5ff2493
-            merge: null
+            merge: e5b307afb26ea281334ef524112ed40af6b7a297
     - number: 4
       slug: jwt-secret-bootstrap
       title: Durable JWT Secret Bootstrap
