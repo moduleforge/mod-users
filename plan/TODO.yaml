@@ -35,7 +35,7 @@ phases:
             branch: plan/catalog-readiness-04-001
             commit:
                 - 6f65a50
-            merge: null
+            merge: 5aa7a9414f06210f6dabf4804a65068c4b997bca
         - number: 2
           slug: implement-jwt-secret-bootstrap
           title: Implement JWT Secret Bootstrap
