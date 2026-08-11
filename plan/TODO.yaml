@@ -54,6 +54,7 @@ phases:
           path: phase-04-jwt-secret-bootstrap/003-test-jwt-secret-race-and-corruption-paths.md
           done: false
           tier: sonnet-high
+          digest: 'Implemented all three requirement layers: (1) fake-Querier unit tests covering all five branches of fetchOrGeneratePersistedJWTSecret; (2) a connection-error unit test and a drift-guard test verifying bootstrapJWTSecretDDL matches migration 0102 byte-for-byte; (3) a real-Postgres integration suite proving fetch-or-generate round trip, fresh/unmigrated-database bootstrap, an 8-goroutine concurrent race (verified to converge on one row/one secret), and a real CHECK-constraint rejection. Discovered and empirically verified that mod-users'' own plain migrations are not self-contained as the task doc assumed (migration 0100 depends on core-model tables outside this module) and designed a clean-skip mechanism for the two affected scenarios. All non-integration validation green; integration tier verified to skip cleanly (not fail) under every prerequisite-missing condition present in this sandbox.'
           git:
             branch: plan/catalog-readiness-04-003
             commit:
