@@ -220,3 +220,94 @@ below.
 3. Run the Validation commands; fix and re-run until green (or cleanly
    skipped, for the integration tier, if prerequisites are unavailable).
 4. Commit both new test files together as this task's change.
+
+## Status
+
+**Outcome:** succeeded (2026-08-10).
+
+Implemented both files as specified:
+
+- `api/internal/config/jwtsecret_bootstrap_test.go` (package `config`, not
+  `config_test` — see decision below) — all 5 `fetchOrGeneratePersistedJWTSecret`
+  branch-coverage cases (Requirement 1), the connection-error test against
+  an unreachable DSN (Requirement 2), and the drift-guard test comparing
+  `bootstrapJWTSecretDDL` against `model/migrations/sql/0102_auth_jwt_secrets.sql`
+  (Requirement 3). All pass. The two "never called" guards (corrupt-secret
+  fail-loudly, and the non-`ErrNoRows` absent-check-error path) were each
+  manually mutated and confirmed to make the corresponding test fail, then
+  reverted (verified clean via `git diff`).
+- `api/internal/config/jwtsecret_bootstrap_integration_test.go`
+  (`//go:build integration`, package `config`) — all 4 scenarios from
+  Requirement 4, following `authz_integration_test.go`'s TestMain /
+  prereq-check-and-skip / host-resolution conventions, with a dedicated
+  shadow DB (`jwt_secret_integ_users`) and a real connectivity probe added
+  to the prerequisite check (see decision below).
+
+**Package decision:** the task doc names `config_test` for both files, but
+every symbol under test (`fetchOrGeneratePersistedJWTSecret`,
+`bootstrapJWTSecretFromDB`, `bootstrapJWTSecretDDL`) is unexported, so a
+black-box `config_test` package cannot call them — this repo's own
+`provider_merge_test.go`/`oidc_state_test.go` already establish the
+package-`config` (white-box) precedent alongside `config_test.go`'s
+black-box style in the same directory. Both new files use `package config`
+so they can exercise these unexported symbols directly, per the task's own
+explicit instruction to call `bootstrapJWTSecretFromDB` directly.
+
+**Known limitation surfaced (not fixed, per scope):** mod-users' own plain
+migrations (`usersmigrations.Migrate`, covering 0100–0102 as one embedded
+set) are not actually self-contained the way this task's Assumptions
+section characterized them — migration `0100_schema.sql` (bundled in the
+same `Migrate` call as `0102`) carries FKs into core-model tables
+(`legal_entities`, `apps`) that this suite's lighter, non-composed shadow DB
+never creates. Empirically reproduced against a scratch Postgres container:
+`usersmigrations.Migrate` against a genuinely bare DB fails with SQLSTATE
+`42P01` (`undefined_table`) on `0100_schema.sql`, unrelated to
+`auth_jwt_secrets` or the JWT-bootstrap code under test. This affects the
+two integration scenarios that need a real migration run
+(`TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip` and the
+convergence tail of
+`TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose`).
+Both are implemented literally as the task doc specifies, with a helper
+(`runUsersMigrationsOrSkip`) that detects exactly this failure mode and
+skips the affected assertions with a clear, permanent message rather than
+either failing on something unrelated to this task's code or silently
+omitting the scenario. The concurrent-race scenario is unaffected (never
+calls `Migrate`). The corruption-detection scenario was adapted to create
+`auth_jwt_secrets` via the `bootstrapJWTSecretDDL` constant directly
+(byte-identical to migration 0102's own DDL, per the drift-guard test)
+instead of via a full migration run, so it always exercises the real CHECK
+constraint whenever the DB is reachable, sidestepping the limitation
+entirely. See this task's structured report / the integration test file's
+header comment ("KNOWN LIMITATION") for full detail. Flagged for the
+manager: a follow-up should decide between (a) revising this task's
+Requirement 4 to use the composed core+authz+users schema for the
+already-migrated/fresh-then-migrate scenarios (mirroring
+`authz_integration_test.go` rather than mod-core's self-contained
+precedent), or (b) accepting the current skip-on-missing-prerequisite
+behavior as permanent for those two scenarios.
+
+**Environment verification:** confirmed real skip-not-fail behavior in this
+sandbox for all three prerequisite gaps (docker missing from `PATH`, goose
+missing from `PATH`, and — the actual state of this sandbox's shared
+`users-module-postgres` container — a real connection attempt failing with
+`role "users" does not exist`). In every case `go test -tags=integration`
+exits 0 and reports `ok`, never `FAIL`.
+
+**Dependency note:** `api/go.mod`/`api/go.sum` picked up `github.com/pressly/goose/v3`
+(transitively, via `model/migrations`) and its own minimum-version floors
+for `golang.org/x/crypto`, `golang.org/x/net`, `golang.org/x/sys`, and
+`google.golang.org/genproto/googleapis/rpc` — a mechanical consequence of
+`go mod tidy`, not an independent version choice; `model/go.mod` already
+carried the same goose dependency and floors.
+
+**Validation:** `cd api && go test ./...` (no tags) passes; `go vet ./...`
+and `go vet -tags=integration ./...` are clean; `gofmt -l internal/config/`
+is clean; `make lint.api` passes. Integration tier confirmed to skip
+cleanly (exit 0) in this sandbox per the environment-verification note
+above.
+
+**Files:** `api/internal/config/jwtsecret_bootstrap_test.go` (new),
+`api/internal/config/jwtsecret_bootstrap_integration_test.go` (new),
+`api/internal/config/jwtsecret_bootstrap.go` (one-line comment fix: stale
+`generate_test.go` reference corrected to `jwtsecret_bootstrap_test.go`),
+`api/go.mod`, `api/go.sum`.
