@@ -1,4 +1,2 @@
 version: 1
-plans:
-    - slug: catalog-readiness
-      status: working
+plans: []
