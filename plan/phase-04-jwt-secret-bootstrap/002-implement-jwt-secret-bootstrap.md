@@ -296,3 +296,59 @@ architectural_impact: true
   Postgres; compiling cleanly is the bar for this checkpoint).
 - After Requirement 3 (the `Load()` wiring), before running full
   Validation.
+
+## Status
+
+**Outcome:** succeeded (2026-08-10).
+
+- Added `api/internal/config/jwtsecret_bootstrap.go` with
+  `JWTSecretQuerier`, `fetchOrGeneratePersistedJWTSecret`,
+  `jwtSecretBootstrapLockKey`, `bootstrapJWTSecretDDL`, and
+  `bootstrapJWTSecretFromDB` exactly per Requirements 1–2.
+- Wired `Load()` in `api/internal/config/config.go` exactly per
+  Requirement 3's diff (new `"context"` import; the
+  `cfg.LocalAuth.JWTSecret == "" && cfg.DB.URL != ""` guard before
+  `validate(cfg, parseErrors)`).
+- Updated doc comments on `Load()` and `LocalAuthConfig.JWTSecret` per
+  Requirement 4.
+- **Import-alias contradiction resolved:** Requirement 2's illustrative
+  code block writes `usersdb.New(conn)`, but its own "New imports this
+  file introduces" note explicitly instructs matching
+  `provider_merge.go`'s existing alias (`db
+  "github.com/moduleforge/mod-users/model/db"`) rather than introducing
+  a second alias for the same import path in the same package. Followed
+  the explicit instruction: this file imports the same path as `db` (not
+  `usersdb`) and calls `db.New(conn)`; the `JWTSecretQuerier` doc comment
+  was adjusted to match.
+- **Pre-existing `go vet` failure fixed (folded-in, single file):**
+  `api/internal/service/user_accounts_upgrade_test.go`'s `stubUAQuerier`
+  did not implement the two `db.Querier` methods Task 001 added
+  (`GetJWTSecret`, `InsertJWTSecretIfAbsent`), which pre-existing gap
+  broke `go vet ./...` (and therefore `cd api && make lint`) for the
+  whole module — including this task's own required validation. Added
+  the two missing trivial stub methods (mirroring the file's existing
+  zero-value/nil-error pattern for unused Querier methods). This is the
+  only fix outside this task's own two files.
+- Validation:
+  - `cd api && go build ./...` — passed.
+  - `cd api && make lint` (`go vet ./...` +
+    `check-server-error-literals`) — passed.
+  - `cd api && go test ./internal/config/...` — passed; every existing
+    `TestLoad` subtest passed unmodified.
+  - `grep -n "bootstrapJWTSecretFromDB\|fetchOrGeneratePersistedJWTSecret\|JWTSecretQuerier" api/internal/config/jwtsecret_bootstrap.go api/internal/config/config.go` — shows all three symbols wired through both files.
+  - `grep -n "MFAPP_DATABASE_URL\|DB_URL" api/internal/config/config.go` —
+    confirms `resolveDBURL` (Phase 3) remains the sole populator of
+    `cfg.DB.URL`.
+  - Manual read-through confirms `Load()`'s exported signature is
+    unchanged and `api/config/config.go`'s facade needed no edit.
+  - Manual (scripted) byte-for-byte comparison confirms
+    `bootstrapJWTSecretDDL`'s text exactly matches migration `0102`'s Up
+    block's `CREATE TABLE ...;` statement.
+- Assumptions from `## Assumptions` relied on as written (10s bootstrap
+  timeout; no `mfgen`/`main.go`/`moduleforge.app.yaml` changes needed).
+
+Affected files (repo-relative):
+- `api/internal/config/jwtsecret_bootstrap.go`
+- `api/internal/config/config.go`
+- `api/internal/service/user_accounts_upgrade_test.go`
+- `plan/phase-04-jwt-secret-bootstrap/002-implement-jwt-secret-bootstrap.md`
