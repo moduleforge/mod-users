@@ -17,43 +17,37 @@ package config
 // for the shared-container convention and the AUTHZ_DEV_PG_HOST=localhost
 // Docker Desktop for macOS caveat -- reused verbatim here rather than
 // inventing a new host-resolution env var, per this task's own instruction).
-// This suite is lighter than that precedent in one respect and heavier in
-// another:
 //
-//   - Lighter: it needs only mod-users' own module migrations
-//     (usersmigrations, model/migrations) applied via the Migrate function
-//     directly, not the cross-module composed core+authz+users schema that
-//     suite's goose-CLI-driven resetDB applies -- auth_jwt_secrets itself
-//     has no FKs outside itself. Its own shadow DB
-//     (jwt_secret_integ_users) is distinct from authz_integ_users, so both
-//     suites can share the same "users-module-postgres" container without
-//     colliding.
+// Migrations: mod-users' own plain migrations (usersmigrations,
+// model/migrations) are not self-contained -- migration 0100_schema.sql
+// (bundled in the same usersmigrations.Migrate call as 0102) carries FKs
+// into core-model tables (legal_entities, apps) that a mod-users-only
+// database never creates. Running usersmigrations.Migrate in-process
+// against a bare shadow DB therefore fails with SQLSTATE 42P01
+// (undefined_table) on 0100. This suite avoids that entirely by following
+// authz_integration_test.go's own precedent: applying the pre-built
+// composed migrations directory (core + authz + users, produced by `make -C
+// model compose`) via the goose CLI directly, exactly as that suite's
+// resetDB does -- see migrationsDir/runComposedMigrations below. This means
+// the composed dir must exist before running this suite; run `make -C model
+// compose` (or `make dev.start`, which builds it as a dependency) first.
+// checkJWTSecretIntegPrereqs treats a missing composed dir as a missing
+// prerequisite (clean skip with an actionable message), mirroring
+// authz_integration_test.go's checkPrereqs.
 //
-//   - Heavier: "genuinely empty" here means dropping the whole shadow
-//     database (not merely truncating tables), since the fresh-database and
-//     concurrent-race scenarios below specifically need no
-//     goose_db_version_users table present either -- see resetJWTSecretShadowDB.
-//
-// KNOWN LIMITATION (see task 003's report for the full empirical
-// reproduction): mod-users' own plain migrations are not actually
-// self-contained the way this suite's Requirements assumed. Migration
-// 0100_schema.sql (part of the same usersmigrations.Migrate call as 0102)
-// carries FKs into core-model tables (legal_entities, apps) that this
-// suite's lighter, non-composed shadow DB never creates. Running
-// usersmigrations.Migrate against a truly bare database -- as
-// TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip and the tail of
-// TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose
-// both do -- fails with SQLSTATE 42P01 (undefined_table) on 0100, not
-// because of anything related to auth_jwt_secrets or the JWT bootstrap code
-// under test. runUsersMigrationsOrSkip detects exactly that failure mode and
-// skips the affected assertions with a clear message, rather than failing
-// on something unrelated to this task's own code, or silently omitting the
-// scenario the task doc asks for. The corruption-detection scenario
-// (TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret) sidesteps
-// this entirely by creating auth_jwt_secrets via bootstrapJWTSecretDDL
-// directly (byte-identical to migration 0102's own DDL -- see the
-// drift-guard unit test) instead of via a full migration run, so it always
-// exercises the real CHECK constraint whenever the DB is reachable at all.
+// This suite's shadow DB (jwt_secret_integ_users) is distinct from
+// authz_integ_users, so both suites can share the same
+// "users-module-postgres" container without colliding. "Genuinely empty"
+// here means dropping the whole shadow database (not merely truncating
+// tables), since the fresh-database and concurrent-race scenarios below
+// specifically need no goose_db_version_users table present either -- see
+// resetJWTSecretShadowDB. The corruption-detection scenario
+// (TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret) creates
+// auth_jwt_secrets via bootstrapJWTSecretDDL directly (byte-identical to
+// migration 0102's own DDL -- see the drift-guard unit test) instead of via
+// a full migration run, so it always exercises the real CHECK constraint
+// whenever the DB is reachable at all, independent of the composed-dir
+// prerequisite above.
 //
 // Run with:
 //
@@ -64,11 +58,12 @@ package config
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -95,8 +90,36 @@ const jwtSecretIntegDB = "jwt_secret_integ_users"
 // authz_integration_test.go's header comment).
 const jwtSecretIntegContainer = "users-module-postgres"
 
+// jwtSecretIntegMigrationsDirEnvVar overrides migrationsDir()'s resolved
+// path, for environments where the test binary does not run from its normal
+// location inside a mod-users checkout. Unset by default. Mirrors
+// authz_integration_test.go's integMigrationsDirEnvVar (AUTHZ_INTEG_MIGRATIONS_DIR),
+// kept as a distinct, file-scoped constant rather than shared across
+// packages.
+const jwtSecretIntegMigrationsDirEnvVar = "JWTSECRET_INTEG_MIGRATIONS_DIR"
+
 // integPGHost is resolved once in TestMain and reused by every test.
 var integPGHost string
+
+// migrationsDir resolves the composed schema dir (core + authz + users,
+// produced by mod-users/model/Makefile's `compose` target) relative to this
+// source file's own location, mirroring authz_integration_test.go's own
+// migrationsDir. This file lives at
+// <repo>/api/internal/config/jwtsecret_bootstrap_integration_test.go; the
+// composed schema lives at <repo>/model/schema/migrations.
+func migrationsDir() string {
+	if d := os.Getenv(jwtSecretIntegMigrationsDirEnvVar); d != "" {
+		return d
+	}
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "model", "schema", "migrations")
+}
+
+// dirExists reports whether path exists and is a directory.
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
 
 func TestMain(m *testing.M) {
 	pgHost := resolveJWTSecretIntegHost()
@@ -110,13 +133,16 @@ func TestMain(m *testing.M) {
 
 // checkJWTSecretIntegPrereqs verifies docker, the shared container, and
 // goose are available (matching authz_integration_test.go's own prerequisite
-// check), and additionally probes a real connection with the expected
-// "users"/"users" role. The container being "running" per docker inspect
-// does not guarantee it is actually provisioned with that role -- a stale
-// data volume, or a container started for an unrelated purpose, can leave
-// it running yet unusable for this suite's own DSNs. Treating a probe
-// failure as a missing prerequisite (clean skip) avoids every test in this
-// file failing individually on it later.
+// check), that the composed migrations dir this suite's two
+// migration-dependent scenarios apply via goose exists (mirroring that same
+// suite's own composed-dir check), and additionally probes a real
+// connection with the expected "users"/"users" role. The container being
+// "running" per docker inspect does not guarantee it is actually
+// provisioned with that role -- a stale data volume, or a container started
+// for an unrelated purpose, can leave it running yet unusable for this
+// suite's own DSNs. Treating a probe failure as a missing prerequisite
+// (clean skip) avoids every test in this file failing individually on it
+// later.
 func checkJWTSecretIntegPrereqs(pgHost string) error {
 	cmd := exec.Command("docker", "inspect", "--format={{.State.Running}}", jwtSecretIntegContainer)
 	out, err := cmd.Output()
@@ -128,6 +154,11 @@ func checkJWTSecretIntegPrereqs(pgHost string) error {
 	}
 	if _, err := exec.LookPath("goose"); err != nil {
 		return fmt.Errorf("goose not in PATH: %w", err)
+	}
+	if dir := migrationsDir(); !dirExists(dir) {
+		return fmt.Errorf(
+			"composed migrations dir %s not found — run `make -C model compose` (or `make dev.start`, which builds it as a dependency) first, or set %s",
+			dir, jwtSecretIntegMigrationsDirEnvVar)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -194,28 +225,28 @@ func resetJWTSecretShadowDB(t *testing.T) {
 	}
 }
 
-// runUsersMigrationsOrSkip runs usersmigrations.Migrate against dsn. See
-// this file's header comment (KNOWN LIMITATION) for why a shadow DB that
-// only ever ran this suite's own reset (never the cross-module composed
-// schema) can legitimately fail this with SQLSTATE 42P01 (undefined_table)
-// on migration 0100 -- a missing prerequisite unrelated to the JWT-bootstrap
-// code under test, not a regression in it. That specific failure mode
-// degrades to a per-test skip; anything else is a genuine, reportable
-// failure.
-func runUsersMigrationsOrSkip(t *testing.T, dsn string) {
+// runComposedMigrations applies the pre-built composed migrations dir (core
+// + authz + users, produced by `make -C model compose`) against dsn via the
+// goose CLI directly -- the same approach authz_integration_test.go's
+// resetDB uses -- rather than calling usersmigrations.Migrate in-process.
+// Migration 0100_schema.sql (bundled in the same migration run as 0102) has
+// FKs into core-model tables (legal_entities, apps) that a mod-users-only
+// database never creates; the composed dir already includes mod-core's own
+// migrations, so those FKs resolve and this never hits SQLSTATE 42P01
+// (undefined_table) the way applying usersmigrations.Migrate alone against
+// a bare shadow DB would. -table pins the goose version-tracking table to
+// usersmigrations.TableName ("goose_db_version_users") so this run's
+// bookkeeping lands in the same table the callers below (and
+// usersmigrations.Migrate itself, were it ever run against this same DB)
+// read and write, keeping the two converge-able.
+func runComposedMigrations(t *testing.T, dsn string) {
 	t.Helper()
-	sqlDB, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open sql.DB for migration: %v", err)
-	}
-	defer sqlDB.Close()
-
-	if err := usersmigrations.Migrate(context.Background(), sqlDB); err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "42P01" { // undefined_table
-			t.Skipf("usersmigrations.Migrate requires core-model tables (e.g. legal_entities, apps) this suite's plain, non-composed shadow DB does not create -- skipping (see this file's KNOWN LIMITATION header note): %v", err)
-		}
-		t.Fatalf("usersmigrations.Migrate: %v", err)
+	cmd := exec.Command("goose", //nolint:gosec // fixed args/resolved paths, not user input
+		"-dir", migrationsDir(),
+		"-table", usersmigrations.TableName,
+		"postgres", dsn, "up")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("goose up (composed migrations): %v\n%s", err, out)
 	}
 }
 
@@ -224,15 +255,15 @@ func runUsersMigrationsOrSkip(t *testing.T, dsn string) {
 // ---------------------------------------------------------------------------
 
 // TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip resets the shadow DB and
-// runs usersmigrations.Migrate against it (normal path -- table pre-exists
-// via goose, mirroring mod-core's field-key precedent scenario), then calls
-// bootstrapJWTSecretFromDB twice: the first call must succeed and generate a
-// well-formed secret; the second call against the same DB must return the
-// same persisted secret, not generate a new one.
+// applies the composed migrations dir against it via goose (normal path --
+// table pre-exists via goose, mirroring mod-core's field-key precedent
+// scenario), then calls bootstrapJWTSecretFromDB twice: the first call must
+// succeed and generate a well-formed secret; the second call against the
+// same DB must return the same persisted secret, not generate a new one.
 func TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip(t *testing.T) {
 	resetJWTSecretShadowDB(t)
 	dsn := jwtSecretIntegShadowDSN(integPGHost)
-	runUsersMigrationsOrSkip(t, dsn)
+	runComposedMigrations(t, dsn)
 
 	first, err := bootstrapJWTSecretFromDB(context.Background(), dsn)
 	if err != nil {
@@ -262,11 +293,11 @@ func TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip(t *testing.T) {
 // config-equivalent bootstrap runs after its own migrations. It calls
 // bootstrapJWTSecretFromDB directly against that raw, unmigrated DB and
 // asserts it succeeds (creating the table itself via its own idempotent
-// DDL), then runs usersmigrations.Migrate against that same DB afterward and
-// asserts it succeeds cleanly and records migration 0102 as applied in
-// goose_db_version_users -- proving the goose migration's own CREATE TABLE
-// IF NOT EXISTS tolerates the table Load()'s bootstrap already created, and
-// the two converge.
+// DDL), then applies the composed migrations dir against that same DB
+// afterward via goose and asserts it succeeds cleanly and records migration
+// 0102 as applied in goose_db_version_users -- proving the goose
+// migration's own CREATE TABLE IF NOT EXISTS tolerates the table Load()'s
+// bootstrap already created, and the two converge.
 func TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose(t *testing.T) {
 	resetJWTSecretShadowDB(t)
 	dsn := jwtSecretIntegShadowDSN(integPGHost)
@@ -279,7 +310,7 @@ func TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWith
 		t.Errorf("secret length = %d, want %d", len(secret), jwtSecretByteLen*2)
 	}
 
-	runUsersMigrationsOrSkip(t, dsn) // may skip the convergence assertions below; see KNOWN LIMITATION
+	runComposedMigrations(t, dsn)
 
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
