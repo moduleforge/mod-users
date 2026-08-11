@@ -5,6 +5,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -169,6 +170,13 @@ type ServerConfig struct {
 
 // LocalAuthConfig holds settings for the local (non-OIDC) auth subsystem.
 type LocalAuthConfig struct {
+	// JWTSecret is the HS256 signing secret for locally-issued JWTs.
+	// Populated from JWT_SECRET when set; when the env var is absent
+	// and cfg.DB.URL is non-empty, Load fetches-or-generates-and-
+	// persists a secret in Postgres instead (see
+	// bootstrapJWTSecretFromDB / fetchOrGeneratePersistedJWTSecret in
+	// jwtsecret_bootstrap.go). A persisted secret that fails the
+	// length check is a fail-loudly error, never silently regenerated.
 	JWTSecret        string
 	EmailCodeTTL     time.Duration
 	PasswordResetTTL time.Duration
@@ -212,6 +220,15 @@ type Config struct {
 // MFAPP_DATABASE_URL is preferred when set, with DB_URL as a permanent
 // fallback — both names remain supported indefinitely, not as a
 // deprecation window.
+//
+// JWT_SECRET follows a fetch-or-generate-persist fallback: the env var
+// always wins when set. When it is absent and the resolved DB URL is
+// present, Load consults Postgres instead of failing boot outright —
+// fetching an already-persisted secret, or generating and durably
+// persisting a new one on first boot (bootstrapJWTSecretFromDB /
+// fetchOrGeneratePersistedJWTSecret in jwtsecret_bootstrap.go). A
+// persisted secret that fails validation (too short — corrupt or
+// truncated) fails loudly rather than being silently regenerated.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
 	// them alongside missing-field errors in one shot.
@@ -334,6 +351,15 @@ func Load() (*Config, error) {
 		Onboarding: OnboardingConfig{
 			TokenDisplay: tokenDisplay,
 		},
+	}
+
+	if cfg.LocalAuth.JWTSecret == "" && cfg.DB.URL != "" {
+		secret, err := bootstrapJWTSecretFromDB(context.Background(), cfg.DB.URL)
+		if err != nil {
+			parseErrors = append(parseErrors, fmt.Sprintf("JWT_SECRET: bootstrap from database failed: %v", err))
+		} else {
+			cfg.LocalAuth.JWTSecret = secret
+		}
 	}
 
 	if err := validate(cfg, parseErrors); err != nil {

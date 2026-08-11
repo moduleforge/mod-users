@@ -187,6 +187,12 @@ func (s *stubUAQuerier) SetAppUserAccountRoles(_ context.Context, _ db.SetAppUse
 func (s *stubUAQuerier) SetDefaultApp(_ context.Context, _ db.SetDefaultAppParams) error {
 	return nil
 }
+func (s *stubUAQuerier) GetJWTSecret(_ context.Context) (string, error) {
+	return "", nil
+}
+func (s *stubUAQuerier) InsertJWTSecretIfAbsent(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
 
 var _ db.Querier = (*stubUAQuerier)(nil)
 
