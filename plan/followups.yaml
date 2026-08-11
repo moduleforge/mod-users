@@ -192,3 +192,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Task doc Requirement 2's code block used a different import alias (usersdb) than its own accompanying prose instructed (db) — resolved per the prose instruction; worth correcting the task-doc template's illustrative snippet for future readers.
+    - title: Empirically verified limitation in the task d
+      id: zFMq
+      date: "2026-08-11"
+      tags:
+        - type:ambiguity
+        - plan/phase:jwt-secret-bootstrap
+        - plan/slug:catalog-readiness
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Empirically verified limitation in the task doc''s Requirement 4 assumption: mod-users'' own plain migrations (usersmigrations.Migrate, applying 0100-0102 as one embedded set) are NOT self-contained as characterized ("since auth_jwt_secrets has no FKs outside itself") — migration 0100_schema.sql carries FKs into core-model tables (legal_entities, apps) that a lighter, non-composed shadow DB never creates. Reproduced directly: usersmigrations.Migrate against a genuinely bare DB fails with SQLSTATE 42P01 on 0100_schema.sql. This blocks a real (non-skipped) run of the migrated-DB round-trip scenario and the convergence tail of the fresh-database scenario in any environment with working DB credentials — currently they skip via a detected-42P01 guard rather than fail. Manager should decide: (a) revise Requirement 4 to use the composed core+authz+users schema for those two scenarios (mirroring authz_integration_test.go rather than mod-core''s self-contained precedent), or (b) accept the current skip-on-missing-prerequisite behavior as permanent. The concurrent-race and corruption-detection scenarios are unaffected and always exercise real Postgres behavior whenever the DB is reachable.'
