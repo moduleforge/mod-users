@@ -56,7 +56,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/catalog-readiness-04-003
-            commit: []
+            commit:
+                - c8fe54d
             merge: null
     - number: 5
       slug: doc-updates
