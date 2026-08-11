@@ -348,6 +348,52 @@ func TestLoad(t *testing.T) {
 	// unorchestrated-container mode was NOT given (that is "container-host"),
 	// precisely because naming it "docker-compose" would have silently
 	// inverted this test instead of failing it loudly. Leave it invalid.
+	t.Run("MFAPP_DATABASE_URL takes precedence over DB_URL", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("MFAPP_DATABASE_URL", "postgres://user:pass@localhost:5432/mfapp-db")
+		// requiredEnv already set DB_URL to a different value.
+
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.DB.URL != "postgres://user:pass@localhost:5432/mfapp-db" {
+			t.Errorf("DB.URL = %q, want the MFAPP_DATABASE_URL value", cfg.DB.URL)
+		}
+	})
+
+	t.Run("DB_URL used as fallback when MFAPP_DATABASE_URL unset", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("MFAPP_DATABASE_URL", "")
+
+		cfg, err := config.Load()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.DB.URL != requiredEnv["DB_URL"] {
+			t.Errorf("DB.URL = %q, want %q (DB_URL fallback)", cfg.DB.URL, requiredEnv["DB_URL"])
+		}
+	})
+
+	t.Run("neither MFAPP_DATABASE_URL nor DB_URL set produces error naming both", func(t *testing.T) {
+		clearProviderEnv(t)
+		setEnv(t, requiredEnv)
+		t.Setenv("MFAPP_DATABASE_URL", "")
+		t.Setenv("DB_URL", "")
+
+		_, err := config.Load()
+		if err == nil {
+			t.Fatal("expected an error when neither MFAPP_DATABASE_URL nor DB_URL is set, got nil")
+		}
+		for _, field := range []string{"MFAPP_DATABASE_URL", "DB_URL"} {
+			if !strings.Contains(err.Error(), field) {
+				t.Errorf("error should mention %q, got: %v", field, err)
+			}
+		}
+	})
+
 	t.Run("invalid DEPLOY_MODE produces validation error", func(t *testing.T) {
 		clearProviderEnv(t)
 		setEnv(t, requiredEnv)

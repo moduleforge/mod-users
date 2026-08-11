@@ -5,6 +5,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -104,10 +105,31 @@ var validDeployModes = map[DeployMode]bool{
 // The pool itself is wired in Phase 3 (Task 3.1); this struct just
 // carries the configuration that will be passed to pgxpool.
 type DBConfig struct {
+	// URL is the resolved Postgres connection string, per resolveDBURL:
+	// MFAPP_DATABASE_URL when set, else DB_URL. Both names are supported
+	// permanently — this is not a rename-in-progress.
 	URL             string
 	MaxConns        int
 	MaxConnLifetime time.Duration
 	MaxConnIdleTime time.Duration
+}
+
+// resolveDBURL returns MFAPP_DATABASE_URL when set, else DB_URL. Both
+// names are supported permanently: MFAPP_DATABASE_URL is the name the
+// app-mfmanager catalog-deploy engine injects into the apps it manages;
+// DB_URL remains the name every self-hosted or non-catalog deployment
+// sets directly (including app-mfmanager's own bootstrap connection —
+// see plan/overview.md's "Key research findings"). This is not a
+// rename-in-progress: neither name is scheduled for removal.
+func resolveDBURL() string {
+	if v := os.Getenv("MFAPP_DATABASE_URL"); v != "" {
+		return v
+	}
+	if v := os.Getenv("DB_URL"); v != "" {
+		slog.Debug("config: using DB_URL (MFAPP_DATABASE_URL not set)")
+		return v
+	}
+	return ""
 }
 
 // AuthConfig holds cross-cutting settings for the authentication subsystem.
@@ -148,6 +170,13 @@ type ServerConfig struct {
 
 // LocalAuthConfig holds settings for the local (non-OIDC) auth subsystem.
 type LocalAuthConfig struct {
+	// JWTSecret is the HS256 signing secret for locally-issued JWTs.
+	// Populated from JWT_SECRET when set; when the env var is absent
+	// and cfg.DB.URL is non-empty, Load fetches-or-generates-and-
+	// persists a secret in Postgres instead (see
+	// bootstrapJWTSecretFromDB / fetchOrGeneratePersistedJWTSecret in
+	// jwtsecret_bootstrap.go). A persisted secret that fails the
+	// length check is a fail-loudly error, never silently regenerated.
 	JWTSecret        string
 	EmailCodeTTL     time.Duration
 	PasswordResetTTL time.Duration
@@ -186,6 +215,20 @@ type Config struct {
 // per-deployment-mode defaults, and validates that all required fields
 // are present. On validation failure it returns a single error that
 // lists every problem so the operator can fix them all at once.
+//
+// The Postgres connection string is resolved via resolveDBURL:
+// MFAPP_DATABASE_URL is preferred when set, with DB_URL as a permanent
+// fallback — both names remain supported indefinitely, not as a
+// deprecation window.
+//
+// JWT_SECRET follows a fetch-or-generate-persist fallback: the env var
+// always wins when set. When it is absent and the resolved DB URL is
+// present, Load consults Postgres instead of failing boot outright —
+// fetching an already-persisted secret, or generating and durably
+// persisting a new one on first boot (bootstrapJWTSecretFromDB /
+// fetchOrGeneratePersistedJWTSecret in jwtsecret_bootstrap.go). A
+// persisted secret that fails validation (too short — corrupt or
+// truncated) fails loudly rather than being silently regenerated.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
 	// them alongside missing-field errors in one shot.
@@ -270,7 +313,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		DeployMode: mode,
 		DB: DBConfig{
-			URL:             os.Getenv("DB_URL"),
+			URL:             resolveDBURL(),
 			MaxConns:        maxConns,
 			MaxConnLifetime: maxConnLifetime,
 			MaxConnIdleTime: maxConnIdleTime,
@@ -310,6 +353,15 @@ func Load() (*Config, error) {
 		},
 	}
 
+	if cfg.LocalAuth.JWTSecret == "" && cfg.DB.URL != "" {
+		secret, err := bootstrapJWTSecretFromDB(context.Background(), cfg.DB.URL)
+		if err != nil {
+			parseErrors = append(parseErrors, fmt.Sprintf("JWT_SECRET: bootstrap from database failed: %v", err))
+		} else {
+			cfg.LocalAuth.JWTSecret = secret
+		}
+	}
+
 	if err := validate(cfg, parseErrors); err != nil {
 		return nil, err
 	}
@@ -335,7 +387,7 @@ func validate(cfg *Config, parseErrors []string) error {
 	}
 
 	required := []check{
-		{"DB_URL", cfg.DB.URL},
+		{"MFAPP_DATABASE_URL / DB_URL", cfg.DB.URL},
 		{"JWT_SECRET", cfg.LocalAuth.JWTSecret},
 	}
 
