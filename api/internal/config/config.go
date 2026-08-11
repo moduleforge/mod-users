@@ -104,10 +104,31 @@ var validDeployModes = map[DeployMode]bool{
 // The pool itself is wired in Phase 3 (Task 3.1); this struct just
 // carries the configuration that will be passed to pgxpool.
 type DBConfig struct {
+	// URL is the resolved Postgres connection string, per resolveDBURL:
+	// MFAPP_DATABASE_URL when set, else DB_URL. Both names are supported
+	// permanently — this is not a rename-in-progress.
 	URL             string
 	MaxConns        int
 	MaxConnLifetime time.Duration
 	MaxConnIdleTime time.Duration
+}
+
+// resolveDBURL returns MFAPP_DATABASE_URL when set, else DB_URL. Both
+// names are supported permanently: MFAPP_DATABASE_URL is the name the
+// app-mfmanager catalog-deploy engine injects into the apps it manages;
+// DB_URL remains the name every self-hosted or non-catalog deployment
+// sets directly (including app-mfmanager's own bootstrap connection —
+// see plan/overview.md's "Key research findings"). This is not a
+// rename-in-progress: neither name is scheduled for removal.
+func resolveDBURL() string {
+	if v := os.Getenv("MFAPP_DATABASE_URL"); v != "" {
+		return v
+	}
+	if v := os.Getenv("DB_URL"); v != "" {
+		slog.Debug("config: using DB_URL (MFAPP_DATABASE_URL not set)")
+		return v
+	}
+	return ""
 }
 
 // AuthConfig holds cross-cutting settings for the authentication subsystem.
@@ -186,6 +207,11 @@ type Config struct {
 // per-deployment-mode defaults, and validates that all required fields
 // are present. On validation failure it returns a single error that
 // lists every problem so the operator can fix them all at once.
+//
+// The Postgres connection string is resolved via resolveDBURL:
+// MFAPP_DATABASE_URL is preferred when set, with DB_URL as a permanent
+// fallback — both names remain supported indefinitely, not as a
+// deprecation window.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
 	// them alongside missing-field errors in one shot.
@@ -270,7 +296,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		DeployMode: mode,
 		DB: DBConfig{
-			URL:             os.Getenv("DB_URL"),
+			URL:             resolveDBURL(),
 			MaxConns:        maxConns,
 			MaxConnLifetime: maxConnLifetime,
 			MaxConnIdleTime: maxConnIdleTime,
@@ -335,7 +361,7 @@ func validate(cfg *Config, parseErrors []string) error {
 	}
 
 	required := []check{
-		{"DB_URL", cfg.DB.URL},
+		{"MFAPP_DATABASE_URL / DB_URL", cfg.DB.URL},
 		{"JWT_SECRET", cfg.LocalAuth.JWTSecret},
 	}
 
