@@ -71,6 +71,7 @@ phases:
           path: phase-05-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: 'Updated docs/architecture.md: added an auth_jwt_secrets row to the Data model table, and a new Configuration and secrets bootstrap subsection describing the permanent MFAPP_DATABASE_URL/DB_URL precedence and Load()''s fetch-or-generate-persist JWT_SECRET fallback, framed per gate finding F1 as a new pre-pool, per-boot Postgres dependency. Per F2, added a paragraph to the API layer section naming config.Load()''s raw pgx.Connect bootstrap as the one deliberate exception to the module''s requires.infra:pool-mediated Postgres access pattern. Reviewed AGENTS.md, .env.example, docs/mod-users-spec.md, README.md, next-steps.md and found no contradicting claims needing edits.'
           git:
             branch: plan/catalog-readiness-05-001
             commit:
