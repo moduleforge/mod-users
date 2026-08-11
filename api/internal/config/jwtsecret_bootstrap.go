@@ -70,6 +70,9 @@ func fetchOrGeneratePersistedJWTSecret(ctx context.Context, q JWTSecretQuerier) 
 		if rerr != nil {
 			return "", fmt.Errorf("jwtsecret: re-fetch secret after lost race: %w", rerr)
 		}
+		if len(winner) < jwtSecretByteLen*2 { // hex-encoded length
+			return "", fmt.Errorf("jwtsecret: winner's persisted secret is %d chars, want >= %d (corrupt or truncated)", len(winner), jwtSecretByteLen*2)
+		}
 		return winner, nil
 	default:
 		return "", fmt.Errorf("jwtsecret: persist generated secret: %w", err)
@@ -116,12 +119,20 @@ func bootstrapJWTSecretFromDB(ctx context.Context, dbURL string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("jwtsecret: connect: %w", err)
 	}
-	defer conn.Close(context.Background())
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn.Close(closeCtx)
+	}()
 
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", jwtSecretBootstrapLockKey); err != nil {
 		return "", fmt.Errorf("jwtsecret: acquire advisory lock: %w", err)
 	}
-	defer conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", jwtSecretBootstrapLockKey)
+	defer func() {
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn.Exec(unlockCtx, "SELECT pg_advisory_unlock($1)", jwtSecretBootstrapLockKey)
+	}()
 
 	// Ensure the table exists: config.Load() runs before this
 	// module's own migrations apply (see 001's header note), so on a
