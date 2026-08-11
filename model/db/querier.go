@@ -36,6 +36,7 @@ type Querier interface {
 	GetAnonTokenBySessionToken(ctx context.Context, sessionToken string) (AnonToken, error)
 	GetAnonTokensByDeviceID(ctx context.Context, deviceID string) ([]AnonToken, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (AuthLocal, error)
+	GetJWTSecret(ctx context.Context) (string, error)
 	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
 	GetOIDCIdentityByIssuerSubject(ctx context.Context, arg GetOIDCIdentityByIssuerSubjectParams) (AuthOidcIdentity, error)
 	// Fetch one provider override row by id.
@@ -45,6 +46,7 @@ type Querier interface {
 	GetUserAccountByEmail(ctx context.Context, lower string) (UserAccount, error)
 	GetUserAccountByID(ctx context.Context, id int64) (UserAccount, error)
 	GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (UserAccount, error)
+	InsertJWTSecretIfAbsent(ctx context.Context, secret string) (string, error)
 	InsertOIDCIdentity(ctx context.Context, arg InsertOIDCIdentityParams) (AuthOidcIdentity, error)
 	ListAppUserAccounts(ctx context.Context, appID int64) ([]AppsUserAccount, error)
 	ListOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) ([]AuthOidcIdentity, error)
