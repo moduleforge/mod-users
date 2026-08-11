@@ -47,7 +47,7 @@ phases:
             branch: plan/catalog-readiness-04-002
             commit:
                 - b851668
-            merge: null
+            merge: 9d17ffae9d932c31d082d251ccecd09776b38346
         - number: 3
           slug: test-jwt-secret-race-and-corruption-paths
           title: Test JWT Secret Race And Corruption Paths
