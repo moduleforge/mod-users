@@ -172,3 +172,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/CLAUDE.md is empty except for an auto-generated claude-mem-context stub, not reachable from README.md, and nothing links to it. readme-document-standards.md explicitly exempts only the .claude/ directory from the link-chain rule, not stray CLAUDE.md files elsewhere in the tree, so a strict reading makes this a technical orphan - though it carries no prose content and functions like an exempted per-directory Claude Code context file. Flagging for manager/standards judgment rather than treating as a hard defect; worth a small standards clarification if this pattern recurs across other Flow-managed projects.'
+    - title: phase-04 task 001's landing left a pre-existi
+      id: ZYJw
+      date: "2026-08-11"
+      tags:
+        - type:ambiguity
+        - plan/phase:jwt-secret-bootstrap
+        - plan/slug:catalog-readiness
+        - priority:unspecified
+        - effort:unspecified
+      text: phase-04 task 001's landing left a pre-existing go-vet gap (stubUAQuerier in api/internal/service/user_accounts_upgrade_test.go missing two Querier methods) that this task had to fix in-scope because it blocked this task's own make lint validation — task 001's own validation only ran go build, not go vet, so the gap wasn't caught there.
