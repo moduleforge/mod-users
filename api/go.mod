@@ -11,13 +11,17 @@ require (
 	go.opentelemetry.io/otel/sdk v1.43.0
 	go.opentelemetry.io/otel/sdk/metric v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
-	golang.org/x/crypto v0.49.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/oauth2 v0.36.0
 )
 
 require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/pressly/goose/v3 v3.27.2 // indirect
+	github.com/sethvargo/go-retry v0.3.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 )
 
@@ -44,11 +48,11 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260420184626-e10c466a9529 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
