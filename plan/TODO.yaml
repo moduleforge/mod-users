@@ -28,7 +28,7 @@ phases:
           slug: add-auth-jwt-secrets-schema
           title: Add Auth JWT Secrets Schema
           path: phase-04-jwt-secret-bootstrap/001-add-auth-jwt-secrets-schema.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Added the auth_jwt_secrets migration (goose, deliberately CREATE TABLE IF NOT EXISTS per the task doc's header note — load-bearing for Task 002's fresh-database bootstrap path) and its paired sqlc query file (GetJWTSecret, InsertJWTSecretIfAbsent), then regenerated model/db/ via sqlc generate. All task-doc validation checks pass including manual verification of the goose Down reversal and cd api && go build ./.... make lint needed SHADOW_DB_PREREQ_DIRS pointed at mod-core/model/migrations to run at all — a pre-existing, already-tracked tooling gap unrelated to this change.
           git:
