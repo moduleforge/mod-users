@@ -13,6 +13,7 @@ phases:
           path: phase-03-db-url-fallback/001-add-database-url-env-fallback.md
           done: false
           tier: sonnet-med
+          digest: Added a resolveDBURL() helper to api/internal/config/config.go that prefers MFAPP_DATABASE_URL and falls back to DB_URL (with a slog.Debug note on the fallback path, deliberately not phrased as deprecation), wired it into Load()'s DBConfig.URL field, and relabeled validate()'s required-field check to "MFAPP_DATABASE_URL / DB_URL" — the label still contains "DB_URL" so the existing aggregated-error test keeps passing unmodified, as designed. Updated the DBConfig.URL field comment and Load()'s doc comment to describe the new precedence, and added a corresponding explanatory comment block to .env.example above the existing DB_URL= line, without removing or altering that default. Added three new TestLoad subtests covering precedence, fallback, and the neither-set error case (asserting both names appear in the error). All Requirements/Validation items pass; go build, make lint, and go test ./internal/config/... are all green, and the grep check confirms both the new symbol and env-var name appear in both target files. Only the files named in the task doc's Assumptions were touched.
           git:
             branch: plan/catalog-readiness-03-001
             commit:
