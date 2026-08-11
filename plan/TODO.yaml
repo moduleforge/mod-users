@@ -32,7 +32,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/catalog-readiness-04-001
-            commit: []
+            commit:
+                - 6f65a50
             merge: null
         - number: 2
           slug: implement-jwt-secret-bootstrap
