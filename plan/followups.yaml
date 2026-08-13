@@ -200,3 +200,12 @@ items:
         - priority:unspecified
         - effort:small
       text: jwtsecret_bootstrap_integration_test.go's TestInteg_BootstrapJWTSecret_ConcurrentFirstBoot_SingleWinnerAcrossAllCallers and TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret still have doc comments literally referencing "this file's KNOWN LIMITATION" -- that header section was removed when the migration-composition fix landed (the limitation it described no longer exists). Left untouched per the fix task's explicit instruction to not modify those two tests; minor doc-comment staleness worth a follow-up cleanup pass whenever that file is next touched.
+    - title: Pin shadow-db-lint's postgres tag to digest
+      id: KutV
+      date: "2026-08-13"
+      tags:
+        - type:optimization
+        - cross-repo/origin:mod-workflows
+        - priority:unspecified
+        - effort:unspecified
+      text: model/scripts/shadow-db-lint.sh's ephemeral shadow-DB container starts from the floating tag postgres:16 rather than a pinned digest. mod-workflows had the identical script (copied verbatim from this project) and just pinned it to postgres:16@sha256:11a9d238fbb48bab14599c57e41123254452b1a2d93c6c8595bce96f346bd082 with a comment documenting the update procedure (docker pull postgres:16 && docker inspect --format='{{index .RepoDigests 0}}' postgres:16). Consider applying the same fix here to avoid divergence between the two copies. Low priority, reproducibility hardening only, not a security issue.
