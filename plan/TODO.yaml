@@ -13,6 +13,7 @@ phases:
           path: phase-01-go-action-required-migration/001-add-action-code-registry.md
           done: false
           tier: sonnet-low
+          digest: Added api/internal/useraction package declaring mod-users' three registered apiresp.ActionCode values (EmailUnverified 403, StepUpRequired 409, OIDCNotConfirmed 503) exactly as specified, with package doc comment and table-driven test. Self-contained additive change, no other package imports useraction yet. All five validation checks pass.
           git:
             branch: plan/users-action-required-migration-01-001
             commit:
