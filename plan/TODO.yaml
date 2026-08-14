@@ -112,7 +112,7 @@ phases:
             branch: plan/users-action-required-migration-03-001
             commit:
                 - eb86f98
-            merge: null
+            merge: ae7f335d50fe3bc1d6355fcd3cc5b4e90dc15e2d
         - number: 2
           slug: document-action-required-in-openapi
           title: Document Action-Required Envelope In OpenAPI
