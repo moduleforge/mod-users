@@ -70,6 +70,7 @@ phases:
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
+      diff_base: ead0baa170a229a922d604426a972d3ece9b202e
       tasks:
         - number: 1
           slug: fix-api-action-discrimination
