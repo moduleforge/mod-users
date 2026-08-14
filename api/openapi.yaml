@@ -526,11 +526,12 @@ components:
             $ref: "#/components/schemas/Action"
     ForbiddenOrEmailUnverified:
       description: |
-        Caller lacks permission (the `Error` shape, `error.code: forbidden`
-        — including a masked not-found), OR the actor's email is unverified
-        (the `Action` shape, `action.code: users.email_unverified`). Both
-        share HTTP 403; the response body's top-level member — `error` vs.
-        `action` — is the discriminator, never both on the same response.
+        Caller lacks permission (the `Error` shape, `error.code: forbidden`),
+        OR the actor's email is unverified (the `Action` shape,
+        `action.code: users.email_unverified`). Both share HTTP 403; the
+        response body's top-level member — `error` vs. `action` — is the
+        discriminator, never both on the same response. A missing resource
+        on these endpoints is a genuine 404 (`NotFound`), not masked as 403.
       content:
         application/json:
           schema:
