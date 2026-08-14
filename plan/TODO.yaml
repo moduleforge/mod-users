@@ -47,7 +47,7 @@ phases:
           slug: migrate-require-oidc-confirmed-middleware
           title: Migrate RequireOIDCConfirmed Middleware To Apiresp
           path: phase-01-go-action-required-migration/004-migrate-require-oidc-confirmed-middleware.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Migrated RequireOIDCConfirmed's not-confirmed branch off bespoke server.JSON envelope onto apiresp.WriteActionRequired using useraction.OIDCNotConfirmed, preserving 503 status (verbatim, never remapped), /oidc-config path, and boot-state value now nested under action.data.state. Removed dead server import, rewrote doc comment. Updated test to decode/assert new shape plus verbatim-503-never-remapped invariant comment. All validation passed cleanly. No new mfgen/stale-interface break beyond the one task 001 already resolved.
           git:
