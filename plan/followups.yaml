@@ -285,3 +285,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: users.step_up_required has no reachable GUI call site in mod-users (no identities-management UI exists to trigger it), so its action-required handling is presently limited to the generic request()-level throw in gui/src/lib/api.ts with no navigation wiring in gui/src/lib/auth-context.tsx.
+    - title: bun.lock and gui/package.json are left uncomm
+      id: nNYm
+      date: "2026-08-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:gui-action-required-handling
+        - plan/slug:users-action-required-migration
+        - priority:unspecified
+        - effort:unspecified
+      text: bun.lock and gui/package.json are left uncommitted in this worktree (yalc-override artifacts only, correctly excluded from commit). Discard via git checkout -- bun.lock gui/package.json before merging, same as after task 001.
