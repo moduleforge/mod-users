@@ -7,7 +7,12 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { api, ApiRequestError, type UserAccountSelf } from './api';
+import {
+  api,
+  ApiActionRequiredError,
+  ApiRequestError,
+  type UserAccountSelf,
+} from './api';
 
 const TOKEN_KEY = 'auth_token';
 
@@ -71,11 +76,16 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       const self = await api.self.get();
       setUser(self);
     } catch (err) {
-      if (err instanceof ApiRequestError && err.status === 401) {
+      if (err instanceof ApiActionRequiredError) {
+        // Action-required: navigate, don't alarm. The session stays intact —
+        // do not call logout() — the user just needs to complete an
+        // out-of-band step (e.g. email verification) before continuing.
+        navigate(err.path);
+      } else if (err instanceof ApiRequestError && err.status === 401) {
         logout();
       }
     }
-  }, [logout]);
+  }, [logout, navigate]);
 
   // Validate token on mount
   useEffect(() => {
@@ -90,7 +100,14 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
       .then((self) => {
         setUser(self);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (err instanceof ApiActionRequiredError) {
+          // Action-required: navigate, don't alarm. Unlike a 401, this keeps
+          // the stored token/session intact and routes the already-
+          // authenticated user to finish an out-of-band step.
+          navigate(err.path);
+          return;
+        }
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
       })
@@ -120,6 +137,18 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         const self = await api.self.get({ skipAuthRedirect: true });
         setTokenAndUser(newToken, self);
       } catch (err) {
+        if (err instanceof ApiActionRequiredError) {
+          // Action-required: navigate, don't alarm. The token written above
+          // is valid — the session is kept — but an out-of-band step (e.g.
+          // email verification) must complete first. `setUser` cannot be
+          // called here since the failed `self.get()` returned no
+          // `UserAccountSelf`; sync the reactive `token` state to match the
+          // token already persisted to localStorage, and do not rethrow so
+          // the caller doesn't render this as an error.
+          setToken(newToken);
+          navigate(err.path);
+          return;
+        }
         // Bad/expired token or API failure: don't leave a stale token behind.
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
@@ -127,7 +156,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         throw err;
       }
     },
-    [setTokenAndUser],
+    [setTokenAndUser, navigate],
   );
 
   const register = useCallback(

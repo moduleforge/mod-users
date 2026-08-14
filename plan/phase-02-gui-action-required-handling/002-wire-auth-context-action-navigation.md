@@ -99,6 +99,58 @@ architectural_impact: false
   this plan (per the phase's "Out of scope / flagged" note) — the navigation call itself is the
   deliverable, not the destination.
 
+## Status
+
+**Outcome:** succeeded. Date: 2026-08-14.
+
+Wired all three reachable `api.self.get()` call sites in `gui/src/lib/auth-context.tsx` to catch
+`ApiActionRequiredError` before any other error-shaped handling and navigate via the provider's
+`navigate` binding:
+
+- **Mount effect** (`useEffect` validating the stored token): on `ApiActionRequiredError`, navigates
+  to `err.path` and returns without clearing the stored token; any other error keeps the pre-existing
+  clear-token behavior.
+- **`refreshUser`**: added an `ApiActionRequiredError` branch that navigates to `err.path` without
+  calling `logout()`; the existing 401 → `logout()` special case and the silent-swallow behavior for
+  all other errors are unchanged.
+- **`completeExternalLogin`**: on `ApiActionRequiredError`, keeps the token already written to
+  `localStorage`, calls `setToken(newToken)` so the provider's reactive `token` state reflects the
+  kept session (no `setUser` — the failed call returned no `UserAccountSelf`), navigates to
+  `err.path`, and does **not** rethrow. Every other error (including a genuine `ApiRequestError`)
+  keeps the existing clear-token-and-rethrow behavior.
+
+**Validation summary:**
+- `cd gui && bun run typecheck` — passed (yalc link for `@moduleforge/core-gui` set up in this
+  worktree per `AGENTS.md` First-time setup step 4; it was not already present).
+- `make lint.gui` — passed (gui's `lint` target is `tsc --noEmit`; no eslint config for this
+  library).
+- `make build.gui` — passed (tsup build succeeded, DTS included).
+- Test-infrastructure check: a test runner exists in this worktree (confirmed by the prior task).
+  Added `gui/src/lib/auth-context.test.tsx` (8 new tests, using `@testing-library/react` against
+  `AuthProvider`/`useAuth`) covering, for each of the three call sites: an `ApiActionRequiredError`
+  resulting in exactly one `onNavigate(path)` call with no token-clear (and, for
+  `completeExternalLogin`, no rethrow), plus a regression case per site (a plain
+  `ApiRequestError`/network failure continuing to behave exactly as before — 401 → `logout()` for
+  `refreshUser`, clear-token for the mount effect and `completeExternalLogin`). Full suite:
+  `bun test` — 28 pass, 0 fail across 4 files (up from 20 pre-existing).
+- Manual read-through of all three modified call sites confirms no site calls `navigate()` for a
+  non-action-required error, and no site clears the token on an action-required response.
+
+**Affected source files:**
+- `gui/src/lib/auth-context.tsx`
+- `gui/src/lib/auth-context.test.tsx` (new)
+
+**Assumptions applied:** all three `## Assumptions` bullets, as stated — the prior task's exported
+`ApiActionRequiredError`/`ApiAction`/`ApiActionResponse` shape (`code`/`message`/`path`/`data`)
+matched exactly, no adaptation needed; `onNavigate`'s no-op default is acceptable for isolated usage;
+no `/verify-email`/`/step-up` screen was built.
+
+**Caveat — Requirement 5 not completed directly:** this task agent's available MCP tool set did not
+include a `followups_add` (or equivalently-named `add-followup`) tool (same gap noted by the prior
+task, `phase-02-gui-action-required-handling/001-fix-api-action-discrimination.md`, whose own
+Requirement 7 follow-up is still outstanding as of this task). See the dispatching report's
+`flagged_for_manager` for the exact follow-up content to record.
+
 ## References
 
 - `gui/src/lib/auth-context.tsx` — the file this task modifies; the three call sites (mount effect,
