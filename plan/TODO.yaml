@@ -91,7 +91,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: plan/users-action-required-migration-02-002
             commit: []
             merge: null
     - number: 3
