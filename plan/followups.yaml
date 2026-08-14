@@ -288,13 +288,3 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: users.step_up_required has no reachable GUI call site in mod-users (no identities-management UI exists to trigger it), so its action-required handling is presently limited to the generic request()-level throw in gui/src/lib/api.ts with no navigation wiring in gui/src/lib/auth-context.tsx.
-    - title: 'Scope note for awareness, not a defect: diff '
-      id: HBoJ
-      date: "2026-08-14"
-      tags:
-        - type:ambiguity
-        - plan/phase:doc-updates
-        - plan/slug:users-action-required-migration
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Scope note for awareness, not a defect: diff is broader than the task doc''s single named example (26 operations got 503 wiring, 15 got 403 wiring) - deliberate reading of apply broadly across /v1/* routes, grounded in tracing the actual middleware chain.'
