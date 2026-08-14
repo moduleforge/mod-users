@@ -18,6 +18,56 @@ import { ApiRequestError } from '@moduleforge/core-gui';
 export type { ApiError, ApiErrorResponse, FieldErrorData };
 export { ApiRequestError };
 
+// ─── Action-required types ──────────────────────────────────────────────────
+//
+// Local to this module for now — NOT imported from `@moduleforge/core-gui`,
+// which does not yet export action-required wire types (Wave 0 of the
+// action-required migration was Go-only). Mirrors the design doc's
+// "Action-required: navigate, don't alarm" TS sketch
+// (docs/mf-standards/architecture/api-response-design.md). Like `ApiError`
+// et al. above, these are strong candidates for a future
+// `@moduleforge/core-gui` promotion, following the same
+// originate-locally-then-promote precedent those types went through.
+
+export interface ApiAction {
+  code: string;
+  message: string;
+  path: string;
+  data?: Record<string, unknown>;
+}
+
+export interface ApiActionResponse {
+  action: ApiAction;
+}
+
+/**
+ * Thrown by `request()` when a non-2xx response carries a top-level `action`
+ * member instead of an `error` member — a flow-control signal (navigate to
+ * complete an out-of-band action), not an error. Parallel to
+ * `ApiRequestError`; carries `status` for the same symmetry.
+ */
+export class ApiActionRequiredError extends Error {
+  code: string;
+  path: string;
+  status: number;
+  data?: Record<string, unknown>;
+
+  constructor(
+    code: string,
+    message: string,
+    path: string,
+    status: number,
+    data?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'ApiActionRequiredError';
+    this.code = code;
+    this.path = path;
+    this.status = status;
+    this.data = data;
+  }
+}
+
 /**
  * Runtime shape check for a single `FieldErrorData` entry. The server
  * envelope is not user input, but a malformed/unexpected body should degrade
@@ -38,6 +88,69 @@ function isFieldErrorData(value: unknown): value is FieldErrorData {
 /** Runtime shape check for `ApiError.details`: an array of `FieldErrorData`. */
 function isFieldErrorDataArray(value: unknown): value is FieldErrorData[] {
   return Array.isArray(value) && value.every(isFieldErrorData);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
+ * Runtime shape check for `ApiError` (the object shape `error` takes in a
+ * genuine error body). Guards against the latent bug where a top-level
+ * `error` member is assumed to always be an object (`errorBody.error.code`):
+ * a flat string `error` (as some endpoints emit) fails this check and falls
+ * back to the generic `unknown_error` code below instead of silently
+ * producing an `undefined` code/message.
+ */
+function isApiError(value: unknown): value is ApiError {
+  return (
+    isRecord(value) &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string'
+  );
+}
+
+/** Extracts a well-shaped `ApiError` from a parsed response body, if present. */
+function extractApiError(body: unknown): ApiError | undefined {
+  if (!isRecord(body) || !('error' in body)) return undefined;
+  return isApiError(body.error) ? body.error : undefined;
+}
+
+/** Runtime shape check for `ApiAction` (the object shape `action` takes in an action-required body). */
+function isApiAction(value: unknown): value is ApiAction {
+  return (
+    isRecord(value) &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string' &&
+    typeof value.path === 'string'
+  );
+}
+
+/** Extracts a well-shaped `ApiAction` from a parsed response body, if present. */
+function extractApiAction(body: unknown): ApiAction | undefined {
+  if (!isRecord(body) || !('action' in body)) return undefined;
+  return isApiAction(body.action) ? body.action : undefined;
+}
+
+/**
+ * Defense-in-depth guard on `action.path` before it is attached to a thrown
+ * `ApiActionRequiredError`. Mirrors the server-side guard
+ * (`WriteActionRequired` panics on a non-relative path) — the client must not
+ * trust the server response unconditionally. Accepts only a single leading
+ * `/` not followed by another `/` or a backslash, rejecting empty strings,
+ * absolute URLs with a scheme, `//host/...`-style protocol-relative
+ * authorities, and `/\host/...`-style backslash tricks some browsers
+ * normalize as protocol-relative. Falls back to a safe default route.
+ */
+const SAFE_ACTION_PATH_FALLBACK = '/';
+const SAFE_ACTION_PATH_PATTERN = /^\/(?![/\\])/;
+
+function sanitizeActionPath(path: string): string {
+  if (SAFE_ACTION_PATH_PATTERN.test(path)) {
+    return path;
+  }
+  console.error('[api] rejected unsafe action.path', path);
+  return SAFE_ACTION_PATH_FALLBACK;
 }
 
 export interface RequestOptions extends RequestInit {
@@ -249,31 +362,50 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
     }
 
     if (!response.ok) {
+      // Parse the body once, then inspect the top-level member before
+      // classifying: a body carrying `action` is a flow-control signal, not
+      // an error, and MUST NEVER be thrown as ApiRequestError. This
+      // short-circuit must run before any error-body handling below.
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        // ignore JSON parse errors — body stays undefined, falls through to
+        // the generic error path below.
+      }
+
+      const action = extractApiAction(body);
+      if (action) {
+        throw new ApiActionRequiredError(
+          action.code,
+          action.message,
+          sanitizeActionPath(action.path),
+          response.status,
+          action.data,
+        );
+      }
+
       let errorCode = 'unknown_error';
       let errorMessage = `Request failed with status ${response.status}`;
       let errorDetails: FieldErrorData[] | undefined;
-      try {
-        const errorBody = (await response.json()) as ApiErrorResponse;
-        if (errorBody.error) {
-          errorCode = errorBody.error.code;
-          errorMessage = errorBody.error.message;
-          const { details } = errorBody.error;
-          if (details !== undefined) {
-            if (isFieldErrorDataArray(details)) {
-              errorDetails = details;
-            } else {
-              // Malformed body: degrade gracefully (treat details as absent)
-              // rather than passing through a shape that could crash a
-              // FieldError/ErrorBanner render downstream.
-              console.error(
-                '[api] malformed error.details in response body',
-                details,
-              );
-            }
+      const apiError = extractApiError(body);
+      if (apiError) {
+        errorCode = apiError.code;
+        errorMessage = apiError.message;
+        const { details } = apiError;
+        if (details !== undefined) {
+          if (isFieldErrorDataArray(details)) {
+            errorDetails = details;
+          } else {
+            // Malformed body: degrade gracefully (treat details as absent)
+            // rather than passing through a shape that could crash a
+            // FieldError/ErrorBanner render downstream.
+            console.error(
+              '[api] malformed error.details in response body',
+              details,
+            );
           }
         }
-      } catch {
-        // ignore JSON parse errors
       }
       throw new ApiRequestError(errorCode, errorMessage, response.status, errorDetails);
     }
