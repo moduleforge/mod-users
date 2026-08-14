@@ -259,3 +259,11 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-go-action-required-migration architecture-conformance gate, arch-review-002] api/cmd/server/main.go''s field-cipher init call was forced from fieldcrypto.NewFromEnv() to fieldcrypto.NewFromEnvOrGenerate(ctx, coredb.New(pool)) in task 001, because NewFromEnv no longer exists in the sibling mod-core/api/fieldcrypto package (confirmed: only NewFromKey and the moduleforge.module.yaml-pinned NewFromEnvOrGenerate remain) — a forced adaptation to an upstream interface removal, not a discretionary choice by this plan. The stale doc comment describing the old fail-fast-on-missing-key behavior has been corrected (see commit ead0baa on plan/users-action-required-migration). Worth separate awareness/review: the security posture for SSN/EIN field-encryption key provisioning has shifted repo-wide from fail-fast-if-missing to auto-generate-if-absent, as a side effect of mod-core''s own interface consolidation (not something mod-users controls or chose). Not blocking this plan; flagging for whoever owns key-management/security policy to confirm this is the intended posture.'
+    - title: Promote gui action-required types to core-gui
+      id: vLi4
+      date: "2026-08-14"
+      tags:
+        - type:enhancement
+        - priority:unspecified
+        - effort:unspecified
+      text: gui/src/lib/api.ts defines ApiAction, ApiActionResponse, and ApiActionRequiredError locally because @moduleforge/core-gui does not yet export action-required wire types. These are strong candidates for future promotion to @moduleforge/core-gui, parallel to how ApiError/ApiErrorResponse/ApiRequestError were promoted.
