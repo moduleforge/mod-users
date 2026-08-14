@@ -61,6 +61,7 @@ phases:
           path: phase-01-go-action-required-migration/005-migrate-identities-step-up-and-last-identity.md
           done: false
           tier: sonnet-med
+          digest: 'Migrated identities.go''s two flat-envelope helpers to apiresp mechanisms: writeStepUpRequired now calls apiresp.WriteActionRequired with useraction.StepUpRequired and /step-up path; writeLastIdentityError now calls apiresp.WriteError(apiresp.Conflict(...)) with Code: users.last_identity. Both helpers gained r *http.Request param threaded through six call sites. Updated tests to assert new nested action/error shapes. Swept for stray retired-field references - none found beyond migrated ones. All validation passed cleanly.'
           git:
             branch: plan/users-action-required-migration-01-005
             commit:
