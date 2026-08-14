@@ -14,7 +14,7 @@ phases:
           done: false
           tier: sonnet-low
           git:
-            branch: null
+            branch: plan/users-action-required-migration-01-001
             commit: []
             merge: null
         - number: 2
