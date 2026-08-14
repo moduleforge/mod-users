@@ -25,6 +25,7 @@ phases:
           path: phase-01-go-action-required-migration/002-fold-in-zvum-email-taken-conflict.md
           done: false
           tier: sonnet-med
+          digest: 'Closed out followup ZVum: svc.ErrEmailTaken now carries its users.email_taken field detail directly via apiresp.Conflict(...), and writeServiceError collapsed to a plain apiresp.WriteError(w,r,err) pass-through with no special-cased branch. Both doc comments rewritten. Added TestErrEmailTaken_ConflictDetail asserting errors.Is(..., apiresp.ErrConflict) and exact field detail. Wire output provably unchanged (build/vet/test/gofmt/grep all pass).'
           git:
             branch: plan/users-action-required-migration-01-002
             commit:
