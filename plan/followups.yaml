@@ -288,16 +288,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: users.step_up_required has no reachable GUI call site in mod-users (no identities-management UI exists to trigger it), so its action-required handling is presently limited to the generic request()-level throw in gui/src/lib/api.ts with no navigation wiring in gui/src/lib/auth-context.tsx.
-    - title: Task doc's own Requirements example (GET /v1/
-      id: gvKH
-      date: "2026-08-14"
-      tags:
-        - type:ambiguity
-        - plan/phase:doc-updates
-        - plan/slug:users-action-required-migration
-        - priority:unspecified
-        - effort:unspecified
-      text: Task doc's own Requirements example (GET /v1/self can surface both 403/503) is factually incorrect against shipped Phase 1 route wiring - only PUT /v1/self can. Implemented per actual code behavior instead. Informational only, no action needed since the plan is closing.
     - title: 'Scope note for awareness, not a defect: diff '
       id: HBoJ
       date: "2026-08-14"
