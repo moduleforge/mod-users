@@ -66,7 +66,7 @@ phases:
             branch: plan/users-action-required-migration-01-005
             commit:
                 - be2ac56
-            merge: null
+            merge: 69a08305e3dae755b67c7a2f154b286aa6a4dc5d
     - number: 2
       slug: gui-action-required-handling
       title: GUI Action-Required Client And Wiring
