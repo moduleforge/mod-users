@@ -78,6 +78,7 @@ phases:
           path: phase-02-gui-action-required-handling/001-fix-api-action-discrimination.md
           done: false
           tier: sonnet-med
+          digest: Fixed request()'s non-2xx handling in gui/src/lib/api.ts to parse the response body once and check for a top-level action member before classifying as error - a 403/409/503 body carrying action now short-circuits to a new ApiActionRequiredError (code/message/path/status/data) and never reaches the error-body branch. Added local ApiAction/ApiActionResponse wire types (flagged as future core-gui promotion candidates) and a defense-in-depth same-origin-relative guard on action.path. Fixed latent bug where flat-string error was assumed to always be an object. request<T>()'s public signature and all existing client methods unchanged. Discovered gui/ now has a working test runner (contradicting follow-up KXNZ); added 11 unit tests. Full suite (20 tests) plus typecheck/lint/build all green.
           git:
             branch: plan/users-action-required-migration-02-001
             commit:
