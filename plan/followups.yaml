@@ -17,7 +17,10 @@ items:
         - plan/phase:route-wiring
         - priority:unspecified
         - effort:unspecified
-      text: '[phase-01-route-wiring architecture-conformance gate] api/openapi.yaml (AGENTS.md''s designated "authoritative REST API specification") has zero hits for identities/credential/step-up — the identity/credential self-service surface (list/link/unlink OIDC identities, set/remove password, step-up request/verify) now wired into moduleforge.module.yaml is undocumented there. Pre-existing gap (the endpoints already existed hand-wired in main.go before this plan), not introduced or worsened by phase-01, and explicitly out of this plan''s Phase 2 doc-update scope (docs/architecture.md + docs/mod-users-spec.md only). Recommend a follow-up task to add these endpoints to openapi.yaml.'
+      text: |-
+        [phase-01-route-wiring architecture-conformance gate] api/openapi.yaml (AGENTS.md's designated "authoritative REST API specification") has zero hits for identities/credential/step-up — the identity/credential self-service surface (list/link/unlink OIDC identities, set/remove password, step-up request/verify) now wired into moduleforge.module.yaml is undocumented there. Pre-existing gap (the endpoints already existed hand-wired in main.go before this plan), not introduced or worsened by phase-01, and explicitly out of this plan's Phase 2 doc-update scope (docs/architecture.md + docs/mod-users-spec.md only). Recommend a follow-up task to add these endpoints to openapi.yaml.
+
+        Update (users-action-required-migration plan, Phase 3, 2026-08-14): the Action/Error envelope schemas this plan added to api/openapi.yaml (task document-action-required-in-openapi) are already ready for this gap's eventual resolution — Action.code's enum already includes users.step_up_required. When the identities/credential endpoints are finally added to api/openapi.yaml, their 409 step_up_required (action-required) and 409 last_identity (conflict + detail) responses should be documented using these existing Action/Error schemas rather than inventing new ones.
     - title: users-gui fetch helper hard-navigates on 401
       id: HPJi
       date: "2026-07-19"
