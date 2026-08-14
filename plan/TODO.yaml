@@ -107,6 +107,7 @@ phases:
           path: phase-03-doc-updates/001-document-action-required-in-spec-and-architecture.md
           done: false
           tier: sonnet-high
+          digest: Documented the action-required response envelope in docs/mod-users-spec.md (new General features bullet naming the three action codes/statuses/paths, cross-referencing api-response-design.md) and updated use case 9's Outcome paragraph for step_up_required (now action-required) and last_identity (now a conflict detail). Added a proportional Action-required responses note to docs/architecture.md's API layer section. Every code/status/path cross-checked directly against shipped Phase 1 Go source and confirmed exact. Neither doc had ever pinned retired flat field names, so no removal needed. api/openapi.yaml left untouched per sibling task's disjoint scope.
           git:
             branch: plan/users-action-required-migration-03-001
             commit:
