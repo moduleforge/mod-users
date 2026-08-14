@@ -122,7 +122,8 @@ function isApiAction(value: unknown): value is ApiAction {
     isRecord(value) &&
     typeof value.code === 'string' &&
     typeof value.message === 'string' &&
-    typeof value.path === 'string'
+    typeof value.path === 'string' &&
+    (value.data === undefined || isRecord(value.data))
   );
 }
 
@@ -140,14 +141,21 @@ function extractApiAction(body: unknown): ApiAction | undefined {
  * `/` not followed by another `/` or a backslash, rejecting empty strings,
  * absolute URLs with a scheme, `//host/...`-style protocol-relative
  * authorities, and `/\host/...`-style backslash tricks some browsers
- * normalize as protocol-relative. Falls back to a safe default route.
+ * normalize as protocol-relative. Also strips ASCII tab/CR/LF before
+ * matching: per the WHATWG URL Standard, browsers strip those characters
+ * from a URL string while parsing, so a value like `"/\t/evil.example.com"`
+ * would otherwise pass the leading-slash check here yet normalize to
+ * `//evil.example.com` at any sink that re-parses the navigated path as a
+ * URL. Falls back to a safe default route.
  */
 const SAFE_ACTION_PATH_FALLBACK = '/';
 const SAFE_ACTION_PATH_PATTERN = /^\/(?![/\\])/;
+const ASCII_TAB_CR_LF_PATTERN = /[\t\r\n]/g;
 
 function sanitizeActionPath(path: string): string {
-  if (SAFE_ACTION_PATH_PATTERN.test(path)) {
-    return path;
+  const stripped = path.replace(ASCII_TAB_CR_LF_PATTERN, '');
+  if (SAFE_ACTION_PATH_PATTERN.test(stripped)) {
+    return stripped;
   }
   console.error('[api] rejected unsafe action.path', path);
   return SAFE_ACTION_PATH_FALLBACK;

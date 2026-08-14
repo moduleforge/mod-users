@@ -1,11 +1,13 @@
 // ─── API client ──────────────────────────────────────────────────────────────
-export { createUsersClient, api, API_BASE_URL, ApiRequestError, fetchProviders } from './lib/api';
+export { createUsersClient, api, API_BASE_URL, ApiRequestError, ApiActionRequiredError, fetchProviders } from './lib/api';
 export type {
   UsersClient,
   UsersClientOptions,
   ApiError,
   ApiErrorResponse,
   FieldErrorData,
+  ApiAction,
+  ApiActionResponse,
   RequestOptions,
   LoginResponse,
   OIDCProvider,

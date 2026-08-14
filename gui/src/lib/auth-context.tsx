@@ -32,8 +32,10 @@ interface AuthContextValue {
   setTokenAndUser: (token: string, user: UserAccountSelf) => void;
   /**
    * Finalize an externally-obtained session (e.g., OAuth callback) by
-   * storing the token and hydrating the user from `/v1/self`. On failure,
-   * clears the token and throws so the caller can surface the error.
+   * storing the token and hydrating the user from `/v1/self`. On an
+   * ApiActionRequiredError, keeps the token and navigates without throwing;
+   * on any other failure, clears the token and throws so the caller can
+   * surface the error.
    */
   completeExternalLogin: (token: string) => Promise<void>;
   refreshUser: () => Promise<void>;
