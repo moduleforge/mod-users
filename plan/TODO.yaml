@@ -37,7 +37,8 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/users-action-required-migration-01-003
-            commit: []
+            commit:
+                - 19c171b
             merge: null
         - number: 4
           slug: migrate-require-oidc-confirmed-middleware
