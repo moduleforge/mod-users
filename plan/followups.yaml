@@ -249,3 +249,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: The task doc's Assumptions (worktree-local go.work recipe) and the dispatcher's build-environment heads-up (three-vs-four ../ up) both turned out not to apply to this worktree — no go.work was needed at all, since api/go.mod's existing replace directives already resolved against pre-existing sibling symlinks. Recorded in task doc Status; manager may want to reconcile this with the plan-wide heads-up for other tasks in this phase.
+    - title: fieldcrypto key-provisioning posture shift
+      id: QhoW
+      date: "2026-08-14"
+      tags:
+        - plan/phase:go-action-required-migration
+        - plan/slug:users-action-required-migration
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+      text: '[phase-01-go-action-required-migration architecture-conformance gate, arch-review-002] api/cmd/server/main.go''s field-cipher init call was forced from fieldcrypto.NewFromEnv() to fieldcrypto.NewFromEnvOrGenerate(ctx, coredb.New(pool)) in task 001, because NewFromEnv no longer exists in the sibling mod-core/api/fieldcrypto package (confirmed: only NewFromKey and the moduleforge.module.yaml-pinned NewFromEnvOrGenerate remain) — a forced adaptation to an upstream interface removal, not a discretionary choice by this plan. The stale doc comment describing the old fail-fast-on-missing-key behavior has been corrected (see commit ead0baa on plan/users-action-required-migration). Worth separate awareness/review: the security posture for SSN/EIN field-encryption key provisioning has shifted repo-wide from fail-fast-if-missing to auto-generate-if-absent, as a side effect of mod-core''s own interface consolidation (not something mod-users controls or chose). Not blocking this plan; flagging for whoever owns key-management/security policy to confirm this is the intended posture.'
