@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: go-action-required-migration
       title: Go Backend Action-Required Migration
+      diff_base: f80c556f688628ff7209ee679356649117a8c07e
       tasks:
         - number: 1
           slug: add-action-code-registry
