@@ -30,7 +30,7 @@ phases:
             branch: plan/users-action-required-migration-01-002
             commit:
                 - 23347ed
-            merge: null
+            merge: a2d54d00e79fc10e0b43632b40f5e7b5451b45ff
         - number: 3
           slug: migrate-require-verified-middleware
           title: Migrate RequireVerifiedEmail Middleware To Apiresp
