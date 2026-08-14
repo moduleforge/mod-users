@@ -95,3 +95,59 @@ architectural_impact: false
   `.../005-migrate-identities-step-up-and-last-identity.md` — the shipped shapes.
 - Followup `biJk` (in `plan/followups.yaml`) — the pre-existing `api/openapi.yaml` identities/
   credential/step-up coverage gap this task defers to.
+
+## Status
+
+**Outcome:** succeeded. **Date:** 2026-08-14.
+
+Implemented entirely in `api/openapi.yaml`:
+
+- Added `components.schemas.Action` (required `code`/`message`/`path`, optional `data`), mirroring the
+  `Error`/`FieldError` convention. `code` enumerates all three registered `mod-users` action codes
+  (`users.email_unverified`, `users.step_up_required`, `users.oidc_not_confirmed`); `data` documents the
+  `oidc_not_confirmed`-only `{state: <boot-state>}` shape, cross-referencing
+  `api/internal/config/oidc_state.go`'s `BootState` for the two states reachable via this response
+  (`init_failed`, `no_env_no_flag` — the two non-`Confirmed()` states).
+- The existing `api/openapi.yaml` convention references `Error` directly in `responses` (no `{error:
+  ...}` wrapper), so `Action` is referenced the same way (no `{action: ...}` wrapper) per the task's
+  "mirror whatever convention is already in use" instruction.
+- Added three reusable `components.responses` entries: `EmailUnverified` (403, `Action` only —
+  used where no prior 403 was documented), `ForbiddenOrEmailUnverified` (403, `oneOf: [Error, Action]`
+  — replaces the 14 existing `Forbidden` refs on endpoints that sit behind both the authz check and
+  `RequireVerifiedEmail`), and `OIDCNotConfirmed` (503, `Action` only).
+- Wired responses by tracing the actual Phase 1 middleware chain (`api/cmd/server/main.go` +
+  `moduleforge.module.yaml` route-entry `middleware:` lists), not just the task doc's one named example,
+  since both action codes verifiably "apply broadly across `/v1/*` routes" per the task doc's own
+  framing:
+  - `503` (`OIDCNotConfirmed`) added to all 26 already-documented `/v1/auth/*` and `/v1/*` operations
+    (every operation sits behind `RequireOIDCConfirmed`; `/healthz`, `/readyz` are outside `/v1` and
+    untouched; `/v1/oidc-config/*` is outside the gate by design and not documented in this file).
+  - `403` added only where `RequireVerifiedEmail` actually gates the route today: `PUT /v1/self`
+    (`EmailUnverified`) and the 14 admin/self endpoints already carrying `403 Forbidden`
+    (`ForbiddenOrEmailUnverified`) — `/v1/users*`, `/v1/apps/{app_uuid}/user-accounts*`, `/v1/audit*`.
+  - `GET /v1/self` was **not** given a 403: per `main.go` (`r.Get("/self", ...)` mounted outside the
+    nested `r.Group` that applies `auth.RequireVerifiedEmail`) and the manifest's
+    `handlers.RegisterSelfGetRoute` entry (`middleware: [requireOIDCConfirmed, requireAuth]`, no
+    `requireVerifiedEmail`), `GET /v1/self` can only ever return the 503 shape, not 403
+    `email_unverified`. This corrects the task doc's `## Requirements` parenthetical ("e.g. GET
+    /v1/self, which can surface both") — see `decisions_made` / `flagged_for_manager` in the structured
+    report for the discrepancy. Only `PUT /v1/self` can actually surface both.
+- No `verify_path`/`config_path`/flat bespoke bodies were found anywhere in `api/openapi.yaml` (the file
+  never documented the phase-1-superseded shapes) — the "retire" requirement was already satisfied;
+  confirmed via grep, no edit needed.
+- **Not done, by design:** no identities/credential endpoints were added to `api/openapi.yaml` (out of
+  scope, per followup `biJk`). The `Action.code` enum already includes `users.step_up_required` so the
+  schema is ready when those endpoints land. **The `biJk`-note extension itself was not made** — this
+  task agent has no access to edit `plan/followups.yaml` (master-plan-doc, manager-owned); see the
+  structured report's `flagged_for_manager` for the exact text the manager should add.
+
+**Validation:** `make openapi.validate` passes (YAML-syntax check; no `spectral` installed in this
+environment). Supplemented with a manual full-document `$ref`-resolution walk (every `$ref` in the file
+resolves to an existing schema/response/parameter) since no OpenAPI-specific validator was available.
+Both required greps pass (`action|Action|users.*` matches the new schema/wiring; `verify_path|config_path`
+has zero matches). Manually cross-checked the `Action` schema's fields, the wired 403/503 bodies, and
+`data.state` against `api/internal/auth/require_verified.go`, `require_confirmed.go`, and
+`api/internal/useraction/action_codes.go` — messages, `path` values (`/verify-email`, `/oidc-config`),
+statuses, and codes match exactly.
+
+**Files touched:** `api/openapi.yaml` only.
