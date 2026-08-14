@@ -109,3 +109,42 @@ architectural_impact: false
 - `gui/src/lib/api.ts` — the file this task modifies; the existing `request()` helper and the
   top-of-file comment describing the core-gui type re-export convention.
 - `AGENTS.md` First-time setup step 4 — the yalc link required for `gui/` typecheck/build.
+
+## Status
+
+**Outcome:** succeeded (Requirements 1-6 and all `## Validation` checks; Requirement 7 could not
+be completed by this task agent — see caveat below).
+
+**Date:** 2026-08-14
+
+**Validation summary:**
+- `cd gui && bun run typecheck` — passed (yalc link for `@moduleforge/core-gui` set up in this
+  worktree per `AGENTS.md` First-time setup step 4; it was not already present).
+- `make lint.gui` — passed (gui's `lint` target is `tsc --noEmit`; no eslint config for this
+  library).
+- `make build.gui` — passed (tsup build succeeded, DTS included).
+- Test-infrastructure check: a test runner **now exists** in this worktree (`bunfig.toml`,
+  `@types/bun`, `src/lib/utils.test.ts`, `src/components/ui/table.test.tsx`), contradicting
+  follow-up `KXNZ`'s 2026-07-16 finding. Added `gui/src/lib/api.test.ts` (11 new tests) covering:
+  a 403/409/503 body with a top-level `action` throwing `ApiActionRequiredError` with the right
+  fields (including optional `data`); a 403/409 body with a top-level `error` object still
+  throwing `ApiRequestError` (regression check); a flat-string `error` body degrading gracefully
+  to `unknown_error` instead of the prior latent bug; and the same-origin-relative `action.path`
+  guard rejecting the four documented attack shapes (empty string, absolute URL with scheme,
+  protocol-relative `//host/...`, backslash `/\host/...`) and falling back to `/`. `bun test`:
+  20 pass, 0 fail (full suite, including the 9 pre-existing tests).
+- Manual grep confirms `ApiActionRequiredError`, `ApiAction`, and `ApiActionResponse` are all
+  exported from `gui/src/lib/api.ts`.
+
+**Affected source files:**
+- `gui/src/lib/api.ts`
+- `gui/src/lib/api.test.ts` (new)
+
+**Assumptions applied:** both `## Assumptions` bullets, as stated (finalized wire contract is
+authoritative; `@moduleforge/core-gui`'s existing error-type re-exports are unaffected, new
+action types/class are defined locally per D9).
+
+**Caveat — Requirement 7 not completed:** this task agent's available MCP tool set did not
+include a `followups_add` (or equivalently-named `add-followup`) tool, so the required follow-up
+recording could not be performed from inside this task. See the dispatching report's
+`flagged_for_manager` for the exact follow-up content to record.
