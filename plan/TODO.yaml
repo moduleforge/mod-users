@@ -18,7 +18,7 @@ phases:
             branch: plan/users-action-required-migration-01-001
             commit:
                 - 4e6528b
-            merge: null
+            merge: 3a1908246b36f9924b9e0d6eba3146c0a6c2efb0
         - number: 2
           slug: fold-in-zvum-email-taken-conflict
           title: Fold In ZVum Email Taken Conflict
