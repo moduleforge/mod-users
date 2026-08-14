@@ -15,7 +15,8 @@ phases:
           tier: sonnet-low
           git:
             branch: plan/users-action-required-migration-01-001
-            commit: []
+            commit:
+                - 4e6528b
             merge: null
         - number: 2
           slug: fold-in-zvum-email-taken-conflict
