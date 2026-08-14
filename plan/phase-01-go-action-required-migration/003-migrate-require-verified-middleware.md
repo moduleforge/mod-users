@@ -102,3 +102,29 @@ architectural_impact: true
   worked example for `users.email_unverified` (message text matches verbatim).
 - `api/internal/server/middleware.go:50` (`Recoverer`), `api/internal/server/server.go:28`
   (`r.Use(Recoverer)`) — confirms the panic-recovery precondition (read-only reference).
+
+## Status
+
+- **Outcome**: succeeded
+- **Date**: 2026-08-14
+- **Validation summary**: `cd api && go build ./...` succeeded; `go vet ./internal/auth/...` clean;
+  `go test ./internal/auth/... -run TestRequireVerifiedEmail` passed (4/4); `go test ./...` (full
+  suite) passed with no regressions; `gofmt -l` reported no files;
+  `grep -n "server.JSON" api/internal/auth/require_verified.go` and
+  `grep -n "verify_path" api/internal/auth/require_verified*.go` both returned no matches.
+- **Affected source files**:
+  - `api/internal/auth/require_verified.go`
+  - `api/internal/auth/require_verified_test.go`
+- **Assumptions applied**: task `add-action-code-registry` (`api/internal/useraction`) was already
+  landed on the branch this worktree was cut from, so `useraction.EmailUnverified` was importable
+  as expected; `/verify-email` used as the resolved `action.path` value per Answer/Reading A.
+- **Build-environment note**: the plain `make build.api` / `cd api && go build ./...` /
+  `go test ./...` invocations succeeded directly against this worktree with no `go.work` workaround
+  needed — the task doc's and dispatch note's assumed worktree-local `go.work` recipe (three or four
+  `../` up) was not required at all in this worktree. `api/go.mod`'s existing local-path `replace`
+  directives resolved cleanly as-is. Flagged for manager awareness in case this reflects a change in
+  the build environment since task 001 ran.
+- **Verification note** (read-only, no code change): confirmed `api/internal/server/server.go:28`
+  (`r.Use(Recoverer)`, defined at `api/internal/server/middleware.go:50`) is a global, top-level
+  middleware installed upstream of every route `RequireVerifiedEmail` can gate — the panic-recovery
+  precondition `apiresp.WriteActionRequired` requires is already satisfied.
