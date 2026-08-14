@@ -219,3 +219,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Task doc's own Assumptions (three ../ up) and plan notes doc action-path-values-and-decisions.md (decision D10, followup UaNK, five ../ up for doubly-nested task worktrees) both mismatch this worktree's empirically-verified reality (four ../ up). Worth reconciling building-common.md guidance and/or plan notes so tasks 003/004/005 in this phase don't rediscover the same mismatch independently.
+    - title: api/cmd/server/main.go fieldcrypto.NewFromEnv
+      id: IuaZ
+      date: "2026-08-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:go-action-required-migration
+        - plan/slug:users-action-required-migration
+        - priority:unspecified
+        - effort:unspecified
+      text: api/cmd/server/main.go fieldcrypto.NewFromEnv -> NewFromEnvOrGenerate fix scoped to the one call site needed to unblock this task's build; no broader audit of main.go or other mfgen-wired constructors performed - worth a dedicated pass if other call sites carry similarly stale mfgen wiring.
