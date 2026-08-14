@@ -209,3 +209,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: model/scripts/shadow-db-lint.sh's ephemeral shadow-DB container starts from the floating tag postgres:16 rather than a pinned digest. mod-workflows had the identical script (copied verbatim from this project) and just pinned it to postgres:16@sha256:11a9d238fbb48bab14599c57e41123254452b1a2d93c6c8595bce96f346bd082 with a comment documenting the update procedure (docker pull postgres:16 && docker inspect --format='{{index .RepoDigests 0}}' postgres:16). Consider applying the same fix here to avoid divergence between the two copies. Low priority, reproducibility hardening only, not a security issue.
+    - title: Task doc's own Assumptions (three ../ up) and
+      id: bdZJ
+      date: "2026-08-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:go-action-required-migration
+        - plan/slug:users-action-required-migration
+        - priority:unspecified
+        - effort:unspecified
+      text: Task doc's own Assumptions (three ../ up) and plan notes doc action-path-values-and-decisions.md (decision D10, followup UaNK, five ../ up for doubly-nested task worktrees) both mismatch this worktree's empirically-verified reality (four ../ up). Worth reconciling building-common.md guidance and/or plan notes so tasks 003/004/005 in this phase don't rediscover the same mismatch independently.
