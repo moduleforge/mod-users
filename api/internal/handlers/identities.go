@@ -25,6 +25,7 @@ import (
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	usersservice "github.com/moduleforge/mod-users/api/internal/service"
+	"github.com/moduleforge/mod-users/api/internal/useraction"
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
@@ -200,7 +201,7 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
-		writeStepUpRequired(w)
+		writeStepUpRequired(w, r)
 		return
 	}
 
@@ -235,7 +236,7 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
-		writeStepUpRequired(w)
+		writeStepUpRequired(w, r)
 		return
 	}
 	stepUpUsed := h.stepUpRequired
@@ -290,7 +291,7 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 
 	if txErr != nil {
 		if errors.Is(txErr, errLastIdentity) {
-			writeLastIdentityError(w)
+			writeLastIdentityError(w, r)
 			return
 		}
 		if errors.Is(txErr, errIdentityNotFound) {
@@ -342,7 +343,7 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 	uc := localauth.MustFromContext(r.Context())
 
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
-		writeStepUpRequired(w)
+		writeStepUpRequired(w, r)
 		return
 	}
 	stepUpUsed := h.stepUpRequired
@@ -448,7 +449,7 @@ func (h *IdentitiesHandler) RemovePassword(w http.ResponseWriter, r *http.Reques
 	uc := localauth.MustFromContext(r.Context())
 
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
-		writeStepUpRequired(w)
+		writeStepUpRequired(w, r)
 		return
 	}
 	stepUpUsed := h.stepUpRequired
@@ -479,7 +480,7 @@ func (h *IdentitiesHandler) RemovePassword(w http.ResponseWriter, r *http.Reques
 
 	if txErr != nil {
 		if errors.Is(txErr, errLastIdentity) {
-			writeLastIdentityError(w)
+			writeLastIdentityError(w, r)
 			return
 		}
 		apiresp.WriteError(w, r, fmt.Errorf("identities.RemovePassword: transaction: %w", txErr))
@@ -645,13 +646,13 @@ func (h *IdentitiesHandler) requireStepUp(r *http.Request, userAccountID int64) 
 	return localauth.VerifyStepUpToken([]byte(h.jwtSecret), token, userAccountID, h.consumed)
 }
 
-// writeStepUpRequired writes the 409 step_up_required response body. The wire
-// format is stable — the Phase 5 GUI keys off the "error" field value.
-func writeStepUpRequired(w http.ResponseWriter) {
-	server.JSON(w, http.StatusConflict, map[string]any{
-		"error":          "step_up_required",
-		"challenge_path": "/v1/self/credential/step-up",
-	})
+// writeStepUpRequired writes the 409 users.step_up_required action-required
+// response via apiresp.WriteActionRequired. action.path ("/step-up") is a
+// GUI navigation route, not an API endpoint — see the task's recorded
+// decision (Reading A) for the rationale.
+func writeStepUpRequired(w http.ResponseWriter, r *http.Request) {
+	apiresp.WriteActionRequired(w, r, useraction.StepUpRequired,
+		"Confirm your identity to continue.", "/step-up", nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -666,12 +667,15 @@ var errLastIdentity = errors.New("identities: last identity cannot be removed")
 // identity UUID does not belong to the caller's account.
 var errIdentityNotFound = errors.New("identities: identity not found")
 
-// writeLastIdentityError writes the 409 response mandated by task 4.4.
-func writeLastIdentityError(w http.ResponseWriter) {
-	server.JSON(w, http.StatusConflict, map[string]any{
-		"error":   "last_identity",
-		"message": "You can't remove your last sign-in method. Add another first.",
-	})
+// writeLastIdentityError writes the 409 users.last_identity conflict
+// response via apiresp.WriteError(apiresp.Conflict(...)). Field is left
+// empty (zero value) — this is a message-only detail, not bound to a
+// specific request field.
+func writeLastIdentityError(w http.ResponseWriter, r *http.Request) {
+	apiresp.WriteError(w, r, apiresp.Conflict(apiresp.FieldError{
+		Code:    "users.last_identity",
+		Message: "You can't remove your last sign-in method. Add another first.",
+	}))
 }
 
 // safeObserve calls obs.Observe only when h.obs is non-nil.

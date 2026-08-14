@@ -96,6 +96,29 @@ branch uses `apiresp.Conflict` directly and has no such dependency).
 - `grep -rn '"error":\s*"step_up_required"\|"error":\s*"last_identity"' api/internal/handlers/identities*.go`
   returns no matches.
 
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-08-14
+- **Validation summary:** `cd api && go build ./...` clean; `go vet ./internal/handlers/...` clean;
+  targeted test run (`-run 'TestWrappedEndpoints|TestLastIdentityErrorBody'`) and the broader
+  identities/step-up sweep (`-run 'Identit|StepUp|Unlink|SetPassword|RemovePassword|StartLink'`)
+  both pass; full `go test ./...` passes except one flaky, unrelated pre-existing timing test
+  (`TestNewStepUpConsumedCache_JanitorStopsOnCancel` in `api/auth`, a goroutine-count race in the
+  step-up-token janitor — not in `internal/handlers`, not touched by this task; passed in isolation
+  and in 2 of 3 fresh full-suite runs). `gofmt -l` reports no files. All four retired-shape grep
+  checks return no matches.
+- **Affected source files:**
+  - `api/internal/handlers/identities.go`
+  - `api/internal/handlers/identities_test.go`
+  - `api/internal/handlers/identities_stepup_test.go`
+  - `plan/phase-01-go-action-required-migration/005-migrate-identities-step-up-and-last-identity.md`
+    (this doc)
+- **Assumptions applied:** task `add-action-code-registry` (001) had already landed —
+  `useraction.StepUpRequired` was importable, confirmed present at
+  `api/internal/useraction/action_codes.go`. `/step-up` used as the literal `action.path` value per
+  the plan notes' recorded "Answer" (Reading A).
+
 ## Metadata
 
 architectural_impact: true
