@@ -238,7 +238,7 @@ func main() {
 
 	// Initialize the field cipher for SSN/EIN encryption. Fail fast if the
 	// key env var is missing or malformed — the server cannot operate without it.
-	fieldCipher, err := fieldcrypto.NewFromEnv()
+	fieldCipher, err := fieldcrypto.NewFromEnvOrGenerate(ctx, coredb.New(pool))
 	if err != nil {
 		slog.ErrorContext(ctx, "field cipher init failed", "error", err)
 		os.Exit(1)
