@@ -90,6 +90,7 @@ phases:
           path: phase-02-gui-action-required-handling/002-wire-auth-context-action-navigation.md
           done: false
           tier: sonnet-med
+          digest: Wired the three reachable api.self.get() call sites in gui/src/lib/auth-context.tsx (mount effect, refreshUser, completeExternalLogin) to catch ApiActionRequiredError ahead of other error handling and navigate via onNavigate, per the design doc's action-required navigation distinction. Each site preserves documented existing behavior for non-action-required errors. Added 8 new unit tests; full suite 28/28 passing. Typecheck/lint/build all green.
           git:
             branch: plan/users-action-required-migration-02-002
             commit:
