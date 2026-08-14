@@ -232,16 +232,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Build-environment observation: this worktree needed no go.work workaround at all — plain make build.api / go build / go vet / go test all succeeded directly using api/go.mod''s existing local-path replace directives. This differs from both task 001''s three-../ assumption and the dispatch note''s corrected four-../ recipe (and the plan notes'' five-../ figure). The sibling docs-mf-standards checkout''s building-common.md actually describes a different, apparently newer mechanism (scripts/link-siblings.sh + make preflight) superseding the go.work recipe, which mod-users does not yet carry (no scripts/link-siblings.sh present) despite being listed as a repo that should carry it. Not blocking — build/test were green — but worth manager awareness since the go.work-workaround guidance for tasks 004/005 may already be stale.'
-    - title: The task doc's Assumptions (worktree-local go
-      id: BqdP
-      date: "2026-08-14"
-      tags:
-        - type:ambiguity
-        - plan/phase:go-action-required-migration
-        - plan/slug:users-action-required-migration
-        - priority:unspecified
-        - effort:unspecified
-      text: The task doc's Assumptions (worktree-local go.work recipe) and the dispatcher's build-environment heads-up (three-vs-four ../ up) both turned out not to apply to this worktree — no go.work was needed at all, since api/go.mod's existing replace directives already resolved against pre-existing sibling symlinks. Recorded in task doc Status; manager may want to reconcile this with the plan-wide heads-up for other tasks in this phase.
     - title: fieldcrypto key-provisioning posture shift
       id: QhoW
       date: "2026-08-14"
