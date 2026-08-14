@@ -70,3 +70,41 @@ architectural_impact: true
   table with bound statuses) and the `ActionCode` struct definition under "Go-layer ownership".
 - `mod-core/api/apiresp/action.go` — the `ActionCode` struct and `WriteActionRequired` function
   this registry's values feed into (read-only reference; not modified by this plan).
+
+## Status
+
+- **Outcome:** succeeded (2026-08-14).
+- **Validation:** `cd api && go build ./...` — passed. `cd api && go vet ./internal/useraction/...` —
+  passed, clean. `cd api && go test ./internal/useraction/...` — passed (`ok`). `gofmt -l
+  api/internal/useraction/` — no files listed. Whole-module `go build ./...` for `api` — passed.
+- **Files:** `api/internal/useraction/action_codes.go`, `api/internal/useraction/action_codes_test.go`.
+- **Build-prerequisite correction (Assumptions).** The Assumptions section's "three `../` up" figure
+  did not hold for this worktree: this worktree's path is
+  `mod-users/worktrees/plan/users-action-required-migration-01-001/`, and because the branch name
+  itself contains a `/` (`plan/...`), the physical directory nesting is one level deeper than the
+  plain single-nested case `building-common.md`'s worked example assumes. Verified empirically
+  (`ls`) that the sibling aggregate root (`.../moduleforge/`) is **four** `../` up from this
+  worktree's root, not three. Built the worktree-local `go.work` with `../../../../mod-core/api`,
+  `../../../../mod-core/model`, and the other `api/go.mod` `replace`-listed siblings
+  (`mod-audit`, `mod-authz`) at the same four-`../` depth, then resolved the resulting
+  "conflicting replacements" errors with `go work edit -replace <module>@v0.0.0=<four-dot-dot
+  path>` for `core-model`, `core-api`, `audit-model`, `audit-api`, `authz-model`, `authz-api` — the
+  same wrinkle-remediation pattern `building-common.md`'s "conflicting replace directives" section
+  documents, just at the corrected depth. `go.work`/`go.work.sum` are already covered by this
+  repo's gitignore; no committed file changed for this. This is consistent with (though not
+  identical in reported figure to) the "doubly-nested" wrinkle flagged in
+  `../notes/action-path-values-and-decisions.md` (decision D10, followup `UaNK`) for Go-migration
+  tasks in this plan — flagged for the manager below in case the plan notes' "five `../`" figure
+  needs reconciling against this task's empirically-verified "four."
+- **Pre-existing build blocker fixed (per dispatch heads-up).** Before creating any task files,
+  `go build ./api/...` failed with `api/cmd/server/main.go:241: undefined:
+  fieldcrypto.NewFromEnv` — the mfgen-wired field-cipher constructor call was stale against the
+  sibling `mod-core/api/fieldcrypto` package's current API, which only exports
+  `NewFromEnvOrGenerate(ctx, FieldKeyQuerier)`. Per the dispatch's explicit heads-up authorizing
+  resolution of an mfgen/build-step interface-shape break encountered during Validation, updated
+  the one call site to `fieldcrypto.NewFromEnvOrGenerate(ctx, coredb.New(pool))` — `coredb.New(pool)`
+  was already used pervasively elsewhere in `main.go` and satisfies `FieldKeyQuerier` structurally
+  (`ListUsableFieldCryptoKeys`, `InsertInitialFieldCryptoKey`). No other line in `main.go` changed.
+  This file is otherwise unrelated to this task's own scope (the `useraction` package); the fix was
+  required purely to make the task's own `go build ./...` validation check pass in this
+  environment.
