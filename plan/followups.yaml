@@ -277,3 +277,11 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: docs/mf-standards submodule was not initialized in this task worktree at dispatch time (unlike the plan worktree it was cut from) - this task agent initialized it read-only to reach the referenced contract doc. Other task worktrees cut from this plan that reference docs/mf-standards docs may need the same step.
+    - title: step_up_required has no GUI navigation wiring
+      id: u353
+      date: "2026-08-14"
+      tags:
+        - type:enhancement
+        - priority:unspecified
+        - effort:unspecified
+      text: users.step_up_required has no reachable GUI call site in mod-users (no identities-management UI exists to trigger it), so its action-required handling is presently limited to the generic request()-level throw in gui/src/lib/api.ts with no navigation wiring in gui/src/lib/auth-context.tsx.
