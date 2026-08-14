@@ -216,4 +216,20 @@ describe('request() action.path same-origin-relative guard', () => {
     const err = (await requestAndCatch()) as ApiActionRequiredError;
     expect(err.path).toBe('/');
   });
+
+  test('rejects a leading-slash path with an embedded tab before a second slash and falls back to the safe default', async () => {
+    stubFetch(
+      {
+        action: {
+          code: 'users.email_unverified',
+          message: 'msg',
+          path: '/\t/evil.example.com',
+        },
+      },
+      403,
+    );
+
+    const err = (await requestAndCatch()) as ApiActionRequiredError;
+    expect(err.path).toBe('/');
+  });
 });
