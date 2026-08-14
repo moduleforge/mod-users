@@ -267,3 +267,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: gui/src/lib/api.ts defines ApiAction, ApiActionResponse, and ApiActionRequiredError locally because @moduleforge/core-gui does not yet export action-required wire types. These are strong candidates for future promotion to @moduleforge/core-gui, parallel to how ApiError/ApiErrorResponse/ApiRequestError were promoted.
+    - title: docs/mf-standards submodule was not initializ
+      id: ojPJ
+      date: "2026-08-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:gui-action-required-handling
+        - plan/slug:users-action-required-migration
+        - priority:unspecified
+        - effort:unspecified
+      text: docs/mf-standards submodule was not initialized in this task worktree at dispatch time (unlike the plan worktree it was cut from) - this task agent initialized it read-only to reach the referenced contract doc. Other task worktrees cut from this plan that reference docs/mf-standards docs may need the same step.
