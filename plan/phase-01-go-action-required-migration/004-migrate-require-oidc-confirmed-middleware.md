@@ -88,3 +88,31 @@ architectural_impact: true
   worked example for `users.oidc_not_confirmed`; "Action-required status set" (the verbatim-503
   invariant).
 - `api/internal/handlers/oidc_config_test.go:510-556` — the existing test this task updates.
+
+## Status
+
+- **Outcome:** succeeded (2026-08-14).
+- **Validation:** `cd api && go build ./...` — passed. `cd api && go vet ./internal/auth/...` —
+  passed, clean. `cd api && go test ./internal/handlers/... -run TestRequireOIDCConfirmed_Gates` —
+  passed. `cd api && go test ./...` (full suite) — passed, all packages. `gofmt -l
+  api/internal/auth/require_confirmed.go api/internal/handlers/oidc_config_test.go` — no files
+  listed. `grep -n "server.JSON" api/internal/auth/require_confirmed.go` — no matches. `grep -n
+  "config_path" api/internal/auth/require_confirmed.go api/internal/handlers/oidc_config_test.go` —
+  no matches.
+- **Files:** `api/internal/auth/require_confirmed.go`,
+  `api/internal/handlers/oidc_config_test.go`.
+- **Build-prerequisite correction (Assumptions).** As previously flagged by task
+  `add-action-code-registry` (phase-01 task 001), the Assumptions section's "three `../` up" figure
+  for the worktree-local `go.work` recipe did not hold for this worktree either — the aggregate
+  sibling root (`.../moduleforge/`) is empirically **four** `../` up from this worktree's root
+  (`mod-users/worktrees/plan/users-action-required-migration-01-004/`), not three, because the
+  branch name contains a `/`. Built the worktree-local `go.work` with `use` directives at the
+  four-`../` depth for `mod-core/api`, `mod-core/model`, `mod-audit/api`, `mod-audit/model`,
+  `mod-authz/api`, `mod-authz/model` (mirroring `api/go.mod`'s `replace`-listed siblings), then
+  resolved the resulting "conflicting replacements" errors with `go work edit -replace
+  <module>@v0.0.0=<four-dot-dot path>` for `core-model`, `core-api`, `audit-model`, `audit-api`,
+  `authz-model`, `authz-api` — same remediation pattern as task 001, same corrected depth.
+  `go.work`/`go.work.sum` are gitignored; no committed file changed for this.
+- No mfgen/stale-interface build break was encountered in this task's own build/test steps beyond
+  the one task 001 already fixed (`fieldcrypto.NewFromEnv` → `NewFromEnvOrGenerate` in
+  `api/cmd/server/main.go`, already present on the branch this worktree was cut from).

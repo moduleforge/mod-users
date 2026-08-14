@@ -526,22 +526,45 @@ func TestRequireOIDCConfirmed_Gates(t *testing.T) {
 	})
 	handler := mw(next)
 
-	// Unconfirmed: 503 with config_path.
+	// Unconfirmed: 503 with an action-required envelope.
+	//
+	// The 503 status is written verbatim here and must never be remapped
+	// to any other status (403/409/500) — apiresp.WriteActionRequired's
+	// own doc comment states it "writes action.Status verbatim... and
+	// MUST NOT remap it onto an error status... under any circumstance".
+	// This is the "verbatim-503 (never remapped)" invariant; the
+	// rr.Code == http.StatusServiceUnavailable check below is the
+	// mechanical assertion of it.
 	req := httptest.NewRequest(http.MethodGet, "/v1/self", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unconfirmed: got %d, want 503", rr.Code)
 	}
-	var resp map[string]any
+	var resp struct {
+		Action map[string]any `json:"action"`
+	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp["error"] != "oidc_not_confirmed" {
-		t.Errorf("error: got %v, want oidc_not_confirmed", resp["error"])
+	if resp.Action == nil {
+		t.Fatal("expected top-level \"action\" object, got none")
 	}
-	if resp["config_path"] != "/oidc-config" {
-		t.Errorf("config_path: got %v, want /oidc-config", resp["config_path"])
+	if code, _ := resp.Action["code"].(string); code != "users.oidc_not_confirmed" {
+		t.Errorf("action.code: got %v, want users.oidc_not_confirmed", resp.Action["code"])
+	}
+	if msg, _ := resp.Action["message"].(string); msg != "Single sign-on is not finished configuring." {
+		t.Errorf("action.message: got %v, want %q", resp.Action["message"], "Single sign-on is not finished configuring.")
+	}
+	if path, _ := resp.Action["path"].(string); path != "/oidc-config" {
+		t.Errorf("action.path: got %v, want /oidc-config", resp.Action["path"])
+	}
+	data, _ := resp.Action["data"].(map[string]any)
+	if data == nil {
+		t.Fatal("expected action.data to be present")
+	}
+	if state, _ := data["state"].(string); state != string(config.BootStateInitFailed) {
+		t.Errorf("action.data.state: got %v, want %q", data["state"], string(config.BootStateInitFailed))
 	}
 
 	// Flip to confirmed without restarting the handler — state read is

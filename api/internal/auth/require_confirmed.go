@@ -3,8 +3,9 @@ package auth
 import (
 	"net/http"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/config"
-	"github.com/moduleforge/mod-users/api/internal/server"
+	"github.com/moduleforge/mod-users/api/internal/useraction"
 )
 
 // RequireOIDCConfirmed blocks /v1/* traffic when the OIDC onboarding flow
@@ -16,9 +17,9 @@ import (
 // so the operator can always reach the onboarding endpoints. Health
 // endpoints (/healthz, /readyz) sit outside /v1 and are unaffected.
 //
-// The 503 response body is deliberately machine-parseable (config_path
-// in particular) so the GUI can redirect without string-parsing HTTP
-// status text.
+// The 503 response is deliberately machine-parseable (action.path in
+// particular) so the GUI can redirect without string-parsing HTTP status
+// text.
 func RequireOIDCConfirmed(statusFn func() config.BootState) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,13 +31,12 @@ func RequireOIDCConfirmed(statusFn func() config.BootState) func(http.Handler) h
 
 			// 503 Service Unavailable is the right signal: the service
 			// *exists* but cannot serve normal traffic until the operator
-			// completes a setup step. The body identifies the remediation
-			// path so clients don't need to guess the onboarding URL.
-			server.JSON(w, http.StatusServiceUnavailable, map[string]any{
-				"error":       "oidc_not_confirmed",
-				"config_path": "/oidc-config",
-				"state":       string(state),
-			})
+			// completes a setup step. The action-required envelope
+			// identifies the remediation path so clients don't need to
+			// guess the onboarding URL.
+			apiresp.WriteActionRequired(w, r, useraction.OIDCNotConfirmed,
+				"Single sign-on is not finished configuring.", "/oidc-config",
+				map[string]any{"state": string(state)})
 		})
 	}
 }
