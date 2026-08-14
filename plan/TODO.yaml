@@ -35,6 +35,7 @@ phases:
           path: phase-01-go-action-required-migration/003-migrate-require-verified-middleware.md
           done: false
           tier: sonnet-med
+          digest: 'Migrated both response branches of RequireVerifiedEmail off the bespoke server.JSON flat envelope. Missing-context branch now calls apiresp.WriteError with an untyped errors.New(...) programmer error (internal_error/500 default). Email-unverified branch now calls apiresp.WriteActionRequired with useraction.EmailUnverified, existing message text, and resolved /verify-email navigation path, data: nil. Updated doc comments. Removed unused server import, added errors/apiresp/useraction. Rewrote all four tests. Confirmed Recoverer middleware satisfies WriteActionRequired''s panic-recovery precondition. Full validation suite green, no regressions.'
           git:
             branch: plan/users-action-required-migration-01-003
             commit:
