@@ -40,22 +40,13 @@ func NewUserAccountsHandler(service *svc.UserAccountService, grantAdmin, revokeA
 
 // writeServiceError maps a service error to the appropriate HTTP response.
 //
-// localAuthz.ErrUnauthenticated/ErrForbidden and svc.ErrInvalidInput are
-// promoted aliases of apiresp's canonical sentinels, so apiresp.WriteError
-// classifies them correctly with no local switch. svc.ErrEmailTaken is the
-// one case that needs a local branch: it wraps apiresp.ErrConflict, but the
-// users.email_taken field-level detail must be attached at the mapping
-// point, so this builds an apiresp.Conflict error carrying that detail and
-// routes it through apiresp.WriteError like any other detail-carrying
-// error. Per the design doc this is a deliberate plain 409 (create-time
-// uniqueness), not a masked 403 — no masking logic applies to this path.
+// localAuthz.ErrUnauthenticated/ErrForbidden, svc.ErrInvalidInput, and
+// svc.ErrEmailTaken are all promoted aliases of (or, for ErrEmailTaken,
+// built directly via) apiresp's canonical sentinels, so a plain
+// apiresp.WriteError classifies every one of them correctly — including
+// field-level details, e.g. svc.ErrEmailTaken's users.email_taken detail —
+// with no local mapping-point special case.
 func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, svc.ErrEmailTaken) {
-		apiresp.WriteError(w, r, apiresp.Conflict(apiresp.FieldError{
-			Field: "email", Code: "users.email_taken", Message: "email is already registered",
-		}))
-		return
-	}
 	apiresp.WriteError(w, r, err)
 }
 
