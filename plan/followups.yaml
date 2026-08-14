@@ -298,3 +298,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Task doc's own Requirements example (GET /v1/self can surface both 403/503) is factually incorrect against shipped Phase 1 route wiring - only PUT /v1/self can. Implemented per actual code behavior instead. Informational only, no action needed since the plan is closing.
+    - title: 'Scope note for awareness, not a defect: diff '
+      id: HBoJ
+      date: "2026-08-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:doc-updates
+        - plan/slug:users-action-required-migration
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Scope note for awareness, not a defect: diff is broader than the task doc''s single named example (26 operations got 503 wiring, 15 got 403 wiring) - deliberate reading of apply broadly across /v1/* routes, grounded in tracing the actual middleware chain.'
