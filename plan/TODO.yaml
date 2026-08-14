@@ -117,7 +117,7 @@ phases:
           slug: document-action-required-in-openapi
           title: Document Action-Required Envelope In OpenAPI
           path: phase-03-doc-updates/002-document-action-required-in-openapi.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Added the Action action-required envelope schema to api/openapi.yaml (mirroring Error/FieldError, enumerating all three registered mod-users action codes, documenting the oidc_not_confirmed-only data.state shape against real BootState values). Wired 403 email_unverified and 503 oidc_not_confirmed onto every already-documented endpoint the shipped middleware chain actually gates (traced via main.go and moduleforge.module.yaml), broader than the task doc's single named example since the code confirmed apply-broadly was literal. Found and corrected an inaccuracy in the task doc's own example. Confirmed retire-flat-bodies requirement was already vacuously satisfied (flat fields never existed in openapi.yaml).
           git:
