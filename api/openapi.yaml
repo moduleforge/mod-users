@@ -81,6 +81,62 @@ components:
           description: Human-readable, safe-to-display detail message.
           example: "That email is already registered."
 
+    Action:
+      type: object
+      description: |
+        The action-required envelope. A response carrying this shape is a
+        third response kind alongside a bare resource body (success) and the
+        `Error` envelope: the request was well-formed and the actor
+        authenticated, but the client must complete an out-of-band action
+        (navigate/redirect the user) before the original operation can
+        proceed. It is never returned alongside `Error` on the same
+        response, and it MUST NOT be treated as an error (no banner/toast) —
+        the client navigates to `path` instead. See
+        `docs/mf-standards/architecture/api-response-design.md`, "The
+        `action` object".
+      required: [code, message, path]
+      properties:
+        code:
+          type: string
+          description: |
+            Machine-readable, module-namespaced action code drawn from the
+            owning module's closed, per-module registry (parallel to how
+            `Error.code` documents its reserved enum, except namespaced
+            rather than top-level — an action-required response has no
+            generic/reserved-core layer). mod-users registers three codes
+            today, enumerated below; a module MUST NOT emit an unregistered
+            or un-namespaced action code.
+          enum:
+            - users.email_unverified
+            - users.step_up_required
+            - users.oidc_not_confirmed
+          example: users.email_unverified
+        message:
+          type: string
+          description: |
+            Human-readable prompt to act — not an error. Safe to surface to
+            an end user; never leaks internal identifiers, stack traces, or
+            SQL.
+          example: "Verify your email address before continuing."
+        path:
+          type: string
+          description: |
+            The application-relative navigation/redirect target the client
+            must send the user to in order to complete the out-of-band
+            action. Always relative — no scheme, no `//`-prefixed
+            authority — never constructed from unvalidated external input.
+          example: /verify-email
+        data:
+          type: object
+          description: |
+            Kind-specific auxiliary state the destination needs. Omitted
+            (not present, not `{}`) when the action needs none. Present only
+            for `users.oidc_not_confirmed`, which carries
+            `{state: <boot-state>}` — `state` is one of the deployment's
+            unconfirmed OIDC boot states (`init_failed`, `no_env_no_flag`;
+            see `api/internal/config/oidc_state.go`'s `BootState`).
+          example: { state: "no_env_no_flag" }
+
     HealthStatus:
       type: object
       properties:
@@ -459,6 +515,40 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
 
+    EmailUnverified:
+      description: |
+        Action-required, not an error: the actor is authenticated but their
+        email is unverified. `action.path` is the verification page the
+        client must navigate to before retrying.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Action"
+    ForbiddenOrEmailUnverified:
+      description: |
+        Caller lacks permission (the `Error` shape, `error.code: forbidden`),
+        OR the actor's email is unverified (the `Action` shape,
+        `action.code: users.email_unverified`). Both share HTTP 403; the
+        response body's top-level member — `error` vs. `action` — is the
+        discriminator, never both on the same response. A missing resource
+        on these endpoints is a genuine 404 (`NotFound`), not masked as 403.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/Error"
+              - $ref: "#/components/schemas/Action"
+    OIDCNotConfirmed:
+      description: |
+        Action-required, not an error: the deployment's OIDC configuration
+        is incomplete. `action.path` is the setup page and `action.data`
+        carries `{state: <boot-state>}`. 503 is written verbatim here and is
+        never remapped onto another status.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Action"
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -528,6 +618,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/anonymous:
     post:
@@ -564,6 +656,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/login:
     post:
@@ -586,6 +680,8 @@ paths:
                 $ref: "#/components/schemas/AuthToken"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/email-code:
     post:
@@ -602,6 +698,8 @@ paths:
       responses:
         "202":
           description: Code sent (if account exists). Response is always 202 to prevent enumeration.
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/email-code/verify:
     post:
@@ -624,6 +722,8 @@ paths:
                 $ref: "#/components/schemas/AuthToken"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/password-reset:
     post:
@@ -640,6 +740,8 @@ paths:
       responses:
         "202":
           description: Reset email sent (if account exists).
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/password-reset/confirm:
     post:
@@ -664,6 +766,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/providers:
     get:
@@ -695,6 +799,8 @@ paths:
                       type: string
                       description: Human-friendly label suitable for a button.
                       example: Google
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/oidc/{provider}/start:
     get:
@@ -734,6 +840,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/oidc/{provider}/callback:
     get:
@@ -790,6 +898,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   # -- Self --
 
@@ -807,6 +917,8 @@ paths:
                 $ref: "#/components/schemas/UserDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
     put:
       summary: Update the authenticated user's profile
       tags: [Self]
@@ -828,6 +940,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/EmailUnverified"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   # -- Admin: Users --
 
@@ -854,7 +970,9 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
     post:
       summary: Create a user (admin)
       tags: [Users]
@@ -877,13 +995,15 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "409":
           description: Email already in use.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/users/{user_uuid}:
     get:
@@ -902,9 +1022,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
     put:
       summary: Update a user (admin)
       tags: [Users]
@@ -929,9 +1051,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
     delete:
       summary: Archive a user (admin, soft-delete)
       tags: [Users]
@@ -944,9 +1068,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/users/{user_uuid}/grant:
     post:
@@ -967,9 +1093,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/users/{user_uuid}/assume:
     post:
@@ -991,9 +1119,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/users/{user_uuid}/audit:
     get:
@@ -1014,7 +1144,9 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   # -- Apps --
   # Top-level /v1/apps CRUD (list/create/get/update/archive) is NOT served by
@@ -1045,9 +1177,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
     post:
       summary: Assign a user account to an application (admin)
       tags: [Apps]
@@ -1072,9 +1206,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/apps/{app_uuid}/user-accounts/{user_uuid}:
     delete:
@@ -1090,9 +1226,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/apps/{app_uuid}/user-accounts/{user_uuid}/roles:
     put:
@@ -1125,9 +1263,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   # -- Audit --
 
@@ -1154,7 +1294,9 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/audit/{resource_type}/{resource_uuid}:
     get:
@@ -1185,4 +1327,6 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"

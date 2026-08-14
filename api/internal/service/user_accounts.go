@@ -95,17 +95,21 @@ type CreateAnonymousUserResult struct {
 
 // ErrEmailTaken is returned by Create when the email is already registered.
 //
-// Wraps apiresp.ErrConflict (rather than being an independent sentinel) so
-// errors.Is(err, apiresp.ErrConflict) succeeds and apiresp.WriteError alone
-// would already classify it as 409 conflict. Per the design doc
-// (docs/mf-standards/architecture/api-response-design.md, "Module-specific
-// extension codes") this is a deliberate plain 409 (create-time uniqueness),
-// not a masked 403 — no masking logic applies to this path. apiresp exposes
-// no public detail-carrying constructor for the conflict sentinel (only
-// InvalidInput), so the users.email_taken field-level detail is attached at
-// the handler mapping point instead; see writeServiceError in
-// handlers/user_accounts.go.
-var ErrEmailTaken = fmt.Errorf("%w: email already registered", apiresp.ErrConflict)
+// Built via apiresp.Conflict, which wraps apiresp.ErrConflict (rather than
+// being an independent sentinel) so errors.Is(err, apiresp.ErrConflict)
+// succeeds and carries the users.email_taken field-level detail directly on
+// the sentinel — apiresp.WriteError(w, r, err) alone classifies it as 409
+// conflict and surfaces the detail, with no local mapping-point special
+// case needed (see writeServiceError in handlers/user_accounts.go). Per the
+// design doc (docs/mf-standards/architecture/api-response-design.md,
+// "Module-specific extension codes") this is a deliberate plain 409
+// (create-time uniqueness), not a masked 403 — no masking logic applies to
+// this path.
+var ErrEmailTaken = apiresp.Conflict(apiresp.FieldError{
+	Field:   "email",
+	Code:    "users.email_taken",
+	Message: "email is already registered",
+})
 
 // ErrInvalidInput is returned when the caller supplies invalid field values.
 //

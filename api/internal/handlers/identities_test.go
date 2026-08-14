@@ -706,7 +706,8 @@ func TestLastIdentitySafety(t *testing.T) {
 
 func TestLastIdentityErrorBody(t *testing.T) {
 	rec := httptest.NewRecorder()
-	writeLastIdentityError(rec)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/self/identities/whatever", nil)
+	writeLastIdentityError(rec, req)
 
 	if rec.Code != http.StatusConflict {
 		t.Errorf("status = %d, want 409", rec.Code)
@@ -716,11 +717,32 @@ func TestLastIdentityErrorBody(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body["error"] != "last_identity" {
-		t.Errorf("error = %v, want last_identity", body["error"])
+	errObj, ok := body["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("error = %v, want an object", body["error"])
 	}
-	if body["message"] != "You can't remove your last sign-in method. Add another first." {
-		t.Errorf("message = %v, unexpected", body["message"])
+	if errObj["code"] != "conflict" {
+		t.Errorf("error.code = %v, want conflict", errObj["code"])
+	}
+	if errObj["message"] != "the request conflicts with the current state" {
+		t.Errorf("error.message = %v, unexpected", errObj["message"])
+	}
+	details, ok := errObj["details"].([]any)
+	if !ok || len(details) != 1 {
+		t.Fatalf("error.details = %v, want a single-element array", errObj["details"])
+	}
+	detail, ok := details[0].(map[string]any)
+	if !ok {
+		t.Fatalf("error.details[0] = %v, want an object", details[0])
+	}
+	if field, present := detail["field"]; !present || field != "" {
+		t.Errorf("error.details[0].field = %v (present=%v), want empty string present", field, present)
+	}
+	if detail["code"] != "users.last_identity" {
+		t.Errorf("error.details[0].code = %v, want users.last_identity", detail["code"])
+	}
+	if detail["message"] != "You can't remove your last sign-in method. Add another first." {
+		t.Errorf("error.details[0].message = %v, unexpected", detail["message"])
 	}
 }
 

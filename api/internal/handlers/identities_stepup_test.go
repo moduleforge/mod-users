@@ -285,7 +285,7 @@ type stepUpGatedHandler struct {
 
 func (sg *stepUpGatedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := sg.h.requireStepUp(r, sg.uc.UserAccountID); err != nil {
-		writeStepUpRequired(w)
+		writeStepUpRequired(w, r)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -317,11 +317,18 @@ func TestWrappedEndpoints_FlagOn_NoHeader_Returns409(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if body["error"] != "step_up_required" {
-				t.Errorf("error = %v, want step_up_required", body["error"])
+			action, ok := body["action"].(map[string]any)
+			if !ok {
+				t.Fatalf("action = %v, want an object", body["action"])
 			}
-			if body["challenge_path"] != "/v1/self/credential/step-up" {
-				t.Errorf("challenge_path = %v, want /v1/self/credential/step-up", body["challenge_path"])
+			if action["code"] != "users.step_up_required" {
+				t.Errorf("action.code = %v, want users.step_up_required", action["code"])
+			}
+			if action["path"] != "/step-up" {
+				t.Errorf("action.path = %v, want /step-up", action["path"])
+			}
+			if msg, _ := action["message"].(string); msg == "" {
+				t.Errorf("action.message = %q, want non-empty", msg)
 			}
 		})
 	}
