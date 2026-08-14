@@ -153,3 +153,27 @@ architectural_impact: true
   the current sites this task migrates.
 - `api/internal/handlers/user_accounts_authz_test.go:354,567` — existing tests already pinned to
   the target wire shape.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-08-14
+- **Build note:** the worktree-local `go.work` recipe named in `## Assumptions` was not needed —
+  this worktree's `api/go.mod` `replace` directives (`../../mod-core/model`, `../../mod-audit/api`,
+  etc.) resolved cleanly against pre-existing sibling symlinks already present two levels up
+  (`worktrees/plan/{mod-core,mod-audit,mod-authz}`), so a plain `cd api && go build ./...` /
+  `go test ./...` succeeded with no `go.work` file at all.
+- **Validation summary:** `go build ./...`, `go vet ./internal/service/... ./internal/handlers/...`,
+  and `go test ./internal/service/... ./internal/handlers/...` all pass. `gofmt -l` on the two edited
+  source files reports nothing. `grep -n "apiresp.Envelope{" api/internal/handlers/user_accounts.go`
+  returns no matches. `go test ./...` (full suite) passes except for one pre-existing, unrelated
+  flake (`TestNewStepUpConsumedCache_JanitorStopsOnCancel` in `api/auth`, a goroutine-count timing
+  assertion) that passes in isolation and is unaffected by this task's diff — see the structured
+  report's `flagged_for_manager`.
+- **Files touched:**
+  - `api/internal/service/user_accounts.go` — `ErrEmailTaken` redefined via `apiresp.Conflict(...)`;
+    doc comment revised.
+  - `api/internal/handlers/user_accounts.go` — `writeServiceError` collapsed to a one-line
+    `apiresp.WriteError(w, r, err)` pass-through (kept, rather than inlined, since 8 call sites
+    across two files reference it by name); doc comment revised.
+  - `api/internal/service/user_accounts_anon_test.go` — added `TestErrEmailTaken_ConflictDetail`.
