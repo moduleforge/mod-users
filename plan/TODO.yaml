@@ -109,7 +109,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/users-action-required-migration-03-001
-            commit: []
+            commit:
+                - eb86f98
             merge: null
         - number: 2
           slug: document-action-required-in-openapi
