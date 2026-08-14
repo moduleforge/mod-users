@@ -92,7 +92,8 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/users-action-required-migration-02-002
-            commit: []
+            commit:
+                - 33d0189
             merge: null
     - number: 3
       slug: doc-updates
