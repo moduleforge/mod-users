@@ -109,3 +109,14 @@ architectural_impact: false
 - `plan/notes/action-path-values-and-decisions.md` — D2, D3, D7, and the Answer (resolved paths).
 - `docs/mod-users-spec.md` (use case 9 outcome ~line 100; structured-payload bullet ~line 178),
   `docs/architecture.md` (Identities/Credentials row ~line 59) — the sites this task updates.
+
+## Status
+
+- **Outcome**: succeeded
+- **Date**: 2026-08-14
+- **Validation summary**: `grep -n "action\b|users.email_unverified|users.step_up_required|users.oidc_not_confirmed|users.last_identity" docs/mod-users-spec.md` returned the new action-required paragraph, the use-case-9 outcome update, and the pre-existing audit-log bullet (unrelated "action" match). `grep -n "verify_path|challenge_path|config_path" docs/mod-users-spec.md docs/architecture.md` returned no matches (these retired field names were never pinned in either doc, so nothing needed removal). Cross-checked all five migrated codes/statuses/paths against the shipped Phase 1 code (`api/internal/auth/require_verified.go`, `require_confirmed.go`, `api/internal/handlers/identities.go`, `api/internal/useraction/action_codes.go`) — all match exactly (`users.email_unverified` 403 `/verify-email`; `users.oidc_not_confirmed` 503 `/oidc-config` with `data.state`; `users.step_up_required` 409 `/step-up`; `users.last_identity` as a `conflict` detail entry). No contradiction found against `moduleforge.module.yaml` (`/v1/oidc-config` is the API prefix, distinct from the `/oidc-config` GUI route the doc now references, matching the plan notes' D2). Markdown table pipe-count in `docs/architecture.md`'s API-layer table is unchanged (new content added as prose paragraphs, not table rows); backtick parity checked programmatically for both files.
+- **Affected source files**:
+  - `docs/mod-users-spec.md`
+  - `docs/architecture.md`
+- **Assumptions applied**: Phase 1 had landed on the branch this worktree was cut from, so the final shipped codes/statuses/paths (confirmed by reading the Phase 1 task docs' own `## Status` sections and the source files directly) were documented as reality, matching the task's assumption. `/verify-email`, `/step-up`, and `/oidc-config` used as the literal `action.path` values per the plan notes' recorded Answer (Reading A) — no divergence found between the assumed and shipped shapes.
+- **Note**: `docs/mf-standards` is a git submodule that was not checked out in this worktree at task start (empty directory); it was initialized read-only (`git submodule update --init docs/mf-standards`) to read `api-response-design.md` for cross-checking. This is a read-only local checkout operation on an already-committed submodule pointer, not a content change — `git status` shows no diff for it.
