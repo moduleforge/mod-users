@@ -54,7 +54,7 @@ phases:
             branch: plan/users-action-required-migration-01-004
             commit:
                 - b34db4b
-            merge: null
+            merge: 1eb1b2a32e7eee67061a31b0ede81e4aaa98b8d0
         - number: 5
           slug: migrate-identities-step-up-and-last-identity
           title: Migrate Identities Step-Up And Last-Identity Responses
