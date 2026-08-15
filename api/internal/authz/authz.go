@@ -9,8 +9,9 @@
 // scoped per resource type, and owning the target satisfies every operation
 // on that entity, not just reads.
 //
-// The implementation resolves the acting user from ctx via opctx.ActorEntityID
-// (and opctx.SudoActorEntityID for assume sessions).
+// The implementation resolves the acting user from ctx via
+// opctx.EffectiveActorEntityID, which applies the sudo-first-then-actor
+// policy (a sudo actor, when set, takes priority over the real actor).
 //
 // Operations with a nil target (list, or other admin-only operations) are
 // denied for non-wildcard-admin actors. A wildcard grant satisfies nil-target
@@ -186,13 +187,12 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 }
 
 // effectiveActor returns the entity ID that should be used for policy checks.
-// If a sudo actor is set (admin assuming another user's identity), that
-// entity ID is returned, since the admin is acting as the sudo user.
+// It delegates to opctx.EffectiveActorEntityID, which applies the
+// sudo-first-then-actor policy (the sudo actor wins when one is set on ctx,
+// otherwise the real actor). The helper is retained as a package-local name
+// for the concept rather than being inlined at the call site.
 func effectiveActor(ctx context.Context) (int64, bool) {
-	if id, ok := opctx.SudoActorEntityID(ctx); ok {
-		return id, true
-	}
-	return opctx.ActorEntityID(ctx)
+	return opctx.EffectiveActorEntityID(ctx)
 }
 
 // checkWildcardGrantDispatch calls wildcardGrantFn if set (test stub), otherwise
