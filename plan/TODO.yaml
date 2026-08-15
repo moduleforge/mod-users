@@ -15,5 +15,6 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/require-authenticated-03-001
-            commit: []
+            commit:
+                - 52d2211
             merge: null
