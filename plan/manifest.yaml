@@ -2,3 +2,8 @@ version: 1
 plans:
     - slug: require-authenticated
       status: working
+      dependencies:
+        /Users/zane/playground/moduleforge/mod-core:
+            phase: TBD — mod-core opctx/authz phase, number assigned during planning
+            task: TBD — add opctx.EffectiveActorEntityID and authz.RequireAuthenticated
+            note: mod-users' effectiveActor() delegation refactor cannot land until mod-core's new exported opctx.EffectiveActorEntityID accessor exists.
