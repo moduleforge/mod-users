@@ -11,7 +11,7 @@ phases:
           slug: delegate-effective-actor
           title: Delegate Effective Actor
           path: phase-03-effective-actor-delegation/001-delegate-effective-actor.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Delegated mod-users' effectiveActor helper (api/internal/authz/authz.go) to mod-core's newly-landed opctx.EffectiveActorEntityID accessor, replacing the local sudo-first-then-actor derivation with a single delegating call. Confirmed the upstream symbol via go doc before editing. Refreshed doc comments per task wording constraints; changed nothing else. All in-scope validation passed; two module-wide test failures are pre-existing, unrelated, and confirmed byte-identical against the pre-edit baseline via git stash. git diff --stat confirms exactly one file touched.
           git:
