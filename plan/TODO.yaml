@@ -1,0 +1,8 @@
+slug: require-authenticated
+version: 1
+title: ""
+phases:
+    - number: 3
+      slug: effective-actor-delegation
+      title: Effective Actor Delegation
+      tasks: []
