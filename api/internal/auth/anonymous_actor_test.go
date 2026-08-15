@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -462,20 +461,28 @@ func TestResolveActorOrAnonymous_ComposedWithRequireVerifiedEmailFailsClosed(t *
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d (body: %s)", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
-	// RequireVerifiedEmail writes a flat {"error", "message"} body, not the
-	// nested server.Error envelope.
+	// RequireVerifiedEmail's missing-context branch goes through
+	// apiresp.WriteError, which always writes the nested
+	// {"error": {"code", "message"}} envelope (see apiresp.Envelope /
+	// apiresp.ErrorBody) — never the flat shape this test used to assert.
+	// WriteError also never echoes the raw wrapped error text on a 5xx
+	// (apiresp.publicMessage's internal_error branch is a fixed generic
+	// string), so this only pins the reserved internal_error code and a
+	// non-empty message, not any specific wording.
 	var body struct {
-		Error   string `json:"error"`
-		Message string `json:"message"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode body: %v (raw: %s)", err, rec.Body.String())
 	}
-	if body.Error != "internal_error" {
-		t.Errorf("error = %q, want %q", body.Error, "internal_error")
+	if body.Error.Code != "internal_error" {
+		t.Errorf("error.code = %q, want %q", body.Error.Code, "internal_error")
 	}
-	if !strings.HasPrefix(body.Message, "server misconfiguration") {
-		t.Errorf("message = %q, want it to start with %q", body.Message, "server misconfiguration")
+	if body.Error.Message == "" {
+		t.Error("error.message: expected non-empty message")
 	}
 }
 
