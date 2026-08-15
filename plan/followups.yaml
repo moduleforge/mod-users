@@ -268,16 +268,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: users.step_up_required has no reachable GUI call site in mod-users (no identities-management UI exists to trigger it), so its action-required handling is presently limited to the generic request()-level throw in gui/src/lib/api.ts with no navigation wiring in gui/src/lib/auth-context.tsx.
-    - title: Two pre-existing, unrelated test failures exi
-      id: E8OK
-      date: "2026-08-15"
-      tags:
-        - type:ambiguity
-        - plan/phase:effective-actor-delegation
-        - plan/slug:require-authenticated
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Two pre-existing, unrelated test failures exist on this worktree baseline and persist post-change: api/auth TestNewStepUpConsumedCache_JanitorStopsOnCancel (goroutine-count timing flake) and api/internal/auth TestResolveActorOrAnonymous_ComposedWithRequireVerifiedEmailFailsClosed (response-body decode assertion mismatch). Neither in this task''s scope (api/internal/authz) nor introduced/worsened by this change — confirmed via git stash comparison — but worth tracking separately as failing tests independent of this plan.'
     - title: 'identities.go lint: server.Error literals'
       id: E5py
       date: "2026-08-15"
