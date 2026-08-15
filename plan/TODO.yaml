@@ -5,6 +5,7 @@ phases:
     - number: 3
       slug: effective-actor-delegation
       title: Effective Actor Delegation
+      diff_base: ec05cde6792fbb5dfe1b60d424bb16d1696d40d0
       tasks:
         - number: 1
           slug: delegate-effective-actor
