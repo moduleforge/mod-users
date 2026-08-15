@@ -4,6 +4,6 @@ plans:
       status: working
       dependencies:
         /Users/zane/playground/moduleforge/mod-core:
-            phase: TBD — mod-core opctx/authz phase, number assigned during planning
-            task: TBD — add opctx.EffectiveActorEntityID and authz.RequireAuthenticated
-            note: mod-users' effectiveActor() delegation refactor cannot land until mod-core's new exported opctx.EffectiveActorEntityID accessor exists.
+            phase: phase-01-authenticated-check-primitives (phase 1, "Authenticated Check Primitives")
+            task: 001-add-effective-actor-accessor (adds opctx.EffectiveActorEntityID)
+            note: mod-users' phase 3 task 001 (delegate-effective-actor) requires mod-core's phase 1 task 001 to be MERGED (not just committed) to mod-core's working branch before dispatch — mod-users' build resolves core-api via a local go.mod replace + sibling-checkout symlink, which only sees merged main-checkout state, not an unmerged task branch.
