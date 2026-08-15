@@ -193,3 +193,35 @@ by this task.
    from `api/`.
 7. Run the `grep`, `git diff --stat`, and `git status --short` checks from
    `## Validation`.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-08-15
+- **Summary:** Verified `opctx.EffectiveActorEntityID` is present in
+  mod-core's main checkout (`go doc` succeeded — mod-core's phase 1 task
+  `001-add-effective-actor-accessor` had already merged, per dispatch note),
+  then rewrote `effectiveActor`'s body in `api/internal/authz/authz.go` as a
+  single delegating `return opctx.EffectiveActorEntityID(ctx)` statement,
+  refreshed its doc comment, and corrected the one stale sentence in the
+  package doc comment. Signature, imports, call site, and all other code in
+  the file are unchanged.
+- **Validation:** `gofmt -l internal/authz` clean; `go vet
+  ./internal/authz/...` clean; `cd api && go build ./...` succeeds; `cd api
+  && go test ./internal/authz/...` passes (pre- and post-edit, byte-identical
+  test files); `cd api && go test ./...` run module-wide — two pre-existing
+  failures in unrelated packages (`api/auth`
+  `TestNewStepUpConsumedCache_JanitorStopsOnCancel`, a goroutine-count timing
+  flake, and `api/internal/auth`
+  `TestResolveActorOrAnonymous_ComposedWithRequireVerifiedEmailFailsClosed`)
+  were confirmed present and byte-identical on the pre-edit baseline via
+  `git stash`, so neither is attributable to this change. All `## Validation`
+  grep/diff/status checks pass; `git diff --stat` shows exactly one changed
+  file, `api/internal/authz/authz.go` (8 insertions, 8 deletions); no
+  modification under `docs/mf-standards/`.
+- **Affected source files:** `api/internal/authz/authz.go`.
+- **Assumptions relied on:** the `## Assumptions` section's claim that
+  `opctx.EffectiveActorEntityID` implements exactly the sudo-first-then-actor
+  policy `effectiveActor` implemented locally, with the identical
+  `(int64, bool)` return shape — confirmed by the `go doc` output, which
+  documents that exact behavior.
