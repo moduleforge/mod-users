@@ -18,4 +18,4 @@ phases:
             branch: plan/require-authenticated-03-001
             commit:
                 - 52d2211
-            merge: null
+            merge: 3d5992bd3750ec2aa9cb8c451376c0b3d59ca530
