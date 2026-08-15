@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Pre-existing flaky test TestNewStepUpConsumed
-      id: 5RbD
-      date: "2026-07-20"
-      tags:
-        - type:ambiguity
-        - plan/phase:route-wiring
-        - priority:unspecified
-        - effort:unspecified
-      text: Pre-existing flaky test TestNewStepUpConsumedCache_JanitorStopsOnCancel (api/auth/stepup_cache_test.go, added by task 001, not touched by this task) failed once under full-suite load (goroutine-count timing assertion) but passed reliably in isolation and on repeat full-suite runs. Worth investigating if it recurs; out of this task's scope to fix.
     - title: api/openapi.yaml missing identities surface
       id: biJk
       date: "2026-07-20"
