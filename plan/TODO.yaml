@@ -5,4 +5,14 @@ phases:
     - number: 3
       slug: effective-actor-delegation
       title: Effective Actor Delegation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: delegate-effective-actor
+          title: Delegate Effective Actor
+          path: phase-03-effective-actor-delegation/001-delegate-effective-actor.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
