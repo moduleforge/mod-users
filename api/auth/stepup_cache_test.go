@@ -81,7 +81,20 @@ func TestNewStepUpConsumedCache_LiveSingleUseStore(t *testing.T) {
 func TestNewStepUpConsumedCache_JanitorStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	baseline := runtime.NumGoroutine()
+	// The two preceding tests in this file each start their own janitor
+	// goroutine(s) and cancel them via `defer cancel()` at return, but that
+	// cancellation only closes the context's Done channel — the janitor
+	// goroutines themselves exit asynchronously, on their own schedule. If
+	// this test samples its baseline before those goroutines have actually
+	// unwound, the baseline is polluted by soon-to-exit goroutines that
+	// belong to a *different* cache/janitor than the one under test here:
+	// as they exit during this test's own polling windows below, their
+	// exits can mask (or spuriously satisfy) this test's own goroutine-count
+	// deltas, independent of whether this test's own janitor is actually
+	// behaving correctly. Wait for the ambient goroutine count to settle
+	// before sampling baseline, so it reflects only steady-state goroutines
+	// and this test's own delta is observed cleanly.
+	baseline := waitForStableGoroutineCount(t)
 
 	returned := make(chan struct{})
 	var consumed any
@@ -114,6 +127,40 @@ func TestNewStepUpConsumedCache_JanitorStopsOnCancel(t *testing.T) {
 
 	waitForGoroutineCount(t, func(n int) bool { return n <= baseline }, baseline,
 		"janitor goroutine did not exit within the deadline after ctx cancellation")
+}
+
+// waitForStableGoroutineCount polls runtime.NumGoroutine until it reports the
+// same value across a short run of consecutive samples (or a 2-second
+// deadline elapses) and returns that value. It exists to settle out
+// goroutines left over from previously run tests in this file — e.g. janitor
+// goroutines whose owning test already called cancel() but which have not
+// yet been scheduled to actually exit — so a subsequent baseline read isn't
+// polluted by goroutines unrelated to the test taking the reading.
+func waitForStableGoroutineCount(t *testing.T) int {
+	t.Helper()
+	const stableSamples = 5
+	const pollInterval = 5 * time.Millisecond
+	deadline := time.Now().Add(2 * time.Second)
+
+	last := runtime.NumGoroutine()
+	seenStable := 1
+	for {
+		time.Sleep(pollInterval)
+		n := runtime.NumGoroutine()
+		if n == last {
+			seenStable++
+			if seenStable >= stableSamples {
+				return n
+			}
+		} else {
+			last = n
+			seenStable = 1
+		}
+		if time.Now().After(deadline) {
+			t.Logf("goroutine count did not stabilize within deadline; using last observed value %d as baseline", n)
+			return n
+		}
+	}
 }
 
 // waitForGoroutineCount polls runtime.NumGoroutine until want returns true or

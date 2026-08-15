@@ -94,9 +94,11 @@ func IsAnonymousActor(ctx context.Context) bool {
 //     admin, full stop.
 //   - No UserContext is ever placed on the request context. That makes an
 //     accidental composition with RequireVerifiedEmail fail closed:
-//     RequireVerifiedEmail responds 500 "server misconfiguration" when no
-//     UserContext is present, so a route group that wrongly composes both
-//     breaks visibly in its first integration test rather than silently.
+//     RequireVerifiedEmail responds 500 (reserved-core internal_error, via
+//     apiresp.WriteError's nested {"error":{"code","message"}} envelope —
+//     not a literal "server misconfiguration" message) when no UserContext
+//     is present, so a route group that wrongly composes both breaks
+//     visibly in its first integration test rather than silently.
 //   - The anonymous marker is set here and only here — never on the
 //     authenticated branch.
 //
