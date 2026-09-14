@@ -268,3 +268,11 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '`make -C api lint` fails on this baseline (confirmed both before and after the E8OK flaky-test fix, via git stash) due to a pre-existing, unrelated issue in api/internal/handlers/identities.go: 3 literal `server.Error`/`server.ErrorWithDetails` calls outside the allowlist documented by api/scripts/check-server-error-literals.sh. Not one of the two tests named in followup E8OK, and identities.go is untouched by that fix, so it was left alone. `go vet ./...` is unaffected and passes clean. Flagging in case this lint gap isn''t already tracked separately.'
+    - title: Hardcoded OIDC cookie path breaks non-root
+      id: izI2
+      date: "2026-09-14"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Discovered while spiking flow-accounts'' /manage basePath mount (flow-accounts project, plan slug manage-mount-basepath): api/internal/handlers/auth/oidc.go:39 hardcodes `const stateCookiePath = "/v1/auth/oidc/"` (duplicated verbatim at handlers/identities.go:729). A cookie''s Path attribute is matched against the browser-visible URL. For any composing app mounted under a non-root path prefix (e.g. flow-accounts at flow.liquid-labs.com/manage), the browser-visible OIDC callback URL is under that prefix, so the cookie set at "/v1/auth/oidc/" is never returned to the callback handler and OIDC login silently fails. No workaround exists at the reverse-proxy layer short of a fragile Set-Cookie header rewrite. Needs a configurable (or dynamically-derived, e.g. from the request''s own mount prefix) cookie Path rather than a hardcoded absolute one, in both locations. This blocks flow-accounts'' planned /manage deployment; see flow-accounts'' plan/phase-01-manage-mount-investigation/002-module-gui-root-relative-audit.md and 005-consolidated-decision-and-prototype.md for the full analysis.'
