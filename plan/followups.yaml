@@ -276,3 +276,16 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Discovered while spiking flow-accounts'' /manage basePath mount (flow-accounts project, plan slug manage-mount-basepath): api/internal/handlers/auth/oidc.go:39 hardcodes `const stateCookiePath = "/v1/auth/oidc/"` (duplicated verbatim at handlers/identities.go:729). A cookie''s Path attribute is matched against the browser-visible URL. For any composing app mounted under a non-root path prefix (e.g. flow-accounts at flow.liquid-labs.com/manage), the browser-visible OIDC callback URL is under that prefix, so the cookie set at "/v1/auth/oidc/" is never returned to the callback handler and OIDC login silently fails. No workaround exists at the reverse-proxy layer short of a fragile Set-Cookie header rewrite. Needs a configurable (or dynamically-derived, e.g. from the request''s own mount prefix) cookie Path rather than a hardcoded absolute one, in both locations. This blocks flow-accounts'' planned /manage deployment; see flow-accounts'' plan/phase-01-manage-mount-investigation/002-module-gui-root-relative-audit.md and 005-consolidated-decision-and-prototype.md for the full analysis.'
+    - title: OIDC discovery skips TLS verify
+      id: UJev
+      date: "2026-09-15"
+      tags:
+        - type:security
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        api/internal/auth/jwt.go:38-45 installs an HTTP client with TLSClientConfig: &tls.Config{InsecureSkipVerify: true} for ANY https:// issuer, unconditionally, before calling oidc.NewProvider for OIDC discovery. This means OIDC issuer discovery (and therefore the JWKS/config it bootstraps trust from) accepts a self-signed or wrong-hostname certificate from whatever host MFIDP_ISSUER_URL (or any other configured issuer) points at — a MITM exposure on issuer discovery, not merely a dev convenience, since nothing in the code path restricts this to a local/dev issuer URL.
+
+        Surfaced while planning app-mfmanager's mftodo-managed-mode plan (project: app-mfmanager, not this repo): this is on the managed-app trust path — a deployed app-mftodo's ResolveMFIDPVerifier -> auth.NewVerifier calls into this same construction when verifying tokens against MFManager's own OIDC issuer. That plan's validation is local-first (in-network HTTP, not HTTPS, for its own target), so it doesn't trigger this code path and isn't blocked by it, but the finding belongs to mod-users regardless of any consuming plan's schedule.
+
+        Recommend: only skip verification for a specifically-configured local/dev issuer (e.g. via an explicit insecure-dev flag or a recognized loopback/private hostname), and use real certificate verification by default for any https:// issuer.
