@@ -682,6 +682,43 @@ func TestRefreshState_BadDB(t *testing.T) {
 	}
 }
 
+// TestMarkExternallyManaged_ConfirmsWithoutDB pins the managed-mode
+// affordance: MarkExternallyManaged flips the cached boot state to
+// ConfirmedOptOut purely in memory, never touching the querier (wired
+// here as erroringQuerier, which fails every method) — if the
+// implementation ever grew a DB dependency, CurrentState would come
+// back unconfirmed instead of ConfirmedOptOut, or the test itself
+// would need to start tolerating an error return, which it can't. A
+// RequireOIDCConfirmed-guarded handler must pass afterwards.
+func TestMarkExternallyManaged_ConfirmsWithoutDB(t *testing.T) {
+	h := NewOIDCConfigHandler(OIDCConfigDeps{
+		Queries:      erroringQuerier{},
+		OAuth:        newEmptyOAuth(t),
+		EnvRegistry:  config.ProviderRegistry{},
+		TokenDisplay: config.TokenDisplayBoth,
+	})
+
+	h.MarkExternallyManaged()
+
+	if !h.CurrentState().Confirmed() {
+		t.Fatalf("CurrentState: got %q, want a confirmed state", h.CurrentState())
+	}
+	if h.CurrentState() != config.BootStateConfirmedOptOut {
+		t.Errorf("state: got %q, want %q", h.CurrentState(), config.BootStateConfirmedOptOut)
+	}
+
+	mw := auth.RequireOIDCConfirmed(h.CurrentState)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v1/self", nil)
+	rr := httptest.NewRecorder()
+	mw(next).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("guarded handler: got %d, want 200, body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 type erroringQuerier struct{}
 
 func (erroringQuerier) GetOIDCConfig(ctx context.Context) (db.OidcConfig, error) {

@@ -149,6 +149,23 @@ func (h *OIDCConfigHandler) CurrentState() config.BootState {
 	return h.cachedBoot.State
 }
 
+// MarkExternallyManaged marks the cached boot state confirmed without
+// touching the database (design item E1). It is for a host app whose
+// sign-in is handled by an external platform (MFManager's managed
+// mode), where local OIDC onboarding does not apply — the app runs no
+// local OIDC providers, so BootStateConfirmedOptOut is semantically
+// exact. It performs no database access, so it is safe to call before
+// any querier is wired or reachable. A later RefreshState call, if any
+// caller makes one, behaves exactly as today: this method does not
+// latch or disable anything, it only sets the initial cached state.
+// Must never be called on the standalone path, where local OIDC
+// onboarding is the real flow.
+func (h *OIDCConfigHandler) MarkExternallyManaged() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cachedBoot = config.BootStateResult{State: config.BootStateConfirmedOptOut}
+}
+
 // ----- GET /v1/oidc-config/status ---------------------------------
 
 type statusResponse struct {
