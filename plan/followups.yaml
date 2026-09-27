@@ -289,3 +289,12 @@ items:
         Surfaced while planning app-mfmanager's mftodo-managed-mode plan (project: app-mfmanager, not this repo): this is on the managed-app trust path — a deployed app-mftodo's ResolveMFIDPVerifier -> auth.NewVerifier calls into this same construction when verifying tokens against MFManager's own OIDC issuer. That plan's validation is local-first (in-network HTTP, not HTTPS, for its own target), so it doesn't trigger this code path and isn't blocked by it, but the finding belongs to mod-users regardless of any consuming plan's schedule.
 
         Recommend: only skip verification for a specifically-configured local/dev issuer (e.g. via an explicit insecure-dev flag or a recognized loopback/private hostname), and use real certificate verification by default for any https:// issuer.
+    - title: Anonymous actor zero-grant has no DB check
+      id: OlHx
+      date: "2026-09-27"
+      tags:
+        - type:security
+        - priority:low
+        - effort:medium
+        - cross-repo/origin:repos
+      text: 'Found while investigating mod-repos'' anonymous-read fix (gap-remediation plan, phase 3): the anonymous actor''s zero-grant invariant (the anonymous actor must never hold any real grant, since consuming modules like mod-repos rely on it having zero authorization footprint to safely map it to public-only access) is only checked at boot (mod-users/api/internal/auth/anonymous_actor_service.go:26-30), with no database constraint enforcing it afterward. Any consuming module''s list-scoping logic that relies on this invariant (e.g. mod-repos'' authenticated-vs-anonymous List behavior) is only as safe as that boot-time check. Recommend a DB-level constraint (e.g. a trigger or check preventing any grant row from targeting the anonymous actor''s entity) so the invariant can''t silently drift after boot.'
