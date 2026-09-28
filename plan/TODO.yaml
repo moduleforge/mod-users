@@ -55,7 +55,7 @@ phases:
           slug: document-ssh-key-endpoints-in-openapi
           title: Document SSH Key Endpoints In OpenAPI
           path: phase-01-ssh-public-keys/005-document-ssh-key-endpoints-in-openapi.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Documented the six SSH-key endpoints (self + operator list/register/revoke) and their schemas in api/openapi.yaml per design-note D6-D10, reusing existing Error/Action/bearer-auth building blocks. Caught and fixed a real path-parameter-name mismatch (AccountUUID vs UserUUID) via the OpenAPI linter. 0 lint errors, same 10 pre-existing warnings as baseline.
           git:
