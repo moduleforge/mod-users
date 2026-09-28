@@ -634,16 +634,29 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 // requireStepUp enforces the step-up challenge when h.stepUpRequired is true.
 // If the flag is false, it returns nil immediately (flag-off path). Otherwise
 // it reads the X-Step-Up-Token header, verifies it, and returns
-// localauth.ErrStepUpRequired on any failure.
+// localauth.ErrStepUpRequired on any failure. Delegates to the shared
+// checkStepUp helper so SSHKeysHandler (ssh_keys.go) enforces the identical
+// gate without copy-paste drift (design note D8); this method's own
+// behavior is unchanged.
 func (h *IdentitiesHandler) requireStepUp(r *http.Request, userAccountID int64) error {
-	if !h.stepUpRequired {
+	return checkStepUp(r, userAccountID, h.stepUpRequired, h.jwtSecret, h.consumed)
+}
+
+// checkStepUp is the package-level step-up gate shared by IdentitiesHandler
+// (via requireStepUp above) and SSHKeysHandler (ssh_keys.go): when
+// stepUpRequired is true, it reads the X-Step-Up-Token header, verifies it
+// against secret and userAccountID, and consumes its jti from consumed
+// (single-use). Returns localauth.ErrStepUpRequired on a missing or invalid
+// token; returns nil immediately when stepUpRequired is false.
+func checkStepUp(r *http.Request, userAccountID int64, stepUpRequired bool, jwtSecret string, consumed *sync.Map) error {
+	if !stepUpRequired {
 		return nil
 	}
 	token := r.Header.Get("X-Step-Up-Token")
 	if token == "" {
 		return localauth.ErrStepUpRequired
 	}
-	return localauth.VerifyStepUpToken([]byte(h.jwtSecret), token, userAccountID, h.consumed)
+	return localauth.VerifyStepUpToken([]byte(jwtSecret), token, userAccountID, consumed)
 }
 
 // writeStepUpRequired writes the 409 users.step_up_required action-required
