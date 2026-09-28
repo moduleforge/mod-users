@@ -74,7 +74,7 @@ phases:
           done: false
           tier: sonnet-med
           git:
-            branch: null
+            branch: plan/ssh-public-keys-01-006
             commit: []
             merge: null
     - number: 2
