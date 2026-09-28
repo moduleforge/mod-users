@@ -85,4 +85,4 @@ Tasks:
 
 ### Phase 02: Documentation updates
 
-1. **[001: Update Architecture Docs](./phase-02-doc-updates/001-update-architecture-docs.md)** (`sonnet-high`): reflect the new table, schema, resolver service, routes, and key policy in `docs/architecture.md` and `docs/mod-users-spec.md`. Runs after Phase 01 lands.
+1. **[001: Update Architecture Docs](./phase-02-doc-updates/001-update-architecture-docs.md)** (`sonnet-med`): reflect the new table, schema, resolver service, routes, and key policy in `docs/architecture.md` and `docs/mod-users-spec.md`. Runs after Phase 01 lands.
