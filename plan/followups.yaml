@@ -508,3 +508,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Three files still carry bare design-note Dn citations to the soon-to-be-torn-down plan/notes/ssh-key-design.md, deliberately left untouched (outside scope, cite non-promoted letters D6/D7/D8): api/internal/sshkey/label.go:20, api/internal/sshkey/sshkey.go:2,26,54,117 (also a stale ''task 003'' reference), api/internal/handlers/identities.go:639. Will dangle once the design note is torn down.'
+    - title: 'docs/mf-standards submodule is uninitialized '
+      id: 6SBq
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:doc-updates
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: docs/mf-standards submodule is uninitialized in this worktree, so pre-existing ./mf-standards/... links could not be click-verified, only pattern-matched. Predates this task.
