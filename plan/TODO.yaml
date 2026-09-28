@@ -71,11 +71,13 @@ phases:
           slug: fix-operator-ssh-key-step-up-bypass
           title: Fix Operator SSH-Key Step-Up Bypass
           path: phase-01-ssh-public-keys/006-fix-operator-ssh-key-step-up-bypass.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Closed phase-1 gate finding security-001: RegisterForAccount/RevokeForAccount now resolve the caller''s own account UUID and apply the identical step-up gate the self routes use whenever the operator route''s path {uuid} equals it; genuine operator-on-behalf-of-another-account calls are unchanged. Added handler-level tests for both cases. All requirements and validation checks pass.'
           git:
-            branch: null
-            commit: []
+            branch: plan/ssh-public-keys-01-006
+            commit:
+                - d5a1681
             merge: null
     - number: 2
       slug: doc-updates
