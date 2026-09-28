@@ -67,6 +67,16 @@ phases:
             commit:
                 - 1f5ccb0
             merge: 3a67001
+        - number: 6
+          slug: fix-operator-ssh-key-step-up-bypass
+          title: Fix Operator SSH-Key Step-Up Bypass
+          path: phase-01-ssh-public-keys/006-fix-operator-ssh-key-step-up-bypass.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: doc-updates
       title: Documentation Updates
