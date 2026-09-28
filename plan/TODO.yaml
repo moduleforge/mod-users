@@ -92,5 +92,6 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/ssh-public-keys-02-001
-            commit: []
+            commit:
+                - afee1a1
             merge: null
