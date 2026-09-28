@@ -298,3 +298,13 @@ items:
         - effort:medium
         - cross-repo/origin:repos
       text: 'Found while investigating mod-repos'' anonymous-read fix (gap-remediation plan, phase 3): the anonymous actor''s zero-grant invariant (the anonymous actor must never hold any real grant, since consuming modules like mod-repos rely on it having zero authorization footprint to safely map it to public-only access) is only checked at boot (mod-users/api/internal/auth/anonymous_actor_service.go:26-30), with no database constraint enforcing it afterward. Any consuming module''s list-scoping logic that relies on this invariant (e.g. mod-repos'' authenticated-vs-anonymous List behavior) is only as safe as that boot-time check. Recommend a DB-level constraint (e.g. a trigger or check preventing any grant row from targeting the anonymous actor''s entity) so the invariant can''t silently drift after boot.'
+    - title: Database-backed Validation checks (goose appl
+      id: AAU0
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: Database-backed Validation checks (goose apply/\d/23505 duplicate/archive-reinsert) could not be executed in this worktree — no reachable, correctly-migrated dev Postgres. Recommend running them from the main checkout before this task is considered fully verified, or accepting the schema/query-level static checks as sufficient given they match the design note's contract exactly.
