@@ -328,3 +328,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[security, non-blocking] ResolveActor''s unknown/revoked-key branch is measurably faster than its archived-holder/success branches (1 vs 2 DB queries) — a theoretical timing side-channel. Per mod-repos'' KeyResolver doc comment, equalizing observable timing across rejection reasons is the transport (caller) layer''s documented responsibility, not this resolver''s; no action taken.'
+    - title: '[security/design, non-blocking] SSHKeyResolve'
+      id: Jtw6
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: '[security/design, non-blocking] SSHKeyResolver''s constructor is pinned to the task doc''s Requirement 8 signature (db.Querier, coredb.Querier), so the ''no writes'' guarantee is enforced by convention/tests, not the compiler. A narrower read-only interface would make this compiler-enforced but was out of this task''s scope.'
