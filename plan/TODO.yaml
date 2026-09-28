@@ -39,7 +39,8 @@ phases:
           tier: sonnet-high
           git:
             branch: plan/ssh-public-keys-01-003
-            commit: []
+            commit:
+                - ad76ea3
             merge: null
         - number: 4
           slug: add-ssh-key-http-routes
