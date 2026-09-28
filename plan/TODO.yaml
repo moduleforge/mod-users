@@ -35,7 +35,7 @@ phases:
           slug: add-ssh-key-service-and-resolver
           title: Add SSH Key Service And Resolver
           path: phase-01-ssh-public-keys/003-add-ssh-key-service-and-resolver.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Implemented SSHKeyService (Register/List/Revoke, authorize-first, audited) and side-effect-free SSHKeyResolver.ResolveActor, plus usersservice facade re-exports. Fixed a pre-existing unrelated compile break. Full unit + 8 new integration tests against real Postgres, 42/42 passing. Inline security review found no blocking issues.
           git:
