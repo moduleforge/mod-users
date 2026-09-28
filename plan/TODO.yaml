@@ -51,7 +51,8 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/ssh-public-keys-01-004
-            commit: []
+            commit:
+                - 003eddc
             merge: null
         - number: 5
           slug: document-ssh-key-endpoints-in-openapi
