@@ -59,7 +59,8 @@ phases:
           tier: sonnet-low
           git:
             branch: plan/ssh-public-keys-01-005
-            commit: []
+            commit:
+                - 1f5ccb0
             merge: null
     - number: 2
       slug: doc-updates
