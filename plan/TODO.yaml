@@ -13,6 +13,7 @@ phases:
           path: phase-01-ssh-public-keys/001-add-ssh-key-storage.md
           done: false
           tier: sonnet-med
+          digest: Added model/migrations/sql/0103_ssh_public_keys.sql (mod_users schema + ssh_public_keys table with partial unique fingerprint index) and model/queries/ssh_public_keys.sql (six schema-qualified queries). sqlc generate clean, go build/make build.api pass. DB-backed validation not runnable in this worktree (documented, not claimed passing). lint.model fails only with pre-existing followup nAXW.
           git:
             branch: plan/ssh-public-keys-01-001
             commit:
