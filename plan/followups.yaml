@@ -398,3 +398,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, arch-006, suggestion] Self-service SSH-key registration requires a verified email, but the operator path applies no such rule about the target account, so an operator can install a standing SSH credential on a guest (email-NULL) or unverified account. Whether that''s intended is an undocumented policy decision — either refuse it explicitly in SSHKeyService.Register or document it as intended.'
+    - title: mod_users schema needs a GRANT note
+      id: AWmf
+      date: "2026-09-28"
+      tags:
+        - type:documentation
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, arch-007, suggestion] The 0103_ssh_public_keys.sql migration is the first real table under a mod_* schema in the ecosystem and deliberately carries no GRANT, per the schema-ownership standard. This assumes the composing app''s runtime role already has USAGE/table privileges on mod_users. Nothing documents this operational requirement for composing hosts, or that backup/reset/test tooling scoped to ''public'' will miss this table. Add a sentence to docs/architecture.md when the schema decision is recorded (see doc-updates phase).'
