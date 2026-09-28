@@ -244,6 +244,47 @@ provides:
         - service:stepUpConsumed
         - field:cfg.Auth.RequireStepUpForCredentialChange
 
+    # sshKeyService — SSH public-key registration, listing, and revocation
+    # for a user account (design note plan/notes/ssh-key-design.md D8-D10).
+    # args order matches usersservice.NewSSHKeyService exactly (task 003).
+    - name: sshKeyService
+      type: "*usersservice.SSHKeyService"
+      constructor: usersservice.NewSSHKeyService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+
+    # sshKeyResolver — resolves a candidate SSH public key to the
+    # account_holder entity id of the user account that registered it
+    # (design note D11). A composing app (for example app-mfgit) adapts it
+    # into mod-repos' transport.KeyResolver; no mod-users route consumes it
+    # directly. It is pre-authentication, read-only, and uncached — see
+    # SSHKeyResolver's own doc comment (api/internal/service/ssh_key_resolver.go)
+    # for the hard guarantees it upholds.
+    - name: sshKeyResolver
+      type: "*usersservice.SSHKeyResolver"
+      constructor: usersservice.NewSSHKeyResolver
+      args:
+        - queries:usersdb
+        - queries:coredb
+
+    # sshKeysHandler — SSH public-key HTTP handler; serves
+    # /v1/self/ssh-keys and /v1/user-accounts/{uuid}/ssh-keys (design note
+    # D9). args order matches handlers.NewSSHKeysHandler one-for-one; the
+    # step-up deps (jwtSecret, stepUpConsumed, requireStepUp flag) mirror
+    # identitiesHandler's.
+    - name: sshKeysHandler
+      type: "*handlers.SSHKeysHandler"
+      constructor: handlers.NewSSHKeysHandler
+      args:
+        - service:sshKeyService
+        - field:cfg.LocalAuth.JWTSecret
+        - service:stepUpConsumed
+        - field:cfg.Auth.RequireStepUpForCredentialChange
+
   routes:
     # REMINDER when adding a route entry here: every `constructor:`/`register:`
     # symbol below must also be re-exported (type alias + thin wrapper func)
@@ -346,6 +387,40 @@ provides:
     - prefix: /v1
       handler: identitiesHandler
       register: handlers.RegisterSelfIdentitiesWriteRoutes
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
+
+    # /v1/self/ssh-keys (GET) — list own active SSH public keys (design note
+    # D9). Reachable to accounts with UNVERIFIED email, and not step-up-gated
+    # (design note D8), matching the identitiesHandler read-route entry above.
+    - prefix: /v1
+      handler: sshKeysHandler
+      register: handlers.RegisterSelfSSHKeysReadRoute
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+
+    # /v1/self/ssh-keys (POST), /v1/self/ssh-keys/{key_uuid} (DELETE) —
+    # register/revoke own SSH public key (design note D9). Requires a
+    # verified email; the handler additionally enforces step-up (design note
+    # D8) when AUTH_REQUIRE_STEP_UP is on.
+    - prefix: /v1
+      handler: sshKeysHandler
+      register: handlers.RegisterSelfSSHKeysWriteRoutes
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
+
+    # /v1/user-accounts/{uuid}/ssh-keys[/{key_uuid}] — operator list/
+    # register/revoke of a user's SSH public keys (design note D9), same
+    # middleware group as the /v1/user-accounts entries above. Not
+    # step-up-gated: operator routes never require step-up (design note D8).
+    - prefix: /v1
+      handler: sshKeysHandler
+      register: handlers.RegisterUserAccountSSHKeyRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth
