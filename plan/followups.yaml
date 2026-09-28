@@ -508,3 +508,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: docs/mf-standards submodule is uninitialized in this worktree, so pre-existing ./mf-standards/... links could not be click-verified, only pattern-matched. Predates this task.
+    - title: Add a batch user-account lookup query
+      id: bHKv
+      date: "2026-09-28"
+      tags:
+        - type:optimization
+        - cross-repo/origin:mod-billing
+        - priority:unspecified
+        - effort:unspecified
+        - cross-repo/origin:mod-billing
+      text: 'mod-billing''s holdersView helper (api/service/seats.go) loops a team''s current seat assignments and calls usersdb.Querier.GetUserAccountByID once per holder — O(team size) round trips per call — under a full multi-table (billing-account -> subscription -> team) lock chain for at least one call site (a team-view/rename read), extending that lock hold by one round trip per current holder and contending with every other seat mutation on the same team. mod-users'' usersdb.Querier (model/db/querier.go) exposes only single-row lookups: GetUserAccountByAccountHolder, GetUserAccountByEmail, GetUserAccountByID, GetUserAccountByUUID — no batch form. Requested: a batch lookup, e.g. GetUserAccountsByIDs(ctx, ids []int64) ([]UserAccount, error) (or a narrower projection), returning at least each account''s id (for re-keying against the caller''s own holder list), uuid, and email — the fields mod-billing''s per-holder view type needs — so a caller holding a multi-table lock chain can resolve every holder in one round trip instead of one per holder. Source: mod-billing''s mod-billing-hardening plan, phase-04 task-006 (followup i2jv).'
