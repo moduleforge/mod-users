@@ -388,3 +388,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, correctness-001, suggestion] SSHKeyService.loadAuthorizedAccount treats a missing account-holder entity (pgx.ErrNoRows from GetEntityByID) as an opaque 500, while the sibling SSHKeyResolver.ResolveActor masks the identical case defensively (unreachable under the FK today, but masked anyway). For consistency, consider mapping ErrNoRows here to the same masked 403 the archived-holder branch already returns. Optional hardening, not required by task 003''s own Requirements.'
+    - title: SSH keys on guest/unverified accounts
+      id: cJcZ
+      date: "2026-09-28"
+      tags:
+        - type:conflict
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, arch-006, suggestion] Self-service SSH-key registration requires a verified email, but the operator path applies no such rule about the target account, so an operator can install a standing SSH credential on a guest (email-NULL) or unverified account. Whether that''s intended is an undocumented policy decision — either refuse it explicitly in SSHKeyService.Register or document it as intended.'
