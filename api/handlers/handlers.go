@@ -23,6 +23,7 @@ import (
 	inner "github.com/moduleforge/mod-users/api/internal/handlers"
 	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
 	innersvc "github.com/moduleforge/mod-users/api/internal/service"
+	"github.com/moduleforge/mod-users/api/usersservice"
 )
 
 // Handler type aliases.
@@ -34,6 +35,7 @@ type AppsHandler = inner.AppsHandler
 type GrantAdminFn = inner.GrantAdminFn
 type SelfHandler = inner.SelfHandler
 type IdentitiesHandler = inner.IdentitiesHandler
+type SSHKeysHandler = inner.SSHKeysHandler
 
 // NewOIDCConfigHandler constructs the OIDC config handler from individual
 // dependencies declared in the module manifest.
@@ -185,6 +187,44 @@ func RegisterSelfIdentitiesReadRoute(r chi.Router, h *IdentitiesHandler) {
 // RegisterSelfPutRoute's doc comment for the rationale this mirrors.
 func RegisterSelfIdentitiesWriteRoutes(r chi.Router, h *IdentitiesHandler) {
 	inner.RegisterSelfIdentitiesWriteRoutes(r, h)
+}
+
+// NewSSHKeysHandler constructs the SSH public-key HTTP handler (see
+// docs/architecture/ssh-keys.md for the design rationale) from the facade
+// usersservice.SSHKeyService type and the same step-up dependencies
+// NewIdentitiesHandler takes.
+func NewSSHKeysHandler(
+	svc *usersservice.SSHKeyService,
+	jwtSecret string,
+	consumed *sync.Map,
+	stepUpRequired bool,
+) *SSHKeysHandler {
+	return inner.NewSSHKeysHandler(svc, jwtSecret, consumed, stepUpRequired)
+}
+
+// RegisterSelfSSHKeysReadRoute mounts GET /self/ssh-keys on r. Reachable to
+// accounts with an unverified email, and never step-up-gated -- see
+// RegisterSelfIdentitiesReadRoute's doc comment for the rationale this
+// mirrors.
+func RegisterSelfSSHKeysReadRoute(r chi.Router, h *SSHKeysHandler) {
+	inner.RegisterSelfSSHKeysReadRoute(r, h)
+}
+
+// RegisterSelfSSHKeysWriteRoutes mounts the two credential-mutating
+// self-service SSH-key endpoints on r. Requires a verified email; each
+// endpoint additionally enforces step-up when AUTH_REQUIRE_STEP_UP is on.
+func RegisterSelfSSHKeysWriteRoutes(r chi.Router, h *SSHKeysHandler) {
+	inner.RegisterSelfSSHKeysWriteRoutes(r, h)
+}
+
+// RegisterUserAccountSSHKeyRoutes mounts the operator SSH-key endpoints
+// (list/register/revoke a target account's keys) on r. Register/revoke are
+// step-up-gated when the path UUID is the caller's own account; a genuine
+// operator-on-behalf-of-a-different-account call is not gated, matching
+// every other /v1/user-accounts/* admin route (docs/architecture/
+// ssh-keys.md D9).
+func RegisterUserAccountSSHKeyRoutes(r chi.Router, h *SSHKeysHandler) {
+	inner.RegisterUserAccountSSHKeyRoutes(r, h)
 }
 
 // Live is the liveness health-check handler.

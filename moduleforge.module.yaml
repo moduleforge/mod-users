@@ -244,6 +244,51 @@ provides:
         - service:stepUpConsumed
         - field:cfg.Auth.RequireStepUpForCredentialChange
 
+    # sshKeyService — SSH public-key registration, listing, and revocation
+    # for a user account (docs/architecture/ssh-keys.md). args order matches
+    # usersservice.NewSSHKeyService exactly (api/internal/service/ssh_keys.go).
+    - name: sshKeyService
+      type: "*usersservice.SSHKeyService"
+      constructor: usersservice.NewSSHKeyService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+
+    # sshKeyResolver — resolves a candidate SSH public key to the
+    # account_holder entity id of the user account that registered it
+    # (docs/architecture/ssh-keys.md D11). A composing app (for example
+    # app-mfgit) adapts it into mod-repos' transport.KeyResolver; no
+    # mod-users route consumes it directly. It is pre-authentication,
+    # read-only, and uncached — see SSHKeyResolver's own doc comment
+    # (api/internal/service/ssh_key_resolver.go) for the hard guarantees it
+    # upholds. The composing transport must rate-limit handshakes and cap
+    # candidate keys per connection, since ResolveActor runs once per
+    # candidate key, including unsigned probes from unauthenticated peers
+    # (docs/architecture/ssh-keys.md).
+    - name: sshKeyResolver
+      type: "*usersservice.SSHKeyResolver"
+      constructor: usersservice.NewSSHKeyResolver
+      args:
+        - queries:usersdb
+        - queries:coredb
+
+    # sshKeysHandler — SSH public-key HTTP handler; serves
+    # /v1/self/ssh-keys and /v1/user-accounts/{uuid}/ssh-keys
+    # (docs/architecture/ssh-keys.md D9). args order matches
+    # handlers.NewSSHKeysHandler one-for-one; the step-up deps (jwtSecret,
+    # stepUpConsumed, requireStepUp flag) mirror identitiesHandler's.
+    - name: sshKeysHandler
+      type: "*handlers.SSHKeysHandler"
+      constructor: handlers.NewSSHKeysHandler
+      args:
+        - service:sshKeyService
+        - field:cfg.LocalAuth.JWTSecret
+        - service:stepUpConsumed
+        - field:cfg.Auth.RequireStepUpForCredentialChange
+
   routes:
     # REMINDER when adding a route entry here: every `constructor:`/`register:`
     # symbol below must also be re-exported (type alias + thin wrapper func)
@@ -346,6 +391,43 @@ provides:
     - prefix: /v1
       handler: identitiesHandler
       register: handlers.RegisterSelfIdentitiesWriteRoutes
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
+
+    # /v1/self/ssh-keys (GET) — list own active SSH public keys
+    # (docs/architecture/ssh-keys.md D9). Reachable to accounts with
+    # UNVERIFIED email, and not step-up-gated, matching the
+    # identitiesHandler read-route entry above.
+    - prefix: /v1
+      handler: sshKeysHandler
+      register: handlers.RegisterSelfSSHKeysReadRoute
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+
+    # /v1/self/ssh-keys (POST), /v1/self/ssh-keys/{key_uuid} (DELETE) —
+    # register/revoke own SSH public key (docs/architecture/ssh-keys.md D9).
+    # Requires a verified email; the handler additionally enforces step-up
+    # when AUTH_REQUIRE_STEP_UP is on.
+    - prefix: /v1
+      handler: sshKeysHandler
+      register: handlers.RegisterSelfSSHKeysWriteRoutes
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+        - requireVerifiedEmail
+
+    # /v1/user-accounts/{uuid}/ssh-keys[/{key_uuid}] — operator list/
+    # register/revoke of a user's SSH public keys
+    # (docs/architecture/ssh-keys.md D9), same middleware group as the
+    # /v1/user-accounts entries above. Register/revoke are step-up-gated
+    # when the path uuid is the caller's own account; a genuine
+    # operator-on-behalf-of-another-account call is not gated (task-006 fix).
+    - prefix: /v1
+      handler: sshKeysHandler
+      register: handlers.RegisterUserAccountSSHKeyRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth

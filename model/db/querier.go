@@ -12,12 +12,14 @@ import (
 )
 
 type Querier interface {
+	ArchiveSSHPublicKey(ctx context.Context, arg ArchiveSSHPublicKeyParams) (int64, error)
 	AssignUserAccountToApp(ctx context.Context, arg AssignUserAccountToAppParams) error
 	// Clear the setup token once the operator has confirmed configuration.
 	// Idempotent — safe to call on every confirmed boot.
 	ClearSetupTokenHash(ctx context.Context) error
 	ConsumeEmailCode(ctx context.Context, id int64) error
 	ConsumePasswordReset(ctx context.Context, id int64) error
+	CountActiveSSHPublicKeysByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CountOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CreateAnonToken(ctx context.Context, arg CreateAnonTokenParams) (AnonToken, error)
 	CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams) (EmailCode, error)
@@ -33,6 +35,7 @@ type Querier interface {
 	DeleteOIDCProvider(ctx context.Context, id string) (int64, error)
 	GetActiveEmailCode(ctx context.Context, arg GetActiveEmailCodeParams) (EmailCode, error)
 	GetActivePasswordReset(ctx context.Context, tokenHash string) (PasswordReset, error)
+	GetActiveSSHPublicKeyByUUIDForUserAccount(ctx context.Context, arg GetActiveSSHPublicKeyByUUIDForUserAccountParams) (ModUsersSshPublicKey, error)
 	GetAnonTokenBySessionToken(ctx context.Context, sessionToken string) (AnonToken, error)
 	GetAnonTokensByDeviceID(ctx context.Context, deviceID string) ([]AnonToken, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (AuthLocal, error)
@@ -48,12 +51,15 @@ type Querier interface {
 	GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (UserAccount, error)
 	InsertJWTSecretIfAbsent(ctx context.Context, secret string) (string, error)
 	InsertOIDCIdentity(ctx context.Context, arg InsertOIDCIdentityParams) (AuthOidcIdentity, error)
+	InsertSSHPublicKey(ctx context.Context, arg InsertSSHPublicKeyParams) (ModUsersSshPublicKey, error)
+	ListActiveSSHPublicKeysByUserAccount(ctx context.Context, arg ListActiveSSHPublicKeysByUserAccountParams) ([]ModUsersSshPublicKey, error)
 	ListAppUserAccounts(ctx context.Context, appID int64) ([]AppsUserAccount, error)
 	ListOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) ([]AuthOidcIdentity, error)
 	// Return every provider override row, sorted by id for stable output.
 	ListOIDCProviders(ctx context.Context) ([]OidcProvider, error)
 	ListUserAccountApps(ctx context.Context, userAccountID int64) ([]AppsUserAccount, error)
 	RemoveUserAccountFromApp(ctx context.Context, arg RemoveUserAccountFromAppParams) error
+	ResolveActiveSSHPublicKey(ctx context.Context, arg ResolveActiveSSHPublicKeyParams) (int64, error)
 	SearchUserAccounts(ctx context.Context, arg SearchUserAccountsParams) ([]UserAccount, error)
 	SetAppUserAccountRoles(ctx context.Context, arg SetAppUserAccountRolesParams) error
 	SetDefaultApp(ctx context.Context, arg SetDefaultAppParams) error
