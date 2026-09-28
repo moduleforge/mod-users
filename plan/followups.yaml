@@ -338,3 +338,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[security/design, non-blocking] SSHKeyResolver''s constructor is pinned to the task doc''s Requirement 8 signature (db.Querier, coredb.Querier), so the ''no writes'' guarantee is enforced by convention/tests, not the compiler. A narrower read-only interface would make this compiler-enforced but was out of this task''s scope.'
+    - title: '[process, non-blocking] Reused an already-doc'
+      id: 0m8H
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: '[process, non-blocking] Reused an already-documented but not-yet-promoted environment workaround (from git history around followup EMIS) to run the integration suite despite a host Postgres port conflict. Surfacing in case the manager wants this workaround promoted into AGENTS.md or a shared script.'
