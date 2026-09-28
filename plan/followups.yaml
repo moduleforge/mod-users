@@ -448,16 +448,6 @@ items:
         - priority:medium
         - effort:small
       text: '[phase-01 gate, security lens flagged_for_manager, needs a decision] The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git — an existing authorization pattern that now reaches a new, persistent impersonation capability. Confirm whether such non-self ownership relationships occur in practice for natural_person entities, and whether this is intended for SSH-key registration specifically.'
-    - title: Documentation drift (pre-existing, explicitly
-      id: 9Abg
-      date: "2026-09-28"
-      tags:
-        - type:ambiguity
-        - plan/phase:ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Documentation drift (pre-existing, explicitly out of this task''s scope): api/openapi.yaml (~lines 1628-1629, 1679-1680) and plan/notes/ssh-key-design.md (line 124) both state unqualified that ''operator routes are not step-up-gated'' — no longer fully accurate now that self-targeting is gated. Left untouched per the task''s scope boundary.'
     - title: Integration suite (ssh_keys_integration_test.
       id: trmJ
       date: "2026-09-28"
