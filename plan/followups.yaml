@@ -318,3 +318,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Incidental observation, not fixed: the already-running users-module-postgres Docker container has a stale goose_db_version table from an older, pre-per-module-migration-scheme setup, unrelated to this task''s diff.'
+    - title: '[security, non-blocking] ResolveActor''s unkno'
+      id: LkIi
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: '[security, non-blocking] ResolveActor''s unknown/revoked-key branch is measurably faster than its archived-holder/success branches (1 vs 2 DB queries) — a theoretical timing side-channel. Per mod-repos'' KeyResolver doc comment, equalizing observable timing across rejection reasons is the transport (caller) layer''s documented responsibility, not this resolver''s; no action taken.'
