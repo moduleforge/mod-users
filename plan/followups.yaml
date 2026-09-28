@@ -458,3 +458,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Documentation drift (pre-existing, explicitly out of this task''s scope): api/openapi.yaml (~lines 1628-1629, 1679-1680) and plan/notes/ssh-key-design.md (line 124) both state unqualified that ''operator routes are not step-up-gated'' — no longer fully accurate now that self-targeting is gated. Left untouched per the task''s scope boundary.'
+    - title: Integration suite (ssh_keys_integration_test.
+      id: trmJ
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: Integration suite (ssh_keys_integration_test.go's TestInteg_SSHKeys_OperatorAuthorization) was not extended to cover the self-targeting-via-operator-route case — service-layer test, requires live Postgres, not required by the task.
