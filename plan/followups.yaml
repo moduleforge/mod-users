@@ -358,3 +358,13 @@ items:
         - priority:low
         - effort:medium
       text: '[phase-01 gate, arch-003, minor] Operator Register/Revoke on SSH keys authorize via the generic ''update'' op (api/internal/service/ssh_keys.go:131,226), which now also grants credential-install/impersonation-grade capability (SSH git access) to any principal holding only ''update'' on a user, not just the impersonation-grade ''assume''/''login'' ops. Practical escalation is already limited since ''update'' can also change email today (see the separate followup on that). Consider authorizing operator SSH-key register/revoke against ''assume'' instead, or record this as an accepted trade-off in docs/architecture.md''s key decisions once that section exists.'
+    - title: SSH-key routes mask 403, sibling routes 404
+      id: tbmN
+      date: "2026-09-28"
+      tags:
+        - type:conflict
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, arch-004, minor] /v1/user-accounts/{uuid}/ssh-keys returns masked 403 for an unknown/unpermitted account UUID, while sibling /v1/user-accounts/{uuid} routes return 404. Masking adds no confidentiality here since the parent route already leaks existence. Either record as a deliberate new-routes-vs-legacy-routes inconsistency in architecture docs, or open a follow-up to unify (move legacy routes to masked 403 rather than unmasking the new ones).'
