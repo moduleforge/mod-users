@@ -46,3 +46,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: document-ssh-key-endpoints-in-openapi
+          title: Document SSH Key Endpoints In OpenAPI
+          path: phase-01-ssh-public-keys/005-document-ssh-key-endpoints-in-openapi.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
