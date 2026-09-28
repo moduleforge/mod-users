@@ -189,9 +189,9 @@ func RegisterSelfIdentitiesWriteRoutes(r chi.Router, h *IdentitiesHandler) {
 	inner.RegisterSelfIdentitiesWriteRoutes(r, h)
 }
 
-// NewSSHKeysHandler constructs the SSH public-key HTTP handler (design note
-// plan/notes/ssh-key-design.md D8-D10) from the facade usersservice.
-// SSHKeyService type (task 003) and the same step-up dependencies
+// NewSSHKeysHandler constructs the SSH public-key HTTP handler (see
+// docs/architecture/ssh-keys.md for the design rationale) from the facade
+// usersservice.SSHKeyService type and the same step-up dependencies
 // NewIdentitiesHandler takes.
 func NewSSHKeysHandler(
 	svc *usersservice.SSHKeyService,
@@ -212,15 +212,17 @@ func RegisterSelfSSHKeysReadRoute(r chi.Router, h *SSHKeysHandler) {
 
 // RegisterSelfSSHKeysWriteRoutes mounts the two credential-mutating
 // self-service SSH-key endpoints on r. Requires a verified email; each
-// endpoint additionally enforces step-up (design note D8) when
-// AUTH_REQUIRE_STEP_UP is on.
+// endpoint additionally enforces step-up when AUTH_REQUIRE_STEP_UP is on.
 func RegisterSelfSSHKeysWriteRoutes(r chi.Router, h *SSHKeysHandler) {
 	inner.RegisterSelfSSHKeysWriteRoutes(r, h)
 }
 
 // RegisterUserAccountSSHKeyRoutes mounts the operator SSH-key endpoints
-// (list/register/revoke a target account's keys) on r. Not step-up-gated,
-// matching every other /v1/user-accounts/* admin route.
+// (list/register/revoke a target account's keys) on r. Register/revoke are
+// step-up-gated when the path UUID is the caller's own account; a genuine
+// operator-on-behalf-of-a-different-account call is not gated, matching
+// every other /v1/user-accounts/* admin route (docs/architecture/
+// ssh-keys.md D9).
 func RegisterUserAccountSSHKeyRoutes(r chi.Router, h *SSHKeysHandler) {
 	inner.RegisterUserAccountSSHKeyRoutes(r, h)
 }

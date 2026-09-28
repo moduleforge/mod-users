@@ -35,7 +35,7 @@ func NewUserAccountService(
 }
 
 // SSHKeyService manages SSH public-key registration, listing, and
-// revocation (design note ../../plan/notes/ssh-key-design.md).
+// revocation. See docs/architecture/ssh-keys.md for the design rationale.
 type SSHKeyService = inner.SSHKeyService
 
 // SSHKey is the public view of one registered SSH public key.
@@ -71,7 +71,7 @@ func NewSSHKeyResolver(q usersdb.Querier, coreQ coredb.Querier) *SSHKeyResolver 
 
 // sshKeyResolverActor is a local, one-method interface used only as a
 // compile-time assertion that *SSHKeyResolver exposes the exact method
-// shape mod-repos' transport.KeyResolver requires (design note D11) --
+// shape mod-repos' transport.KeyResolver requires (docs/architecture/ssh-keys.md D11) --
 // without this package importing mod-repos, which mod-users must not do.
 type sshKeyResolverActor interface {
 	ResolveActor(context.Context, gossh.PublicKey) (int64, error)

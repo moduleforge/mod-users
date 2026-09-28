@@ -17,8 +17,8 @@ import (
 // that does not resolve to any known, currently-usable account: an
 // unregistered key, a revoked key, and a key whose account holder entity is
 // archived all return this exact sentinel, with no distinguishing wrapping
-// between the three cases (design note D11) -- ResolveActor never reveals
-// more than "resolution failed" to its caller.
+// between the three cases (docs/architecture/ssh-keys.md D11) --
+// ResolveActor never reveals more than "resolution failed" to its caller.
 var ErrUnknownSSHKey = errors.New("service: unknown ssh public key")
 
 // SSHKeyResolver resolves a candidate SSH public key to the account_holder
@@ -40,8 +40,8 @@ var ErrUnknownSSHKey = errors.New("service: unknown ssh public key")
 //     write here -- for example a last-used timestamp -- would let an
 //     unauthenticated party mutate state for a key it does not hold.
 //   - No caching of any kind. Revocation must take effect on the very next
-//     connection (design note D4); a cache, at any layer, would delay
-//     that. Every call issues a fresh, indexed lookup.
+//     connection (docs/architecture/ssh-keys.md D4); a cache, at any
+//     layer, would delay that. Every call issues a fresh, indexed lookup.
 //   - No logging of key material. Only derived, non-reversible values
 //     (e.g. a fingerprint) are safe to log; this implementation logs
 //     nothing at all.
@@ -71,9 +71,9 @@ func (r *SSHKeyResolver) ResolveActor(ctx context.Context, key gossh.PublicKey) 
 
 	// Comparing both the fingerprint and the canonical authorized_keys text
 	// (rather than either alone) means a stored-row mismatch can never
-	// resolve (design note D11). Both helpers are shared with registration
-	// (sshkey.Parse) so the two derive byte-identical values from the same
-	// key.
+	// resolve (docs/architecture/ssh-keys.md D11). Both helpers are shared
+	// with registration (sshkey.Parse) so the two derive byte-identical
+	// values from the same key.
 	accountHolder, err := r.q.ResolveActiveSSHPublicKey(ctx, db.ResolveActiveSSHPublicKeyParams{
 		FingerprintSha256: sshkey.Fingerprint(key),
 		PublicKey:         sshkey.Canonical(key),

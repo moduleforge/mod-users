@@ -1625,10 +1625,13 @@ paths:
       summary: Register an SSH public key for a user (operator)
       description: |
         Registers a new SSH public key on the target account. Requires a
-        verified email on the caller; operator routes are not
-        step-up-gated. Uses the `/v1/user-accounts/{uuid}` prefix, the
-        prefix this module actually serves
-        (`api/internal/handlers/account_routes.go`), unlike the older
+        verified email on the caller. Step-up-gated exactly like the
+        self-service register endpoint above, but **only when `{uuid}`
+        names the caller's own account** — a genuine
+        operator-on-behalf-of-a-different-account call is not step-up-gated,
+        matching every other `/v1/user-accounts/*` admin route. Uses the
+        `/v1/user-accounts/{uuid}` prefix, the prefix this module actually
+        serves (`api/internal/handlers/account_routes.go`), unlike the older
         `/v1/users/{user_uuid}` admin paths documented elsewhere in this file.
         Every not-found-or-not-permitted outcome — unknown account UUID, or
         an account the caller may not act on — returns the same masked
@@ -1646,6 +1649,7 @@ paths:
       operationId: registerUserAccountSSHKey
       parameters:
         - $ref: "#/components/parameters/AccountUUID"
+        - $ref: "#/components/parameters/StepUpToken"
       requestBody:
         required: true
         content:
@@ -1666,7 +1670,7 @@ paths:
         "403":
           $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "409":
-          $ref: "#/components/responses/SSHKeyConflict"
+          $ref: "#/components/responses/SSHKeyRegisterConflict"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
@@ -1676,10 +1680,13 @@ paths:
       description: |
         Archives the key; it stops resolving on the account's next SSH
         connection (an already-open session is not terminated). Requires a
-        verified email on the caller; operator routes are not
-        step-up-gated. Uses the `/v1/user-accounts/{uuid}` prefix, the
-        prefix this module actually serves
-        (`api/internal/handlers/account_routes.go`), unlike the older
+        verified email on the caller. Step-up-gated exactly like the
+        self-service revoke endpoint above, but **only when `{uuid}`
+        names the caller's own account** — a genuine
+        operator-on-behalf-of-a-different-account call is not step-up-gated,
+        matching every other `/v1/user-accounts/*` admin route. Uses the
+        `/v1/user-accounts/{uuid}` prefix, the prefix this module actually
+        serves (`api/internal/handlers/account_routes.go`), unlike the older
         `/v1/users/{user_uuid}` admin paths documented elsewhere in this file.
         Every not-found-or-not-permitted outcome — unknown account UUID, an
         account the caller may not act on, unknown `key_uuid`, a
@@ -1690,6 +1697,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/AccountUUID"
         - $ref: "#/components/parameters/KeyUUID"
+        - $ref: "#/components/parameters/StepUpToken"
       responses:
         "204":
           description: Key revoked.
@@ -1699,5 +1707,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/ForbiddenOrEmailUnverified"
+        "409":
+          $ref: "#/components/responses/SSHKeyStepUpRequired"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"

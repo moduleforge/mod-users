@@ -494,8 +494,9 @@ func main() {
 	})
 
 	// SSH public-key handler — self-service and operator register/list/
-	// revoke (plan/notes/ssh-key-design.md D8-D10). Reuses the same
-	// step-up deps (JWT secret, consumed-JTI cache, flag) as identitiesHandler.
+	// revoke (see docs/architecture/ssh-keys.md for the design rationale).
+	// Reuses the same step-up deps (JWT secret, consumed-JTI cache, flag)
+	// as identitiesHandler.
 	sshKeySvc := usersservice.NewSSHKeyService(pool, db.New(pool), coredb.New(pool), az, observerGroup)
 	sshKeysHandler := handlers.NewSSHKeysHandler(sshKeySvc, cfg.LocalAuth.JWTSecret, stepUpConsumed, cfg.Auth.RequireStepUpForCredentialChange)
 
@@ -588,8 +589,8 @@ func main() {
 			r.Get("/self/identities", identitiesHandler.List)
 
 			// GET /self/ssh-keys — list own active SSH public keys
-			// (plan/notes/ssh-key-design.md D9). Reachable to unverified
-			// accounts and not step-up-gated (D8), matching GET
+			// (docs/architecture/ssh-keys.md D9). Reachable to unverified
+			// accounts and not step-up-gated, matching GET
 			// /self/identities above.
 			r.Get("/self/ssh-keys", sshKeysHandler.ListSelf)
 
@@ -615,8 +616,8 @@ func main() {
 				r.Post("/self/credential/step-up/verify", identitiesHandler.StepUpVerify)
 
 				// Register/revoke own SSH public key
-				// (plan/notes/ssh-key-design.md D8-D10). Requires a verified
-				// email; the handler additionally enforces step-up (D8) when
+				// (docs/architecture/ssh-keys.md D9). Requires a verified
+				// email; the handler additionally enforces step-up when
 				// AUTH_REQUIRE_STEP_UP is on.
 				r.Post("/self/ssh-keys", sshKeysHandler.RegisterSelf)
 				r.Delete("/self/ssh-keys/{key_uuid}", sshKeysHandler.RevokeSelf)
@@ -655,8 +656,11 @@ func main() {
 				// part of this group — it now lives in mod-core.
 
 				// Operator: list/register/revoke a user's SSH public keys
-				// (plan/notes/ssh-key-design.md D9), same middleware group as
-				// the /user-accounts entries above. Not step-up-gated (D8).
+				// (docs/architecture/ssh-keys.md D9), same middleware group as
+				// the /user-accounts entries above. Register/revoke are
+				// step-up-gated when the path UUID is the caller's own
+				// account (task-006 fix); a genuine operator-on-behalf-of-
+				// another-account call is not gated.
 				r.Get("/user-accounts/{uuid}/ssh-keys", sshKeysHandler.ListForAccount)
 				r.Post("/user-accounts/{uuid}/ssh-keys", sshKeysHandler.RegisterForAccount)
 				r.Delete("/user-accounts/{uuid}/ssh-keys/{key_uuid}", sshKeysHandler.RevokeForAccount)

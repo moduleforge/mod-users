@@ -120,6 +120,8 @@ cd model && sqlc generate
 ```
 The generated files are committed to the repo. `make clean.build` removes `model/db/` — restore with `git checkout HEAD -- model/db/` if needed.
 
+A table in a non-`public` schema (`mod_users.ssh_public_keys` is the first instance — see [docs/architecture/ssh-keys.md](./docs/architecture/ssh-keys.md#d1-schema-placement)) gets its sqlc-generated Go struct name prefixed with the schema, e.g. `mod_users.ssh_public_keys` → `ModUsersSshPublicKey`. Add a `rename` override in `model/sqlc.yaml` only if the resulting name is awkward; this repo has so far kept the generated name as-is.
+
 ## Working in worktrees
 
 This repo uses git worktrees for isolated plan branches. When working in a worktree:
