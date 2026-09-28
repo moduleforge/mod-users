@@ -38,7 +38,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: plan/ssh-public-keys-01-003
             commit: []
             merge: null
         - number: 4
