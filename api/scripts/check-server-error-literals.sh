@@ -47,9 +47,9 @@ HANDLERS_DIR="$(cd "$SCRIPT_DIR/../internal/handlers" && pwd)"
 # lockstep with adding/removing/moving a justified literal call.
 ALLOWLIST=(
   "oidc_providers.go:222"
-  "identities.go:310"
-  "identities.go:389"
-  "identities.go:407"
+  "identities.go:311"
+  "identities.go:390"
+  "identities.go:408"
 )
 
 is_allowlisted() {
