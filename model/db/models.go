@@ -57,6 +57,18 @@ type EmailCode struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
+type ModUsersSshPublicKey struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	UserAccountID     int64              `json:"user_account_id"`
+	KeyType           string             `json:"key_type"`
+	PublicKey         string             `json:"public_key"`
+	FingerprintSha256 string             `json:"fingerprint_sha256"`
+	Label             string             `json:"label"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ArchivedAt        *time.Time         `json:"archived_at"`
+}
+
 type OidcConfig struct {
 	ID                  int32              `json:"id"`
 	OptOut              bool               `json:"opt_out"`
