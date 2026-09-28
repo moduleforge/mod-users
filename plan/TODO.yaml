@@ -15,7 +15,8 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/ssh-public-keys-01-001
-            commit: []
+            commit:
+                - 2e487c3
             merge: null
         - number: 2
           slug: add-ssh-key-parsing-policy
