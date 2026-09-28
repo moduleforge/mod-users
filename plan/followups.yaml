@@ -378,3 +378,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, efficiency-001, suggestion] SSHKeyService.Revoke issues a separate SELECT to build the audit ''before'' snapshot, then a second query to archive the row. Change ArchiveSSHPublicKey from :execrows to :many/:one with a RETURNING clause (mirroring InsertSSHPublicKey''s :one+RETURNING pattern) so Revoke builds its not-found check and audit snapshot from the UPDATE''s own returned row, removing one round trip per revoke call.'
+    - title: loadAuthorizedAccount doesn't mask ErrNoRows
+      id: 433h
+      date: "2026-09-28"
+      tags:
+        - type:bug
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, correctness-001, suggestion] SSHKeyService.loadAuthorizedAccount treats a missing account-holder entity (pgx.ErrNoRows from GetEntityByID) as an opaque 500, while the sibling SSHKeyResolver.ResolveActor masks the identical case defensively (unreachable under the FK today, but masked anyway). For consistency, consider mapping ErrNoRows here to the same masked 403 the archived-holder branch already returns. Optional hardening, not required by task 003''s own Requirements.'
