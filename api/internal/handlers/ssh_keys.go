@@ -156,9 +156,15 @@ func (h *SSHKeysHandler) RevokeSelf(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
-// Operator handlers -- account UUID from the {uuid} path param. Never
-// step-up-gated (design note D8/D9), matching every other
-// /v1/user-accounts/* admin route.
+// Operator handlers -- account UUID from the {uuid} path param. Not
+// step-up-gated for a genuine operator-on-behalf-of-another-account call
+// (design note D8/D9), matching every other /v1/user-accounts/* admin
+// route. When the path {uuid} equals the caller's own account UUID,
+// though, the caller is reaching a self-mutation through this route, so
+// RegisterForAccount/RevokeForAccount apply the identical step-up gate the
+// self routes use -- otherwise an ordinary authenticated user could bypass
+// step-up entirely by calling the operator route with their own UUID
+// (phase-1 security-001; see isSelfTargetingOperatorCall below).
 // ---------------------------------------------------------------------------
 
 // ListForAccount handles GET /v1/user-accounts/{uuid}/ssh-keys.
@@ -171,15 +177,36 @@ func (h *SSHKeysHandler) ListForAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 // RegisterForAccount handles POST /v1/user-accounts/{uuid}/ssh-keys.
+// Step-up-gated (design note D8; phase-1 security-001), identically to
+// RegisterSelf, only when the target account is the caller's own -- see
+// isSelfTargetingOperatorCall.
 func (h *SSHKeysHandler) RegisterForAccount(w http.ResponseWriter, r *http.Request) {
 	accountUUID, ok := parseUUIDPathParam(w, r, "uuid")
 	if !ok {
 		return
 	}
-	h.register(w, r, accountUUID, false)
+
+	uc, isSelf, err := h.isSelfTargetingOperatorCall(r, accountUUID)
+	if err != nil {
+		apiresp.WriteError(w, r, err)
+		return
+	}
+	stepUpUsed := false
+	if isSelf {
+		if err := checkStepUp(r, uc.UserAccountID, h.stepUpRequired, h.jwtSecret, h.consumed); err != nil {
+			writeStepUpRequired(w, r)
+			return
+		}
+		stepUpUsed = h.stepUpRequired
+	}
+
+	h.register(w, r, accountUUID, stepUpUsed)
 }
 
 // RevokeForAccount handles DELETE /v1/user-accounts/{uuid}/ssh-keys/{key_uuid}.
+// Step-up-gated (design note D8; phase-1 security-001), identically to
+// RevokeSelf, only when the target account is the caller's own -- see
+// isSelfTargetingOperatorCall.
 func (h *SSHKeysHandler) RevokeForAccount(w http.ResponseWriter, r *http.Request) {
 	accountUUID, ok := parseUUIDPathParam(w, r, "uuid")
 	if !ok {
@@ -189,7 +216,22 @@ func (h *SSHKeysHandler) RevokeForAccount(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	h.revoke(w, r, accountUUID, keyUUID, false)
+
+	uc, isSelf, err := h.isSelfTargetingOperatorCall(r, accountUUID)
+	if err != nil {
+		apiresp.WriteError(w, r, err)
+		return
+	}
+	stepUpUsed := false
+	if isSelf {
+		if err := checkStepUp(r, uc.UserAccountID, h.stepUpRequired, h.jwtSecret, h.consumed); err != nil {
+			writeStepUpRequired(w, r)
+			return
+		}
+		stepUpUsed = h.stepUpRequired
+	}
+
+	h.revoke(w, r, accountUUID, keyUUID, stepUpUsed)
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +304,30 @@ func (h *SSHKeysHandler) callerAccountUUID(uc *localauth.UserContext) (uuid.UUID
 		return uuid.UUID{}, fmt.Errorf("ssh_keys: parse caller account uuid: %w", err)
 	}
 	return id, nil
+}
+
+// isSelfTargetingOperatorCall reports whether an operator-route call
+// (RegisterForAccount/RevokeForAccount) targets the caller's own account --
+// i.e. targetAccountUUID equals the UUID resolved from the caller's own
+// UserContext. Closes the bypass where an ordinary authenticated caller
+// could reach a credential-mutating self-operation through the un-gated
+// operator route by passing their own UUID in the path (phase-1
+// security-001): SSHKeyService authorizes both route families identically
+// via the Authorizer's ownership arm, so without this check a
+// self-targeting call to the operator route would skip step-up entirely.
+// The caller applies the step-up gate itself, exactly as RegisterSelf/
+// RevokeSelf do, when isSelf is true.
+//
+// A non-nil err indicates an internal invariant violation resolving the
+// caller's own account UUID (see callerAccountUUID); the caller must write
+// the error response and return without proceeding.
+func (h *SSHKeysHandler) isSelfTargetingOperatorCall(r *http.Request, targetAccountUUID uuid.UUID) (uc *localauth.UserContext, isSelf bool, err error) {
+	uc = localauth.MustFromContext(r.Context())
+	callerUUID, err := h.callerAccountUUID(uc)
+	if err != nil {
+		return uc, false, err
+	}
+	return uc, callerUUID == targetAccountUUID, nil
 }
 
 // parseUUIDPathParam extracts the named chi URL parameter, writing 400
