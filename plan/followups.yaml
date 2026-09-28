@@ -498,3 +498,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, fix-confirmation re-review of task 006, informational, not a regression] During an assume-identity (sudo) session, uc.UserUUID is the admin''s own UUID while the Authorizer''s effective actor is the impersonated user X. Task 006''s new isSelfTargetingOperatorCall check compares the path UUID against uc.UserUUID, so an admin impersonating X can call the operator SSH-key route on X''s own UUID with no step-up — isSelf is false even though the Authorizer treats the caller as X via ownership. Not a regression (this path was already fully ungated before task 006, and the same admin token can already mutate X''s keys via the designed wildcard-grant operator path) — recorded for completeness in case assume-identity sessions are later brought under step-up requirements generally.'
+    - title: Three files still carry bare design-note Dn c
+      id: tB6v
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:doc-updates
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Three files still carry bare design-note Dn citations to the soon-to-be-torn-down plan/notes/ssh-key-design.md, deliberately left untouched (outside scope, cite non-promoted letters D6/D7/D8): api/internal/sshkey/label.go:20, api/internal/sshkey/sshkey.go:2,26,54,117 (also a stale ''task 003'' reference), api/internal/handlers/identities.go:639. Will dangle once the design note is torn down.'
