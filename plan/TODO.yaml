@@ -75,7 +75,8 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/ssh-public-keys-01-006
-            commit: []
+            commit:
+                - d5a1681
             merge: null
     - number: 2
       slug: doc-updates
