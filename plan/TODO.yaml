@@ -62,7 +62,7 @@ phases:
             branch: plan/ssh-public-keys-01-005
             commit:
                 - 1f5ccb0
-            merge: null
+            merge: 3a67001
     - number: 2
       slug: doc-updates
       title: Documentation Updates
