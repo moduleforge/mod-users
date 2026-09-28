@@ -78,7 +78,7 @@ phases:
             branch: plan/ssh-public-keys-01-006
             commit:
                 - d5a1681
-            merge: null
+            merge: 1873cdc
     - number: 2
       slug: doc-updates
       title: Documentation Updates
