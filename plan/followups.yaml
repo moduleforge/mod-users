@@ -368,3 +368,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, arch-004, minor] /v1/user-accounts/{uuid}/ssh-keys returns masked 403 for an unknown/unpermitted account UUID, while sibling /v1/user-accounts/{uuid} routes return 404. Masking adds no confidentiality here since the parent route already leaks existence. Either record as a deliberate new-routes-vs-legacy-routes inconsistency in architecture docs, or open a follow-up to unify (move legacy routes to masked 403 rather than unmasking the new ones).'
+    - title: Revoke does a redundant SELECT before UPDATE
+      id: o1uH
+      date: "2026-09-28"
+      tags:
+        - type:optimization
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, efficiency-001, suggestion] SSHKeyService.Revoke issues a separate SELECT to build the audit ''before'' snapshot, then a second query to archive the row. Change ArchiveSSHPublicKey from :execrows to :many/:one with a RETURNING clause (mirroring InsertSSHPublicKey''s :one+RETURNING pattern) so Revoke builds its not-found check and audit snapshot from the UPDATE''s own returned row, removing one round trip per revoke call.'
