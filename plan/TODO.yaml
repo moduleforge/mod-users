@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: ssh-public-keys
       title: SSH Public-Key Ownership
+      diff_base: cb4a9b4709923c74aff22dc0f9dc89a229ecc019
       tasks:
         - number: 1
           slug: add-ssh-key-storage
