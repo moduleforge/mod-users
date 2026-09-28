@@ -103,7 +103,7 @@ docs/
   mod-users-spec.md       # feature specification and key use cases
   architecture.md         # system design, sub-project relationships, auth flow
   architecture/
-    ssh-keys.md            # SSH public-key ownership: durable design decisions
+    ssh-keys.md           # SSH public-key ownership: durable design decisions
   project-structure.md    # this file
   oidc-troubleshooting.md # OIDC configuration troubleshooting checklist
 ```
