@@ -42,7 +42,7 @@ phases:
             branch: plan/ssh-public-keys-01-003
             commit:
                 - ad76ea3
-            merge: null
+            merge: 38eee77
         - number: 4
           slug: add-ssh-key-http-routes
           title: Add SSH Key HTTP Routes
