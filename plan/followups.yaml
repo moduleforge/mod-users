@@ -418,3 +418,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, security-002, minor] NormalizeLabel (api/internal/sshkey/label.go) only bounds length, not content: a caller-supplied label containing NUL, other control chars, or Unicode bidi overrides passes validation, and NUL then causes Postgres to reject the INSERT as a 500 instead of a 400. Stored control/bidi chars are echoed in API responses and audit snapshots (a display-spoofing vector). Reject unicode.IsControl runes and bidi formatting chars (U+202A-U+202E, U+2066-U+2069) in caller-supplied labels with a new 400 detail code; strip (don''t reject) them from comment-derived default labels. Add table-driven test cases (NUL, newline, U+202E).'
+    - title: 'Orphan docs: model/local-deploy/next-steps'
+      id: endf
+      date: "2026-09-28"
+      tags:
+        - type:documentation
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, documentation-001/002/003, major but pre-existing — not caused by this phase''s diff] Link-chain check found three non-exempt project docs unreachable from README.md: model/README.md (not linked from any doc), deploy/local/README.md (mentioned in docs/architecture.md only as plain code text, not a Markdown link), and next-steps.md (not linked anywhere). Fix: link model/README.md from docs/project-structure.md or AGENTS.md; convert the deploy/local/README.md mention in docs/architecture.md to an actual Markdown link; link next-steps.md from README.md''s "Additional documentation" section.'
