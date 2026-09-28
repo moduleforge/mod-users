@@ -1,11 +1,11 @@
 package handlers
 
-// SSHKeysHandler serves the SSH public-key lifecycle endpoints (design note
-// ../../plan/notes/ssh-key-design.md D8-D10): self-service register/list/
-// revoke under /v1/self/ssh-keys, and operator-on-behalf-of register/list/
-// revoke under /v1/user-accounts/{uuid}/ssh-keys. Kept thin (AGENTS.md
-// "Handlers are thin"): parse input, call one service method, shape the
-// response.
+// SSHKeysHandler serves the SSH public-key lifecycle endpoints (see
+// docs/architecture/ssh-keys.md for the design rationale): self-service
+// register/list/revoke under /v1/self/ssh-keys, and operator-on-behalf-of
+// register/list/revoke under /v1/user-accounts/{uuid}/ssh-keys. Kept thin
+// (AGENTS.md "Handlers are thin"): parse input, call one service method,
+// shape the response.
 
 import (
 	"context"
@@ -24,12 +24,12 @@ import (
 	usersservice "github.com/moduleforge/mod-users/api/internal/service"
 )
 
-// sshKeyRegisterBodyMaxBytes caps the POST body (design note D6).
+// sshKeyRegisterBodyMaxBytes caps the POST body.
 const sshKeyRegisterBodyMaxBytes = 32 * 1024
 
-// sshKeyService is the subset of *usersservice.SSHKeyService (task 003)
-// SSHKeysHandler calls, declared as an interface so tests can substitute a
-// stub service without a real database or transaction.
+// sshKeyService is the subset of *usersservice.SSHKeyService SSHKeysHandler
+// calls, declared as an interface so tests can substitute a stub service
+// without a real database or transaction.
 type sshKeyService interface {
 	Register(ctx context.Context, accountUUID uuid.UUID, publicKeyLine string, label *string, stepUpUsed bool) (usersservice.SSHKey, error)
 	List(ctx context.Context, accountUUID uuid.UUID, limit, offset int32) ([]usersservice.SSHKey, int64, error)
@@ -61,7 +61,7 @@ func NewSSHKeysHandler(svc sshKeyService, jwtSecret string, consumed *sync.Map, 
 }
 
 // ---------------------------------------------------------------------------
-// Response / request DTOs (design note D10; matches api/openapi.yaml)
+// Response / request DTOs (matches api/openapi.yaml)
 // ---------------------------------------------------------------------------
 
 // sshKeyDTO is the public view of one registered SSH key. No internal ids --
@@ -104,7 +104,7 @@ type registerSSHKeyRequest struct {
 // Self-service handlers -- account UUID from localauth.UserContext
 // ---------------------------------------------------------------------------
 
-// ListSelf handles GET /v1/self/ssh-keys. Not step-up-gated (design note D8).
+// ListSelf handles GET /v1/self/ssh-keys. Not step-up-gated.
 func (h *SSHKeysHandler) ListSelf(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 	accountUUID, err := h.callerAccountUUID(uc)
@@ -115,8 +115,8 @@ func (h *SSHKeysHandler) ListSelf(w http.ResponseWriter, r *http.Request) {
 	h.list(w, r, accountUUID)
 }
 
-// RegisterSelf handles POST /v1/self/ssh-keys. Step-up-gated (design note D8)
-// when h.stepUpRequired is true.
+// RegisterSelf handles POST /v1/self/ssh-keys. Step-up-gated when
+// h.stepUpRequired is true.
 func (h *SSHKeysHandler) RegisterSelf(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 	if err := checkStepUp(r, uc.UserAccountID, h.stepUpRequired, h.jwtSecret, h.consumed); err != nil {
@@ -134,7 +134,7 @@ func (h *SSHKeysHandler) RegisterSelf(w http.ResponseWriter, r *http.Request) {
 }
 
 // RevokeSelf handles DELETE /v1/self/ssh-keys/{key_uuid}. Step-up-gated
-// (design note D8) when h.stepUpRequired is true.
+// when h.stepUpRequired is true.
 func (h *SSHKeysHandler) RevokeSelf(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 	if err := checkStepUp(r, uc.UserAccountID, h.stepUpRequired, h.jwtSecret, h.consumed); err != nil {
@@ -158,8 +158,9 @@ func (h *SSHKeysHandler) RevokeSelf(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 // Operator handlers -- account UUID from the {uuid} path param. Not
 // step-up-gated for a genuine operator-on-behalf-of-another-account call
-// (design note D8/D9), matching every other /v1/user-accounts/* admin
-// route. When the path {uuid} equals the caller's own account UUID,
+// (docs/architecture/ssh-keys.md D9), matching every other
+// /v1/user-accounts/* admin route. When the path {uuid} equals the
+// caller's own account UUID,
 // though, the caller is reaching a self-mutation through this route, so
 // RegisterForAccount/RevokeForAccount apply the identical step-up gate the
 // self routes use -- otherwise an ordinary authenticated user could bypass
@@ -177,9 +178,9 @@ func (h *SSHKeysHandler) ListForAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 // RegisterForAccount handles POST /v1/user-accounts/{uuid}/ssh-keys.
-// Step-up-gated (design note D8; phase-1 security-001), identically to
-// RegisterSelf, only when the target account is the caller's own -- see
-// isSelfTargetingOperatorCall.
+// Step-up-gated (phase-1 security-001; see docs/architecture/ssh-keys.md's
+// D9), identically to RegisterSelf, only when the target account is the
+// caller's own -- see isSelfTargetingOperatorCall.
 func (h *SSHKeysHandler) RegisterForAccount(w http.ResponseWriter, r *http.Request) {
 	accountUUID, ok := parseUUIDPathParam(w, r, "uuid")
 	if !ok {
@@ -204,9 +205,9 @@ func (h *SSHKeysHandler) RegisterForAccount(w http.ResponseWriter, r *http.Reque
 }
 
 // RevokeForAccount handles DELETE /v1/user-accounts/{uuid}/ssh-keys/{key_uuid}.
-// Step-up-gated (design note D8; phase-1 security-001), identically to
-// RevokeSelf, only when the target account is the caller's own -- see
-// isSelfTargetingOperatorCall.
+// Step-up-gated (phase-1 security-001; see docs/architecture/ssh-keys.md's
+// D9), identically to RevokeSelf, only when the target account is the
+// caller's own -- see isSelfTargetingOperatorCall.
 func (h *SSHKeysHandler) RevokeForAccount(w http.ResponseWriter, r *http.Request) {
 	accountUUID, ok := parseUUIDPathParam(w, r, "uuid")
 	if !ok {
@@ -256,8 +257,9 @@ func (h *SSHKeysHandler) list(w http.ResponseWriter, r *http.Request, accountUUI
 
 // register parses, caps, and validates the request body, then registers the
 // key for accountUUID. All key-format/label validation is the service's job
-// (via sshkey.Parse/NormalizeLabel, design note D6/D7) -- this only checks
-// for well-formed JSON and a non-empty public_key.
+// (via sshkey.Parse/NormalizeLabel; see the algorithm policy in
+// docs/mod-users-spec.md's Security requirements) -- this only checks for
+// well-formed JSON and a non-empty public_key.
 func (h *SSHKeysHandler) register(w http.ResponseWriter, r *http.Request, accountUUID uuid.UUID, stepUpUsed bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, sshKeyRegisterBodyMaxBytes)
 
@@ -343,8 +345,8 @@ func parseUUIDPathParam(w http.ResponseWriter, r *http.Request, name string) (uu
 
 // parseSSHKeyListPagination reads limit/offset query params, leniently
 // parsing and leaving invalid or absent values (zero) to
-// SSHKeyService.List's own default/clamp handling (design note D10), rather
-// than duplicating that clamp here.
+// SSHKeyService.List's own default/clamp handling, rather than duplicating
+// that clamp here.
 func parseSSHKeyListPagination(r *http.Request) (limit, offset int32) {
 	q := r.URL.Query()
 	if l := q.Get("limit"); l != "" {

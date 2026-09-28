@@ -29,7 +29,7 @@ const (
 // errSSHKeyNotFoundForAccount is returned inside Revoke's transaction when
 // ArchiveSSHPublicKey affects zero rows: the key UUID does not exist, does
 // not belong to accountUUID, or is already revoked. Revoke maps it to the
-// masked apiresp.ErrForbidden (D10); it never reaches a caller directly.
+// masked apiresp.ErrForbidden; it never reaches a caller directly.
 var errSSHKeyNotFoundForAccount = errors.New("ssh_keys: key not found for account")
 
 // SSHKey is the service-layer, public view of one registered SSH public
@@ -47,14 +47,14 @@ type SSHKey struct {
 // SSHKeyService implements SSH public-key registration, listing, and
 // revocation for a user account. Every method is keyed by the target
 // account's UUID (not the caller's), so the self-service and operator route
-// families (design note D9) share one implementation: a handler passes
-// either UserContext's own account UUID or the path UUID.
+// families (docs/architecture/ssh-keys.md D9) share one implementation: a
+// handler passes either UserContext's own account UUID or the path UUID.
 //
 // Every method follows the same order of work, per AGENTS.md's
-// "Authorization is checked first" convention and design note D9:
+// "Authorization is checked first" convention and docs/architecture/
+// ssh-keys.md's D9:
 //  1. load the target user_accounts row by UUID -- a miss returns the
-//     masked apiresp.ErrForbidden, never ErrNotFound (D10, existence
-//     masking);
+//     masked apiresp.ErrForbidden, never ErrNotFound (existence masking);
 //  2. load the account holder entity via coredb.GetEntityByID -- an
 //     archived holder returns the same masked ErrForbidden;
 //  3. call Authorize against the account holder entity, propagating any
@@ -116,15 +116,17 @@ func (s *SSHKeyService) loadAuthorizedAccount(ctx context.Context, accountUUID u
 }
 
 // Register parses and validates publicKeyLine against the module's fixed
-// SSH key acceptance policy (sshkey.Parse, design note D6), then registers
-// it for accountUUID. label overrides the key's authorized_keys comment
-// when non-nil (design note D7). stepUpUsed records whether the caller
-// completed a step-up challenge for this call, for the audit trail (D8).
+// SSH key acceptance policy (sshkey.Parse; see the algorithm policy in
+// docs/mod-users-spec.md's Security requirements), then registers it for
+// accountUUID. label overrides the key's authorized_keys comment when
+// non-nil. stepUpUsed records whether the caller completed a step-up
+// challenge for this call, for the audit trail.
 //
 // A duplicate active key (Postgres unique violation on
 // ssh_public_keys_active_fingerprint_uq) returns apiresp.Conflict with
 // detail code users.ssh_key_in_use, identically whether the existing holder
-// is the caller or a different account (D2) -- the uniqueness invariant is
+// is the caller or a different account (docs/architecture/ssh-keys.md D2)
+// -- the uniqueness invariant is
 // enforced by the schema, not by a Go pre-check, since a pre-check alone
 // would lose a concurrent-registration race.
 func (s *SSHKeyService) Register(ctx context.Context, accountUUID uuid.UUID, publicKeyLine string, label *string, stepUpUsed bool) (SSHKey, error) {
@@ -219,9 +221,9 @@ func (s *SSHKeyService) List(ctx context.Context, accountUUID uuid.UUID, limit, 
 // Revoke archives the active key identified by keyUUID for accountUUID.
 // Any failure to identify an active key belonging to this account --
 // unknown UUID, another account's key, or an already-revoked key -- returns
-// the masked apiresp.ErrForbidden (D10), indistinguishable from an
-// authorization denial. stepUpUsed records whether the caller completed a
-// step-up challenge for this call, for the audit trail (D8).
+// the masked apiresp.ErrForbidden, indistinguishable from an authorization
+// denial. stepUpUsed records whether the caller completed a step-up
+// challenge for this call, for the audit trail.
 func (s *SSHKeyService) Revoke(ctx context.Context, accountUUID, keyUUID uuid.UUID, stepUpUsed bool) error {
 	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, "update")
 	if err != nil {
@@ -303,10 +305,9 @@ func toSSHKey(row db.ModUsersSshPublicKey) SSHKey {
 	}
 }
 
-// sshKeyAuditSnapshot builds the audit-log detail map design note D10
-// specifies for both register (create) and revoke (delete): {uuid,
-// fingerprint, key_type, label}, plus step_up (D8's per-mutation audit
-// convention, matching identities.go's step_up detail).
+// sshKeyAuditSnapshot builds the audit-log detail map for both register
+// (create) and revoke (delete): {uuid, fingerprint, key_type, label}, plus
+// step_up, matching identities.go's per-mutation step_up detail convention.
 func sshKeyAuditSnapshot(row db.ModUsersSshPublicKey, stepUpUsed bool) map[string]any {
 	return map[string]any{
 		"uuid":        row.Uuid.String(),
@@ -317,11 +318,11 @@ func sshKeyAuditSnapshot(row db.ModUsersSshPublicKey, stepUpUsed bool) map[strin
 	}
 }
 
-// mapSSHKeyParseError maps a sshkey.Parse error to the D6 detail code on
-// field "public_key", per the sentinel-to-detail-code table task 002
-// defines. A sentinel this function does not recognize is wrapped and
-// returned as an internal error rather than silently defaulting to one of
-// the known codes.
+// mapSSHKeyParseError maps a sshkey.Parse error to its detail code on
+// field "public_key", per the sentinel-to-detail-code table
+// api/internal/sshkey defines. A sentinel this function does not recognize
+// is wrapped and returned as an internal error rather than silently
+// defaulting to one of the known codes.
 func mapSSHKeyParseError(err error) error {
 	switch {
 	case errors.Is(err, sshkey.ErrTooWeak):
@@ -341,7 +342,7 @@ func mapSSHKeyParseError(err error) error {
 	}
 }
 
-// mapSSHKeyLabelError maps a sshkey.NormalizeLabel error to its D7 detail
+// mapSSHKeyLabelError maps a sshkey.NormalizeLabel error to its detail
 // code on field "label".
 func mapSSHKeyLabelError(err error) error {
 	if errors.Is(err, sshkey.ErrLabelTooLong) {
