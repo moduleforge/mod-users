@@ -90,6 +90,7 @@ phases:
           path: phase-02-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-med
+          digest: 'Delivered both the base doc-update scope and the phase-01 gate''s architecture findings: new docs/architecture/ssh-keys.md promoting D1/D2/D3/D4/D9/D11 with rationale, a new ''Key decisions'' section in architecture.md, a dangling-citation repoint sweep across 8 files, and correction of the stale ''operator routes never step-up-gated'' claim in 4 files. Doc/comment/spec only, no behavior change; build/vet/test/YAML validation all pass.'
           git:
             branch: plan/ssh-public-keys-02-001
             commit:
