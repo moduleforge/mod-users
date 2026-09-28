@@ -194,6 +194,30 @@ func (s *stubUAQuerier) InsertJWTSecretIfAbsent(_ context.Context, _ string) (st
 	return "", nil
 }
 
+// SSH public-key methods (task 003, phase-01-ssh-public-keys) are not
+// called by any test in this file (Update's own dependency surface predates
+// them); these stubs exist only so *stubUAQuerier keeps satisfying the
+// db.Querier interface as it grows. See ssh_keys_test.go for the dedicated
+// stubSSHQuerier used to exercise SSHKeyService/SSHKeyResolver themselves.
+func (s *stubUAQuerier) ArchiveSSHPublicKey(_ context.Context, _ db.ArchiveSSHPublicKeyParams) (int64, error) {
+	return 0, nil
+}
+func (s *stubUAQuerier) CountActiveSSHPublicKeysByUserAccount(_ context.Context, _ int64) (int64, error) {
+	return 0, nil
+}
+func (s *stubUAQuerier) GetActiveSSHPublicKeyByUUIDForUserAccount(_ context.Context, _ db.GetActiveSSHPublicKeyByUUIDForUserAccountParams) (db.ModUsersSshPublicKey, error) {
+	return db.ModUsersSshPublicKey{}, pgx.ErrNoRows
+}
+func (s *stubUAQuerier) InsertSSHPublicKey(_ context.Context, _ db.InsertSSHPublicKeyParams) (db.ModUsersSshPublicKey, error) {
+	return db.ModUsersSshPublicKey{}, nil
+}
+func (s *stubUAQuerier) ListActiveSSHPublicKeysByUserAccount(_ context.Context, _ db.ListActiveSSHPublicKeysByUserAccountParams) ([]db.ModUsersSshPublicKey, error) {
+	return nil, nil
+}
+func (s *stubUAQuerier) ResolveActiveSSHPublicKey(_ context.Context, _ db.ResolveActiveSSHPublicKeyParams) (int64, error) {
+	return 0, pgx.ErrNoRows
+}
+
 var _ db.Querier = (*stubUAQuerier)(nil)
 
 // ---------------------------------------------------------------------------
