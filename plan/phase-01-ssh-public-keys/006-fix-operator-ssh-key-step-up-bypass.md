@@ -23,3 +23,19 @@ This task closes that gap. It does not touch the self-service routes (already co
 - `grep -n "checkStepUp" api/internal/handlers/ssh_keys.go` shows it called in all four of `RegisterSelf`, `RevokeSelf`, and (new) the self-targeting branches of `RegisterForAccount`/`RevokeForAccount`.
 - Manually trace: an operator (non-self, different account) call still requires no step-up token and is unaffected by this change.
 - Record a Status section noting whether the integration suite (`api/internal/authz/ssh_keys_integration_test.go`'s `TestInteg_SSHKeys_OperatorAuthorization`) was also extended or re-run to cover the self-targeting-via-operator-route case at the integration level; not required, but note whether it was done.
+
+## Status
+
+**Outcome:** succeeded (2026-09-28)
+
+`RegisterForAccount` and `RevokeForAccount` (`api/internal/handlers/ssh_keys.go`) now resolve the caller's own account UUID via a new `isSelfTargetingOperatorCall` helper and, when the path `{uuid}` equals it, apply the identical `checkStepUp`/`writeStepUpRequired` gate `RegisterSelf`/`RevokeSelf` already use, threading the resulting `stepUpUsed` into the `SSHKeyService` call in place of the previous hard-coded `false`. A genuine operator-on-behalf-of-another-account call (target UUID differs from the caller's own) is unaffected: no gate, `stepUpUsed` stays `false`.
+
+Validation:
+- `cd api && go test ./internal/handlers/...` — passed (all pre-existing tests green, plus new self-targeting-operator-route step-up tests: `TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_NoToken_Returns409`, `TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_ValidToken_Proceeds`, `TestSSHKeysHandler_StepUp_OperatorRoutes_DifferentAccount_FlagOn_NoTokenNeeded`). Two pre-existing tests (`TestSSHKeysRoutes_MountedAtRightPathAndMethod`'s operator-register/revoke cases, `TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated`) were updated to attach a `UserContext` to the request (via the existing `withUC` test helper) with a *different* account UUID than the path target, since the handlers now call `localauth.MustFromContext` unconditionally — matching how the routes are always wired behind `RequireAuth` in `cmd/server/main.go`. Their assertions (operator call to a different account succeeds / is never step-up-gated) are unchanged.
+- `make build.api` — passed.
+- `make lint.api` — passed (`go vet` + `check-server-error-literals`; `gofmt` needed on `ssh_keys_test.go`, applied).
+- `grep -n "checkStepUp" api/internal/handlers/ssh_keys.go` — shows 4 call sites: `RegisterSelf` (unchanged), `RevokeSelf` (unchanged), and the new self-targeting branches of `RegisterForAccount`/`RevokeForAccount` (each inlines its own `checkStepUp` call, matching the self routes literally rather than going through one shared step-up-calling helper).
+- Manual trace: an operator (non-self, different account) call parses the path UUID, resolves the caller's own UUID via `isSelfTargetingOperatorCall`, finds it does not equal the target, and proceeds straight to `h.register`/`h.revoke` with `stepUpUsed=false` — identical to the pre-fix code path. No step-up token is required or checked in that branch.
+- Integration suite (`TestInteg_SSHKeys_OperatorAuthorization`): **not extended or re-run.** It exercises `SSHKeyService` directly (via `actorCtx`), below the HTTP handler layer where this fix lives, so it does not exercise `checkStepUp`/step-up headers at all — extending it to cover the self-targeting-via-operator-route case would mean adding HTTP-level assertions foreign to that file's established service-layer pattern. It also requires a live Postgres (`//go:build integration`), not available in this worktree run. Left untouched, per the task's "not required" allowance.
+
+Files touched: `api/internal/handlers/ssh_keys.go`, `api/internal/handlers/ssh_keys_test.go` (plus this task document).

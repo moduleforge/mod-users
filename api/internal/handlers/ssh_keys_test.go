@@ -161,9 +161,14 @@ func TestSSHKeysRoutes_MountedAtRightPathAndMethod(t *testing.T) {
 			wantCalled: func(s *stubSSHKeyService) bool { return s.listCalled },
 		},
 		{
-			name:       "POST /user-accounts/{uuid}/ssh-keys -> RegisterForAccount",
-			method:     http.MethodPost,
-			path:       "/user-accounts/" + accountUUID.String() + "/ssh-keys",
+			name:   "POST /user-accounts/{uuid}/ssh-keys -> RegisterForAccount",
+			method: http.MethodPost,
+			path:   "/user-accounts/" + accountUUID.String() + "/ssh-keys",
+			// Operator routes now read the caller's UC to apply the
+			// self-targeting step-up gate (phase-1 security-001); accountUUID
+			// differs from uc's own UUID, so this is the genuine
+			// operator-on-behalf-of-another-account case.
+			withUC:     true,
 			wantStatus: http.StatusCreated,
 			wantCalled: func(s *stubSSHKeyService) bool { return s.registerCalled },
 		},
@@ -171,6 +176,7 @@ func TestSSHKeysRoutes_MountedAtRightPathAndMethod(t *testing.T) {
 			name:       "DELETE /user-accounts/{uuid}/ssh-keys/{key_uuid} -> RevokeForAccount",
 			method:     http.MethodDelete,
 			path:       "/user-accounts/" + accountUUID.String() + "/ssh-keys/" + keyUUID.String(),
+			withUC:     true,
 			wantStatus: http.StatusNoContent,
 			wantCalled: func(s *stubSSHKeyService) bool { return s.revokeCalled },
 		},
@@ -323,7 +329,15 @@ func TestSSHKeysHandler_StepUp_SelfRoutes_FlagOff_NoTokenNeeded(t *testing.T) {
 	}
 }
 
+// TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated covers the genuine
+// operator-on-behalf-of-another-account case: accountUUID is a different
+// account than the caller's own (uc), so no step-up gate applies regardless
+// of h.stepUpRequired. The self-targeting case (path {uuid} == caller's own
+// UUID) is covered separately by
+// TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting (phase-1
+// security-001).
 func TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated(t *testing.T) {
+	uc := newTestUC(1, 10)
 	accountUUID := uuid.New()
 
 	tests := []struct {
@@ -340,8 +354,9 @@ func TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := &stubSSHKeyService{}
-			// stepUpRequired=true on the handler -- operator routes must
-			// ignore it entirely; no X-Step-Up-Token header is sent.
+			// stepUpRequired=true on the handler -- operator routes targeting
+			// a *different* account must ignore it entirely; no
+			// X-Step-Up-Token header is sent.
 			h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, true)
 			r := newSSHKeysTestRouter(h)
 
@@ -351,6 +366,7 @@ func TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated(t *testing.T) {
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}
+			req = withUC(req, uc)
 
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
@@ -359,9 +375,140 @@ func TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated(t *testing.T) {
 				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
 			}
 			if !tt.wantCalled(svc) {
-				t.Error("expected service method to be called (operator routes are never step-up-gated)")
+				t.Error("expected service method to be called (operator routes targeting a different account are never step-up-gated)")
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Operator routes: self-targeting step-up gate (phase-1 security-001)
+// ---------------------------------------------------------------------------
+
+// TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_NoToken_Returns409
+// covers the bypass fixed by phase-1 security-001: a non-admin caller
+// reaching the operator route with their own account UUID in the path must
+// hit the same step-up gate as the self routes.
+func TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_NoToken_Returns409(t *testing.T) {
+	uc := newTestUC(1, 10)
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{"RegisterForAccount (self-targeting)", http.MethodPost, "/user-accounts/" + uc.UserUUID + "/ssh-keys"},
+		{"RevokeForAccount (self-targeting)", http.MethodDelete, "/user-accounts/" + uc.UserUUID + "/ssh-keys/" + uuid.New().String()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &stubSSHKeyService{}
+			h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, true)
+			r := newSSHKeysTestRouter(h)
+
+			var req *http.Request
+			if tt.method == http.MethodPost {
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+			} else {
+				req = httptest.NewRequest(tt.method, tt.path, nil)
+			}
+			req = withUC(req, uc)
+
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+			}
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			action, ok := body["action"].(map[string]any)
+			if !ok {
+				t.Fatalf("action = %v, want an object", body["action"])
+			}
+			if action["code"] != "users.step_up_required" {
+				t.Errorf("action.code = %v, want users.step_up_required", action["code"])
+			}
+			if svc.registerCalled || svc.revokeCalled {
+				t.Error("service must not be called when step-up fails")
+			}
+		})
+	}
+}
+
+// TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_ValidToken_Proceeds
+// mirrors the self-route valid-token case, but through the operator route
+// with the caller's own UUID in the path.
+func TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_ValidToken_Proceeds(t *testing.T) {
+	uc := newTestUC(1, 10)
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus int
+		wantCalled func(*stubSSHKeyService) bool
+	}{
+		{"RegisterForAccount (self-targeting)", http.MethodPost, "/user-accounts/" + uc.UserUUID + "/ssh-keys", http.StatusCreated, func(s *stubSSHKeyService) bool { return s.registerCalled }},
+		{"RevokeForAccount (self-targeting)", http.MethodDelete, "/user-accounts/" + uc.UserUUID + "/ssh-keys/" + uuid.New().String(), http.StatusNoContent, func(s *stubSSHKeyService) bool { return s.revokeCalled }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &stubSSHKeyService{}
+			h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, true)
+			r := newSSHKeysTestRouter(h)
+
+			token := issueTestStepUpToken(t, uc.UserAccountID)
+
+			var req *http.Request
+			if tt.method == http.MethodPost {
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+			} else {
+				req = httptest.NewRequest(tt.method, tt.path, nil)
+			}
+			req.Header.Set("X-Step-Up-Token", token)
+			req = withUC(req, uc)
+
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if !tt.wantCalled(svc) {
+				t.Error("expected service method to be called")
+			}
+		})
+	}
+}
+
+// TestSSHKeysHandler_StepUp_OperatorRoutes_DifferentAccount_FlagOn_NoTokenNeeded
+// re-confirms, alongside TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated,
+// that a genuine operator-on-behalf-of-another-account call is unaffected:
+// no step-up token is required even with h.stepUpRequired set.
+func TestSSHKeysHandler_StepUp_OperatorRoutes_DifferentAccount_FlagOn_NoTokenNeeded(t *testing.T) {
+	uc := newTestUC(1, 10)
+	otherAccountUUID := uuid.New()
+
+	svc := &stubSSHKeyService{}
+	h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, true)
+	r := newSSHKeysTestRouter(h)
+
+	req := jsonRequest(t, http.MethodPost, "/user-accounts/"+otherAccountUUID.String()+"/ssh-keys", registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+	req = withUC(req, uc)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if !svc.registerCalled {
+		t.Error("expected service.Register to be called")
 	}
 }
 
