@@ -49,3 +49,20 @@ The contract being documented is fixed in the [SSH key design note](../notes/ssh
 - `api/openapi.yaml`: the existing `Error`/`FieldError`/`Action` schemas, list envelope patterns, and security scheme.
 - `api/internal/handlers/user_accounts.go`: the actual list envelope the server emits, for cross-checking the list schema.
 - Followup `biJk` in `plan/followups.yaml`: guidance on documenting the `409` step-up and conflict responses with existing schemas.
+
+## Status
+
+**Outcome:** succeeded. Date: 2026-09-28.
+
+Added the `SSH Keys` tag, three schemas (`SSHKey`, `SSHKeyCreate`, `PaginatedSSHKeys`), two path parameters (`KeyUUID`, `AccountUUID`), one header parameter (`StepUpToken`), and three reusable `409` responses (`SSHKeyConflict`, `SSHKeyStepUpRequired`, `SSHKeyRegisterConflict`) to `api/openapi.yaml`, plus the four path items covering the six operations, per D6–D10 of the design note. All reuse the existing `Error`/`Action`/bearer-auth building blocks; no parallel error shapes were introduced.
+
+Affected source file: `api/openapi.yaml`.
+
+Validation summary:
+- YAML parse (`python3 -c "import yaml,sys; yaml.safe_load(open('api/openapi.yaml'))"`): passed.
+- OpenAPI lint (`npx @redocly/cli lint api/openapi.yaml`, available locally): passed — 0 errors both before and after the change; the 10 pre-existing warnings are unchanged (no new warnings introduced). Caught and fixed one real bug during implementation: the operator paths use `{uuid}` (matching the served `/v1/user-accounts/{uuid}` routes) but the existing `UserUUID` parameter is named `user_uuid`, which redocly's `path-parameters-defined` rule flagged as a mismatch; added a new `AccountUUID` parameter (`name: uuid`) for these paths instead of reusing `UserUUID`.
+- `grep -n "ssh-keys\|SSHKey" api/openapi.yaml`: shows all four path items and all new schemas/responses.
+- Every `$ref` added resolves: verified programmatically (walked the full document; 196 total `$ref`s, 0 unresolved) in addition to the lint pass.
+- `git diff --stat`: touches only `api/openapi.yaml` (371 insertions), excluding this task document.
+
+Decision recorded: the list envelope (`PaginatedSSHKeys`) follows the `items`/`total` pattern already established in `api/openapi.yaml` (`PaginatedUsers`, `PaginatedAudit`) rather than the ad hoc `{"user_accounts": [...], "total": N}` shape `api/internal/handlers/user_accounts.go`'s `List` emits for the unrelated `/v1/user-accounts` listing endpoint — that handler's key name doesn't apply here since the SSH-key list endpoints have no Go implementation yet (task 004, not yet landed) and the task doc's instruction to "reuse the existing pattern" reads most naturally as the envelope shape already documented in this file.
