@@ -36,3 +36,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: add-ssh-key-http-routes
+          title: Add SSH Key HTTP Routes
+          path: phase-01-ssh-public-keys/004-add-ssh-key-http-routes.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
