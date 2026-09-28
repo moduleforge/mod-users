@@ -54,7 +54,7 @@ phases:
             branch: plan/ssh-public-keys-01-004
             commit:
                 - 003eddc
-            merge: null
+            merge: 35ca4f8
         - number: 5
           slug: document-ssh-key-endpoints-in-openapi
           title: Document SSH Key Endpoints In OpenAPI
