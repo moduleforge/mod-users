@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: add-ssh-key-parsing-policy
+          title: Add SSH Key Parsing Policy
+          path: phase-01-ssh-public-keys/002-add-ssh-key-parsing-policy.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
