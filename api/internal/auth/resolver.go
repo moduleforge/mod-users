@@ -211,14 +211,19 @@ func (r *UserResolver) Resolve(ctx context.Context, p Principal) (*UserContext, 
 		}
 	}
 
-	// Branches 2–5: no existing identity row. Look up by email.
-	if p.Email != "" {
+	// Branches 2–5: no existing identity row. Look up by email. Canonicalize
+	// (trim + lowercase) before matching — user_accounts.email is stored
+	// canonicalized by every write path, so an IdP claim with mismatched
+	// case or surrounding whitespace would otherwise fail to match an
+	// existing account and incorrectly fall through to auto-create (branch 5).
+	canonicalEmail := strings.TrimSpace(strings.ToLower(p.Email))
+	if canonicalEmail != "" {
 		var ua db.UserAccount
 		var emailErr error
 		if r.emailAccountLookup != nil {
-			ua, emailErr = r.emailAccountLookup(ctx, p.Email)
+			ua, emailErr = r.emailAccountLookup(ctx, canonicalEmail)
 		} else {
-			ua, emailErr = r.queries.GetUserAccountByEmail(ctx, p.Email)
+			ua, emailErr = r.queries.GetUserAccountByEmail(ctx, canonicalEmail)
 		}
 		if emailErr == nil {
 			// Found an existing account.
@@ -392,10 +397,36 @@ func (r *UserResolver) verifyAndLink(ctx context.Context, ua db.UserAccount, p P
 	return nil
 }
 
+// autoCreateEmailFields derives the canonicalized email and the given_name
+// autoCreate persists from an IdP-asserted email claim. Canonicalization
+// (trim + lowercase) matches the pattern every other write path to
+// user_accounts.email already applies — see
+// internal/service/user_accounts.go's Create and the auth handlers'
+// register/reset/emailcode/login request normalization. Extracted as a pure
+// function so this logic can be unit-tested without a live Postgres
+// connection, which autoCreate itself requires for the surrounding
+// transaction.
+func autoCreateEmailFields(rawEmail string) (canonicalEmail, givenName string) {
+	canonicalEmail = strings.TrimSpace(strings.ToLower(rawEmail))
+	givenName = canonicalEmail
+	if idx := strings.Index(canonicalEmail, "@"); idx > 0 {
+		givenName = canonicalEmail[:idx]
+	}
+	return canonicalEmail, givenName
+}
+
 // autoCreate creates a new entity → legal_entity → natural_person → user_account chain
 // and inserts an auth_oidc_identities row in the same transaction.
 func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAccount, error) {
 	var ua db.UserAccount
+
+	// Canonicalize the IdP-asserted email the same way every other write
+	// path to user_accounts.email does (trim + lowercase) before it's used
+	// to derive the display name or persisted to the account. p.Email
+	// itself is left untouched so anything that legitimately needs the raw
+	// IdP-asserted value (e.g. the auth_oidc_identities row, or the log
+	// lines below) still reflects exactly what the IdP sent.
+	canonicalEmail, givenName := autoCreateEmailFields(p.Email)
 
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -432,12 +463,6 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 		return ua, fmt.Errorf("create legal entity: %w", err)
 	}
 
-	// Derive given_name from email local-part for auto-created accounts.
-	givenName := p.Email
-	if idx := strings.Index(p.Email, "@"); idx > 0 {
-		givenName = p.Email[:idx]
-	}
-
 	// Create natural person.
 	_, err = coreQtx.CreateNaturalPerson(ctx, coredb.CreateNaturalPersonParams{
 		EntityID:   entity.ID,
@@ -459,7 +484,7 @@ func (r *UserResolver) autoCreate(ctx context.Context, p Principal) (db.UserAcco
 	// so entity.ID is valid here because we just created the legal_entity row.
 	ua, err = qtx.CreateUserAccount(ctx, db.CreateUserAccountParams{
 		AccountHolder:   entity.ID,
-		Email:           pgtype.Text{String: p.Email, Valid: p.Email != ""},
+		Email:           pgtype.Text{String: canonicalEmail, Valid: canonicalEmail != ""},
 		EmailVerifiedAt: emailVerifiedAt,
 	})
 	if err != nil {

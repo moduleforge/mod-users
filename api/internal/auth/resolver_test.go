@@ -402,3 +402,128 @@ func TestResolver_Branch5_NewUser(t *testing.T) {
 		t.Errorf("Branch 5: UserAccountID = %d, want %d", uc.UserAccountID, createdUA.ID)
 	}
 }
+
+// -------------------------------------------------------------------------
+// Email canonicalization
+// -------------------------------------------------------------------------
+
+// TestAutoCreateEmailFields proves that autoCreate's email-derivation helper
+// canonicalizes (trims + lowercases) an IdP-asserted email exactly like
+// every other write path to user_accounts.email (see
+// internal/service/user_accounts.go's Create and the auth handlers'
+// register/reset/emailcode/login request normalization) before it is
+// persisted or used to derive given_name. autoCreate itself requires a live
+// Postgres connection for its surrounding transaction (it is only ever
+// exercised indirectly here via the autoCreateFn stub), so this pure helper
+// is where the canonicalization logic is unit-tested.
+func TestAutoCreateEmailFields(t *testing.T) {
+	tests := []struct {
+		name          string
+		rawEmail      string
+		wantEmail     string
+		wantGivenName string
+	}{
+		{
+			name:          "mixed case is lowercased",
+			rawEmail:      "Alice.Example@Example.COM",
+			wantEmail:     "alice.example@example.com",
+			wantGivenName: "alice.example",
+		},
+		{
+			name:          "surrounding whitespace is trimmed",
+			rawEmail:      "  bob@example.com  ",
+			wantEmail:     "bob@example.com",
+			wantGivenName: "bob",
+		},
+		{
+			name:          "mixed case and whitespace together",
+			rawEmail:      "  Carol.Example@Example.COM ",
+			wantEmail:     "carol.example@example.com",
+			wantGivenName: "carol.example",
+		},
+		{
+			name:          "already canonical is unchanged",
+			rawEmail:      "dave@example.com",
+			wantEmail:     "dave@example.com",
+			wantGivenName: "dave",
+		},
+		{
+			name:          "no @ falls back to the full canonical email",
+			rawEmail:      " NotAnEmail ",
+			wantEmail:     "notanemail",
+			wantGivenName: "notanemail",
+		},
+		{
+			name:          "empty email stays empty",
+			rawEmail:      "",
+			wantEmail:     "",
+			wantGivenName: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotEmail, gotGivenName := autoCreateEmailFields(tt.rawEmail)
+			if gotEmail != tt.wantEmail {
+				t.Errorf("autoCreateEmailFields(%q) email = %q, want %q", tt.rawEmail, gotEmail, tt.wantEmail)
+			}
+			if gotGivenName != tt.wantGivenName {
+				t.Errorf("autoCreateEmailFields(%q) givenName = %q, want %q", tt.rawEmail, gotGivenName, tt.wantGivenName)
+			}
+		})
+	}
+}
+
+// TestResolver_Branch2_CanonicalizesEmailForLookup proves that Resolve
+// canonicalizes (trims + lowercases) the principal's email before using it
+// to look up an existing account by email. user_accounts.email is stored
+// canonicalized by every write path, so a raw IdP claim with mismatched
+// case or surrounding whitespace must still match an existing account
+// rather than incorrectly falling through to auto-create (branch 5).
+func TestResolver_Branch2_CanonicalizesEmailForLookup(t *testing.T) {
+	issuer := "https://accounts.google.com"
+	subject := "google-sub-canon"
+	ua := fakeAccount(21, "frank@example.com", true)
+
+	var gotLookupEmail string
+	linkCalled := false
+
+	r := newOIDCResolver(t,
+		// oidcIdentityLookup: no row yet
+		func(_ context.Context, _, _ string) (db.AuthOidcIdentity, error) {
+			return db.AuthOidcIdentity{}, pgx.ErrNoRows
+		},
+		// emailAccountLookup: records exactly what it was called with.
+		func(_ context.Context, email string) (db.UserAccount, error) {
+			gotLookupEmail = email
+			if email == ua.Email.String {
+				return ua, nil
+			}
+			return db.UserAccount{}, pgx.ErrNoRows
+		},
+		nil, // idAccountLookup not needed for branch 2 return
+		// linkIdentityFn: branch 2 action
+		func(_ context.Context, _ db.UserAccount, _ Principal, _ int64) error {
+			linkCalled = true
+			return nil
+		},
+		nil, nil,
+	)
+
+	// The IdP asserts the email with mismatched case and surrounding
+	// whitespace; the stored account's email is already canonical.
+	p := Principal{Issuer: issuer, Subject: subject, Email: "  Frank@Example.COM  ", EmailVerified: false}
+	uc, err := r.Resolve(context.Background(), p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotLookupEmail != ua.Email.String {
+		t.Errorf("emailAccountLookup was called with %q, want canonicalized %q", gotLookupEmail, ua.Email.String)
+	}
+	if !linkCalled {
+		t.Error("linkIdentityFn was not called — canonicalization failure caused the email match to be missed")
+	}
+	if uc.UserAccountID != ua.ID {
+		t.Errorf("UserAccountID = %d, want %d", uc.UserAccountID, ua.ID)
+	}
+}
