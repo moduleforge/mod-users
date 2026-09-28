@@ -308,3 +308,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Database-backed Validation checks (goose apply/\d/23505 duplicate/archive-reinsert) could not be executed in this worktree — no reachable, correctly-migrated dev Postgres. Recommend running them from the main checkout before this task is considered fully verified, or accepting the schema/query-level static checks as sufficient given they match the design note's contract exactly.
+    - title: 'Incidental observation, not fixed: the alread'
+      id: sl4d
+      date: "2026-09-28"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Incidental observation, not fixed: the already-running users-module-postgres Docker container has a stale goose_db_version table from an older, pre-per-module-migration-scheme setup, unrelated to this task''s diff.'
