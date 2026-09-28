@@ -18,7 +18,7 @@ phases:
             branch: plan/ssh-public-keys-01-001
             commit:
                 - 2e487c3
-            merge: null
+            merge: d67ad82
         - number: 2
           slug: add-ssh-key-parsing-policy
           title: Add SSH Key Parsing Policy
