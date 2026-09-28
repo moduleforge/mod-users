@@ -408,3 +408,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, arch-007, suggestion] The 0103_ssh_public_keys.sql migration is the first real table under a mod_* schema in the ecosystem and deliberately carries no GRANT, per the schema-ownership standard. This assumes the composing app''s runtime role already has USAGE/table privileges on mod_users. Nothing documents this operational requirement for composing hosts, or that backup/reset/test tooling scoped to ''public'' will miss this table. Add a sentence to docs/architecture.md when the schema decision is recorded (see doc-updates phase).'
+    - title: SSH-key label allows control/bidi chars
+      id: GrC7
+      date: "2026-09-28"
+      tags:
+        - type:security
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, security-002, minor] NormalizeLabel (api/internal/sshkey/label.go) only bounds length, not content: a caller-supplied label containing NUL, other control chars, or Unicode bidi overrides passes validation, and NUL then causes Postgres to reject the INSERT as a 500 instead of a 400. Stored control/bidi chars are echoed in API responses and audit snapshots (a display-spoofing vector). Reject unicode.IsControl runes and bidi formatting chars (U+202A-U+202E, U+2066-U+2069) in caller-supplied labels with a new 400 detail code; strip (don''t reject) them from comment-derived default labels. Add table-driven test cases (NUL, newline, U+202E).'
