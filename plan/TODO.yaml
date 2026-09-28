@@ -11,21 +11,25 @@ phases:
           slug: add-ssh-key-storage
           title: Add SSH Key Storage
           path: phase-01-ssh-public-keys/001-add-ssh-key-storage.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added model/migrations/sql/0103_ssh_public_keys.sql (mod_users schema + ssh_public_keys table with partial unique fingerprint index) and model/queries/ssh_public_keys.sql (six schema-qualified queries). sqlc generate clean, go build/make build.api pass. DB-backed validation not runnable in this worktree (documented, not claimed passing). lint.model fails only with pre-existing followup nAXW.
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/ssh-public-keys-01-001
+            commit:
+                - 2e487c3
+            merge: d67ad82
         - number: 2
           slug: add-ssh-key-parsing-policy
           title: Add SSH Key Parsing Policy
           path: phase-01-ssh-public-keys/002-add-ssh-key-parsing-policy.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Implemented api/internal/sshkey/ per D6/D7: Parse() enforces size cap, rejects options/multi-key, enforces positive key-type allow-list, refuses weak RSA. NormalizeLabel implements label rules. Table-driven tests cover all paths. Folded in an unrelated lint-script line-drift fix and a defense-in-depth label-size guard.'
           git:
-            branch: null
-            commit: []
+            branch: plan/ssh-public-keys-01-002
+            commit:
+                - 3a947ef
             merge: null
         - number: 3
           slug: add-ssh-key-service-and-resolver
@@ -51,11 +55,13 @@ phases:
           slug: document-ssh-key-endpoints-in-openapi
           title: Document SSH Key Endpoints In OpenAPI
           path: phase-01-ssh-public-keys/005-document-ssh-key-endpoints-in-openapi.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Documented the six SSH-key endpoints (self + operator list/register/revoke) and their schemas in api/openapi.yaml per design-note D6-D10, reusing existing Error/Action/bearer-auth building blocks. Caught and fixed a real path-parameter-name mismatch (AccountUUID vs UserUUID) via the OpenAPI linter. 0 lint errors, same 10 pre-existing warnings as baseline.
           git:
-            branch: null
-            commit: []
+            branch: plan/ssh-public-keys-01-005
+            commit:
+                - 1f5ccb0
             merge: null
     - number: 2
       slug: doc-updates
