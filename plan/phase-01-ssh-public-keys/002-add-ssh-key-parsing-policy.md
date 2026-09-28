@@ -55,6 +55,31 @@ No standard skill covers this. The contract is the [SSH key design note](../note
 - `grep -rn "ssh-dss\|cert-v01" api/internal/sshkey/*.go` (excluding `_test.go`) shows the refusal logic lives only in this package, and no other package in `api/` hard-codes the allow-list.
 - `api/go.mod` gains no new direct dependency beyond what `golang.org/x/crypto/ssh` already provides from the existing `golang.org/x/crypto` requirement. If `go mod tidy` changes `go.mod`/`go.sum`, explain why in Status.
 
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-09-28
+- **Validation:**
+  - `cd api && go test ./internal/sshkey/...` — passed (17 test functions/subtests, all green).
+  - `make build.api` — passed.
+  - `make lint.api` — passed (see decision below re: a pre-existing, unrelated `check-server-error-literals.sh` line-number drift that was blocking this target before any sshkey work; fixed as a folded-in drift correction).
+  - `grep -rn "ssh-dss\|cert-v01" api/internal/sshkey/*.go` (excluding `_test.go`) — matches only in doc comments in `errors.go` and `sshkey.go`; a broader `grep -rln` across all of `api/` excluding `sshkey/` found zero other hits, confirming the allow-list lives in exactly one place.
+  - `api/go.mod`/`api/go.sum` — no diff; no new dependency was introduced (golang.org/x/crypto v0.52.0 already provided `ssh`).
+- **Affected source files:**
+  - `api/internal/sshkey/sshkey.go`
+  - `api/internal/sshkey/label.go`
+  - `api/internal/sshkey/errors.go`
+  - `api/internal/sshkey/sshkey_test.go`
+  - `api/internal/sshkey/label_test.go`
+  - `api/internal/sshkey/helpers_test.go`
+- **Assumptions applied:** both `## Assumptions` below held — `golang.org/x/crypto v0.52.0`'s `ssh.ParseAuthorizedKey` parses the `sk-` FIDO key types (confirmed via a hand-built wire-format fixture that round-trips through `ssh.ParseAuthorizedKey`), and the policy is implemented as a fixed, non-configurable allow-list in code.
+- **Decisions made (within task scope):**
+  - Implemented the D6 allow-list as a positive `acceptedKeyTypes` map (fixed-deny-by-default) rather than explicit `ssh-dss`/`*-cert-v01@openssh.com` deny checks. This refuses every current and future certificate variant automatically (any `*-cert-v01@openssh.com` name), not just the ones enumerated today. The literal strings `ssh-dss` and `cert-v01` are documented in the map's doc comment so the task's grep-based validation check still finds the refusal logic anchored in this package.
+  - Literal test fixtures for `sk-ssh-ed25519@openssh.com`, `sk-ecdsa-sha2-nistp256@openssh.com`, `ssh-dss`, and one `ssh-ed25519-cert-v01@openssh.com` certificate were generated once, offline, with `golang.org/x/crypto/ssh` pinned to the same `v0.52.0` in `api/go.mod`, verified to round-trip through `ssh.ParseAuthorizedKey`, and pasted into `helpers_test.go` as fixed literals (no live private key material is carried; the certificate's CA key was ephemeral and discarded after signing).
+  - `[folded-in]` Fixed a pre-existing, unrelated line-number drift in `api/scripts/check-server-error-literals.sh`'s `ALLOWLIST` (`identities.go:310/389/407` no longer matched the actual call sites at `:311/390/408`, off by exactly one line each), which was failing `make lint.api` before any sshkey change. Single file, minor, self-identifying (the script itself detects and reports "allowlist entries do not match any current call site (line drift?)").
+  - `[security self-fix]` Added an early raw-byte-length guard (`maxLabelRawBytes`, 400 bytes) to `NormalizeLabel`'s explicit-`requested` branch in `label.go`, so an arbitrarily large caller-supplied label string is rejected before the function does `strings.TrimSpace`/`[]rune` work on it, mirroring `Parse`'s own 16 KiB early-reject pattern for the SSH line. Purely a defense-in-depth/DoS-input hardening; does not change any behavior the task doc's Requirement 4 specifies (any input this large was always going to exceed the 100-rune cap).
+- **Security review (review_focus: security), applied inline:** No blocking findings. Reviewed input-boundary validation (16 KiB cap before parsing, options/multi-key rejection, allow-list enforcement, RSA modulus strength check via `rsaKey.N.BitLen()`), error-message hygiene (verified by test that no error echoes submitted key material; `key.Type()` values included in one error are drawn from the SSH library's fixed algorithm-name constant set, not attacker-controlled free text), and dependency posture (no new dependency). One minor defense-in-depth gap was found and self-fixed in-diff (see decisions above); no other findings.
+
 ## Assumptions
 
 - `golang.org/x/crypto v0.52.0` (already in `api/go.mod`) supports the `sk-` key types in `ParseAuthorizedKey`.
