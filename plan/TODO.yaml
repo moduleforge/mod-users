@@ -23,7 +23,7 @@ phases:
           slug: add-ssh-key-parsing-policy
           title: Add SSH Key Parsing Policy
           path: phase-01-ssh-public-keys/002-add-ssh-key-parsing-policy.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Implemented api/internal/sshkey/ per D6/D7: Parse() enforces size cap, rejects options/multi-key, enforces positive key-type allow-list, refuses weak RSA. NormalizeLabel implements label rules. Table-driven tests cover all paths. Folded in an unrelated lint-script line-drift fix and a defense-in-depth label-size guard.'
           git:
