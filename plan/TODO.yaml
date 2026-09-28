@@ -26,3 +26,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: add-ssh-key-service-and-resolver
+          title: Add SSH Key Service And Resolver
+          path: phase-01-ssh-public-keys/003-add-ssh-key-service-and-resolver.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
