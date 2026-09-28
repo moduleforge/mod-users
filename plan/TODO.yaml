@@ -47,7 +47,7 @@ phases:
           slug: add-ssh-key-http-routes
           title: Add SSH Key HTTP Routes
           path: phase-01-ssh-public-keys/004-add-ssh-key-http-routes.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Implemented the full SSH-key HTTP surface (self-service + operator register/list/revoke, step-up gating on self routes only) consuming task 003''s service directly, wired through manifest/facade/dev server, response shapes matching task 005''s openapi.yaml. go test/build/lint all green. Inline security review: no findings.'
           git:
