@@ -468,3 +468,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Integration suite (ssh_keys_integration_test.go's TestInteg_SSHKeys_OperatorAuthorization) was not extended to cover the self-targeting-via-operator-route case — service-layer test, requires live Postgres, not required by the task.
+    - title: General system-actor seeding path for modules
+      id: WZTj
+      date: "2026-09-28"
+      tags:
+        - type:enhancement
+        - cross-repo/origin:mod-billing
+        - priority:unspecified
+        - effort:unspecified
+        - cross-repo/origin:mod-billing
+      text: 'mod-billing''s mod-billing-hardening plan (task 4/001, followup 74XZ) had to hand-write a composer-owned idempotent SQL recipe (mod-billing''s api/service/systemactorseed.go, PaddleSyncActorSeedSQL) to seed the billing.paddle_sync system actor, because mod-users has no general, migration-order-safe system-actor seeding path a module can declare. Requested interface shape (composer-facing, not a mod-users design mandate): something a module can declare in its own manifest/module.yaml, or an exported library function analogous to mod-authz''s authz_operations additive-migration pattern, that (a) creates the entities row under the system_actor type, (b) creates the paired system_actors row for a caller-supplied slug, idempotently, safe in any migration order regardless of which modules are composed, and (c) does NOT special-case grants — grants stay the composing module''s own concern via its own operation registration, since a system actor''s authority varies per composer/module. mod-authz''s grants table already accepts a system_actor actor_id with no schema change needed, so the grant side needs no new mechanism. Current single-hardcoded-row precedent with no extension point: mod-users/model/migrations/sql/0101_system_actors.sql and api/internal/auth/anonymous_actor_service.go. flow-accounts'' own rd43 followup is the same gap from the composer side.'
