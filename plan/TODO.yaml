@@ -30,7 +30,7 @@ phases:
             branch: plan/ssh-public-keys-01-002
             commit:
                 - 3a947ef
-            merge: null
+            merge: ebf1289
         - number: 3
           slug: add-ssh-key-service-and-resolver
           title: Add SSH Key Service And Resolver
