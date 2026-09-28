@@ -27,7 +27,8 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/ssh-public-keys-01-002
-            commit: []
+            commit:
+                - 3a947ef
             merge: null
         - number: 3
           slug: add-ssh-key-service-and-resolver
