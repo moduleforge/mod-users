@@ -488,3 +488,13 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, fix-confirmation re-review of task 006] After task 006''s step-up-bypass fix, comments in api/cmd/server/main.go:657-659, api/handlers/handlers.go:221-223, and moduleforge.module.yaml:420 still say the operator SSH-key routes are "never"/"not" step-up-gated. They should say the routes are gated when the path UUID is the caller''s own account, so a future maintainer doesn''t read the stale comment as license to remove the gate. Doc-only, no current security impact.'
+    - title: Assume-identity bypasses self step-up gate
+      id: 1mnX
+      date: "2026-09-28"
+      tags:
+        - type:security
+        - plan/phase:phase-01-ssh-public-keys
+        - plan/slug:ssh-public-keys
+        - priority:low
+        - effort:small
+      text: '[phase-01 gate, fix-confirmation re-review of task 006, informational, not a regression] During an assume-identity (sudo) session, uc.UserUUID is the admin''s own UUID while the Authorizer''s effective actor is the impersonated user X. Task 006''s new isSelfTargetingOperatorCall check compares the path UUID against uc.UserUUID, so an admin impersonating X can call the operator SSH-key route on X''s own UUID with no step-up — isSelf is false even though the Authorizer treats the caller as X via ownership. Not a regression (this path was already fully ungated before task 006, and the same admin token can already mutate X''s keys via the designed wildcard-grant operator path) — recorded for completeness in case assume-identity sessions are later brought under step-up requirements generally.'
