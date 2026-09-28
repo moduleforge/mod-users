@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: ssh-public-keys
       title: SSH Public-Key Ownership
-      tasks: []
+      tasks:
+        - number: 1
+          slug: add-ssh-key-storage
+          title: Add SSH Key Storage
+          path: phase-01-ssh-public-keys/001-add-ssh-key-storage.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
