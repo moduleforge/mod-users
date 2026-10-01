@@ -5,4 +5,14 @@ phases:
     - number: 18
       slug: flow-ignore-migrate
       title: Migrate Flow Ignore - mod-users
-      tasks: []
+      tasks:
+        - number: 1
+          slug: migrate-gitignore
+          title: Migrate Gitignore To Single Flow Entry
+          path: phase-18-flow-ignore-migrate/001-migrate-gitignore.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
