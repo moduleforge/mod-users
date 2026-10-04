@@ -143,7 +143,9 @@ export function LoginForm({
       await login(email, password);
       onSuccess?.(returnPath ?? readReturnPath());
     } catch (err) {
-      if (err instanceof ApiRequestError) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        setError('Invalid email or password.');
+      } else if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
         console.error('[login]', err);
