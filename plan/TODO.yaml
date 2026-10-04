@@ -149,7 +149,8 @@ phases:
           digest: Updated four docs to reflect the users-gui seams (runtime config and 401 handling, standard screens and backend-to-path contract, router-agnostic spec wording, new file layout). All detail links to gui/README.md instead of duplicating it.
           git:
             branch: plan/users-gui-integration-seams-03-001
-            commit: []
+            commit:
+                - ec02502
             merge: null
     - number: 4
       slug: remediation-01
