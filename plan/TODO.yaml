@@ -151,7 +151,7 @@ phases:
             branch: plan/users-gui-integration-seams-03-001
             commit:
                 - ec02502
-            merge: null
+            merge: ec5a4b96f2834073dac621fbaf78c0ef5c38ca19
     - number: 4
       slug: remediation-01
       title: Remediation Round 1
