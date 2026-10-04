@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 1
+    tasks_added: 2
 phases:
     - number: 1
       slug: smtp-sender-hardening
@@ -26,6 +26,7 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
+      security_review: required
       tasks:
         - number: 1
           slug: expose-sender-api-in-public-facade
@@ -35,6 +36,21 @@ phases:
           tier: haiku-med
           findings:
             - XFjp
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: harden-sender-body-recipient-and-error-chain
+          title: Stuff Bare-CR Dots, Validate To as a Bare Address, Redact the Error Chain, and Cover Untested Branches
+          path: phase-02-remediation-01/002-harden-sender-body-recipient-and-error-chain.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - L7ky
+            - GS7Y
+            - Zr31
+            - KKhL
           git:
             branch: null
             commit: []
