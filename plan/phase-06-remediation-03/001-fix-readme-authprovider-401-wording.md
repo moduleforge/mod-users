@@ -20,3 +20,7 @@ Remediates finding aaEB: `gui/README.md` says `AuthProvider` navigates through `
 ## References
 
 - Finding aaEB in this plan's `plan/findings.yaml` ("README overstates AuthProvider 401 navigation").
+
+## Status
+
+succeeded, 2026-10-04. Reworded the AuthProvider loginPath bullet and components-table row in gui/README.md to match gui/src/lib/auth-context.tsx (refreshUser 401 -> logout() -> navigate; mount-time 401 only clears the token). Validation: grep of v1/self shows no remaining mount-time navigation claim; only gui/README.md changed. Optional requirement 3 not applied.
