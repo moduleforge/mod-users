@@ -109,6 +109,7 @@ phases:
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
+      diff_base: 0d40c4c0fdf0f16df752386811203e5fcf59781e
       tasks:
         - number: 1
           slug: consumer-integration-guide
