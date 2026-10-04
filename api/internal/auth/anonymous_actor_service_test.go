@@ -52,7 +52,7 @@ func TestNewAnonymousActor(t *testing.T) {
 				return false, nil
 			},
 			wantErr:       true,
-			wantErrSubstr: []string{anonymousActorSlug, "0101_system_actors.sql"},
+			wantErrSubstr: []string{anonymousActorSlug, "0100_baseline.sql"},
 		},
 		{
 			name: "lookup returns unexpected error: wrapped",

@@ -10,7 +10,7 @@ package config
 //   - bootstrapJWTSecretFromDB's connection-error path, against a
 //     syntactically valid but unreachable DSN (no Docker needed).
 //   - A drift guard comparing the bootstrapJWTSecretDDL Go constant against
-//     model/migrations/sql/0102_auth_jwt_secrets.sql's actual content.
+//     model/migrations/sql/0100_baseline.sql's actual content.
 //
 // This file is package config (not config_test): every symbol it exercises
 // directly (fetchOrGeneratePersistedJWTSecret, bootstrapJWTSecretFromDB,
@@ -265,24 +265,24 @@ func TestBootstrapJWTSecretFromDB_UnreachableDB_ReturnsWrappedErrorFast(t *testi
 }
 
 // ---------------------------------------------------------------------------
-// Drift guard: bootstrapJWTSecretDDL vs. migration 0102
+// Drift guard: bootstrapJWTSecretDDL vs. the baseline migration
 // ---------------------------------------------------------------------------
 
-// TestBootstrapJWTSecretDDL_MatchesMigration0102 reads
-// model/migrations/sql/0102_auth_jwt_secrets.sql from disk (path resolved
+// TestBootstrapJWTSecretDDL_MatchesBaselineMigration reads
+// model/migrations/sql/0100_baseline.sql from disk (path resolved
 // relative to this test file's own location via runtime.Caller, matching
 // this repo's established integration-test convention for locating files
 // relative to source, e.g. authz_integration_test.go's migrationsDir) and
 // asserts its content contains bootstrapJWTSecretDDL verbatim -- catching
 // any future edit to one without the other.
-func TestBootstrapJWTSecretDDL_MatchesMigration0102(t *testing.T) {
+func TestBootstrapJWTSecretDDL_MatchesBaselineMigration(t *testing.T) {
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller(0) failed to resolve this test file's own path")
 	}
 	// This file lives at <repo>/api/internal/config/jwtsecret_bootstrap_test.go;
-	// the migration lives at <repo>/model/migrations/sql/0102_auth_jwt_secrets.sql.
-	migrationPath := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "model", "migrations", "sql", "0102_auth_jwt_secrets.sql")
+	// the migration lives at <repo>/model/migrations/sql/0100_baseline.sql.
+	migrationPath := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "model", "migrations", "sql", "0100_baseline.sql")
 
 	content, err := os.ReadFile(migrationPath)
 	if err != nil {

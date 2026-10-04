@@ -19,12 +19,12 @@ package config
 // inventing a new host-resolution env var, per this task's own instruction).
 //
 // Migrations: mod-users' own plain migrations (usersmigrations,
-// model/migrations) are not self-contained -- migration 0100_schema.sql
-// (bundled in the same usersmigrations.Migrate call as 0102) carries FKs
+// model/migrations) are not self-contained -- the baseline migration 0100_baseline.sql
+// (the single usersmigrations.Migrate migration, which also creates auth_jwt_secrets) carries FKs
 // into core-model tables (legal_entities, apps) that a mod-users-only
 // database never creates. Running usersmigrations.Migrate in-process
 // against a bare shadow DB therefore fails with SQLSTATE 42P01
-// (undefined_table) on 0100. This suite avoids that entirely by following
+// (undefined_table) on the baseline. This suite avoids that entirely by following
 // authz_integration_test.go's own precedent: applying the pre-built
 // composed migrations directory (core + authz + users, produced by `make -C
 // model compose`) via the goose CLI directly, exactly as that suite's
@@ -44,7 +44,7 @@ package config
 // resetJWTSecretShadowDB. The corruption-detection scenario
 // (TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret) creates
 // auth_jwt_secrets via bootstrapJWTSecretDDL directly (byte-identical to
-// migration 0102's own DDL -- see the drift-guard unit test) instead of via
+// the baseline migration's own DDL -- see the drift-guard unit test) instead of via
 // a full migration run, so it always exercises the real CHECK constraint
 // whenever the DB is reachable at all, independent of the composed-dir
 // prerequisite above.
@@ -229,7 +229,7 @@ func resetJWTSecretShadowDB(t *testing.T) {
 // + authz + users, produced by `make -C model compose`) against dsn via the
 // goose CLI directly -- the same approach authz_integration_test.go's
 // resetDB uses -- rather than calling usersmigrations.Migrate in-process.
-// Migration 0100_schema.sql (bundled in the same migration run as 0102) has
+// The baseline migration 0100_baseline.sql (which also creates auth_jwt_secrets) has
 // FKs into core-model tables (legal_entities, apps) that a mod-users-only
 // database never creates; the composed dir already includes mod-core's own
 // migrations, so those FKs resolve and this never hits SQLSTATE 42P01
@@ -295,7 +295,7 @@ func TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip(t *testing.T) {
 // asserts it succeeds (creating the table itself via its own idempotent
 // DDL), then applies the composed migrations dir against that same DB
 // afterward via goose and asserts it succeeds cleanly and records migration
-// 0102 as applied in goose_db_version_users -- proving the goose
+// the baseline (version 100) as applied in goose_db_version_users -- proving the goose
 // migration's own CREATE TABLE IF NOT EXISTS tolerates the table Load()'s
 // bootstrap already created, and the two converge.
 func TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose(t *testing.T) {
@@ -320,12 +320,12 @@ func TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWith
 	defer conn.Close(ctx)
 
 	var applied bool
-	const versionSQL = `SELECT is_applied FROM goose_db_version_users WHERE version_id = 102 ORDER BY id DESC LIMIT 1`
+	const versionSQL = `SELECT is_applied FROM goose_db_version_users WHERE version_id = 100 ORDER BY id DESC LIMIT 1`
 	if err := conn.QueryRow(ctx, versionSQL).Scan(&applied); err != nil {
-		t.Fatalf("query goose_db_version_users for migration 0102: %v", err)
+		t.Fatalf("query goose_db_version_users for baseline migration 100: %v", err)
 	}
 	if !applied {
-		t.Errorf("goose_db_version_users records migration 0102 as not applied, want applied=true")
+		t.Errorf("goose_db_version_users records baseline migration 100 as not applied, want applied=true")
 	}
 
 	var count int
@@ -405,8 +405,8 @@ func TestInteg_BootstrapJWTSecret_ConcurrentFirstBoot_SingleWinnerAcrossAllCalle
 
 // TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret resets the
 // shadow DB, creates auth_jwt_secrets via bootstrapJWTSecretDDL directly
-// (byte-identical to migration 0102's own DDL -- see
-// TestBootstrapJWTSecretDDL_MatchesMigration0102) without inserting a row,
+// (byte-identical to the baseline migration's own DDL -- see
+// TestBootstrapJWTSecretDDL_MatchesBaselineMigration) without inserting a row,
 // then attempts a raw INSERT INTO auth_jwt_secrets (id, secret) VALUES (1,
 // 'short') directly and asserts it fails with a CHECK constraint violation
 // -- proving the char_length(secret) >= 32 CHECK from Task 001 actually
