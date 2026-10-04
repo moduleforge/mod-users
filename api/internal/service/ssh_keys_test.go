@@ -508,6 +508,7 @@ func TestSSHKeyService_Revoke_UnknownKeyUUIDReturnsMaskedForbidden(t *testing.T)
 
 func TestSSHKeyService_Register_ParseAndLabelErrorsMapToDetailCodes(t *testing.T) {
 	over100 := strings.Repeat("x", 101)
+	nulLabel := "a\x00b"
 
 	tests := []struct {
 		name      string
@@ -519,6 +520,7 @@ func TestSSHKeyService_Register_ParseAndLabelErrorsMapToDetailCodes(t *testing.T
 		{name: "garbage input is invalid", line: "not an ssh key", wantField: "public_key", wantCode: "users.ssh_key_invalid"},
 		{name: "unsupported key type (dsa)", line: dsaFixtureLine, wantField: "public_key", wantCode: "users.ssh_key_type_unsupported"},
 		{name: "label too long", line: genEd25519Line(t, ""), label: &over100, wantField: "label", wantCode: "users.ssh_key_label_too_long"},
+		{name: "label with NUL is invalid", line: genEd25519Line(t, ""), label: &nulLabel, wantField: "label", wantCode: "users.ssh_key_label_invalid"},
 	}
 
 	for _, tc := range tests {

@@ -293,3 +293,155 @@ describe('auth.verifyEmail / requestEmailCode purpose', () => {
     localStorage.clear();
   });
 });
+
+// ─── SSH keys / step-up client methods ───────────────────────────────────────
+
+interface RecordedCall {
+  url: string;
+  method: string | undefined;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+function recordingFetch(
+  body: unknown,
+  status: number,
+): { calls: RecordedCall[] } {
+  const calls: RecordedCall[] = [];
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({
+      url,
+      method: init?.method,
+      headers: { ...(init?.headers as Record<string, string>) },
+      body: init?.body,
+    });
+    return status === 204
+      ? new Response(null, { status })
+      : new Response(JSON.stringify(body), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        });
+  }) as unknown as typeof fetch;
+  return { calls };
+}
+
+describe('sshKeys / stepUp client methods', () => {
+  test('list() sends no query string without params and adds ?limit=200', async () => {
+    const rec = recordingFetch({ items: [], total: 0 }, 200);
+    await client.sshKeys.list();
+    await client.sshKeys.list({ limit: 200 });
+    expect(rec.calls[0].url).toBe('http://localhost:8080/v1/self/ssh-keys');
+    expect(rec.calls[0].method).toBeUndefined();
+    expect(rec.calls[1].url).toBe('http://localhost:8080/v1/self/ssh-keys?limit=200');
+  });
+
+  test('register sends no step-up header by default or for an empty token', async () => {
+    const rec = recordingFetch({}, 201);
+    const data = { public_key: 'ssh-ed25519 AAAA', label: 'laptop' };
+    await client.sshKeys.register(data);
+    await client.sshKeys.register(data, { stepUpToken: '' });
+    for (const call of rec.calls) {
+      expect(call.method).toBe('POST');
+      expect(call.headers['X-Step-Up-Token']).toBeUndefined();
+      expect(call.body).toBe(JSON.stringify(data));
+    }
+  });
+
+  test('register sends X-Step-Up-Token when a token is supplied', async () => {
+    const rec = recordingFetch({}, 201);
+    const data = { public_key: 'ssh-ed25519 AAAA' };
+    await client.sshKeys.register(data, { stepUpToken: 't' });
+    expect(rec.calls[0].headers['X-Step-Up-Token']).toBe('t');
+    expect(rec.calls[0].body).toBe(JSON.stringify(data));
+  });
+
+  test('revoke URL-encodes the key uuid, sends the step-up header, and resolves undefined on 204', async () => {
+    const rec = recordingFetch(null, 204);
+    const result = await client.sshKeys.revoke('a/b c', { stepUpToken: 'tok' });
+    expect(result).toBeUndefined();
+    expect(rec.calls[0].url).toBe('http://localhost:8080/v1/self/ssh-keys/a%2Fb%20c');
+    expect(rec.calls[0].method).toBe('DELETE');
+    expect(rec.calls[0].headers['X-Step-Up-Token']).toBe('tok');
+  });
+
+  test('a 409 step-up action on register rejects with ApiActionRequiredError', async () => {
+    stubFetch(
+      {
+        action: {
+          code: 'users.step_up_required',
+          message: 'Step-up required.',
+          path: '/step-up',
+        },
+      },
+      409,
+    );
+    const err = (await client.sshKeys
+      .register({ public_key: 'k' })
+      .catch((e: unknown) => e)) as ApiActionRequiredError;
+    expect(err).toBeInstanceOf(ApiActionRequiredError);
+    expect(err.code).toBe('users.step_up_required');
+    expect(err.path).toBe('/step-up');
+    expect(err.status).toBe(409);
+  });
+
+  test('a 403 email_unverified action on revoke rejects with ApiActionRequiredError', async () => {
+    stubFetch(
+      {
+        action: {
+          code: 'users.email_unverified',
+          message: 'Verify your email.',
+          path: '/verify-email',
+        },
+      },
+      403,
+    );
+    const err = (await client.sshKeys
+      .revoke('u1')
+      .catch((e: unknown) => e)) as ApiActionRequiredError;
+    expect(err).toBeInstanceOf(ApiActionRequiredError);
+    expect(err.code).toBe('users.email_unverified');
+    expect(err.status).toBe(403);
+  });
+
+  test('a 409 ssh_key_in_use conflict rejects with ApiRequestError carrying details', async () => {
+    const details = [
+      { field: 'public_key', code: 'users.ssh_key_in_use', message: 'Key already in use.' },
+    ];
+    stubFetch({ error: { code: 'conflict', message: 'Conflict', details } }, 409);
+    const err = (await client.sshKeys
+      .register({ public_key: 'k' })
+      .catch((e: unknown) => e)) as ApiRequestError;
+    expect(err).toBeInstanceOf(ApiRequestError);
+    expect(err.code).toBe('conflict');
+    expect(err.status).toBe(409);
+    expect(err.details).toEqual(details);
+  });
+
+  test('stepUp.request() POSTs and resolves undefined on 204', async () => {
+    const rec = recordingFetch(null, 204);
+    expect(await client.stepUp.request()).toBeUndefined();
+    expect(rec.calls[0].url).toBe('http://localhost:8080/v1/self/credential/step-up');
+    expect(rec.calls[0].method).toBe('POST');
+  });
+
+  test('stepUp.verify 401 rejects unauthenticated without clearing the session or redirecting', async () => {
+    const rec = recordingFetch({ error: { code: 'unauthenticated', message: 'bad code' } }, 401);
+    localStorage.setItem('auth_token', 'session-token');
+    const hrefBefore = window.location.href;
+    try {
+      const err = (await client.stepUp
+        .verify('000000')
+        .catch((e: unknown) => e)) as ApiRequestError;
+      expect(err).toBeInstanceOf(ApiRequestError);
+      expect(err.code).toBe('unauthenticated');
+      expect(localStorage.getItem('auth_token')).toBe('session-token');
+      expect(window.location.href).toBe(hrefBefore);
+      expect(rec.calls[0].url).toBe(
+        'http://localhost:8080/v1/self/credential/step-up/verify',
+      );
+      expect(rec.calls[0].body).toBe(JSON.stringify({ code: '000000' }));
+    } finally {
+      localStorage.removeItem('auth_token');
+    }
+  });
+});

@@ -81,7 +81,7 @@ gui/
   .ladle/               # Ladle component workbench config (styles.css is the Tailwind entry, workbench-only)
   src/
     index.ts            # package entry point — re-exports all public components
-    components/         # React UI components (auth flows, profile, admin views)
+    components/         # React UI components (auth flows, account credentials, profile, admin views)
       verify-email-page.tsx          # /verify-email standard screen (emailed-code flow)
       oidc-config-page.tsx           # /oidc-config standard screen (setup-token and admin modes)
       oidc-provider-add-modal.tsx    # OIDC provider add dialog used by oidc-config-page

@@ -29,6 +29,11 @@ export type {
   AppMembersResponse,
   CreateAppRequest,
   AddAppMemberRequest,
+  SSHKey,
+  SSHKeyListResponse,
+  RegisterSSHKeyRequest,
+  StepUpVerifyResponse,
+  StepUpOptions,
 } from './lib/api';
 
 // ─── Runtime configuration ───────────────────────────────────────────────────
@@ -112,6 +117,9 @@ export { OidcConfigPage } from './components/oidc-config-page';
 export type { OidcConfigPageProps } from './components/oidc-config-page';
 export { OidcSetupGate } from './components/oidc-setup-gate';
 export type { OidcSetupGateProps } from './components/oidc-setup-gate';
+
+export { SSHKeysPanel } from './components/ssh-keys-panel';
+export type { SSHKeysPanelProps } from './components/ssh-keys-panel';
 
 // ─── Standard frontend routes ─────────────────────────────────────────────────
 export { USERS_GUI_ROUTES } from './lib/routes';
