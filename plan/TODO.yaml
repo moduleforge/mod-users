@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 1
       slug: ssh-keys-panel-and-hardening
@@ -76,4 +76,17 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
-      tasks: []
+      security_review: required
+      tasks:
+        - number: 1
+          slug: reject-all-bidi-control-label-chars
+          title: Reject All Unicode Bidi Control Characters in SSH Key Labels
+          path: phase-05-remediation-01/001-reject-all-bidi-control-label-chars.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - sQRd
+          git:
+            branch: null
+            commit: []
+            merge: null
