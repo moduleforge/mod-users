@@ -147,6 +147,7 @@ phases:
     - number: 4
       slug: remediation-01
       title: Remediation Round 1
+      diff_base: 4dedaf0bb919aceb51ff5fd559f842bc613f368a
       kind: remediation
       security_review: required
       tasks:
