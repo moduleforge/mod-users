@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 1
       slug: smtp-sender-hardening
@@ -26,4 +26,16 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: expose-sender-api-in-public-facade
+          title: Expose Message, MessageSender and Sender Options in the Public Email Facade
+          path: phase-02-remediation-01/001-expose-sender-api-in-public-facade.md
+          done: false
+          tier: haiku-med
+          findings:
+            - XFjp
+          git:
+            branch: null
+            commit: []
+            merge: null
