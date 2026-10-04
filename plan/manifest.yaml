@@ -2,3 +2,6 @@ version: 1
 plans:
     - slug: users-gui-integration-seams
       status: working
+      wave:
+        slug: home-app-switcher
+        leadProject: app-mfmanager
