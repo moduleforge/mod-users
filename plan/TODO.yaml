@@ -138,16 +138,19 @@ phases:
     - number: 3
       slug: doc-updates
       title: Documentation Updates
+      diff_base: 5bb189ff7eee8884facbdc9c4169c4b6dc6db8e8
       tasks:
         - number: 1
           slug: update-architecture-docs
           title: Update Architecture Docs
           path: phase-03-doc-updates/001-update-architecture-docs.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Updated four docs to reflect the users-gui seams (runtime config and 401 handling, standard screens and backend-to-path contract, router-agnostic spec wording, new file layout). All detail links to gui/README.md instead of duplicating it.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-03-001
+            commit:
+                - ec02502
             merge: null
     - number: 4
       slug: remediation-01
