@@ -6,6 +6,7 @@ import { ErrorMessage } from './error-message';
 import { useAuth } from '../lib/auth-context';
 import { ApiRequestError, fetchProviders, type OIDCProvider } from '../lib/api';
 import { getApiBaseUrl } from '../lib/config';
+import { readReturnPath } from '../lib/return-path';
 
 // Inline brand glyphs keep the bundle small and avoid pulling in an icon
 // package for two logos. Colors are the brand-correct Google/Microsoft marks.
@@ -55,8 +56,15 @@ function providerIcon(id: string) {
 }
 
 export interface LoginFormProps {
-  /** Called after a successful login. */
-  onSuccess?: () => void;
+  /**
+   * Called after a successful login with the effective return path (the
+   * `returnPath` prop, else the validated `?<unauthenticatedReturnParam>=`
+   * value, else `null`). The value is already validated by
+   * `isSafeReturnPath`, so apps can navigate with one line:
+   * `onSuccess={(r) => router.replace(r ?? '/')}`. Callbacks that declare no
+   * parameter keep working unchanged.
+   */
+  onSuccess?: (returnPath: string | null) => void;
   /**
    * Initial error message to display — e.g. surfaced from an OIDC callback
    * redirect's `?error=` query param by the consuming app. This component
@@ -67,8 +75,11 @@ export interface LoginFormProps {
   /**
    * Site-relative path echoed back once the OIDC provider round trip
    * completes; passed as the `return` query param on the OIDC start URL.
-   * Defaults to `'/'`. It feeds only that OIDC `start` URL — navigation after
-   * a local (email/password) login is the app's job via `onSuccess`.
+   * An explicit value always wins. When omitted, falls back to the validated
+   * `?<unauthenticatedReturnParam>=` query value (only when that config is
+   * set; see `readReturnPath`), else `'/'` for the OIDC start URL. The same
+   * effective value is handed to `onSuccess` (`null` when none) —
+   * navigation after a local (email/password) login is the app's job.
    */
   returnPath?: string;
   /**
@@ -90,7 +101,7 @@ export interface LoginFormProps {
 export function LoginForm({
   onSuccess,
   initialError = null,
-  returnPath = '/',
+  returnPath,
   idPrefix = 'login',
   onForgotPassword,
 }: LoginFormProps) {
@@ -115,11 +126,12 @@ export function LoginForm({
   }, []);
 
   function handleProviderClick(providerId: string) {
+    const effectiveReturnPath = returnPath ?? readReturnPath();
     // Full page navigation — NOT a fetch. The API responds with a 302 to the
     // provider's authorization endpoint, and the `return` param is echoed
     // back through the OAuth round-trip.
     window.location.assign(
-      `${getApiBaseUrl()}/v1/auth/oidc/${encodeURIComponent(providerId)}/start?return=${encodeURIComponent(returnPath)}`,
+      `${getApiBaseUrl()}/v1/auth/oidc/${encodeURIComponent(providerId)}/start?return=${encodeURIComponent(effectiveReturnPath ?? '/')}`,
     );
   }
 
@@ -129,7 +141,7 @@ export function LoginForm({
     setIsSubmitting(true);
     try {
       await login(email, password);
-      onSuccess?.();
+      onSuccess?.(returnPath ?? readReturnPath());
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setError(err.message);
