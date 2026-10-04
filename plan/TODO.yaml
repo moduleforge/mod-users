@@ -1,6 +1,9 @@
 slug: smtp-sender-replyto-timeout
 version: 1
 title: ""
+remediation:
+    rounds: 1
+    tasks_added: 0
 phases:
     - number: 1
       slug: smtp-sender-hardening
@@ -19,3 +22,8 @@ phases:
             commit:
                 - 80afea3
             merge: 1de14a3076d6d9189a6c7c8b2340aea828201ade
+    - number: 2
+      slug: remediation-01
+      title: Remediation Round 1
+      kind: remediation
+      tasks: []
