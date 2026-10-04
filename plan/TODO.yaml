@@ -18,7 +18,7 @@ phases:
             branch: plan/users-gui-integration-seams-01-001
             commit:
                 - ac29af9
-            merge: null
+            merge: 6727e8e24a6dbd3602f8f36b3031e113e362f354
         - number: 2
           slug: unauthenticated-handler
           title: Configurable Unauthenticated Handler With Return Path and Logout Target
