@@ -13,10 +13,10 @@ items:
       id: HNPY
       date: "2026-10-04"
       tags:
-        - type:ambiguity
+        - type:documentation
+        - priority:low
         - plan/phase:remediation-01
-        - priority:unspecified
-        - effort:unspecified
+        - effort:small
       text: gui/src/components/auth-page.tsx onAuthenticated doc (lines 23-30) still says 'Already validated by isSafeReturnPath', which is inaccurate when an explicit returnPath prop is supplied (it is echoed as supplied; only the readReturnPath fallback is validated). Same inaccuracy just corrected in login-form.tsx; correct the AuthPage wording to match (comments only).
 closed:
     - id: Y7W0
