@@ -565,3 +565,13 @@ items:
         - plan/phase:ssh-keys-panel-and-hardening
         - plan/slug:mfgit-upstream-modules
       text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] No flow/policy.yaml exists in this repo, so the link-chain check''s "expected-orphan" patterns are not declared/excused: every one of the 23 files under plan/ (plan/overview.md, every plan/plan-summary-*.md and plan/summary*.md, and the current phase-01/phase-02 task docs) is unreachable from README.md, and several of those plan-summary docs also carry dangling forward-links into historical phase directories removed after earlier plans completed (e.g. plan/plan-summary-ssh-public-keys.md references phase-01-ssh-public-keys/* and notes/ssh-key-design.md, neither of which exist; similar dangling links in plan-summary-catalog-readiness.md, summary-gui-lib-conversion.md, summary.md, and others). Recommend declaring plan/ in flow/policy.yaml''s link_check.excluded_dirs (one entry resolves all of these) rather than leaving them as silent, undeclared orphans.'
+    - title: mf-standards submodule links dangle
+      id: hlTS
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:medium
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/mf-standards is a registered but uninitialized git submodule (directory present, zero files) in this checkout. Several links in the README-reachable chain dangle into it: README.md''s own Installation section links ./docs/mf-standards/building-applications.md#first-time-setup (the install instructions'' own forward-link dead-ends); AGENTS.md links ./docs/mf-standards/building-common.md#building-inside-a-task-worktree; docs/architecture.md links ./mf-standards/architecture.md (twice), ./mf-standards/architecture/entity-typing.md, and ./mf-standards/architecture/db-considerations.md; docs/mod-users-spec.md links ./mf-standards/architecture.md, ./mf-standards/architecture/api-response-design.md, and ./mf-standards/architecture/authorization-design.md. Recommend checking in/populating the docs-mf-standards submodule before publication, or replacing these forward-links with concrete local steps until the submodule is live.'
