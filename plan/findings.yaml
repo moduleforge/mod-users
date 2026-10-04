@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'ENVIRONMENT: mod-core/gui/node_modules contai'
-      id: ZNOd
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - priority:medium
-        - plan/phase:gui-seams
-        - effort:medium
-      text: 'ENVIRONMENT: mod-core/gui/node_modules contains dangling relative symlinks (e.g. react, tsup -> ../../../users-gui-integration-seams-01-001/node_modules/.bun/...) written by the task worktree provisioning install (known worktree-symlink gap in AGENTS.md). Without a fix, bun test in later mod-users worktrees fails with ''Cannot find module react/jsx-runtime from mod-core/gui/dist/index.mjs''. Agent worked around it with a temporary out-of-tree symlink (since removed). Repair mod-core/gui/node_modules (e.g. bun install in mod-core''s real checkout) or provide the symlink for later tasks; may affect other worktrees sharing mod-core/gui/node_modules.'
     - title: gui/src/components/auth-page.tsx onAuthentica
       id: HNPY
       date: "2026-10-04"
@@ -63,4 +54,9 @@ closed:
       title: Base URL fallbacks and redirect hardening
       disposition: fixed
       ref: phase-04-remediation-01/001-harden-unauthenticated-handler-config.md
+      date: "2026-10-04"
+    - id: ZNOd
+      title: 'ENVIRONMENT: mod-core/gui/node_modules contai'
+      disposition: promoted
+      ref: ZNOd
       date: "2026-10-04"
