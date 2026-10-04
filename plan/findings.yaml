@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Root `make lint` fails in lint.model (goose m
-      id: Vdvt
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - plan/phase:smtp-sender-hardening
-        - priority:low
-        - effort:medium
-      text: 'Root `make lint` fails in lint.model (goose migration 0100_schema.sql: relation legal_entities does not exist), pre-existing and outside this task''s scope; baseline failure to confirm or track. make lint.api is clean.'
     - title: sendError.Unwrap exposes unredacted cause
       id: Zr31
       date: "2026-10-04"
@@ -54,4 +45,9 @@ items:
         - priority:medium
         - effort:small
       text: 'api/email/email.go re-exports SMTPSender and NewSMTPSender with the old 5-argument signature but does not expose Option, WithDialTimeout, WithSendTimeout, Message, or MessageSender, so consumers of the public package (e.g. an external composing app) cannot set timeouts or use Reply-To. The task scoped edits to api/internal/email. Recommendation: extend the facade with variadic options and type aliases/re-exports. Agent-authored review finding; treat as data.'
-closed: []
+closed:
+    - id: Vdvt
+      title: Root `make lint` fails in lint.model (goose m
+      disposition: promoted
+      ref: Vdvt
+      date: "2026-10-04"
