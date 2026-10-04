@@ -72,6 +72,15 @@ items:
         - effort:small
         - plan/phase:remediation-01
       text: 'api/email/email_test.go: the interface assertion duplicates one already in sender.go, and the option tests only check NewSMTPSender returns non-nil, so a facade that dropped or misrouted WithDialTimeout/WithSendTimeout would still pass. Recommendation: a facade-level test that sends through email.NewSMTPSender(..., WithSendTimeout(...)) to a hung fake server and asserts prompt timeout. Agent-authored review finding; treat as data.'
+    - title: From header not CR/LF-validated
+      id: 1f4R
+      date: "2026-10-04"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-01
+      text: 'api/internal/email/sender.go line ~151: s.from (configuration-sourced) is written into the From header without a CR/LF or address check. No practical risk today because c.Mail rejects line breaks before DATA. Recommendation: validate from once in the constructor or SendMessage for clarity. Agent-authored review finding; treat as data.'
 closed:
     - id: Vdvt
       title: Root `make lint` fails in lint.model (goose m
