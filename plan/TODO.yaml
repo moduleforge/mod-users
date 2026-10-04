@@ -60,3 +60,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: verify-consumption-and-handoff
+          title: Verify Built Package Consumption and Finalize Wave-2 Hand-off
+          path: phase-02-consumer-docs-and-handoff/002-verify-consumption-and-handoff.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
