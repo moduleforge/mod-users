@@ -20,11 +20,19 @@ const maxLabelRawBytes = 4 * maxLabelRunes
 
 // isDisallowedLabelRune reports whether r may not appear in a stored label:
 // any control character (unicode.IsControl, which covers NUL, C0, DEL, and
-// C1), or a bidi formatting character (U+202A through U+202E embeddings and
-// overrides, U+2066 through U+2069 isolates) that could spoof how the label
-// displays.
+// C1), or a Unicode Bidi_Control character — U+202A through U+202E
+// embeddings and overrides, U+2066 through U+2069 isolates, U+061C (ARABIC
+// LETTER MARK), U+200E (LEFT-TO-RIGHT MARK), and U+200F (RIGHT-TO-LEFT
+// MARK) — that could spoof how the label displays. This covers the whole
+// Unicode Bidi_Control set; it deliberately excludes zero-width characters
+// (U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 WORD JOINER), which are not
+// bidi controls and are needed for legitimate emoji sequences and Persian
+// and Indic scripts.
 func isDisallowedLabelRune(r rune) bool {
 	return unicode.IsControl(r) ||
+		r == 0x061C ||
+		r == 0x200E ||
+		r == 0x200F ||
 		(r >= 0x202A && r <= 0x202E) ||
 		(r >= 0x2066 && r <= 0x2069)
 }
