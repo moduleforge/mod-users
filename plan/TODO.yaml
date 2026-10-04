@@ -13,6 +13,7 @@ phases:
           path: phase-01-ssh-keys-panel-and-hardening/001-ssh-key-label-hardening.md
           done: false
           tier: sonnet-med
+          digest: Added control and bidi character rejection for supplied SSH key labels (stripping for comment-derived defaults), with the new users.ssh_key_label_invalid detail code, OpenAPI docs and tests. No surprises.
           git:
             branch: null
             commit: []
