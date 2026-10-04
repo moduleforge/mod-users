@@ -24,3 +24,11 @@ This remediation task closes findings `3oGr` and `uNF5` from the phase-02 gate's
 ## References
 
 - Findings `3oGr` and `uNF5` in this plan's `plan/findings.yaml`.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-10-04
+- **Summary:** Reworded the `SSHKeysPanel` sentence in `docs/architecture.md`'s GUI component library section: (1) replaced "a sixth component" with "an additional component", matching the task's suggested wording; (2) replaced the "optional `onActionRequired` callback ... with an inline fallback alert when none is supplied" phrasing with wording stating the panel always shows an inline alert for every non-step-up action-required response and also invokes the optional `onActionRequired` callback when one is supplied, matching `handleActionRequired` in `gui/src/components/ssh-keys-panel.tsx` (unconditional `setNotice(...)` followed by `onActionRequiredRef.current?.(error)`).
+- **Validation:** All three checks passed — `grep -n "fallback alert when none is supplied" docs/architecture.md` (no hits), `grep -n "sixth component" docs/architecture.md` (no hits), `git diff --stat` excluding `plan/` touches only `docs/architecture.md`.
+- **Affected files:** `docs/architecture.md`.
