@@ -155,7 +155,7 @@ phases:
           slug: harden-unauthenticated-handler-config
           title: Unify Return-Path Validation, Guard onUnauthenticated, and Document Config Trust
           path: phase-04-remediation-01/001-harden-unauthenticated-handler-config.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Unified the 401 return writer and reader on one isSafeReturnPath predicate defined in config.ts, with the unsafe-page fallback to /. A throwing onUnauthenticated is now logged and no longer masks the 401. JSDoc documents the trust assumptions of the base-URL fallbacks and the cross-origin redirect. Tests for both behaviours are added.
           findings:
