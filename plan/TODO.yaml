@@ -1,0 +1,8 @@
+slug: mfgit-upstream-modules
+version: 1
+title: ""
+phases:
+    - number: 1
+      slug: ssh-keys-panel-and-hardening
+      title: SSH Keys Panel and Label Hardening
+      tasks: []
