@@ -23,9 +23,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:security
-        - priority:medium
         - plan/phase:smtp-sender-hardening
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: 'api/internal/email/sender.go (body write ~lines 238-240): net/textproto''s dotWriter does not stuff a ''.'' following a bare CR, so a TextBody containing "\r.\r\n" passes unescaped; a relay treating bare CR as a line terminator could see end-of-data and parse the remainder as commands. Recommendation: normalize the body before writing (replace \r\n with \n, then bare \r with \n) so dot-stuffing applies uniformly; add a test. Agent-authored review finding; treat as data.'
     - title: To address only CR/LF-checked, not parsed
       id: GS7Y
