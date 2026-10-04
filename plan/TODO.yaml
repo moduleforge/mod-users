@@ -85,6 +85,7 @@ phases:
           path: phase-05-remediation-01/001-reject-all-bidi-control-label-chars.md
           done: false
           tier: sonnet-low
+          digest: Extended the SSH key label's bidi-rejection filter to cover Unicode's full Bidi_Control set (added U+061C, U+200E, U+200F) per the plan's stated scope, closing finding sQRd. Zero-width characters stayed allowed per the task's explicit carve-out. Table-driven tests cover all three new code points plus a ZWJ regression guard; all tests pass; diff scope matches exactly the two files the task specified.
           findings:
             - sQRd
           git:
