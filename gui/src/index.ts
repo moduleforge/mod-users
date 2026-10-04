@@ -12,6 +12,7 @@ export type {
   LoginResponse,
   OIDCProvider,
   RegisterRequest,
+  EmailCodePurpose,
   EmailCodeRequest,
   EmailCodeVerifyRequest,
   ForgotPasswordRequest,
@@ -102,6 +103,12 @@ export { ForgotPasswordPage } from './components/forgot-password-page';
 export type { ForgotPasswordPageProps } from './components/forgot-password-page';
 export { ResetPasswordPage } from './components/reset-password-page';
 export type { ResetPasswordPageProps } from './components/reset-password-page';
+export { VerifyEmailPage } from './components/verify-email-page';
+export type { VerifyEmailPageProps } from './components/verify-email-page';
+
+// ─── Standard frontend routes ─────────────────────────────────────────────────
+export { USERS_GUI_ROUTES } from './lib/routes';
+export type { UsersGuiRoutes } from './lib/routes';
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger } from './components/ui/dialog';
