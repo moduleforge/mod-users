@@ -26,3 +26,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: ssh-keys-panel
+          title: SSH Keys Panel
+          path: phase-01-ssh-keys-panel-and-hardening/003-ssh-keys-panel.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
