@@ -59,9 +59,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:documentation
-        - priority:low
-        - effort:unspecified
         - plan/phase:ssh-keys-panel-and-hardening
+        - priority:low
+        - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] No flow/policy.yaml exists in this repo, so the link-chain check''s "expected-orphan" patterns are not declared/excused: every one of the 23 files under plan/ (plan/overview.md, every plan/plan-summary-*.md and plan/summary*.md, and the current phase-01/phase-02 task docs) is unreachable from README.md, and several of those plan-summary docs also carry dangling forward-links into historical phase directories removed after earlier plans completed (e.g. plan/plan-summary-ssh-public-keys.md references phase-01-ssh-public-keys/* and notes/ssh-key-design.md, neither of which exist; similar dangling links in plan-summary-catalog-readiness.md, summary-gui-lib-conversion.md, summary.md, and others). Recommend declaring plan/ in flow/policy.yaml''s link_check.excluded_dirs (one entry resolves all of these) rather than leaving them as silent, undeclared orphans.'
     - title: mf-standards submodule links dangle
       id: hlTS
