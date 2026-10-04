@@ -46,7 +46,8 @@ phases:
           digest: Documented the mod_users privilege sets (read-only vs write) and the public-scoped tooling caveat in the architecture doc's Data model and D1. Aligned ssh-keys.md D1 with them. The audit found nothing to fix.
           git:
             branch: plan/mfgit-upstream-modules-01-004
-            commit: []
+            commit:
+                - 1ebb059
             merge: null
     - number: 2
       slug: doc-updates
