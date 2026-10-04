@@ -62,6 +62,15 @@ items:
         - plan/phase:gui-seams
         - effort:unspecified
       text: 'gui/src/lib/auth-context.tsx: (1) the isCurrentPath guard (~lines 19-39, 88-95, 128, 153, 194) compares err.path to window.location.pathname by exact equality, so an app under a basePath or with trailing-slash URLs (pathname `/app/verify-email/` vs err.path `/verify-email`) never matches and the provider navigates to the page it is already on, the redundant navigation the guard was added to prevent. Normalize a trailing slash before comparing, consider a basePath-suffix match, or accept a `currentPath` prop as OidcSetupGate already does. (2) An invalid `loginPath` is validated and logged with console.error during render (~lines 92-99), repeating on every render and noisy under StrictMode; resolve it with useMemo/ref and log once from an effect.'
+    - title: LoginForm doc drift; ClientLayout loginPath
+      id: uOkV
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:low
+        - plan/phase:gui-seams
+        - effort:unspecified
+      text: (1) gui/src/components/login-form.tsx onSuccess doc (~lines 58-67, 141-145) says the value is already validated by isSafeReturnPath, but when the `returnPath` prop is supplied it is echoed unvalidated (`returnPath ?? readReturnPath()`); only the query-param fallback is validated. AuthPage's doc admits the echo, LoginForm's does not. Reword the doc, or validate the prop (which changes the documented explicit-value-wins contract and needs a decision). (2) gui/src/components/client-layout.tsx (~lines 36-58) builds `<AuthProvider onNavigate={onNavigate}>` with no way to pass `loginPath`, and gui/src/components/sidebar-nav.tsx (~lines 88-91) hard-codes `/auth/login`, so an app using ClientLayout with a custom login route cannot make provider logout/401 navigation or the sidebar link honour it. Add an optional `loginPath` prop to ClientLayout forwarded to AuthProvider and derive the sidebar login href from it.
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
