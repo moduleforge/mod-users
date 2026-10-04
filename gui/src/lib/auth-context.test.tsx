@@ -394,3 +394,93 @@ describe('custom tokenStorageKey', () => {
     expect(localStorage.getItem(TOKEN_KEY)).toBe('default-token');
   });
 });
+
+describe('action-required navigation is skipped when already on the target path', () => {
+  const OIDC_BODY = {
+    action: {
+      code: 'users.oidc_not_confirmed',
+      message: 'OIDC configuration must be confirmed.',
+      path: '/oidc-config',
+    },
+  };
+
+  // happy-dom starts at about:blank, where history.replaceState cannot set a
+  // path; point it at a real origin for these tests and restore afterwards.
+  const happyDOM = (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM;
+  function goTo(path: string): void {
+    happyDOM.setURL(`http://localhost${path}`);
+  }
+
+  afterEach(() => {
+    happyDOM.setURL('about:blank');
+  });
+
+  test('mount effect does not navigate to the page it is already on', async () => {
+    goTo('/oidc-config');
+    localStorage.setItem(TOKEN_KEY, 'stored-token');
+    stubFetch(OIDC_BODY, 503);
+    const navigateCalls: string[] = [];
+
+    render(
+      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+
+    expect(navigateCalls).toEqual([]);
+    expect(localStorage.getItem(TOKEN_KEY)).toBe('stored-token');
+  });
+
+  test('mount effect still navigates from any other path', async () => {
+    goTo('/dashboard');
+    localStorage.setItem(TOKEN_KEY, 'stored-token');
+    stubFetch(OIDC_BODY, 503);
+    const navigateCalls: string[] = [];
+
+    render(
+      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+
+    expect(navigateCalls).toEqual(['/oidc-config']);
+  });
+
+  test('refreshUser does not navigate to the page it is already on', async () => {
+    goTo('/oidc-config');
+    const navigateCalls: string[] = [];
+    render(
+      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
+        <Probe trigger="refresh" />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+
+    stubFetch(OIDC_BODY, 503);
+    fireEvent.click(screen.getByText('refresh'));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(navigateCalls).toEqual([]);
+  });
+
+  test('completeExternalLogin does not navigate to the page it is already on', async () => {
+    goTo('/oidc-config');
+    const navigateCalls: string[] = [];
+    render(
+      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
+        <Probe trigger="completeExternalLogin" />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+
+    stubFetch(OIDC_BODY, 503);
+    fireEvent.click(screen.getByText('complete'));
+    await waitFor(() => expect(screen.getByTestId('complete-settled').textContent).toBe('true'));
+
+    expect(navigateCalls).toEqual([]);
+    expect(screen.getByTestId('complete-error').textContent).toBe('none');
+    expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token');
+  });
+});

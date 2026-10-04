@@ -28,6 +28,16 @@ function removeToken(): void {
   localStorage.removeItem(getTokenStorageKey());
 }
 
+/**
+ * True when the browser is already on `path`. `GET /v1/self` itself returns
+ * an action-required envelope while e.g. OIDC is unconfirmed, so a provider
+ * mounted above the target page (`/oidc-config`) must not navigate to the
+ * page it is already on.
+ */
+function isCurrentPath(path: string): boolean {
+  return typeof window !== 'undefined' && window.location.pathname === path;
+}
+
 interface AuthContextValue {
   token: string | null;
   user: UserAccountSelf | null;
@@ -115,7 +125,7 @@ export function AuthProvider({
         // Action-required: navigate, don't alarm. The session stays intact —
         // do not call logout() — the user just needs to complete an
         // out-of-band step (e.g. email verification) before continuing.
-        navigate(err.path);
+        if (!isCurrentPath(err.path)) navigate(err.path);
       } else if (err instanceof ApiRequestError && err.status === 401) {
         logout();
       }
@@ -140,7 +150,7 @@ export function AuthProvider({
           // Action-required: navigate, don't alarm. Unlike a 401, this keeps
           // the stored token/session intact and routes the already-
           // authenticated user to finish an out-of-band step.
-          navigate(err.path);
+          if (!isCurrentPath(err.path)) navigate(err.path);
           return;
         }
         removeToken();
@@ -181,7 +191,7 @@ export function AuthProvider({
           // token already persisted to localStorage, and do not rethrow so
           // the caller doesn't render this as an error.
           setToken(newToken);
-          navigate(err.path);
+          if (!isCurrentPath(err.path)) navigate(err.path);
           return;
         }
         // Bad/expired token or API failure: don't leave a stale token behind.
