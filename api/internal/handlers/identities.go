@@ -739,7 +739,7 @@ func newOIDCStateCookie(value string, maxAge int, r *http.Request) *http.Cookie 
 	return &http.Cookie{
 		Name:     "oidc_state",
 		Value:    value,
-		Path:     "/v1/auth/oidc/",
+		Path:     localauth.OIDCStateCookiePath(r),
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   secure,

@@ -34,10 +34,6 @@ func normalizeProviderID(r *http.Request) string {
 // token between /start and /callback.
 const stateCookieName = "oidc_state"
 
-// stateCookiePath scopes the cookie to the OIDC callback route tree so it
-// isn't broadcast on unrelated requests.
-const stateCookiePath = "/v1/auth/oidc/"
-
 // stateCookieMaxAge mirrors the TTL baked into the state token itself.
 const stateCookieMaxAge = 300
 
@@ -511,7 +507,7 @@ func (h *OIDCHandler) newStateCookie(value string, maxAge int, r *http.Request) 
 	return &http.Cookie{
 		Name:     stateCookieName,
 		Value:    value,
-		Path:     stateCookiePath,
+		Path:     localauth.OIDCStateCookiePath(r),
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   requestIsHTTPS(r),
