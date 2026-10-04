@@ -1,13 +1,5 @@
 version: 2
 items:
-    - title: Expose email_verified_at on GET /v1/self
-      id: QCRD
-      date: "2026-10-04"
-      tags:
-        - type:enhancement
-        - priority:low
-        - effort:medium
-      text: UserAccountSelf (gui/src/lib/api.ts) has no email_verified_at, so VerifyEmailPage cannot tell that the signed-in user is already verified and cannot skip itself or redirect onward. Backend change (self response + openapi + GUI type) outside this plan.
     - title: EmailCodePage wrong code hits 401 redirect
       id: ljyL
       date: "2026-10-04"
@@ -21,4 +13,9 @@ closed:
       title: Standard /step-up page not implemented
       disposition: promoted
       ref: Y7W0
+      date: "2026-10-04"
+    - id: QCRD
+      title: Expose email_verified_at on GET /v1/self
+      disposition: promoted
+      ref: QCRD
       date: "2026-10-04"
