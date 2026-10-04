@@ -14,6 +14,6 @@ phases:
           tier: sonnet-low
           digest: Replaced flow ignore lines with single .flow/ entry and untracked 6 .flow paths.
           git:
-            branch: null
+            branch: plan/migrate-moduleforge-18-001
             commit: []
             merge: null
