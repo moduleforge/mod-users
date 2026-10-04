@@ -23,7 +23,7 @@ phases:
           slug: ssh-keys-client-methods
           title: SSH Keys Client Methods
           path: phase-01-ssh-keys-panel-and-hardening/002-ssh-keys-client-methods.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Added typed sshKeys and stepUp client groups, the SSH-key types, and the five type exports. All changes are additive hunks in api.ts that avoid the lines the seams plan rewrites. stepUp.verify uses skipAuthRedirect: true, with a regression test. Tests pass (38/38) only when core-gui resolves, which it does not in the worktree itself.'
           git:
