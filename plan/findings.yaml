@@ -9,6 +9,15 @@ items:
         - effort:unspecified
         - plan/phase:doc-updates
       text: '[doc-updates gate correctness-lens finding correctness-001, minor] docs/architecture.md line 150''s new sentence says SSHKeysPanel delegates non-step-up action-required responses to an optional onActionRequired callback "with an inline fallback alert when none is supplied." In gui/src/components/ssh-keys-panel.tsx, handleActionRequired always calls setNotice(...) and also invokes onActionRequiredRef.current?.(error) when present -- the inline alert renders every time regardless of whether a host supplies the callback, not only as a fallback. A host supplying onActionRequired would be surprised to see both its own handling and the panel''s alert fire together. Recommend rewording to state the alert always shows in addition to the callback, not only as a fallback.'
+    - title: '"sixth component" ordinal unclear'
+      id: uNF5
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:unspecified
+        - plan/phase:doc-updates
+      text: '[doc-updates gate correctness-lens finding correctness-002, suggestion] docs/architecture.md line 150 calls SSHKeysPanel "a sixth component," but the paragraph names seven other pieces before this sentence (LoginForm, RegisterForm, AuthPage, OidcCallbackPage, ForgotPasswordPage, ResetPasswordPage, EmailCodePage), so a literal count reads as the eighth named item, not the sixth; the "sixth" framing only parses under a non-obvious reading (the sixth member of "the five full-page compositions plus this one"). Recommend dropping the ordinal or making the counted set explicit.'
 closed:
     - id: WAAG
       title: The gui half of make test.unit cannot pass in
