@@ -26,6 +26,15 @@ items:
         - plan/phase:gui-seams
         - effort:unspecified
       text: 'gui/src/lib/config.ts defines `isSafeSitePath()` (used for returnPath/loginPath and redirect-URL path validation and for the path written on a 401 return param) while gui/src/lib/return-path.ts defines `isSafeReturnPath()` (used by oidc-callback-page.tsx, readReturnPath and exported from index.ts). They overlap but now diverge in behaviour: isSafeSitePath lacks the colon-in-first-segment rule, so for a page like `/team:alpha/x` handleUnauthenticated appends a return value that readReturnPath (isSafeReturnPath) then rejects, and the post-login return silently becomes null. Consolidate on one predicate (writer and reader must use the same rule so any written value is readable) and keep the full existing test tables for both behaviours.'
+    - title: Throwing onUnauthenticated masks the 401
+      id: dYMj
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:medium
+        - plan/phase:gui-seams
+        - effort:unspecified
+      text: 'gui/src/lib/config.ts `handleUnauthenticated` (~lines 262-277) calls the consumer''s `onUnauthenticated` callback unguarded. If it throws, the exception propagates out of `request()` in gui/src/lib/api.ts and replaces the intended ApiRequestError(''unauthenticated'', 401), so callers that test `err instanceof ApiRequestError && status === 401` (AuthProvider''s refreshUser and mount effect) miss the 401 branch and skip logout(). Wrap the custom handler call in try/catch (log the error) so request() still throws the 401 ApiRequestError, or call handleUnauthenticated inside try/finally in request(). Reviewer confidence: medium.'
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
