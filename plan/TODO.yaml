@@ -47,7 +47,7 @@ phases:
           tier: sonnet-low
           digest: Removed the dangling ./styles.css export from gui/package.json; no source imports it, and the build is unchanged.
           git:
-            branch: null
+            branch: plan/users-gui-integration-seams-01-004
             commit: []
             merge: null
         - number: 5
