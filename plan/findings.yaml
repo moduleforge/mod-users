@@ -57,10 +57,10 @@ items:
       id: aQ2V
       date: "2026-10-04"
       tags:
-        - type:bug
+        - type:enhancement
         - priority:low
         - plan/phase:gui-seams
-        - effort:unspecified
+        - effort:medium
       text: 'gui/src/lib/auth-context.tsx: (1) the isCurrentPath guard (~lines 19-39, 88-95, 128, 153, 194) compares err.path to window.location.pathname by exact equality, so an app under a basePath or with trailing-slash URLs (pathname `/app/verify-email/` vs err.path `/verify-email`) never matches and the provider navigates to the page it is already on, the redundant navigation the guard was added to prevent. Normalize a trailing slash before comparing, consider a basePath-suffix match, or accept a `currentPath` prop as OidcSetupGate already does. (2) An invalid `loginPath` is validated and logged with console.error during render (~lines 92-99), repeating on every render and noisy under StrictMode; resolve it with useMemo/ref and log once from an effect.'
     - title: LoginForm doc drift; ClientLayout loginPath
       id: uOkV
