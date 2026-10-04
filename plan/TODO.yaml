@@ -120,7 +120,8 @@ phases:
           digest: 'Wrote gui/README.md (consumer integration guide) from the current code: configureUsersApi field table, Next.js and React Router wiring, unauthenticated handling, AuthPage/LoginForm return-path handling, VerifyEmailPage and USERS_GUI_ROUTES, OidcSetupGate/OidcConfigPage, plus the six review trust notes and known limitations. Added a pointer sentence in the root README. Snippets are not yet type-checked against a built dist (task 002''s paste-check).'
           git:
             branch: plan/users-gui-integration-seams-02-001
-            commit: []
+            commit:
+                - 68976a7
             merge: null
         - number: 2
           slug: verify-consumption-and-handoff
