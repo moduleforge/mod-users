@@ -85,7 +85,7 @@ phases:
           tier: sonnet-med
           digest: Added readReturnPath (opt-in via unauthenticatedReturnParam) and wired it into LoginForm and AuthPage, which now use returnPath ?? readReturnPath() for the OIDC start URL. The onSuccess and onAuthenticated callbacks now receive string | null. Tests cover the unconfigured case, the return and next param names, unsafe values, and prop precedence, for both components.
           git:
-            branch: null
+            branch: plan/users-gui-integration-seams-01-007
             commit: []
             merge: null
         - number: 8
