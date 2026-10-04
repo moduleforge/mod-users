@@ -146,6 +146,7 @@ phases:
           path: phase-03-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: Updated four docs to reflect the users-gui seams (runtime config and 401 handling, standard screens and backend-to-path contract, router-agnostic spec wording, new file layout). All detail links to gui/README.md instead of duplicating it.
           git:
             branch: null
             commit: []
