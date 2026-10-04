@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: ssh-keys-panel-and-hardening
       title: SSH Keys Panel and Label Hardening
-      tasks: []
+      tasks:
+        - number: 1
+          slug: ssh-key-label-hardening
+          title: SSH Key Label Hardening
+          path: phase-01-ssh-keys-panel-and-hardening/001-ssh-key-label-hardening.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
