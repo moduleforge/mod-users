@@ -1,6 +1,9 @@
 slug: mfgit-upstream-modules
 version: 1
 title: ""
+remediation:
+    rounds: 1
+    tasks_added: 0
 phases:
     - number: 1
       slug: ssh-keys-panel-and-hardening
@@ -69,3 +72,8 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 5
+      slug: remediation-01
+      title: Remediation Round 1
+      kind: remediation
+      tasks: []
