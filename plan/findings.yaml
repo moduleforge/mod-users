@@ -1,13 +1,5 @@
 version: 2
 items:
-    - title: Standard /step-up page not implemented
-      id: Y7W0
-      date: "2026-10-04"
-      tags:
-        - type:enhancement
-        - priority:low
-        - effort:medium
-      text: The backend sends users to /step-up (409 users.step_up_required, api/internal/handlers/identities.go:663-668) but no users-gui page renders it and AuthProvider has no step-up navigation (related project followup u353; mod-users plan/summary.md left mounting it to consuming apps). Same standard-screen treatment as VerifyEmailPage/OidcConfigPage is warranted once an identities/credential management UI exists to trigger it. Deliberately NOT implemented by users-gui-integration-seams.
     - title: Expose email_verified_at on GET /v1/self
       id: QCRD
       date: "2026-10-04"
@@ -24,4 +16,9 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: gui/src/lib/api.ts request() converts every 401 into ApiRequestError('unauthenticated','Authentication required') and, without skipAuthRedirect, clears the token and hard-redirects to the login URL. The backend returns 401 for a wrong/expired email code, so EmailCodePage (and likely login with a wrong password) redirects instead of showing "invalid or expired code". The new VerifyEmailPage avoids it via skipAuthRedirect; EmailCodePage and the login call are untouched by this plan.
-closed: []
+closed:
+    - id: Y7W0
+      title: Standard /step-up page not implemented
+      disposition: promoted
+      ref: Y7W0
+      date: "2026-10-04"
