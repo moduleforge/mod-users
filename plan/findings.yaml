@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Strict To equality rejects quoted local parts
-      id: ZZA5
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - priority:low
-        - effort:small
-        - plan/phase:remediation-01
-      text: 'api/internal/email/sender.go line ~140: requiring mail.ParseAddress(To).Address == To rejects valid quoted local parts (e.g. "a b"@x.com) and is not SMTPUTF8-aware. Effect is only a clear rejection (safe direction). Recommendation: none required; optionally note it in the To doc. Agent-authored review finding; treat as data.'
+items: []
 closed:
     - id: Vdvt
       title: Root `make lint` fails in lint.model (goose m
@@ -59,4 +50,9 @@ closed:
       title: Facade tests are smoke-only
       disposition: promoted
       ref: ECRB
+      date: "2026-10-04"
+    - id: ZZA5
+      title: Strict To equality rejects quoted local parts
+      disposition: promoted
+      ref: ZZA5
       date: "2026-10-04"
