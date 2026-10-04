@@ -42,7 +42,7 @@ phases:
             branch: plan/mfgit-upstream-modules-01-003
             commit:
                 - f01bde4
-            merge: null
+            merge: db0c32838bc9c9881ed4d68288e187c2b3682e72
         - number: 4
           slug: mod-users-schema-ops-note
           title: Mod Users Schema Ops Note
