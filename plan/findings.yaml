@@ -1,5 +1,14 @@
 version: 2
-items: []
+items:
+    - title: README overstates AuthProvider 401 navigation
+      id: aaEB
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - plan/phase:consumer-docs-and-handoff
+        - effort:unspecified
+      text: 'gui/README.md lines ~70 (the AuthProvider loginPath bullet) and ~84 (the AuthProvider row of the components table) say AuthProvider navigates through onNavigate/loginPath "when its own /v1/self check returns 401" / "on a 401 from /v1/self". In gui/src/lib/auth-context.tsx only `refreshUser` does this: its 401 branch calls `logout()`, which runs navigate(resolvedLoginPath). The mount-time /v1/self check on a 401 only clears the stored token and sets token to null; any redirect on that path comes from the fetch-layer handleUnauthenticated as a hard window.location redirect, never through loginPath/onNavigate (and with unauthenticatedReturnParam set the same-path guard can skip it). Reword both places: the provider navigates via onNavigate on logout() and when refreshUser() gets a 401; the mount-time check on a 401 only clears the token and the fetch-layer redirect handles it. Optionally state that without the return param the default redirect always fires, even from the login page. Reviewer confidence: high.'
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
