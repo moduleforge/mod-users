@@ -312,6 +312,46 @@ export interface AddAppMemberRequest {
   role: string;
 }
 
+// ─── SSH keys ────────────────────────────────────────────────────────────────
+
+export interface SSHKey {
+  uuid: string;
+  /** Kept as `string` (not a closed union) so a server-side allow-list change cannot break typing. */
+  key_type: string;
+  fingerprint: string;
+  public_key: string;
+  label: string;
+  created_at: string;
+}
+
+export interface SSHKeyListResponse {
+  items: SSHKey[];
+  total: number;
+}
+
+export interface RegisterSSHKeyRequest {
+  public_key: string;
+  label?: string | null;
+}
+
+/** Response of `POST /v1/self/credential/step-up/verify`. */
+export interface StepUpVerifyResponse {
+  step_up_token: string;
+  expires_in: number;
+}
+
+/** Optional step-up proof for a step-up-gated call (sent as `X-Step-Up-Token`). */
+export interface StepUpOptions {
+  stepUpToken?: string;
+}
+
+/** Builds the `X-Step-Up-Token` header only when a non-empty token is supplied. */
+function stepUpHeaders(options?: StepUpOptions): Record<string, string> | undefined {
+  return options?.stepUpToken
+    ? { 'X-Step-Up-Token': options.stepUpToken }
+    : undefined;
+}
+
 // ─── Client factory ──────────────────────────────────────────────────────────
 
 /**
@@ -540,6 +580,71 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
       removeMember: (uuid: string, userUuid: string) =>
         request<void>(`/v1/apps/${uuid}/user-accounts/${userUuid}`, {
           method: 'DELETE',
+        }),
+    },
+
+    sshKeys: {
+      /**
+       * `GET /v1/self/ssh-keys` - lists the caller's registered SSH keys.
+       */
+      list: (params?: { limit?: number; offset?: number }) => {
+        const qs = new URLSearchParams();
+        if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+        if (params?.offset !== undefined) qs.set('offset', String(params.offset));
+        const query = qs.toString();
+        return request<SSHKeyListResponse>(
+          `/v1/self/ssh-keys${query ? `?${query}` : ''}`,
+        );
+      },
+
+      /**
+       * `POST /v1/self/ssh-keys` - registers a public key. Step-up gated:
+       * when `AUTH_REQUIRE_STEP_UP` is on and no valid `stepUpToken` is
+       * supplied, rejects with `ApiActionRequiredError` code
+       * `users.step_up_required` (409). Rejects with `users.email_unverified`
+       * (action-required) when the account's email is unverified.
+       */
+      register: (data: RegisterSSHKeyRequest, options?: StepUpOptions) =>
+        request<SSHKey>('/v1/self/ssh-keys', {
+          method: 'POST',
+          body: JSON.stringify(data),
+          headers: stepUpHeaders(options),
+        }),
+
+      /**
+       * `DELETE /v1/self/ssh-keys/{keyUuid}` - revokes a key (204, resolves
+       * `void`). Same step-up gating and `users.step_up_required` /
+       * `users.email_unverified` action-required outcomes as `register`.
+       */
+      revoke: (keyUuid: string, options?: StepUpOptions) =>
+        request<void>(`/v1/self/ssh-keys/${encodeURIComponent(keyUuid)}`, {
+          method: 'DELETE',
+          headers: stepUpHeaders(options),
+        }),
+    },
+
+    stepUp: {
+      /**
+       * `POST /v1/self/credential/step-up` - asks the server to send a
+       * step-up code (204, resolves `void`).
+       */
+      request: () =>
+        request<void>('/v1/self/credential/step-up', { method: 'POST' }),
+
+      /**
+       * `POST /v1/self/credential/step-up/verify` - exchanges the emailed
+       * code for a short-lived step-up token. A wrong or expired code is
+       * answered with `401`; this call always passes `skipAuthRedirect: true`
+       * so that 401 surfaces as an `ApiRequestError` (`unauthenticated`)
+       * instead of clearing the session token and redirecting to login.
+       */
+      verify: (code: string) =>
+        request<StepUpVerifyResponse>('/v1/self/credential/step-up/verify', {
+          method: 'POST',
+          body: JSON.stringify({ code }),
+          // A 401 here means "wrong/expired code", not "session expired";
+          // without this flag request() would log the user out.
+          skipAuthRedirect: true,
         }),
     },
   };

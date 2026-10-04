@@ -28,6 +28,11 @@ export type {
   AppMembersResponse,
   CreateAppRequest,
   AddAppMemberRequest,
+  SSHKey,
+  SSHKeyListResponse,
+  RegisterSSHKeyRequest,
+  StepUpVerifyResponse,
+  StepUpOptions,
 } from './lib/api';
 
 // ─── Auth context ─────────────────────────────────────────────────────────────
