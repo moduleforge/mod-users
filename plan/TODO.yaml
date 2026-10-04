@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: ssh-keys-panel-and-hardening
       title: SSH Keys Panel and Label Hardening
+      diff_base: ae9a6459b0a826a55e2c86f6ceccc3b177ef5f13
       tasks:
         - number: 1
           slug: ssh-key-label-hardening
