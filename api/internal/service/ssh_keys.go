@@ -350,5 +350,10 @@ func mapSSHKeyLabelError(err error) error {
 			Field: "label", Code: "users.ssh_key_label_too_long", Message: "label is too long",
 		})
 	}
+	if errors.Is(err, sshkey.ErrLabelInvalidChars) {
+		return apiresp.InvalidInput(apiresp.FieldError{
+			Field: "label", Code: "users.ssh_key_label_invalid", Message: "label contains invalid characters",
+		})
+	}
 	return fmt.Errorf("ssh_keys: normalize label: %w", err)
 }
