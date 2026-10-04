@@ -212,6 +212,11 @@ export function getApiBaseUrl(): string {
   return DEFAULT_BASE_URL;
 }
 
+/** The configured 401 return-param name, or null when none is configured. */
+export function getUnauthenticatedReturnParam(): string | null {
+  return configuredReturnParam ?? null;
+}
+
 export function getTokenStorageKey(): string {
   return configuredTokenKey ?? USERS_TOKEN_KEY;
 }

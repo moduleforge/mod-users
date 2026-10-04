@@ -71,32 +71,38 @@ phases:
           slug: oidc-config-page-migration
           title: Migrate OidcConfigPage and OidcSetupGate Into users-gui
           path: phase-01-gui-seams/006-oidc-config-page-migration.md
-          done: false
+          done: true
           tier: opus-med
+          digest: Moved app-mfdemo's /oidc-config page and its add/edit provider modals into users-gui. The copies differ from the originals only in imports, names, and the new props. The page is exported as OidcConfigPage; the hard-coded redirect to /auth/login is replaced by an onComplete prop that fires after redirectDelayMs (default 2000) and is cancelled if the page unmounts. Moved the OIDC readiness check out of ClientLayout into an exported OidcSetupGate with a ready/setup render-prop; ClientLayout now uses it and renders the same DOM. AuthProvider no longer navigates to an action-required path the browser is already on. Added 33 tests and a mocked-fetch Ladle story.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-01-006
+            commit:
+                - d7a0aa4
             merge: null
         - number: 7
           slug: login-return-path-standard
           title: Standard Login Return-Path Handling in AuthPage and LoginForm
           path: phase-01-gui-seams/007-login-return-path-standard.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added readReturnPath (opt-in via unauthenticatedReturnParam) and wired it into LoginForm and AuthPage, which now use returnPath ?? readReturnPath() for the OIDC start URL. The onSuccess and onAuthenticated callbacks now receive string | null. Tests cover the unconfigured case, the return and next param names, unsafe values, and prop precedence, for both components.
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/users-gui-integration-seams-01-007
+            commit:
+                - 38e2afc
+            merge: a1e9928e76bc8199acb4b2a448cbf85770f20c56
         - number: 8
           slug: credential-401-inline-errors
           title: Credential-Failure 401s Show Inline Errors Instead of Redirecting
           path: phase-01-gui-seams/008-credential-401-inline-errors.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Credential-failure 401s (login, email-code verify, reset-password confirm) now opt out of the redirect inside the api client and show fixed inline errors at the call sites. The request() 401 branch is untouched. Added credential-401.test.tsx covering the three components, the requestEmailCode non-401 path and two regression guards.
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/users-gui-integration-seams-01-008
+            commit:
+                - 5ae9597
+            merge: 648c23984c07be563053da5e096a9f20e68382f4
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off

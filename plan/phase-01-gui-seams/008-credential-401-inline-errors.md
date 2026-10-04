@@ -54,3 +54,10 @@ architectural_impact: false
 
 - After the `api.ts` option changes and the regression guard test
 - After the three component error paths and their tests
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- `api.auth.login`, `verifyEmailCode`, `resetPassword` now pass `skipAuthRedirect: true` (`verifyEmail` already did). Inline 401 errors added in `LoginForm`, `EmailCodePage`, `ResetPasswordPage`.
+- Validation: `cd gui && bun run typecheck && bun test` pass (145 pass); the three credential tests fail with the `api.ts` edit stashed and pass after.
+- Files: `gui/src/lib/api.ts`, `gui/src/components/{login-form,email-code-page,reset-password-page}.tsx`, `gui/src/components/credential-401.test.tsx`.
