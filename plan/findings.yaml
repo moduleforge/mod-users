@@ -9,6 +9,15 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening security-lens gate finding security-001, suggestion] api/internal/sshkey/label.go''s isDisallowedLabelRune rejects every Unicode control character plus the bidi override/embedding (U+202A-U+202E) and isolate (U+2066-U+2069) characters, but not the weaker formatting marks U+200E/U+200F (LRM/RLM), U+061C (ALM), or zero-width characters U+200B/U+200C/U+200D/U+2060 (ZWSP/ZWNJ/ZWJ/WORD JOINER). A label built from these could still render misleadingly or compare unequal to a visually identical label, though it can no longer force a strong directional override. Matches the task''s stated scope (control + bidi override/isolate only), so likely intentional, but leaves a residual spoofing surface. Recommend extending isDisallowedLabelRune''s ranges to cover these marks if full confusable-resistance for labels becomes a goal.'
+    - title: sQRd closure not reconciled in store
+      id: dWOG
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:remediation-01
+      text: '[remediation-01 security-lens gate finding security-001, suggestion] The remediation task document for extending isDisallowedLabelRune (api/internal/sshkey/label.go) states it "closes finding sQRd," but at review time plan/findings.yaml still listed sQRd under its open items rather than closed. This is a bookkeeping/process observation, not a code defect: the manager''s post-merge reconcile step is expected to close the finding once the task''s commit is confirmed on the plan branch.'
 closed:
     - id: WAAG
       title: The gui half of make test.unit cannot pass in
