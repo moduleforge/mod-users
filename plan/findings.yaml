@@ -14,9 +14,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:documentation
-        - priority:low
-        - effort:unspecified
         - plan/phase:doc-updates
+        - priority:low
+        - effort:small
       text: '[doc-updates gate correctness-lens finding correctness-002, suggestion] docs/architecture.md line 150 calls SSHKeysPanel "a sixth component," but the paragraph names seven other pieces before this sentence (LoginForm, RegisterForm, AuthPage, OidcCallbackPage, ForgotPasswordPage, ResetPasswordPage, EmailCodePage), so a literal count reads as the eighth named item, not the sixth; the "sixth" framing only parses under a non-obvious reading (the sixth member of "the five full-page compositions plus this one"). Recommend dropping the ordinal or making the counted set explicit.'
 closed:
     - id: WAAG
