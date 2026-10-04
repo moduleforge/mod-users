@@ -18,7 +18,7 @@ phases:
             branch: plan/mfgit-upstream-modules-01-001
             commit:
                 - 0bf56dd
-            merge: null
+            merge: 8fd89b11581e4eadb7b67860acc2b163f471f86c
         - number: 2
           slug: ssh-keys-client-methods
           title: SSH Keys Client Methods
