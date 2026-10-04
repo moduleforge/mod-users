@@ -585,3 +585,16 @@ items:
         - plan/phase:ssh-keys-panel-and-hardening
         - plan/slug:mfgit-upstream-modules
       text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff; likely duplicates existing project-scope followups endf/oti2 filed during the ssh-public-keys plan] deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md, and api/server/CLAUDE.md are all unreachable from README.md. docs/architecture.md mentions deploy/local/README.md''s path in backticks rather than as a markdown link, which doesn''t close the chain. Recommend linking the deploy READMEs and model/README.md from docs/project-structure.md or AGENTS.md, converting the deploy/local/README.md mention into a real link, linking next-steps.md from README''s "Additional documentation" section, and either populating or excluding api/server/CLAUDE.md per flow/policy.yaml''s link_check.excluded_docs.'
+    - title: 'Environment: mod-core/gui/node_modules/react'
+      id: YPQ2
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:medium
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: |-
+        Environment: mod-core/gui/node_modules/react is a dangling symlink to a sibling worktree's bun cache (the AGENTS.md Known gap: bun installed through the worktree symlink). It makes bun test fail in the worktree even on the base. Before final validation, run bun install && bun run build in mod-core's real checkout (mod-core/gui) so the full gui test suite runs natively.
+
+        Open question (internal-escalation gated off, surfaced for manager decision): "Before plan close-out, should the manager repair the sibling mod-core/gui install (bun install && bun run build in mod-core's real checkout) so the full mod-users gui test suite runs natively, or accept the task agents' workaround-based green runs as the evidence for the gui-tests success criterion?" Options considered: (1) repair the sibling install and re-run natively before close-out; (2) accept the workaround-based runs and note the gap in the plan summary; (3) accept as-is and also file a durable project followup to make AGENTS.md's Known gap name the dangling react symlink. Recommended option: (1) repair the sibling install, then re-run gui typecheck and tests natively before close-out.
