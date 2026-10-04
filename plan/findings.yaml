@@ -27,15 +27,6 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening security-lens gate finding security-001, suggestion] api/internal/sshkey/label.go''s isDisallowedLabelRune rejects every Unicode control character plus the bidi override/embedding (U+202A-U+202E) and isolate (U+2066-U+2069) characters, but not the weaker formatting marks U+200E/U+200F (LRM/RLM), U+061C (ALM), or zero-width characters U+200B/U+200C/U+200D/U+2060 (ZWSP/ZWNJ/ZWJ/WORD JOINER). A label built from these could still render misleadingly or compare unequal to a visually identical label, though it can no longer force a strong directional override. Matches the task''s stated scope (control + bidi override/isolate only), so likely intentional, but leaves a residual spoofing surface. Recommend extending isDisallowedLabelRune''s ranges to cover these marks if full confusable-resistance for labels becomes a goal.'
-    - title: plan/ docs orphaned, no policy exclusion
-      id: Rvii
-      date: "2026-10-04"
-      tags:
-        - type:documentation
-        - plan/phase:ssh-keys-panel-and-hardening
-        - priority:low
-        - effort:small
-      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] No flow/policy.yaml exists in this repo, so the link-chain check''s "expected-orphan" patterns are not declared/excused: every one of the 23 files under plan/ (plan/overview.md, every plan/plan-summary-*.md and plan/summary*.md, and the current phase-01/phase-02 task docs) is unreachable from README.md, and several of those plan-summary docs also carry dangling forward-links into historical phase directories removed after earlier plans completed (e.g. plan/plan-summary-ssh-public-keys.md references phase-01-ssh-public-keys/* and notes/ssh-key-design.md, neither of which exist; similar dangling links in plan-summary-catalog-readiness.md, summary-gui-lib-conversion.md, summary.md, and others). Recommend declaring plan/ in flow/policy.yaml''s link_check.excluded_dirs (one entry resolves all of these) rather than leaving them as silent, undeclared orphans.'
     - title: mf-standards submodule links dangle
       id: hlTS
       date: "2026-10-04"
@@ -72,4 +63,9 @@ closed:
       disposition: dismissed
       reason: 'Already planned: covered by this plan''s own pending task phase-02-doc-updates/001-update-architecture-docs.md, whose requirements add SSHKeysPanel to docs/architecture.md''s GUI component library section and whose validation greps for it.'
       ref: phase-02-doc-updates/001-update-architecture-docs.md
+      date: "2026-10-04"
+    - id: Rvii
+      title: plan/ docs orphaned, no policy exclusion
+      disposition: promoted
+      ref: Rvii
       date: "2026-10-04"
