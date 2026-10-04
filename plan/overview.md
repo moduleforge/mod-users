@@ -6,7 +6,7 @@ Wave 1 (parallel with mod-core's `shared-home-switcher`) of wave plan `home-app-
 
 In scope (all under `mod-users/gui`, plus plan docs): a runtime configuration API for the API base URL (G1), the 401/unauthenticated handling and logout target (G2), and the token storage key (G3); `AuthPage` registration hiding, a forgot-password entry point, and an exported `isSafeReturnPath`; removal of the dangling `./styles.css` export; tests; a consumer integration guide with route expectations and Next.js usage; build/consumption verification including a no-`window` server render; and a written hand-off; plus, from the same principle: a standard `VerifyEmailPage`, a migrated `OidcConfigPage` (with the extracted `OidcSetupGate`), an exported `USERS_GUI_ROUTES` path set, and opt-in standard login return-path handling. Out of scope: any edit outside `mod-users` (app-mftodo/app-mfdemo/app-mfmanager/mod-core change nothing here); backend changes (a configurable reset-link path and a registration on/off switch are filed as followups); `SidebarNav` changes and any `ClientLayout` behavior change (its OIDC gate is only extracted into `OidcSetupGate`, props and DOM unchanged); a `/step-up` page (followup filed); delegating `request()` to core-gui; a version bump or publish (users-gui is never published).
 
-Backward compatibility is a hard constraint: with no new configuration call, no new prop, behavior for app-mftodo, app-mfdemo and other consumers is identical. The single intentional semantic fix is `NEXT_PUBLIC_API_BASE_URL=""` now meaning same-origin instead of falling through to `http://localhost:8080`.
+Backward compatibility is a hard constraint: with no new configuration call, no new prop, behavior for app-mftodo, app-mfdemo and other consumers is identical. The intentional semantic fixes are `NEXT_PUBLIC_API_BASE_URL=""` now meaning same-origin instead of falling through to `http://localhost:8080`, and (task 008, finding `ljyL`) a wrong password, wrong email code, or bad reset token now showing an inline error instead of redirecting to login.
 
 ## Current status
 
@@ -23,7 +23,7 @@ Source verification of each seam (file and line references, rejected alternative
 - The components are already router-agnostic (no router import in `src`); no adapter or `navigate` prop is needed for Next. What Next needs is documentation, a client-only import rule (the bundle has no `"use client"`), and verification.
 - `AuthPage`/`LoginForm` have no way to reach `ForgotPasswordPage`; an optional `onForgotPassword` is added.
 - The backend already sends users to `/verify-email` (action-required `users.email_unverified`; verification is a 6-digit emailed code, `purpose: "verify_email"`, verify returns `204`) and `/oidc-config` (action-required `users.oidc_not_confirmed`, setup-token banner URL), and `AuthProvider` already navigates there, but no frontend renders either except app-mfdemo's app-local oidc-config page. Both become standard users-gui pages.
-- A wrong email code is a `401`, which `request()` turns into a redirect to login unless `skipAuthRedirect` is passed: the new verify-email calls pass it (the pre-existing `EmailCodePage` has the same latent behavior; followup).
+- A wrong email code is a `401`, which `request()` turns into a redirect to login unless `skipAuthRedirect` is passed: the new verify-email calls pass it (the pre-existing `EmailCodePage`, `LoginForm`, and `ResetPasswordPage` have the same bug; fixed in task 008, finding `ljyL`).
 
 ### Interface wave 2 consumes
 
@@ -95,7 +95,7 @@ Route expectations for an embedding app (details in the embedding note): the app
 
 Suggested wave-2 configuration (standard paths; `/login` stays an allowed, stated deviation if MFManager keeps its existing URL): `configureUsersApi({ baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8090', tokenStorageKey: 'mfmanager_session_token', unauthenticatedRedirectUrl: USERS_GUI_ROUTES.login, unauthenticatedReturnParam: 'return' })` and `<AuthProvider loginPath={USERS_GUI_ROUTES.login} onNavigate={router.replace}>`, plus routes for `USERS_GUI_ROUTES.verifyEmail` and `.oidcConfig` mounting the standard pages (no static notice pages). Setting `tokenStorageKey` to MFManager's existing key avoids both session migration and any change to MFManager's own `api-client.ts`; the label-cache invariant (G4) stays the app's concern.
 
-### Phase 1: `gui-seams` (7 tasks)
+### Phase 1: `gui-seams` (8 tasks)
 
 - `001-runtime-config-base-url-and-token-key` (sonnet-med): `config.ts`, `configureUsersApi`, lazy base URL and token key everywhere, exports, tests. Must run first.
 - `002-unauthenticated-handler` (sonnet-med): 401 handler options, return path, same-path guard, `AuthProvider loginPath`, tests. After 001.
@@ -105,7 +105,9 @@ Suggested wave-2 configuration (standard paths; `/login` stays an allowed, state
 - `006-oidc-config-page-migration` (opus-med): move `OidcConfigPage` and its modals from app-mfdemo (behavior-preserving), `onComplete`/`redirectDelayMs`, the `AuthProvider` same-path guard, `OidcSetupGate` extraction from `ClientLayout`, tests. After 001 and 005 (uses `routes.ts`).
 - `007-login-return-path-standard` (sonnet-med): library-side read/validate of the configured return param; `onAuthenticated`/`onSuccess` receive it. After 002 and 003.
 
-Parallel-eligible after 001: 002, 003, 004, 005 (004 may also run with 001). Then 006 (after 005) and 007 (after 002 and 003). 005-007 each add exports to `gui/src/index.ts`; the merges are trivial append-only conflicts.
+- `008-credential-401-inline-errors` (sonnet-med): folds finding `ljyL`. `skipAuthRedirect` on the login, email-code verify, and reset-confirm calls (the three backend endpoints that return 401 for credential failure, verified in the handlers) with inline errors, plus tests that wrong credentials neither clear the token nor redirect while an expired-session 401 still does. After 002 and 005; touches the same components as 007, so run after 007.
+
+Parallel-eligible after 001: 002, 003, 004, 005 (004 may also run with 001). Then 006 (after 005) and 007 (after 002 and 003); 008 last (after 002, 005, and 007, to avoid conflicts in `login-form.tsx`/`auth-page.tsx`). 005-007 each add exports to `gui/src/index.ts`; the merges are trivial append-only conflicts.
 
 ### Phase 2: `consumer-docs-and-handoff` (2 tasks; after phase 1)
 
@@ -125,7 +127,7 @@ Wave 2 needs: the merge SHA of this plan on mod-users `main` (filled by the mana
 Decisions the plan made (flagged so the manager/user can override before execution):
 
 1. Module-level `configureUsersApi` (lazy), not a provider prop: the OIDC helpers are plain functions and cannot read context.
-2. `""` in `NEXT_PUBLIC_API_BASE_URL` or `window.__USERS_API_URL__` now means same-origin (the only behavior change).
+2. `""` in `NEXT_PUBLIC_API_BASE_URL` or `window.__USERS_API_URL__` now means same-origin (a behavior change; see also task 008).
 3. Token key is configurable, not just readable, so MFManager's existing sessions survive adoption.
 4. A custom `onUnauthenticated` always runs after the token is cleared (mod-core's custom handler replaces the default entirely, including token removal).
 5. `./styles.css` export removed rather than built.
@@ -153,7 +155,7 @@ Each place the plan keeps or kept something app-owned or non-standard, and the o
 | `/reset-password` path is backend-hard-coded (apps like app-mfdemo serve `/auth/reset`) | Standard path is the backend's `/reset-password` (in `USERS_GUI_ROUTES`); making it configurable is followup `sUuz`; app-mfdemo's mismatch is `TbfT` (wave 5). |
 | `ClientLayout`/`SidebarNav` keep the `/auth/login` literal | Design reason: it equals the standard default, and the chrome is admin UI used only by apps that follow the standard path. |
 | `/step-up` has no page | Not standardized now: no UI calls the gated endpoints yet; followup filed (do not implement here). |
-| Existing `EmailCodePage` login-by-code flow treats a wrong code as a 401 redirect | Out of scope; followup filed. The new page avoids it. |
+| Existing `EmailCodePage`, `LoginForm` and `ResetPasswordPage` treat a wrong code, wrong password, or bad reset token (401) as an expired session and redirect | Fixed: task 008 (finding `ljyL`), `skipAuthRedirect` plus inline errors. |
 
 Open questions (non-blocking; defaults above apply unless changed):
 
@@ -165,7 +167,7 @@ Open questions (non-blocking; defaults above apply unless changed):
 - Should wave 2 wrap MFManager in `OidcSetupGate`? Default: yes unless its deployments are guaranteed OIDC-confirmed or opted out; app-mfmanager's plan decides.
 - Should `UserAccountSelf` expose `email_verified_at` so `VerifyEmailPage` can skip itself for verified users? Backend change, not in this plan; followup filed.
 
-Followups filed by the revision pass: the `/step-up` page (not implemented here), the `EmailCodePage` 401-redirect behavior, and exposing `email_verified_at` on `/v1/self` (ids in the plan's findings store; the earlier project-level `u353` covers the missing step-up navigation wiring). Followups filed by the original planning pass: `sUuz` (mod-users: configurable password-reset email path and `/oidc-config` banner path), `TbfT` (app-mfdemo: `/auth/reset` vs emailed `/reset-password`). Existing mod-users followup `HPJi` is closed by this plan's merge (manager action).
+Followups filed by the revision pass: the `/step-up` page (not implemented here), the `EmailCodePage` 401-redirect behavior (now folded into task 008 as `ljyL`), and exposing `email_verified_at` on `/v1/self` (ids in the plan's findings store; the earlier project-level `u353` covers the missing step-up navigation wiring). Followups filed by the original planning pass: `sUuz` (mod-users: configurable password-reset email path and `/oidc-config` banner path), `TbfT` (app-mfdemo: `/auth/reset` vs emailed `/reset-password`). Existing mod-users followup `HPJi` is closed by this plan's merge (manager action).
 
 ## Assumptions
 
