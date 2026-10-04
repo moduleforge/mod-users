@@ -78,7 +78,7 @@ phases:
             branch: plan/users-gui-integration-seams-01-006
             commit:
                 - d7a0aa4
-            merge: null
+            merge: 3173dc50179a8016a0cee4dce9df0dc595c09c05
         - number: 7
           slug: login-return-path-standard
           title: Standard Login Return-Path Handling in AuthPage and LoginForm
