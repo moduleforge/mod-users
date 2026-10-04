@@ -5,7 +5,17 @@ phases:
     - number: 1
       slug: gui-seams
       title: users-gui Integration Seams
-      tasks: []
+      tasks:
+        - number: 1
+          slug: runtime-config-base-url-and-token-key
+          title: Add configureUsersApi With Runtime Base URL and Token Key
+          path: phase-01-gui-seams/001-runtime-config-base-url-and-token-key.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
