@@ -87,6 +87,7 @@ gui/
       oidc-provider-add-modal.tsx    # OIDC provider add dialog used by oidc-config-page
       oidc-provider-edit-modal.tsx   # OIDC provider edit dialog used by oidc-config-page
       oidc-setup-gate.tsx            # render-prop gate routing an unconfirmed deployment to /oidc-config
+      ssh-keys-panel.tsx             # SSH public-key self-service panel (list/register/revoke, inline step-up)
     lib/                # API client, hooks, shared utilities
       config.ts         # runtime configuration (configureUsersApi), token storage, 401 handler, isSafeReturnPath
       return-path.ts    # readReturnPath(); re-exports isSafeReturnPath

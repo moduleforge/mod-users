@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { SSHKeysPanel } from './ssh-keys-panel';
-import { API_BASE_URL, ApiActionRequiredError } from '../lib/api';
+import { ApiActionRequiredError } from '../lib/api';
+import { getApiBaseUrl } from '../lib/config';
 import type { SSHKey } from '../lib/api';
 
 // Behavior tests for SSHKeysPanel against a stubbed `globalThis.fetch`. The
@@ -30,7 +31,7 @@ function installFetch(handler: Handler): void {
     const rawBody = typeof init?.body === 'string' ? init.body : undefined;
     const recorded: RecordedRequest = {
       url,
-      path: url.startsWith(API_BASE_URL) ? url.slice(API_BASE_URL.length) : url,
+      path: url.startsWith(getApiBaseUrl()) ? url.slice(getApiBaseUrl().length) : url,
       method: init?.method ?? 'GET',
       headers: { ...(init?.headers as Record<string, string> | undefined) },
       body: rawBody ? (JSON.parse(rawBody) as unknown) : undefined,
@@ -552,7 +553,7 @@ describe('SSHKeysPanel revoke', () => {
 
     expect(await screen.findByText('No SSH keys yet.')).toBeInTheDocument();
     const del = requests.find((r) => r.method === 'DELETE');
-    expect(del?.url).toBe(`${API_BASE_URL}/v1/self/ssh-keys/${KEY_A.uuid}`);
+    expect(del?.url).toBe(`${getApiBaseUrl()}/v1/self/ssh-keys/${KEY_A.uuid}`);
     expect(del?.headers['X-Step-Up-Token']).toBeUndefined();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
@@ -629,13 +630,13 @@ describe('SSHKeysPanel props and base URL', () => {
 
     expect(requests.length).toBeGreaterThanOrEqual(4);
     for (const request of requests) {
-      expect(request.url.startsWith(API_BASE_URL)).toBe(true);
+      expect(request.url.startsWith(getApiBaseUrl())).toBe(true);
       expect(request.path.startsWith('/v1/')).toBe(true);
     }
-    expect(requests[0]?.url).toBe(`${API_BASE_URL}/v1/self/ssh-keys?limit=200`);
-    expect(requests.find(isRegister)?.url).toBe(`${API_BASE_URL}/v1/self/ssh-keys`);
+    expect(requests[0]?.url).toBe(`${getApiBaseUrl()}/v1/self/ssh-keys?limit=200`);
+    expect(requests.find(isRegister)?.url).toBe(`${getApiBaseUrl()}/v1/self/ssh-keys`);
     expect(requests.find((r) => r.method === 'DELETE')?.url).toBe(
-      `${API_BASE_URL}/v1/self/ssh-keys/${KEY_A.uuid}`,
+      `${getApiBaseUrl()}/v1/self/ssh-keys/${KEY_A.uuid}`,
     );
   });
 });

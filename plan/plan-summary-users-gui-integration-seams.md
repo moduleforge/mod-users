@@ -114,7 +114,7 @@ Parallel-eligible after 001: 002, 003, 004, 005 (004 may also run with 001). The
 
 ### Hand-off summary for wave 2
 
-Wave 2 needs: the merge SHA of this plan on mod-users `main` (filled by the manager at finalization), the aggregate checkout on `main` at or after it, `make pins.update REPOS="mod-users"` (plus a compatible mod-core pin) in app-mfmanager, and the app-side build wiring (second workspace member `../mod-users/gui`, named Docker context after core-gui, three-package single-React check, `@source` of users-gui's `dist/`). Wave 2 additionally mounts `/verify-email` and `/oidc-config` with the standard pages (no static notices). Wave 5 (app-mfdemo, a later plan) deletes `src/app/oidc-config/` and mounts `OidcConfigPage` with `onComplete={() => window.location.assign(USERS_GUI_ROUTES.login)}`; the migrated page is behavior-preserving so that is a delete-and-mount. Other than that, app-mftodo and app-mfdemo need nothing now; app-mftodo may later retire `configure-users-gui.ts` and its `/auth/login` alias (its followup ZyTU). Full list: [`notes/consumption-and-handoff.md`](./notes/consumption-and-handoff.md).
+Wave 2 needs: the merge SHA of this plan on mod-users `main` (`bd469682826160a0084c4a1e8207ce84364c3202`, merged 2026-10-04), the aggregate checkout on `main` at or after it, `make pins.update REPOS="mod-users"` (plus a compatible mod-core pin) in app-mfmanager, and the app-side build wiring (second workspace member `../mod-users/gui`, named Docker context after core-gui, three-package single-React check, `@source` of users-gui's `dist/`). Wave 2 additionally mounts `/verify-email` and `/oidc-config` with the standard pages (no static notices). Wave 5 (app-mfdemo, a later plan) deletes `src/app/oidc-config/` and mounts `OidcConfigPage` with `onComplete={() => window.location.assign(USERS_GUI_ROUTES.login)}`; the migrated page is behavior-preserving so that is a delete-and-mount. Other than that, app-mftodo and app-mfdemo need nothing now; app-mftodo may later retire `configure-users-gui.ts` and its `/auth/login` alias (its followup ZyTU). Full list: [`notes/consumption-and-handoff.md`](./notes/consumption-and-handoff.md).
 
 ### Decisions made and open questions
 
@@ -312,7 +312,7 @@ Tracking document for the active plan.
 
 ## Purpose and scope
 
-Records how consumers obtain `@moduleforge/users-gui`, what that means for delivering these seams, and exactly what wave 2 (`adopt-users-gui-auth` in app-mfmanager) needs from this plan. Mirrors mod-core's `shared-home-switcher` note of the same name. Facts below were read from `mod-users/AGENTS.md`, `gui/package.json`, `gui/tsup.config.ts`, `versions.lock.yaml`, `app-mftodo/versions.lock.yaml`, `app-mftodo/gui/src/lib/configure-users-gui.ts`, `app-mftodo/gui/src/App.tsx`, and mod-core's matching note. Phase 2 task 002 verified the built package and filled the verification entry; the merge-SHA slot is filled by the manager at finalization.
+Records how consumers obtain `@moduleforge/users-gui`, what that means for delivering these seams, and exactly what wave 2 (`adopt-users-gui-auth` in app-mfmanager) needs from this plan. Mirrors mod-core's `shared-home-switcher` note of the same name. Facts below were read from `mod-users/AGENTS.md`, `gui/package.json`, `gui/tsup.config.ts`, `versions.lock.yaml`, `app-mftodo/versions.lock.yaml`, `app-mftodo/gui/src/lib/configure-users-gui.ts`, `app-mftodo/gui/src/App.tsx`, and mod-core's matching note. Phase 2 task 002 verified the built package and filled the verification entry; the merge-SHA slot was filled at finalization.
 
 ## How users-gui is versioned and distributed
 
@@ -328,7 +328,7 @@ Records how consumers obtain `@moduleforge/users-gui`, what that means for deliv
 
 ## Exact hand-off wave 2 needs
 
-1. This plan's branch `plan/users-gui-integration-seams` is merged to `mod-users` `main`; the manager reports the **merge commit SHA**: `<filled by the manager at finalization>` (do not invent one).
+1. This plan's branch `plan/users-gui-integration-seams` is merged to `mod-users` `main`; the manager reports the **merge commit SHA**: `bd469682826160a0084c4a1e8207ce84364c3202` (merged into mod-users `main`, 2026-10-04).
 2. The aggregate checkout `/Users/zane/playground/moduleforge/mod-users` is on `main` at or after that SHA when app-mfmanager builds its GUI deps (its `.gui-siblings`/workspace materialization copies the aggregate working tree, not a git ref).
 3. `cd mod-users/gui && bun run build` succeeds after `mod-core/gui` is built, and `dist/index.d.ts` exports the symbols in the overview's "Interface wave 2 consumes". **Verified (phase-02 task 002, 2026-10-04): PASS**, no deviation from the overview interface. Summary:
    - **Build**: `bun run build` produced `dist/index.mjs`, `dist/index.js`, `dist/index.d.ts` (and `index.d.mts`). `package.json` has no `./styles.css` export (only `.`).
