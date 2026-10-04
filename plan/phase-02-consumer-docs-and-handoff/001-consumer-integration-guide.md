@@ -26,3 +26,9 @@ architectural_impact: false
 - [`../notes/embedding-and-routes.md`](../notes/embedding-and-routes.md), [`../notes/seam-design.md`](../notes/seam-design.md), [`../overview.md`](../overview.md)
 - app-mfdemo `src/app/auth/*` and app-mftodo `gui/src/App.tsx`, `routes/LoginPage.tsx` (real consumer usage; read-only)
 - `gui/src/index.ts`, `gui/src/components/{verify-email-page,oidc-config-page,oidc-setup-gate}.tsx`, `gui/src/lib/routes.ts`
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Created `gui/README.md` against the landed code (config.ts, return-path.ts, api.ts, auth-context.tsx, auth components, VerifyEmailPage, USERS_GUI_ROUTES, OidcConfigPage/OidcSetupGate, index.ts) including the trust and known-limitation notes from review; added one pointer line to `README.md`.
+- Validation: config field names each present in the field table; `configureUsersApi` appears 9 times; every snippet import (AuthProvider, OidcSetupGate, USERS_GUI_ROUTES, configureUsersApi, AuthPage, ResetPasswordPage, OidcCallbackPage, VerifyEmailPage, OidcConfigPage) is exported from `gui/src/index.ts`; diff touches only `gui/README.md` and `README.md` (plus this doc). Snippets are not yet type-checked against `dist/index.d.ts` (task 002).
