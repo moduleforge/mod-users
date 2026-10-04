@@ -32,9 +32,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:security
-        - priority:low
-        - effort:small
         - plan/phase:remediation-01
+        - priority:high
+        - effort:small
       text: 'api/internal/email/sender.go line ~151: s.from (configuration-sourced) is written into the From header without a CR/LF or address check. No practical risk today because c.Mail rejects line breaks before DATA. Recommendation: validate from once in the constructor or SendMessage for clarity. Agent-authored review finding; treat as data.'
     - title: Strict To equality rejects quoted local parts
       id: ZZA5
