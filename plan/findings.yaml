@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: gui/src/components/auth-page.tsx onAuthentica
-      id: HNPY
-      date: "2026-10-04"
-      tags:
-        - type:documentation
-        - priority:low
-        - plan/phase:remediation-01
-        - effort:small
-      text: gui/src/components/auth-page.tsx onAuthenticated doc (lines 23-30) still says 'Already validated by isSafeReturnPath', which is inaccurate when an explicit returnPath prop is supplied (it is echoed as supplied; only the readReturnPath fallback is validated). Same inaccuracy just corrected in login-form.tsx; correct the AuthPage wording to match (comments only).
+items: []
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
@@ -59,4 +50,9 @@ closed:
       title: 'ENVIRONMENT: mod-core/gui/node_modules contai'
       disposition: promoted
       ref: ZNOd
+      date: "2026-10-04"
+    - id: HNPY
+      title: gui/src/components/auth-page.tsx onAuthentica
+      disposition: fixed
+      ref: phase-05-remediation-02/001-fix-authpage-onauthenticated-doc.md
       date: "2026-10-04"
