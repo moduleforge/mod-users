@@ -4,10 +4,10 @@ items:
       id: WAAG
       date: "2026-10-04"
       tags:
-        - type:ambiguity
+        - type:bug
         - plan/phase:ssh-keys-panel-and-hardening
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: The gui half of make test.unit cannot pass in this environment because react is missing from the sibling mod-core/gui/node_modules. Install it there if a green full run is needed.
     - title: 'Environment: mod-core/gui/node_modules/react'
       id: YPQ2
