@@ -1,0 +1,11 @@
+version: 2
+items:
+    - title: Standard /step-up page not implemented
+      id: Y7W0
+      date: "2026-10-04"
+      tags:
+        - type:enhancement
+        - priority:unspecified
+        - effort:unspecified
+      text: The backend sends users to /step-up (409 users.step_up_required, api/internal/handlers/identities.go:663-668) but no users-gui page renders it and AuthProvider has no step-up navigation (related project followup u353; mod-users plan/summary.md left mounting it to consuming apps). Same standard-screen treatment as VerifyEmailPage/OidcConfigPage is warranted once an identities/credential management UI exists to trigger it. Deliberately NOT implemented by users-gui-integration-seams.
+closed: []
