@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 2
-    tasks_added: 2
+    tasks_added: 3
 phases:
     - number: 1
       slug: gui-seams
@@ -185,4 +185,16 @@ phases:
       slug: remediation-02
       title: Remediation Round 2
       kind: remediation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fix-authpage-onauthenticated-doc
+          title: Correct AuthPage onAuthenticated Return-Path Validation Doc
+          path: phase-05-remediation-02/001-fix-authpage-onauthenticated-doc.md
+          done: false
+          tier: haiku-med
+          findings:
+            - HNPY
+          git:
+            branch: null
+            commit: []
+            merge: null
