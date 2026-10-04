@@ -1,0 +1,12 @@
+version: 2
+items:
+    - title: Root `make lint` fails in lint.model (goose m
+      id: Vdvt
+      date: "2026-10-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:smtp-sender-hardening
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Root `make lint` fails in lint.model (goose migration 0100_schema.sql: relation legal_entities does not exist), pre-existing and outside this task''s scope; baseline failure to confirm or track. make lint.api is clean.'
+closed: []
