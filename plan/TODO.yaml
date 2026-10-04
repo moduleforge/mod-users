@@ -2,7 +2,7 @@ slug: users-gui-integration-seams
 version: 1
 title: ""
 remediation:
-    rounds: 1
+    rounds: 2
     tasks_added: 2
 phases:
     - number: 1
@@ -181,3 +181,8 @@ phases:
             commit:
                 - 4a54458
             merge: 632a3efc40c9ac125c353a1e21ae1ef302c37347
+    - number: 5
+      slug: remediation-02
+      title: Remediation Round 2
+      kind: remediation
+      tasks: []
