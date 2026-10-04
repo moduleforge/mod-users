@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: sQRd closure not reconciled in store
-      id: dWOG
-      date: "2026-10-04"
-      tags:
-        - type:documentation
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:remediation-01
-      text: '[remediation-01 security-lens gate finding security-001, suggestion] The remediation task document for extending isDisallowedLabelRune (api/internal/sshkey/label.go) states it "closes finding sQRd," but at review time plan/findings.yaml still listed sQRd under its open items rather than closed. This is a bookkeeping/process observation, not a code defect: the manager''s post-merge reconcile step is expected to close the finding once the task''s commit is confirmed on the plan branch.'
+items: []
 closed:
     - id: WAAG
       title: The gui half of make test.unit cannot pass in
@@ -58,4 +49,9 @@ closed:
       disposition: dismissed
       reason: 'Fixed by remediation task phase-05-remediation-01/001-reject-all-bidi-control-label-chars.md: isDisallowedLabelRune now covers Unicode''s full Bidi_Control set (added U+061C, U+200E, U+200F), closing the gap this finding named. Verified independently by both the correctness lens and the full security lens at the remediation gate (security-001 noted only a bookkeeping reconciliation gap, not a code defect; the zero-width-character portion is a deliberate, documented out-of-scope carve-out, not part of this finding''s Bidi_Control claim).'
       ref: 3f9fe6e53681499e0d59274cae611f40428f74fa
+      date: "2026-10-04"
+    - id: dWOG
+      title: sQRd closure not reconciled in store
+      disposition: dismissed
+      reason: 'Addressed: the manager has now explicitly closed sQRd (dismissed with a fixed-disposition reason citing the merge commit), resolving the bookkeeping gap this finding flagged.'
       date: "2026-10-04"
