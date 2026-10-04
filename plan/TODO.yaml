@@ -12,6 +12,7 @@ phases:
           path: phase-18-flow-ignore-migrate/001-migrate-gitignore.md
           done: false
           tier: sonnet-low
+          digest: Replaced flow ignore lines with single .flow/ entry and untracked 6 .flow paths.
           git:
             branch: null
             commit: []
