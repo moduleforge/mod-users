@@ -76,6 +76,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 8
+          slug: credential-401-inline-errors
+          title: Credential-Failure 401s Show Inline Errors Instead of Redirecting
+          path: phase-01-gui-seams/008-credential-401-inline-errors.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
