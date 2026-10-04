@@ -4,10 +4,10 @@ items:
       id: Vdvt
       date: "2026-10-04"
       tags:
-        - type:ambiguity
+        - type:bug
         - plan/phase:smtp-sender-hardening
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:medium
       text: 'Root `make lint` fails in lint.model (goose migration 0100_schema.sql: relation legal_entities does not exist), pre-existing and outside this task''s scope; baseline failure to confirm or track. make lint.api is clean.'
     - title: sendError.Unwrap exposes unredacted cause
       id: Zr31
