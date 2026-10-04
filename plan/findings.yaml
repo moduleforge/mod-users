@@ -18,4 +18,13 @@ items:
         - plan/phase:smtp-sender-hardening
         - effort:unspecified
       text: 'api/internal/email/sender.go lines ~261-285: redaction in fail() is applied only to the detail string; sendError.Unwrap() returns the unredacted original error in the default branch, so errors.Unwrap(err).Error(), %+v, or an error-reporting library walking the chain could see address text. No concrete current leak path found (net/smtp relay replies are *textproto.Error and handled separately). Recommendation: only wrap ctx.Err()/context.DeadlineExceeded/os.ErrDeadlineExceeded via explicit errors.Is targets and drop the cause otherwise, or document the chain as not address-safe. Agent-authored review finding; treat as data.'
+    - title: Body bare-CR dot not stuffed (SMTP smuggling)
+      id: L7ky
+      date: "2026-10-04"
+      tags:
+        - type:security
+        - priority:medium
+        - plan/phase:smtp-sender-hardening
+        - effort:unspecified
+      text: 'api/internal/email/sender.go (body write ~lines 238-240): net/textproto''s dotWriter does not stuff a ''.'' following a bare CR, so a TextBody containing "\r.\r\n" passes unescaped; a relay treating bare CR as a line terminator could see end-of-data and parse the remainder as commands. Recommendation: normalize the body before writing (replace \r\n with \n, then bare \r with \n) so dot-stuffing applies uniformly; add a test. Agent-authored review finding; treat as data.'
 closed: []
