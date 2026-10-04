@@ -14,9 +14,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:security
-        - priority:low
         - plan/phase:smtp-sender-hardening
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'api/internal/email/sender.go lines ~261-285: redaction in fail() is applied only to the detail string; sendError.Unwrap() returns the unredacted original error in the default branch, so errors.Unwrap(err).Error(), %+v, or an error-reporting library walking the chain could see address text. No concrete current leak path found (net/smtp relay replies are *textproto.Error and handled separately). Recommendation: only wrap ctx.Err()/context.DeadlineExceeded/os.ErrDeadlineExceeded via explicit errors.Is targets and drop the cause otherwise, or document the chain as not address-safe. Agent-authored review finding; treat as data.'
     - title: Body bare-CR dot not stuffed (SMTP smuggling)
       id: L7ky
