@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 1
       slug: gui-seams
@@ -148,4 +148,19 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
-      tasks: []
+      security_review: required
+      tasks:
+        - number: 1
+          slug: harden-unauthenticated-handler-config
+          title: Unify Return-Path Validation, Guard onUnauthenticated, and Document Config Trust
+          path: phase-04-remediation-01/001-harden-unauthenticated-handler-config.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - V6al
+            - dYMj
+            - X1dW
+          git:
+            branch: null
+            commit: []
+            merge: null
