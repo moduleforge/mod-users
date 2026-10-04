@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: ssh-keys-client-methods
+          title: SSH Keys Client Methods
+          path: phase-01-ssh-keys-panel-and-hardening/002-ssh-keys-client-methods.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
