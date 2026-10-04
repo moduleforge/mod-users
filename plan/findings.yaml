@@ -16,4 +16,12 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: UserAccountSelf (gui/src/lib/api.ts) has no email_verified_at, so VerifyEmailPage cannot tell that the signed-in user is already verified and cannot skip itself or redirect onward. Backend change (self response + openapi + GUI type) outside this plan.
+    - title: EmailCodePage wrong code hits 401 redirect
+      id: ljyL
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+      text: gui/src/lib/api.ts request() converts every 401 into ApiRequestError('unauthenticated','Authentication required') and, without skipAuthRedirect, clears the token and hard-redirects to the login URL. The backend returns 401 for a wrong/expired email code, so EmailCodePage (and likely login with a wrong password) redirects instead of showing "invalid or expired code". The new VerifyEmailPage avoids it via skipAuthRedirect; EmailCodePage and the login call are untouched by this plan.
 closed: []
