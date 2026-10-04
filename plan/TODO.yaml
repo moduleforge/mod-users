@@ -184,17 +184,20 @@ phases:
     - number: 5
       slug: remediation-02
       title: Remediation Round 2
+      diff_base: 32c07b58a38ff69a751c191f8c27d5eab1edce65
       kind: remediation
       tasks:
         - number: 1
           slug: fix-authpage-onauthenticated-doc
           title: Correct AuthPage onAuthenticated Return-Path Validation Doc
           path: phase-05-remediation-02/001-fix-authpage-onauthenticated-doc.md
-          done: false
+          done: true
           tier: haiku-med
+          digest: 'Updated the AuthPage onAuthenticated JSDoc to state that only the query-param fallback (readReturnPath) is validated by isSafeReturnPath, while an explicit returnPath prop is passed through as supplied so the app owns its validation; wording matches LoginForm''s corrected onSuccess doc. Comments only. Manager re-ran bun test in the task worktree: 185 pass, 0 fail (the agent''s reported 78 failures were not reproducible).'
           findings:
             - HNPY
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-05-001
+            commit:
+                - 5753f86
             merge: null
