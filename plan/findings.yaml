@@ -72,4 +72,13 @@ items:
         - effort:unspecified
         - plan/phase:ssh-keys-panel-and-hardening
       text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/mf-standards is a registered but uninitialized git submodule (directory present, zero files) in this checkout. Several links in the README-reachable chain dangle into it: README.md''s own Installation section links ./docs/mf-standards/building-applications.md#first-time-setup (the install instructions'' own forward-link dead-ends); AGENTS.md links ./docs/mf-standards/building-common.md#building-inside-a-task-worktree; docs/architecture.md links ./mf-standards/architecture.md (twice), ./mf-standards/architecture/entity-typing.md, and ./mf-standards/architecture/db-considerations.md; docs/mod-users-spec.md links ./mf-standards/architecture.md, ./mf-standards/architecture/api-response-design.md, and ./mf-standards/architecture/authorization-design.md. Recommend checking in/populating the docs-mf-standards submodule before publication, or replacing these forward-links with concrete local steps until the submodule is live.'
+    - title: Deploy/model docs unreachable from README
+      id: 124J
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:unspecified
+        - plan/phase:ssh-keys-panel-and-hardening
+      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff; likely duplicates existing project-scope followups endf/oti2 filed during the ssh-public-keys plan] deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md, and api/server/CLAUDE.md are all unreachable from README.md. docs/architecture.md mentions deploy/local/README.md''s path in backticks rather than as a markdown link, which doesn''t close the chain. Recommend linking the deploy READMEs and model/README.md from docs/project-structure.md or AGENTS.md, converting the deploy/local/README.md mention into a real link, linking next-steps.md from README''s "Additional documentation" section, and either populating or excluding api/server/CLAUDE.md per flow/policy.yaml''s link_check.excluded_docs.'
 closed: []
