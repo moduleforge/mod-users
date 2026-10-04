@@ -16,6 +16,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: unauthenticated-handler
+          title: Configurable Unauthenticated Handler With Return Path and Logout Target
+          path: phase-01-gui-seams/002-unauthenticated-handler.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
