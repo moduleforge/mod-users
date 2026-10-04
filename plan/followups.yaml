@@ -683,3 +683,12 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: 'OIDCStateCookiePath(r) in api/internal/auth/oidc_cookie_path.go derives the oidc_state cookie Path from the request URL path (it keeps only a prefix already present before /v1/auth/oidc/). Behind a proxy that strips the public mount prefix (for example Caddy handle_path /manage/* in front of an app served at /manage), the request carries no prefix, so the cookie keeps Path=/v1/auth/oidc/ while the browser is at /manage/v1/auth/oidc/..., so the browser never sends it back and the callback returns HTTP 400 "missing state cookie". The existing tests cover only "prefix present in request" and "no marker". Change: derive the Path from the path of OAuth.RedirectBase (AUTH_OAUTH_REDIRECT_BASE_URL, auth/oauth.go ~194, the same field used for the IdP callback URI at ~379-380), or honour a configured prefix, or read X-Forwarded-Prefix from a trusted proxy; add a unit test for a stripped request with a configured public base of /manage. Workaround until then: a proxy Set-Cookie header rewrite (Caddy header_down), or run without browser OIDC (NO_OIDC_ACCOUNTS=1). Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 1).'
+    - title: OIDC test redirect drops mount prefix
+      id: hDB7
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: api/internal/handlers/auth/oidc.go redirectToTestResult (~line 338) assigns u.Path = "/oidc-config" over the operator-supplied FrontendReturnURL (AUTH_FRONTEND_RETURN_URL), dropping any mount prefix the app is served under (for example /manage), so the OIDC provider test result lands on the wrong URL. Loud failure (a 404 or wrong page after the provider test), admin-only flow. Derive the redirect from the FrontendReturnURL's own path (or a configured oidc-config path) instead of overwriting it, and add a test with a prefixed return URL. Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 2).
