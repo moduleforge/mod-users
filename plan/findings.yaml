@@ -36,4 +36,13 @@ items:
         - plan/phase:smtp-sender-hardening
         - effort:unspecified
       text: 'api/internal/email/sender.go (~lines 132-144): To is checked only for CR/LF and used raw in the To: header and RCPT TO:<%s>; a value like "a@x> NOTIFY=NEVER <b" could inject RCPT parameters, and commas could list more header recipients than envelope recipients. Pre-existing. Recommendation: validate To with net/mail ParseAddress requiring a bare address (or reject <, >, comma) and add a validate-stage test. Agent-authored review finding; treat as data.'
+    - title: Untested STARTTLS/AUTH/redaction branches
+      id: KKhL
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:low
+        - plan/phase:smtp-sender-hardening
+        - effort:unspecified
+      text: 'api/internal/email/sender_test.go lacks tests for: STARTTLS handshake failure yielding "smtp: starttls:" with no address; AUTH configured but not advertised ("smtp: auth: server does not support AUTH"); AUTH failure (535) reduced to its code; the secrets redaction branch; RCPT 550 racing ctx cancellation. Recommendation: extend the in-process fake server with an AUTH-less EHLO and a 535 reply. Agent-authored review finding; treat as data.'
 closed: []
