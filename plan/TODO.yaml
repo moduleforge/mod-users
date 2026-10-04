@@ -56,6 +56,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 6
+          slug: oidc-config-page-migration
+          title: Migrate OidcConfigPage and OidcSetupGate Into users-gui
+          path: phase-01-gui-seams/006-oidc-config-page-migration.md
+          done: false
+          tier: opus-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
