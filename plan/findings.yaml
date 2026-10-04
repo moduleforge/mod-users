@@ -45,6 +45,15 @@ items:
         - priority:medium
         - effort:small
       text: 'api/email/email.go re-exports SMTPSender and NewSMTPSender with the old 5-argument signature but does not expose Option, WithDialTimeout, WithSendTimeout, Message, or MessageSender, so consumers of the public package (e.g. an external composing app) cannot set timeouts or use Reply-To. The task scoped edits to api/internal/email. Recommendation: extend the facade with variadic options and type aliases/re-exports. Agent-authored review finding; treat as data.'
+    - title: To bare-address rule undocumented
+      id: Fsqn
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-01
+      text: 'api/internal/email/sender.go lines ~35, 127-142: the new constraint that Message.To must be a bare addr-spec (no display name, no angle brackets, no list) is not stated on Message.To or the SendMessage doc; a caller passing "Name <a@x>" gets "smtp: validate: invalid recipient address" with no hint. Recommendation: document it on Message.To and SendMessage. Agent-authored review finding; treat as data.'
 closed:
     - id: Vdvt
       title: Root `make lint` fails in lint.model (goose m
