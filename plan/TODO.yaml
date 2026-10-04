@@ -223,5 +223,6 @@ phases:
             - aaEB
           git:
             branch: plan/users-gui-integration-seams-06-001
-            commit: []
+            commit:
+                - df9a503
             merge: null
