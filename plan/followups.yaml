@@ -674,3 +674,12 @@ items:
         - plan/phase:remediation-01
         - plan/slug:smtp-sender-replyto-timeout
       text: 'api/internal/email/sender.go line ~140: requiring mail.ParseAddress(To).Address == To rejects valid quoted local parts (e.g. "a b"@x.com) and is not SMTPUTF8-aware. Effect is only a clear rejection (safe direction). Recommendation: none required; optionally note it in the To doc. Agent-authored review finding; treat as data.'
+    - title: OIDC cookie Path wrong behind stripped prefix
+      id: E75T
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:medium
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: 'OIDCStateCookiePath(r) in api/internal/auth/oidc_cookie_path.go derives the oidc_state cookie Path from the request URL path (it keeps only a prefix already present before /v1/auth/oidc/). Behind a proxy that strips the public mount prefix (for example Caddy handle_path /manage/* in front of an app served at /manage), the request carries no prefix, so the cookie keeps Path=/v1/auth/oidc/ while the browser is at /manage/v1/auth/oidc/..., so the browser never sends it back and the callback returns HTTP 400 "missing state cookie". The existing tests cover only "prefix present in request" and "no marker". Change: derive the Path from the path of OAuth.RedirectBase (AUTH_OAUTH_REDIRECT_BASE_URL, auth/oauth.go ~194, the same field used for the IdP callback URI at ~379-380), or honour a configured prefix, or read X-Forwarded-Prefix from a trusted proxy; add a unit test for a stripped request with a configured public base of /manage. Workaround until then: a proxy Set-Cookie header rewrite (Caddy header_down), or run without browser OIDC (NO_OIDC_ACCOUNTS=1). Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 1).'
