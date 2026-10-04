@@ -11,7 +11,7 @@ phases:
           slug: harden-smtp-sender
           title: 'Harden SMTPSender: Reply-To, Context-Bounded Send, Address-Free Errors'
           path: phase-01-smtp-sender-hardening/001-harden-smtp-sender.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Replaced smtp.SendMail with an explicit context-bounded SMTP flow (DialContext, conn deadline, watcher goroutine that closes the connection on ctx.Done and is always joined). Added Message, MessageSender, Options, Reply-To and CR/LF validation, and address-free stage errors. Tests cover everything the task listed and are stable under -race -count=20.
           git:
