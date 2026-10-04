@@ -171,6 +171,7 @@ phases:
           path: phase-04-remediation-01/002-fix-loginform-onsuccess-doc.md
           done: false
           tier: sonnet-low
+          digest: Corrected the LoginForm onSuccess JSDoc (comments only). Typecheck and tests pass.
           findings:
             - uOkV
           git:
