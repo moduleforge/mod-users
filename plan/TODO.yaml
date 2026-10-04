@@ -33,7 +33,7 @@ phases:
           slug: expose-sender-api-in-public-facade
           title: Expose Message, MessageSender and Sender Options in the Public Email Facade
           path: phase-02-remediation-01/001-expose-sender-api-in-public-facade.md
-          done: false
+          done: true
           tier: haiku-med
           digest: Exposed the new sender API in the public api/email facade by adding type aliases for Message, MessageSender, and Option, re-exporting WithDialTimeout and WithSendTimeout, and updating NewSMTPSender to accept variadic opts. Backward compatible, scoped to api/email.
           findings:
