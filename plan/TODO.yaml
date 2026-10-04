@@ -114,5 +114,6 @@ phases:
             - uNF5
           git:
             branch: plan/mfgit-upstream-modules-06-001
-            commit: []
+            commit:
+                - f68883f
             merge: null
