@@ -164,7 +164,8 @@ phases:
             - X1dW
           git:
             branch: plan/users-gui-integration-seams-04-001
-            commit: []
+            commit:
+                - 3b2ee27
             merge: null
         - number: 2
           slug: fix-loginform-onsuccess-doc
