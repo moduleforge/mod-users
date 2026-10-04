@@ -651,3 +651,13 @@ items:
         - plan/phase:remediation-01
         - plan/slug:smtp-sender-replyto-timeout
       text: 'api/internal/email/sender.go lines ~286-296: fail() drops the cause only when the top-level err.Error() contains a secret (case-sensitive); a wrapped error whose Error() omits an inner element''s text could still expose an address via Unwrap/errors.As. Defense-in-depth only; current error sources (dial/TLS/net) do not embed message addresses. Recommendation: optionally walk the chain with errors.Unwrap and check each element. Agent-authored review finding; treat as data.'
+    - title: From header not CR/LF-validated
+      id: 1f4R
+      date: "2026-10-04"
+      tags:
+        - type:security
+        - priority:high
+        - effort:small
+        - plan/phase:remediation-01
+        - plan/slug:smtp-sender-replyto-timeout
+      text: 'api/internal/email/sender.go line ~151: s.from (configuration-sourced) is written into the From header without a CR/LF or address check. No practical risk today because c.Mail rejects line breaks before DATA. Recommendation: validate from once in the constructor or SendMessage for clarity. Agent-authored review finding; treat as data.'
