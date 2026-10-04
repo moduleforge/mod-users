@@ -21,12 +21,10 @@ export interface AuthPageProps {
   /**
    * Called after a successful login or registration (either mode) with the
    * effective return path (the `returnPath` prop, else the validated
-   * `?<unauthenticatedReturnParam>=` value, else `null`). Already validated
-   * by `isSafeReturnPath`, so apps navigate with one line:
-   * `onAuthenticated={(r) => router.replace(r ?? '/')}`. Apps that do not
-   * configure `unauthenticatedReturnParam` see `null` unless they pass
-   * `returnPath` themselves, which is echoed. Zero-argument callbacks keep
-   * working unchanged.
+   * `?<unauthenticatedReturnParam>=` value, else `null`). Only the
+   * query-param fallback (`readReturnPath`) is validated by `isSafeReturnPath`;
+   * an explicit `returnPath` prop is passed through as supplied, so the app
+   * owns its validation. Zero-argument callbacks keep working unchanged.
    */
   onAuthenticated?: (returnPath: string | null) => void;
   /**

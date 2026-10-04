@@ -17,3 +17,16 @@ Remediates finding HNPY: the `AuthPage` `onAuthenticated` JSDoc in `gui/src/comp
 ## References
 
 - Finding HNPY in this plan's `plan/findings.yaml` (the `AuthPage` `onAuthenticated` doc).
+
+## Status
+
+**Outcome:** succeeded
+
+**Date:** 2026-10-04
+
+**Validation summary:**
+- Validation check 1 (docstring consistency): The updated `onAuthenticated` JSDoc in `gui/src/components/auth-page.tsx` now matches the corrected `onSuccess` JSDoc in `gui/src/components/login-form.tsx`. Both accurately state that only the query-param fallback is validated by `isSafeReturnPath`, while an explicit `returnPath` prop is passed through as supplied.
+- Validation check 2 (diff scope and test status): The diff touches comments only in `gui/src/components/auth-page.tsx`. Typecheck (`cd gui && bun run typecheck`) passes with no errors. Test suite shows identical results before and after (20 pass, 78 fail, 6 errors) — no new failures introduced.
+
+**Files modified:**
+- `gui/src/components/auth-page.tsx` — updated `onAuthenticated` JSDoc to clarify validation scope
