@@ -3,6 +3,7 @@ package sshkey
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // maxLabelRunes is the maximum length, in runes, of a normalized label (D7).
@@ -17,11 +18,33 @@ const maxLabelRunes = 100
 // input-size guard.
 const maxLabelRawBytes = 4 * maxLabelRunes
 
+// isDisallowedLabelRune reports whether r may not appear in a stored label:
+// any control character (unicode.IsControl, which covers NUL, C0, DEL, and
+// C1), or a Unicode Bidi_Control character — U+202A through U+202E
+// embeddings and overrides, U+2066 through U+2069 isolates, U+061C (ARABIC
+// LETTER MARK), U+200E (LEFT-TO-RIGHT MARK), and U+200F (RIGHT-TO-LEFT
+// MARK) — that could spoof how the label displays. This covers the whole
+// Unicode Bidi_Control set; it deliberately excludes zero-width characters
+// (U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 WORD JOINER), which are not
+// bidi controls and are needed for legitimate emoji sequences and Persian
+// and Indic scripts.
+func isDisallowedLabelRune(r rune) bool {
+	return unicode.IsControl(r) ||
+		r == 0x061C ||
+		r == 0x200E ||
+		r == 0x200F ||
+		(r >= 0x202A && r <= 0x202E) ||
+		(r >= 0x2066 && r <= 0x2069)
+}
+
 // NormalizeLabel resolves the stored label per design note D7. When
 // requested is non-nil, its trimmed value is used; it must not exceed 100
-// runes, or NormalizeLabel returns ErrLabelTooLong. When requested is nil,
-// the label defaults to the trimmed comment, silently truncated to 100
-// runes rather than rejected. An empty result is valid in both cases.
+// runes, or NormalizeLabel returns ErrLabelTooLong, and it must not contain
+// a control character or bidi formatting character once surrounding
+// whitespace is trimmed, or NormalizeLabel returns ErrLabelInvalidChars.
+// When requested is nil, the label defaults to the comment with control and
+// bidi formatting characters stripped, then trimmed and silently truncated
+// to 100 runes rather than rejected. An empty result is valid in both cases.
 func NormalizeLabel(requested *string, comment string) (string, error) {
 	if requested != nil {
 		if len(*requested) > maxLabelRawBytes {
@@ -31,10 +54,19 @@ func NormalizeLabel(requested *string, comment string) (string, error) {
 		if n := len([]rune(trimmed)); n > maxLabelRunes {
 			return "", fmt.Errorf("sshkey: label is %d runes, maximum is %d: %w", n, maxLabelRunes, ErrLabelTooLong)
 		}
+		if strings.IndexFunc(trimmed, isDisallowedLabelRune) >= 0 {
+			return "", fmt.Errorf("sshkey: label contains control or bidi formatting characters: %w", ErrLabelInvalidChars)
+		}
 		return trimmed, nil
 	}
 
-	runes := []rune(strings.TrimSpace(comment))
+	stripped := strings.Map(func(r rune) rune {
+		if isDisallowedLabelRune(r) {
+			return -1
+		}
+		return r
+	}, comment)
+	runes := []rune(strings.TrimSpace(stripped))
 	if len(runes) > maxLabelRunes {
 		runes = runes[:maxLabelRunes]
 	}

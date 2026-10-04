@@ -501,7 +501,9 @@ components:
           description: >-
             User-supplied label. Defaults to the key's `authorized_keys`
             comment (trimmed and truncated to 100 characters) when omitted
-            at registration.
+            at registration. Control and bidi-formatting characters are
+            rejected in a supplied label and stripped from a
+            comment-derived default.
         created_at:
           type: string
           format: date-time
@@ -526,7 +528,9 @@ components:
           description: >-
             Optional label, at most 100 characters. When omitted or null,
             defaults to the key's `authorized_keys` comment, trimmed and
-            truncated to 100 characters.
+            truncated to 100 characters. Control and bidi-formatting
+            characters are rejected in a supplied label and stripped from a
+            comment-derived default.
 
     PaginatedSSHKeys:
       type: object
@@ -1526,7 +1530,9 @@ paths:
         at least 2048 bits; an unsupported type is refused with `400` /
         `users.ssh_key_type_unsupported`, an under-strength RSA key with
         `400` / `users.ssh_key_too_weak`, and a `label` over 100 characters
-        with `400` / `users.ssh_key_label_too_long`.
+        with `400` / `users.ssh_key_label_too_long`. A supplied `label`
+        containing a control or bidi-formatting character is refused with
+        `400` / `users.ssh_key_label_invalid`.
       tags: [SSH Keys]
       operationId: registerSelfSSHKey
       parameters:
@@ -1644,7 +1650,9 @@ paths:
         `sk-` variants, ECDSA P-256/384/521, and RSA of at least 2048 bits
         (otherwise `400` / `users.ssh_key_type_unsupported` or `400` /
         `users.ssh_key_too_weak`); a `label` over 100 characters is refused
-        with `400` / `users.ssh_key_label_too_long`.
+        with `400` / `users.ssh_key_label_too_long`, and a `label`
+        containing a control or bidi-formatting character is refused with
+        `400` / `users.ssh_key_label_invalid`.
       tags: [SSH Keys]
       operationId: registerUserAccountSSHKey
       parameters:

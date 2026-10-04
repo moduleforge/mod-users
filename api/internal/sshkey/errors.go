@@ -19,3 +19,8 @@ var ErrTooWeak = errors.New("sshkey: key too weak")
 // ErrLabelTooLong indicates a caller-supplied label exceeds 100 runes. Maps
 // to detail code users.ssh_key_label_too_long.
 var ErrLabelTooLong = errors.New("sshkey: label too long")
+
+// ErrLabelInvalidChars indicates a caller-supplied label contains a control
+// or bidi formatting character. Maps to detail code
+// users.ssh_key_label_invalid.
+var ErrLabelInvalidChars = errors.New("sshkey: label contains invalid characters")

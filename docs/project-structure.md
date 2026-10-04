@@ -80,7 +80,7 @@ gui/
   .ladle/               # Ladle component workbench config (styles.css is the Tailwind entry, workbench-only)
   src/
     index.ts            # package entry point — re-exports all public components
-    components/         # React UI components (auth flows, profile, admin views)
+    components/         # React UI components (auth flows, account credentials, profile, admin views)
     lib/                # API client, hooks, shared utilities
     stories/            # Ladle story files (exploratory; not the primary showcase)
 ```
