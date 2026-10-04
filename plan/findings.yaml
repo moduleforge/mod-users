@@ -5,9 +5,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:documentation
-        - priority:unspecified
-        - effort:unspecified
         - plan/phase:doc-updates
+        - priority:medium
+        - effort:small
       text: '[doc-updates gate correctness-lens finding correctness-001, minor] docs/architecture.md line 150''s new sentence says SSHKeysPanel delegates non-step-up action-required responses to an optional onActionRequired callback "with an inline fallback alert when none is supplied." In gui/src/components/ssh-keys-panel.tsx, handleActionRequired always calls setNotice(...) and also invokes onActionRequiredRef.current?.(error) when present -- the inline alert renders every time regardless of whether a host supplies the callback, not only as a fallback. A host supplying onActionRequired would be surprised to see both its own handling and the panel''s alert fire together. Recommend rewording to state the alert always shows in addition to the callback, not only as a fallback.'
     - title: '"sixth component" ordinal unclear'
       id: uNF5
