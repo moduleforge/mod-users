@@ -37,6 +37,7 @@ phases:
           path: phase-01-ssh-keys-panel-and-hardening/003-ssh-keys-panel.md
           done: false
           tier: sonnet-high
+          digest: Built SSHKeysPanel (list, add with field-error mapping, revoke dialog, inline email-code step-up, host delegation of action-required errors) on the shared api singleton, plus 29 behavior tests, five Ladle stories, and an append-only export. Tests pass only with the environment workaround below.
           git:
             branch: null
             commit: []
