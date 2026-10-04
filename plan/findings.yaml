@@ -13,8 +13,8 @@ items:
       date: "2026-10-04"
       tags:
         - type:enhancement
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:medium
       text: UserAccountSelf (gui/src/lib/api.ts) has no email_verified_at, so VerifyEmailPage cannot tell that the signed-in user is already verified and cannot skip itself or redirect onward. Backend change (self response + openapi + GUI type) outside this plan.
     - title: EmailCodePage wrong code hits 401 redirect
       id: ljyL
