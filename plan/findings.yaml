@@ -9,15 +9,6 @@ items:
         - priority:medium
         - effort:small
       text: 'Environment: mod-core/gui/node_modules/react is a dangling symlink to a sibling worktree''s bun cache (the AGENTS.md Known gap: bun installed through the worktree symlink). It makes bun test fail in the worktree even on the base. Before final validation, run bun install && bun run build in mod-core''s real checkout (mod-core/gui) so the full gui test suite runs natively.'
-    - title: Environment gap (pre-existing, not caused by
-      id: xcHA
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - plan/phase:ssh-keys-panel-and-hardening
-        - priority:medium
-        - effort:small
-      text: 'Environment gap (pre-existing, not caused by this change): symlinks under mod-core/gui/node_modules point at a nonexistent path relative to the mfgit-upstream-modules-01-003 worktree, so bun test fails identically on the unmodified base. Please repair the mod-core/gui install (re-run bun install in the workspace) so a plain bun test works for verification outside the worktree.'
     - title: The recommended live-stack manual check (make
       id: KOQ4
       date: "2026-10-04"
@@ -75,6 +66,12 @@ items:
 closed:
     - id: WAAG
       title: The gui half of make test.unit cannot pass in
+      disposition: dismissed
+      reason: Duplicate of YPQ2, which carries the more specific cause/remedy and is being escalated.
+      ref: YPQ2
+      date: "2026-10-04"
+    - id: xcHA
+      title: Environment gap (pre-existing, not caused by
       disposition: dismissed
       reason: Duplicate of YPQ2, which carries the more specific cause/remedy and is being escalated.
       ref: YPQ2
