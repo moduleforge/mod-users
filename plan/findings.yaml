@@ -1,17 +1,5 @@
 version: 2
 items:
-    - title: The recommended live-stack manual check (make
-      id: KOQ4
-      date: "2026-10-04"
-      tags:
-        - type:ambiguity
-        - plan/phase:ssh-keys-panel-and-hardening
-        - priority:low
-        - effort:small
-      text: |-
-        The recommended live-stack manual check (make dev.start, make preview, Mailpit step-up) was not performed.
-
-        Open question (internal-escalation gated off, surfaced for manager decision): "Should the recommended live-stack manual check of SSHKeysPanel (make dev.start, make preview, register/revoke an Ed25519 key, Mailpit step-up) be performed before plan close-out, or recorded as not performed?" Options considered: (1) perform the manual check before close-out; (2) record it as not performed and close on automated coverage (29 component tests, api unit tests). Recommended option: (2) record it as not performed and close on automated coverage.
     - title: 'Label spoof: weak bidi/ZW marks allowed'
       id: sQRd
       date: "2026-10-04"
@@ -59,4 +47,9 @@ closed:
       title: 'Environment: mod-core/gui/node_modules/react'
       disposition: promoted
       ref: YPQ2
+      date: "2026-10-04"
+    - id: KOQ4
+      title: The recommended live-stack manual check (make
+      disposition: promoted
+      ref: KOQ4
       date: "2026-10-04"
