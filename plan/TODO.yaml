@@ -50,7 +50,7 @@ phases:
             branch: plan/users-gui-integration-seams-01-004
             commit:
                 - 41a8f8b
-            merge: null
+            merge: e5c6542d7c531d0ec4a28420f5cd91d8e8c2be08
         - number: 5
           slug: verify-email-page-and-routes
           title: Standard VerifyEmailPage and Exported USERS_GUI_ROUTES
