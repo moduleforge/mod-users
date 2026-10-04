@@ -458,6 +458,8 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         request<LoginResponse>('/v1/auth/login', {
           method: 'POST',
           body: JSON.stringify({ email, password }),
+          // 401 here means wrong email or password (login.go), not an expired session.
+          skipAuthRedirect: true,
         }),
 
       register: (data: RegisterRequest) =>
@@ -476,6 +478,8 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         request<void>('/v1/auth/password-reset/confirm', {
           method: 'POST',
           body: JSON.stringify(data),
+          // 401 here means an invalid or expired reset token (reset.go), not an expired session.
+          skipAuthRedirect: true,
         }),
 
       requestEmailCode: (
@@ -492,6 +496,8 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         request<LoginResponse>('/v1/auth/email-code/verify', {
           method: 'POST',
           body: JSON.stringify(data),
+          // 401 here means a wrong, expired, or unknown-user code (emailcode.go), not an expired session.
+          skipAuthRedirect: true,
         }),
 
       /**

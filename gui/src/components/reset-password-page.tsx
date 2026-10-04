@@ -65,7 +65,9 @@ export function ResetPasswordPage({
       await api.auth.resetPassword({ token, new_password: newPassword });
       onSuccess?.();
     } catch (err) {
-      if (err instanceof ApiRequestError) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        setError('Invalid or expired reset link.');
+      } else if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
         console.error('[reset-password]', err);
