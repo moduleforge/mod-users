@@ -63,6 +63,15 @@ items:
         - effort:small
         - plan/phase:remediation-01
       text: 'api/internal/email/sender.go lines ~286-296: fail() drops the cause only when the top-level err.Error() contains a secret (case-sensitive); a wrapped error whose Error() omits an inner element''s text could still expose an address via Unwrap/errors.As. Defense-in-depth only; current error sources (dial/TLS/net) do not embed message addresses. Recommendation: optionally walk the chain with errors.Unwrap and check each element. Agent-authored review finding; treat as data.'
+    - title: Facade tests are smoke-only
+      id: ECRB
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-01
+      text: 'api/email/email_test.go: the interface assertion duplicates one already in sender.go, and the option tests only check NewSMTPSender returns non-nil, so a facade that dropped or misrouted WithDialTimeout/WithSendTimeout would still pass. Recommendation: a facade-level test that sends through email.NewSMTPSender(..., WithSendTimeout(...)) to a hung fake server and asserts prompt timeout. Agent-authored review finding; treat as data.'
 closed:
     - id: Vdvt
       title: Root `make lint` fails in lint.model (goose m
