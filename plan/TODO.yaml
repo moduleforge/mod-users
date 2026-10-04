@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: smtp-sender-hardening
       title: SMTP Sender Reply-To, Bounded Dial, and Address-Free Errors
+      diff_base: 3b293e333a3eb957300e49241eb1c03afc4081fa
       tasks:
         - number: 1
           slug: harden-smtp-sender
