@@ -35,7 +35,7 @@ phases:
           slug: auth-component-props
           title: AuthPage Registration Toggle, Forgot-Password Link, and Exported isSafeReturnPath
           path: phase-01-gui-seams/003-auth-component-props.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Moved isSafeReturnPath verbatim into lib/return-path.ts and exported it from index.ts. Added allowRegistration and onForgotPassword props to AuthPage and LoginForm, all default-preserving. Documented that returnPath feeds only the OIDC start URL. Added tests and stories; typecheck and the full suite pass.
           git:
