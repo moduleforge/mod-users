@@ -15,7 +15,7 @@ phases:
           tier: sonnet-med
           digest: Added control and bidi character rejection for supplied SSH key labels (stripping for comment-derived defaults), with the new users.ssh_key_label_invalid detail code, OpenAPI docs and tests. No surprises.
           git:
-            branch: null
+            branch: plan/mfgit-upstream-modules-01-001
             commit: []
             merge: null
         - number: 2
