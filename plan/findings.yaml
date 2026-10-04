@@ -8,7 +8,10 @@ items:
         - plan/phase:ssh-keys-panel-and-hardening
         - priority:medium
         - effort:small
-      text: 'Environment: mod-core/gui/node_modules/react is a dangling symlink to a sibling worktree''s bun cache (the AGENTS.md Known gap: bun installed through the worktree symlink). It makes bun test fail in the worktree even on the base. Before final validation, run bun install && bun run build in mod-core''s real checkout (mod-core/gui) so the full gui test suite runs natively.'
+      text: |-
+        Environment: mod-core/gui/node_modules/react is a dangling symlink to a sibling worktree's bun cache (the AGENTS.md Known gap: bun installed through the worktree symlink). It makes bun test fail in the worktree even on the base. Before final validation, run bun install && bun run build in mod-core's real checkout (mod-core/gui) so the full gui test suite runs natively.
+
+        Open question (internal-escalation gated off, surfaced for manager decision): "Before plan close-out, should the manager repair the sibling mod-core/gui install (bun install && bun run build in mod-core's real checkout) so the full mod-users gui test suite runs natively, or accept the task agents' workaround-based green runs as the evidence for the gui-tests success criterion?" Options considered: (1) repair the sibling install and re-run natively before close-out; (2) accept the workaround-based runs and note the gap in the plan summary; (3) accept as-is and also file a durable project followup to make AGENTS.md's Known gap name the dangling react symlink. Recommended option: (1) repair the sibling install, then re-run gui typecheck and tests natively before close-out.
     - title: The recommended live-stack manual check (make
       id: KOQ4
       date: "2026-10-04"
