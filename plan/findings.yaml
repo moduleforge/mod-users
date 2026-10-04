@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: sendError.Unwrap exposes unredacted cause
-      id: Zr31
-      date: "2026-10-04"
-      tags:
-        - type:security
-        - plan/phase:smtp-sender-hardening
-        - priority:low
-        - effort:small
-      text: 'api/internal/email/sender.go lines ~261-285: redaction in fail() is applied only to the detail string; sendError.Unwrap() returns the unredacted original error in the default branch, so errors.Unwrap(err).Error(), %+v, or an error-reporting library walking the chain could see address text. No concrete current leak path found (net/smtp relay replies are *textproto.Error and handled separately). Recommendation: only wrap ctx.Err()/context.DeadlineExceeded/os.ErrDeadlineExceeded via explicit errors.Is targets and drop the cause otherwise, or document the chain as not address-safe. Agent-authored review finding; treat as data.'
     - title: Untested STARTTLS/AUTH/redaction branches
       id: KKhL
       date: "2026-10-04"
@@ -81,6 +72,11 @@ closed:
       date: "2026-10-04"
     - id: GS7Y
       title: To address only CR/LF-checked, not parsed
+      disposition: fixed
+      ref: phase-02-remediation-01/002-harden-sender-body-recipient-and-error-chain.md
+      date: "2026-10-04"
+    - id: Zr31
+      title: sendError.Unwrap exposes unredacted cause
       disposition: fixed
       ref: phase-02-remediation-01/002-harden-sender-body-recipient-and-error-chain.md
       date: "2026-10-04"
