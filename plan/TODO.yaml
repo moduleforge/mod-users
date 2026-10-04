@@ -30,7 +30,7 @@ phases:
             branch: plan/mfgit-upstream-modules-01-002
             commit:
                 - 0e8fe5c
-            merge: null
+            merge: 8c6aa6bf87ed9cd5b946398a145ad282fab86164
         - number: 3
           slug: ssh-keys-panel
           title: SSH Keys Panel
