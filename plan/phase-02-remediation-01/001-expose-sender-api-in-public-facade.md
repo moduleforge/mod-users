@@ -21,3 +21,24 @@ Remediates finding XFjp (in this plan's `plan/findings.yaml`): the public `api/e
 
 - Finding XFjp, in this plan's `plan/findings.yaml`.
 - `api/email/email.go`, `api/internal/email/sender.go`.
+
+## Status
+
+**Outcome:** succeeded
+
+**Date:** 2026-10-04
+
+**Implementation summary:** Exposed the sender API in the public `api/email` facade by adding type aliases for `Message`, `MessageSender`, and `Option`, and re-exporting `WithDialTimeout` and `WithSendTimeout`. Updated `NewSMTPSender` to accept variadic `opts ...Option` parameter and forward it to the internal constructor, maintaining backward compatibility with existing callers.
+
+**Files modified:**
+- `api/email/email.go` — added type aliases, re-exported functions, updated NewSMTPSender signature
+- `api/email/email_test.go` — created with tests for interface compliance and new signature
+
+**Validation results:**
+1. `make build.api` — passed
+2. Interface compliance and new signature test — passed
+3. `cd api && go test ./email/...` — passed (0 failed, 0 skipped)
+4. `make lint.api` — passed (gofmt, go vet clean)
+5. `git diff --stat` — only `api/email/` files modified
+
+**Correctness review:** All requirements met. Type aliases and re-exports are simple facades over internal types. NewSMTPSender signature change is backward compatible — existing callers without options still work. No new error paths or edge cases. Tests verify interface compliance and the new signature works as intended.
