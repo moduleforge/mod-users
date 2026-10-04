@@ -49,4 +49,14 @@ phases:
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
-      tasks: []
+      tasks:
+        - number: 1
+          slug: consumer-integration-guide
+          title: Write the users-gui Consumer Integration Guide
+          path: phase-02-consumer-docs-and-handoff/001-consumer-integration-guide.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
