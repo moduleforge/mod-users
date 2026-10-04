@@ -48,7 +48,8 @@ phases:
           digest: Removed the dangling ./styles.css export from gui/package.json; no source imports it, and the build is unchanged.
           git:
             branch: plan/users-gui-integration-seams-01-004
-            commit: []
+            commit:
+                - 41a8f8b
             merge: null
         - number: 5
           slug: verify-email-page-and-routes
