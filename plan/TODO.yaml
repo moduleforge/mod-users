@@ -169,7 +169,7 @@ phases:
           slug: fix-loginform-onsuccess-doc
           title: Correct LoginForm onSuccess Return-Path Validation Doc
           path: phase-04-remediation-01/002-fix-loginform-onsuccess-doc.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Corrected the LoginForm onSuccess JSDoc (comments only). Typecheck and tests pass.
           findings:
