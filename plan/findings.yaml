@@ -17,6 +17,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'ENVIRONMENT: mod-core/gui/node_modules contains dangling relative symlinks (e.g. react, tsup -> ../../../users-gui-integration-seams-01-001/node_modules/.bun/...) written by the task worktree provisioning install (known worktree-symlink gap in AGENTS.md). Without a fix, bun test in later mod-users worktrees fails with ''Cannot find module react/jsx-runtime from mod-core/gui/dist/index.mjs''. Agent worked around it with a temporary out-of-tree symlink (since removed). Repair mod-core/gui/node_modules (e.g. bun install in mod-core''s real checkout) or provide the symlink for later tasks; may affect other worktrees sharing mod-core/gui/node_modules.'
+    - title: Duplicate site-path safety check
+      id: V6al
+      date: "2026-10-04"
+      tags:
+        - type:optimization
+        - priority:low
+        - plan/phase:gui-seams
+        - effort:unspecified
+      text: gui/src/lib/config.ts defines `isSafeSitePath()` (used for returnPath/loginPath and redirect-URL path validation) while gui/src/lib/return-path.ts defines `isSafeReturnPath()` (used by oidc-callback-page.tsx and exported from index.ts). Both landed independently and overlap; the config.ts helper's own comment says return-path.ts should replace it. Consolidate on one helper (config.ts importing isSafeReturnPath, or the reverse) and keep the full existing test tables for both behaviours.
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
