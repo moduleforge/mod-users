@@ -134,7 +134,7 @@ phases:
             branch: plan/users-gui-integration-seams-02-002
             commit:
                 - b6dd3a8
-            merge: null
+            merge: 659290f40135b8058c71e8133a7aa995d765f774
     - number: 3
       slug: doc-updates
       title: Documentation Updates
