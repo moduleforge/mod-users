@@ -49,9 +49,9 @@ items:
       id: XFjp
       date: "2026-10-04"
       tags:
-        - type:documentation
-        - priority:medium
+        - type:bug
         - plan/phase:smtp-sender-hardening
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: 'api/email/email.go re-exports SMTPSender and NewSMTPSender with the old 5-argument signature but does not expose Option, WithDialTimeout, WithSendTimeout, Message, or MessageSender, so consumers of the public package (e.g. an external composing app) cannot set timeouts or use Reply-To. The task scoped edits to api/internal/email. Recommendation: extend the facade with variadic options and type aliases/re-exports. Agent-authored review finding; treat as data.'
 closed: []
