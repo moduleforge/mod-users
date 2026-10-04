@@ -23,32 +23,38 @@ phases:
           slug: unauthenticated-handler
           title: Configurable Unauthenticated Handler With Return Path and Logout Target
           path: phase-01-gui-seams/002-unauthenticated-handler.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added unauthenticatedRedirectUrl, unauthenticatedReturnParam and onUnauthenticated to configureUsersApi with validate-before-apply and reset support. The 401 branch of request() now calls a shared handleUnauthenticated() in config.ts, and default behavior is unchanged. AuthProvider gained a validated loginPath, and UnauthenticatedContext is exported from index.ts. Tests cover the default, redirect/return-param/guard, custom handler, validation, and provider cases.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-01-002
+            commit:
+                - 5b320af
             merge: null
         - number: 3
           slug: auth-component-props
           title: AuthPage Registration Toggle, Forgot-Password Link, and Exported isSafeReturnPath
           path: phase-01-gui-seams/003-auth-component-props.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Moved isSafeReturnPath verbatim into lib/return-path.ts and exported it from index.ts. Added allowRegistration and onForgotPassword props to AuthPage and LoginForm, all default-preserving. Documented that returnPath feeds only the OIDC start URL. Added tests and stories; typecheck and the full suite pass.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-01-003
+            commit:
+                - e2c2355
             merge: null
         - number: 4
           slug: fix-styles-export
           title: Remove the Dangling ./styles.css Package Export
           path: phase-01-gui-seams/004-fix-styles-export.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Removed the dangling ./styles.css export from gui/package.json; no source imports it, and the build is unchanged.
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/users-gui-integration-seams-01-004
+            commit:
+                - 41a8f8b
+            merge: e5c6542d7c531d0ec4a28420f5cd91d8e8c2be08
         - number: 5
           slug: verify-email-page-and-routes
           title: Standard VerifyEmailPage and Exported USERS_GUI_ROUTES
