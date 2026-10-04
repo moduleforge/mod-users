@@ -18,3 +18,15 @@ export const RegisterMode: Story = () => (
     <AuthPage initialMode="register" />
   </AuthProvider>
 );
+
+export const RegistrationDisabled: Story = () => (
+  <AuthProvider>
+    <AuthPage allowRegistration={false} />
+  </AuthProvider>
+);
+
+export const WithForgotPassword: Story = () => (
+  <AuthProvider>
+    <AuthPage onForgotPassword={() => console.log('forgot password')} />
+  </AuthProvider>
+);

@@ -164,8 +164,9 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 | `model/migrations/migrate.go` | Embeds `model/migrations/sql/*.sql` and exposes `Migrate` |
 | `model/queries/` | SQL queries consumed by sqlc |
 | `model/db/` | sqlc-generated Go query code (committed; do not edit by hand) |
-| `gui/src/components/` | React UI components |
-| `gui/src/lib/` | API client and shared utilities |
+| `gui/README.md` | Consumer integration guide for `@moduleforge/users-gui` (runtime configuration, 401 handling, routes, standard pages, examples) — update it with any change to the exported GUI surface |
+| `gui/src/components/` | React UI components, including the standard screens (`VerifyEmailPage`, `OidcConfigPage`, `OidcSetupGate`) |
+| `gui/src/lib/` | API client, runtime configuration (`config.ts`: `configureUsersApi`, `isSafeReturnPath`), `return-path.ts`, `routes.ts` (`USERS_GUI_ROUTES`), and shared utilities |
 | `deploy/local/` | Docker Compose files and Authelia config for local dev |
 | `docs/` | Project documentation |
 | `plan/` | Historical plan summaries and follow-up items |

@@ -64,7 +64,9 @@ export function EmailCodePage({ onSuccess, onNavigateToLogin }: EmailCodePagePro
       setTokenAndUser(response.token, response.user);
       onSuccess?.();
     } catch (err) {
-      if (err instanceof ApiRequestError) {
+      if (err instanceof ApiRequestError && err.status === 401) {
+        setError('Invalid or expired code.');
+      } else if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
         console.error('[email-code]', err);

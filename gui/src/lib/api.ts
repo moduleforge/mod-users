@@ -14,6 +14,7 @@ import type {
   FieldErrorData,
 } from '@moduleforge/core-gui';
 import { ApiRequestError } from '@moduleforge/core-gui';
+import { getApiBaseUrl, getStoredToken, handleUnauthenticated } from './config';
 
 export type { ApiError, ApiErrorResponse, FieldErrorData };
 export { ApiRequestError };
@@ -165,7 +166,7 @@ export interface RequestOptions extends RequestInit {
   /**
    * When true, a 401 response is surfaced to the caller as an
    * `ApiRequestError` without clearing the stored token or triggering a hard
-   * redirect to `/auth/login`. Use this when the caller needs to handle
+   * redirect (default `/auth/login`, see `configureUsersApi`). Use this when the caller needs to handle
    * authentication failures itself (e.g., the OAuth return page, which must
    * redirect to a login URL that carries an `?error=...` message).
    *
@@ -205,13 +206,21 @@ export interface RegisterResponse {
   email_verification_required: boolean;
 }
 
+/**
+ * What the emailed code is for. Omitted keeps the wire body unchanged (the
+ * backend defaults to `'login'`).
+ */
+export type EmailCodePurpose = 'login' | 'verify_email';
+
 export interface EmailCodeRequest {
   email: string;
+  purpose?: EmailCodePurpose;
 }
 
 export interface EmailCodeVerifyRequest {
   email: string;
   code: string;
+  purpose?: EmailCodePurpose;
 }
 
 export interface ForgotPasswordRequest {
@@ -358,7 +367,8 @@ function stepUpHeaders(options?: StepUpOptions): Record<string, string> | undefi
  * Options for {@link createUsersClient}.
  */
 export interface UsersClientOptions {
-  baseUrl: string;
+  /** A fixed base URL, or a function resolved on every request. */
+  baseUrl: string | (() => string);
 }
 
 /**
@@ -371,9 +381,11 @@ export interface UsersClientOptions {
  * ```
  */
 export function createUsersClient({ baseUrl }: UsersClientOptions) {
+  const resolveBaseUrl = (): string =>
+    typeof baseUrl === 'function' ? baseUrl() : baseUrl;
+
   function getToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('auth_token');
+    return getStoredToken();
   }
 
   async function request<T>(
@@ -393,7 +405,7 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
 
     let response: Response;
     try {
-      response = await fetch(`${baseUrl}${path}`, {
+      response = await fetch(`${resolveBaseUrl()}${path}`, {
         ...fetchOptions,
         headers,
       });
@@ -408,9 +420,8 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
     }
 
     if (response.status === 401) {
-      if (!skipAuthRedirect && typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
-        window.location.href = '/auth/login';
+      if (!skipAuthRedirect) {
+        handleUnauthenticated();
       }
       // Unconditional: this throw is intentional and relied upon even when
       // skipAuthRedirect suppresses the redirect above — see the
@@ -478,13 +489,17 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
 
   return {
     /** The configured base URL, e.g. for use in OIDC redirect construction. */
-    baseUrl,
+    get baseUrl(): string {
+      return resolveBaseUrl();
+    },
 
     auth: {
       login: (email: string, password: string) =>
         request<LoginResponse>('/v1/auth/login', {
           method: 'POST',
           body: JSON.stringify({ email, password }),
+          // 401 here means wrong email or password (login.go), not an expired session.
+          skipAuthRedirect: true,
         }),
 
       register: (data: RegisterRequest) =>
@@ -503,18 +518,39 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         request<void>('/v1/auth/password-reset/confirm', {
           method: 'POST',
           body: JSON.stringify(data),
+          // 401 here means an invalid or expired reset token (reset.go), not an expired session.
+          skipAuthRedirect: true,
         }),
 
-      requestEmailCode: (data: EmailCodeRequest) =>
+      requestEmailCode: (
+        data: EmailCodeRequest,
+        options?: Pick<RequestOptions, 'skipAuthRedirect'>,
+      ) =>
         request<void>('/v1/auth/email-code/request', {
           method: 'POST',
           body: JSON.stringify(data),
+          ...options,
         }),
 
       verifyEmailCode: (data: EmailCodeVerifyRequest) =>
         request<LoginResponse>('/v1/auth/email-code/verify', {
           method: 'POST',
           body: JSON.stringify(data),
+          // 401 here means a wrong, expired, or unknown-user code (emailcode.go), not an expired session.
+          skipAuthRedirect: true,
+        }),
+
+      /**
+       * Marks the address verified using the emailed code (`purpose:
+       * 'verify_email'`); the backend answers `204 No Content` (no token).
+       * Passes `skipAuthRedirect` because a wrong or expired code is a `401`
+       * that must not clear the session or redirect to login.
+       */
+      verifyEmail: (data: { email: string; code: string }) =>
+        request<void>('/v1/auth/email-code/verify', {
+          method: 'POST',
+          body: JSON.stringify({ ...data, purpose: 'verify_email' }),
+          skipAuthRedirect: true,
         }),
     },
 
@@ -659,19 +695,18 @@ export type UsersClient = ReturnType<typeof createUsersClient>;
 // enough for 95% of use cases. Consumers that need SSR-safe base URL injection
 // can instead use `createUsersClient` directly.
 
-export const API_BASE_URL =
-  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE_URL
-    ? process.env.NEXT_PUBLIC_API_BASE_URL
-    : typeof window !== 'undefined' && (window as { __USERS_API_URL__?: string }).__USERS_API_URL__
-      ? (window as { __USERS_API_URL__?: string }).__USERS_API_URL__!
-      : 'http://localhost:8080';
+/**
+ * Computed once at module load.
+ * @deprecated Use `getApiBaseUrl()` (evaluated lazily) and `configureUsersApi()`.
+ */
+export const API_BASE_URL: string = getApiBaseUrl();
 
 /**
  * Module-level singleton used by `AuthProvider` and the OIDC config helpers.
  * Configured from `NEXT_PUBLIC_API_BASE_URL` (or the `window.__USERS_API_URL__`
  * escape hatch for non-Next.js consumers).
  */
-export const api = createUsersClient({ baseUrl: API_BASE_URL });
+export const api = createUsersClient({ baseUrl: getApiBaseUrl });
 
 /**
  * Fetches the list of configured OIDC providers for the login page.
@@ -682,7 +717,7 @@ export const api = createUsersClient({ baseUrl: API_BASE_URL });
  */
 export async function fetchProviders(): Promise<OIDCProvider[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/auth/providers`, {
+    const response = await fetch(`${getApiBaseUrl()}/v1/auth/providers`, {
       headers: { 'Content-Type': 'application/json' },
     });
     if (!response.ok) {

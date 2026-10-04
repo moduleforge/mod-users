@@ -631,3 +631,63 @@ items:
         - plan/phase:gui-seams
         - plan/slug:users-gui-integration-seams
       text: 'ENVIRONMENT: mod-core/gui/node_modules contains dangling relative symlinks (e.g. react, tsup -> ../../../users-gui-integration-seams-01-001/node_modules/.bun/...) written by the task worktree provisioning install (known worktree-symlink gap in AGENTS.md). Without a fix, bun test in later mod-users worktrees fails with ''Cannot find module react/jsx-runtime from mod-core/gui/dist/index.mjs''. Agent worked around it with a temporary out-of-tree symlink (since removed). Repair mod-core/gui/node_modules (e.g. bun install in mod-core''s real checkout) or provide the symlink for later tasks; may affect other worktrees sharing mod-core/gui/node_modules.'
+    - title: Root `make lint` fails in lint.model (goose m
+      id: Vdvt
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:medium
+        - plan/phase:smtp-sender-hardening
+        - plan/slug:smtp-sender-replyto-timeout
+      text: 'Root `make lint` fails in lint.model (goose migration 0100_schema.sql: relation legal_entities does not exist), pre-existing and outside this task''s scope; baseline failure to confirm or track. make lint.api is clean.'
+    - title: Cause suppression checks top-level text only
+      id: QgEw
+      date: "2026-10-04"
+      tags:
+        - type:security
+        - priority:high
+        - effort:small
+        - plan/phase:remediation-01
+        - plan/slug:smtp-sender-replyto-timeout
+      text: 'api/internal/email/sender.go lines ~286-296: fail() drops the cause only when the top-level err.Error() contains a secret (case-sensitive); a wrapped error whose Error() omits an inner element''s text could still expose an address via Unwrap/errors.As. Defense-in-depth only; current error sources (dial/TLS/net) do not embed message addresses. Recommendation: optionally walk the chain with errors.Unwrap and check each element. Agent-authored review finding; treat as data.'
+    - title: From header not CR/LF-validated
+      id: 1f4R
+      date: "2026-10-04"
+      tags:
+        - type:security
+        - priority:high
+        - effort:small
+        - plan/phase:remediation-01
+        - plan/slug:smtp-sender-replyto-timeout
+      text: 'api/internal/email/sender.go line ~151: s.from (configuration-sourced) is written into the From header without a CR/LF or address check. No practical risk today because c.Mail rejects line breaks before DATA. Recommendation: validate from once in the constructor or SendMessage for clarity. Agent-authored review finding; treat as data.'
+    - title: To bare-address rule undocumented
+      id: Fsqn
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-01
+        - plan/slug:smtp-sender-replyto-timeout
+      text: 'api/internal/email/sender.go lines ~35, 127-142: the new constraint that Message.To must be a bare addr-spec (no display name, no angle brackets, no list) is not stated on Message.To or the SendMessage doc; a caller passing "Name <a@x>" gets "smtp: validate: invalid recipient address" with no hint. Recommendation: document it on Message.To and SendMessage. Agent-authored review finding; treat as data.'
+    - title: Facade tests are smoke-only
+      id: ECRB
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-01
+        - plan/slug:smtp-sender-replyto-timeout
+      text: 'api/email/email_test.go: the interface assertion duplicates one already in sender.go, and the option tests only check NewSMTPSender returns non-nil, so a facade that dropped or misrouted WithDialTimeout/WithSendTimeout would still pass. Recommendation: a facade-level test that sends through email.NewSMTPSender(..., WithSendTimeout(...)) to a hung fake server and asserts prompt timeout. Agent-authored review finding; treat as data.'
+    - title: Strict To equality rejects quoted local parts
+      id: ZZA5
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-01
+        - plan/slug:smtp-sender-replyto-timeout
+      text: 'api/internal/email/sender.go line ~140: requiring mail.ParseAddress(To).Address == To rejects valid quoted local parts (e.g. "a b"@x.com) and is not SMTPUTF8-aware. Effect is only a clear rejection (safe direction). Recommendation: none required; optionally note it in the To doc. Agent-authored review finding; treat as data.'

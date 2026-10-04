@@ -22,3 +22,11 @@ export const WithInitialError: Story = () => (
     </div>
   </AuthProvider>
 );
+
+export const WithForgotPassword: Story = () => (
+  <AuthProvider>
+    <div className="w-full max-w-sm p-6">
+      <LoginForm onForgotPassword={() => console.log('forgot password')} />
+    </div>
+  </AuthProvider>
+);

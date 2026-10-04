@@ -1,7 +1,4 @@
 version: 1
 plans:
-    - slug: users-gui-integration-seams
+    - slug: smtp-sender-replyto-timeout
       status: working
-      wave:
-        slug: home-app-switcher
-        leadProject: app-mfmanager

@@ -12,6 +12,7 @@ export type {
   LoginResponse,
   OIDCProvider,
   RegisterRequest,
+  EmailCodePurpose,
   EmailCodeRequest,
   EmailCodeVerifyRequest,
   ForgotPasswordRequest,
@@ -35,8 +36,23 @@ export type {
   StepUpOptions,
 } from './lib/api';
 
+// ─── Runtime configuration ───────────────────────────────────────────────────
+export {
+  configureUsersApi,
+  resetUsersApiConfig,
+  getApiBaseUrl,
+  getStoredToken,
+  clearStoredToken,
+  getTokenStorageKey,
+  USERS_TOKEN_KEY,
+} from './lib/config';
+export type { UsersApiConfig, UnauthenticatedContext } from './lib/config';
+
 // ─── Auth context ─────────────────────────────────────────────────────────────
 export { AuthProvider, useAuth, useOptionalAuth } from './lib/auth-context';
+
+// ─── Return-path safety ───────────────────────────────────────────────────────
+export { isSafeReturnPath, readReturnPath } from './lib/return-path';
 
 // ─── OIDC config helpers ──────────────────────────────────────────────────────
 export {
@@ -95,8 +111,19 @@ export { ForgotPasswordPage } from './components/forgot-password-page';
 export type { ForgotPasswordPageProps } from './components/forgot-password-page';
 export { ResetPasswordPage } from './components/reset-password-page';
 export type { ResetPasswordPageProps } from './components/reset-password-page';
+export { VerifyEmailPage } from './components/verify-email-page';
+export type { VerifyEmailPageProps } from './components/verify-email-page';
+export { OidcConfigPage } from './components/oidc-config-page';
+export type { OidcConfigPageProps } from './components/oidc-config-page';
+export { OidcSetupGate } from './components/oidc-setup-gate';
+export type { OidcSetupGateProps } from './components/oidc-setup-gate';
+
 export { SSHKeysPanel } from './components/ssh-keys-panel';
 export type { SSHKeysPanelProps } from './components/ssh-keys-panel';
+
+// ─── Standard frontend routes ─────────────────────────────────────────────────
+export { USERS_GUI_ROUTES } from './lib/routes';
+export type { UsersGuiRoutes } from './lib/routes';
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger } from './components/ui/dialog';
