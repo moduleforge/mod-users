@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'Label spoof: weak bidi/ZW marks allowed'
-      id: sQRd
-      date: "2026-10-04"
-      tags:
-        - type:security
-        - plan/phase:ssh-keys-panel-and-hardening
-        - priority:low
-        - effort:small
-      text: '[phase-01-ssh-keys-panel-and-hardening security-lens gate finding security-001, suggestion] api/internal/sshkey/label.go''s isDisallowedLabelRune rejects every Unicode control character plus the bidi override/embedding (U+202A-U+202E) and isolate (U+2066-U+2069) characters, but not the weaker formatting marks U+200E/U+200F (LRM/RLM), U+061C (ALM), or zero-width characters U+200B/U+200C/U+200D/U+2060 (ZWSP/ZWNJ/ZWJ/WORD JOINER). A label built from these could still render misleadingly or compare unequal to a visually identical label, though it can no longer force a strong directional override. Matches the task''s stated scope (control + bidi override/isolate only), so likely intentional, but leaves a residual spoofing surface. Recommend extending isDisallowedLabelRune''s ranges to cover these marks if full confusable-resistance for labels becomes a goal.'
     - title: sQRd closure not reconciled in store
       id: dWOG
       date: "2026-10-04"
@@ -61,4 +52,10 @@ closed:
       title: The recommended live-stack manual check (make
       disposition: promoted
       ref: KOQ4
+      date: "2026-10-04"
+    - id: sQRd
+      title: 'Label spoof: weak bidi/ZW marks allowed'
+      disposition: dismissed
+      reason: 'Fixed by remediation task phase-05-remediation-01/001-reject-all-bidi-control-label-chars.md: isDisallowedLabelRune now covers Unicode''s full Bidi_Control set (added U+061C, U+200E, U+200F), closing the gap this finding named. Verified independently by both the correctness lens and the full security lens at the remediation gate (security-001 noted only a bookkeeping reconciliation gap, not a code defect; the zero-width-character portion is a deliberate, documented out-of-scope carve-out, not part of this finding''s Bidi_Control claim).'
+      ref: 3f9fe6e53681499e0d59274cae611f40428f74fa
       date: "2026-10-04"
