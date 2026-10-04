@@ -1,2 +1,7 @@
 version: 1
-plans: []
+plans:
+    - slug: migrate-moduleforge
+      status: working
+      wave:
+        slug: flow-ignore-canonicalization
+        leadProject: flow
