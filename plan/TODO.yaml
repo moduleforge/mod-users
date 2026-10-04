@@ -97,7 +97,7 @@ phases:
           tier: sonnet-med
           digest: Credential-failure 401s (login, email-code verify, reset-password confirm) now opt out of the redirect inside the api client and show fixed inline errors at the call sites. The request() 401 branch is untouched. Added credential-401.test.tsx covering the three components, the requestEmailCode non-401 path and two regression guards.
           git:
-            branch: null
+            branch: plan/users-gui-integration-seams-01-008
             commit: []
             merge: null
     - number: 2
