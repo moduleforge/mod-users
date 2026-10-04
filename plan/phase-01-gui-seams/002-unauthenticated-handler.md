@@ -51,3 +51,9 @@ architectural_impact: true
 - After extending the config module and its validation tests
 - After rewiring the `request()` 401 branch and its tests
 - After the `AuthProvider loginPath` change and tests
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `cd gui && bun run typecheck && bun test` pass (87 tests, 0 fail); `auth/login` literal appears only as defaults and doc comments; diff touches only `gui/src/` (plus this doc).
+- Files: `gui/src/lib/config.ts` (new options, validation, `handleUnauthenticated`, `isSafeSitePath`), `gui/src/lib/api.ts`, `gui/src/lib/auth-context.tsx` (`loginPath`), `gui/src/index.ts`, `gui/src/lib/unauthenticated.test.ts` (new), `gui/src/lib/auth-context.test.tsx`.
