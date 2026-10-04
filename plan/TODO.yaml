@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 1
+    tasks_added: 2
 phases:
     - number: 1
       slug: gui-seams
@@ -160,6 +160,18 @@ phases:
             - V6al
             - dYMj
             - X1dW
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: fix-loginform-onsuccess-doc
+          title: Correct LoginForm onSuccess Return-Path Validation Doc
+          path: phase-04-remediation-01/002-fix-loginform-onsuccess-doc.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - uOkV
           git:
             branch: null
             commit: []
