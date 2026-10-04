@@ -88,7 +88,7 @@ phases:
             branch: plan/users-gui-integration-seams-01-007
             commit:
                 - 38e2afc
-            merge: null
+            merge: a1e9928e76bc8199acb4b2a448cbf85770f20c56
         - number: 8
           slug: credential-401-inline-errors
           title: Credential-Failure 401s Show Inline Errors Instead of Redirecting
