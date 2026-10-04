@@ -15,7 +15,7 @@ phases:
           tier: sonnet-med
           digest: Added gui/src/lib/config.ts with a lazy runtime config covering base URL and token key. All API_BASE_URL and 'auth_token' consumers now go through it. The api singleton and returned client baseUrl resolve lazily. Deprecated API_BASE_URL export kept; new APIs exported from index.ts. Tests cover precedence, lazy evaluation, validation and the custom token key across auth flows.
           git:
-            branch: null
+            branch: plan/users-gui-integration-seams-01-001
             commit: []
             merge: null
         - number: 2
