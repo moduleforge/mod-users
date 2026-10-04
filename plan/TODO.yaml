@@ -176,5 +176,6 @@ phases:
             - uOkV
           git:
             branch: plan/users-gui-integration-seams-04-002
-            commit: []
+            commit:
+                - 4a54458
             merge: null
