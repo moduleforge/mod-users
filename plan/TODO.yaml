@@ -59,7 +59,7 @@ phases:
           slug: verify-email-page-and-routes
           title: Standard VerifyEmailPage and Exported USERS_GUI_ROUTES
           path: phase-01-gui-seams/005-verify-email-page-and-routes.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Added api.auth.verifyEmail and the optional purpose and options arguments on the client. Added the USERS_GUI_ROUTES constant and a router-agnostic VerifyEmailPage with an email fallback, resend cooldown, 401 mapping, user refresh and a success state. Tests and stories were added; no surprises.
           git:
