@@ -1,0 +1,8 @@
+slug: users-gui-integration-seams
+version: 1
+title: ""
+phases:
+    - number: 1
+      slug: gui-seams
+      title: users-gui Integration Seams
+      tasks: []
