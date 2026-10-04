@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: gui-seams
       title: users-gui Integration Seams
+      diff_base: eeccd5f0546ba6de342ca3b158f77f40486993ce
       tasks:
         - number: 1
           slug: runtime-config-base-url-and-token-key
