@@ -25,6 +25,7 @@ phases:
           path: phase-01-gui-seams/002-unauthenticated-handler.md
           done: false
           tier: sonnet-med
+          digest: Added unauthenticatedRedirectUrl, unauthenticatedReturnParam and onUnauthenticated to configureUsersApi with validate-before-apply and reset support. The 401 branch of request() now calls a shared handleUnauthenticated() in config.ts, and default behavior is unchanged. AuthProvider gained a validated loginPath, and UnauthenticatedContext is exported from index.ts. Tests cover the default, redirect/return-param/guard, custom handler, validation, and provider cases.
           git:
             branch: null
             commit: []
