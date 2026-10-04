@@ -28,9 +28,6 @@ CLAUDE.md
 client_secret_*.apps.googleusercontent.com.json
 ms-secret-*.token
 
-# flow stuff
+# Flow per-machine runtime state; durable state lives in plan/ and flow/.
+.flow/
 worktrees/
-.flow/*
-!.flow/plans
-!.flow/project-analysis.json
-!.flow/what-next-cache.json
