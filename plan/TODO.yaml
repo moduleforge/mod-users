@@ -122,7 +122,7 @@ phases:
             branch: plan/users-gui-integration-seams-02-001
             commit:
                 - 68976a7
-            merge: null
+            merge: 7a36bec3e263219637b7fa696fa20742f8bc45f3
         - number: 2
           slug: verify-consumption-and-handoff
           title: Verify Built Package Consumption and Finalize Wave-2 Hand-off
