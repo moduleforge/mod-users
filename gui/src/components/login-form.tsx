@@ -59,10 +59,10 @@ export interface LoginFormProps {
   /**
    * Called after a successful login with the effective return path (the
    * `returnPath` prop, else the validated `?<unauthenticatedReturnParam>=`
-   * value, else `null`). The value is already validated by
-   * `isSafeReturnPath`, so apps can navigate with one line:
-   * `onSuccess={(r) => router.replace(r ?? '/')}`. Callbacks that declare no
-   * parameter keep working unchanged.
+   * value, else `null`). Only the query-param fallback (`readReturnPath`) is
+   * validated by `isSafeReturnPath`; an explicit `returnPath` prop is passed
+   * through as supplied, so the app owns its validation. Callbacks that
+   * declare no parameter keep working unchanged.
    */
   onSuccess?: (returnPath: string | null) => void;
   /**
