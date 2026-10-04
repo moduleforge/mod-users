@@ -115,7 +115,7 @@ phases:
           slug: consumer-integration-guide
           title: Write the users-gui Consumer Integration Guide
           path: phase-02-consumer-docs-and-handoff/001-consumer-integration-guide.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Wrote gui/README.md (consumer integration guide) from the current code: configureUsersApi field table, Next.js and React Router wiring, unauthenticated handling, AuthPage/LoginForm return-path handling, VerifyEmailPage and USERS_GUI_ROUTES, OidcSetupGate/OidcConfigPage, plus the six review trust notes and known limitations. Added a pointer sentence in the root README. Snippets are not yet type-checked against a built dist (task 002''s paste-check).'
           git:
