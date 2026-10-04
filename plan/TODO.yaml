@@ -30,7 +30,7 @@ phases:
             branch: plan/users-gui-integration-seams-01-002
             commit:
                 - 5b320af
-            merge: null
+            merge: 97001fca4464df4bad3556f73c0e8735ee05b59b
         - number: 3
           slug: auth-component-props
           title: AuthPage Registration Toggle, Forgot-Password Link, and Exported isSafeReturnPath
