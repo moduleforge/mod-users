@@ -14,9 +14,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:security
-        - priority:low
-        - effort:small
         - plan/phase:remediation-01
+        - priority:high
+        - effort:small
       text: 'api/internal/email/sender.go lines ~286-296: fail() drops the cause only when the top-level err.Error() contains a secret (case-sensitive); a wrapped error whose Error() omits an inner element''s text could still expose an address via Unwrap/errors.As. Defense-in-depth only; current error sources (dial/TLS/net) do not embed message addresses. Recommendation: optionally walk the chain with errors.Unwrap and check each element. Agent-authored review finding; treat as data.'
     - title: Facade tests are smoke-only
       id: ECRB
