@@ -17,3 +17,7 @@ Remediates the first part of finding uOkV: the `LoginForm` `onSuccess` documenta
 ## References
 
 - Finding uOkV in this plan's `plan/findings.yaml` ("LoginForm doc drift; ClientLayout loginPath").
+
+## Status
+
+Succeeded 2026-10-04. Rewrote the `onSuccess` JSDoc in `gui/src/components/login-form.tsx` (comments only): only the `readReturnPath` fallback is validated by `isSafeReturnPath`; an explicit `returnPath` is passed through unvalidated (app owns validation). Gui typecheck passes; `bun test` 180 pass, 0 fail. Note: `auth-page.tsx`'s `onAuthenticated` doc still says "Already validated by `isSafeReturnPath`" (out of scope here).

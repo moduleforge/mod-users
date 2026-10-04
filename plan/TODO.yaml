@@ -147,6 +147,7 @@ phases:
     - number: 4
       slug: remediation-01
       title: Remediation Round 1
+      diff_base: 4dedaf0bb919aceb51ff5fd559f842bc613f368a
       kind: remediation
       security_review: required
       tasks:
@@ -154,25 +155,29 @@ phases:
           slug: harden-unauthenticated-handler-config
           title: Unify Return-Path Validation, Guard onUnauthenticated, and Document Config Trust
           path: phase-04-remediation-01/001-harden-unauthenticated-handler-config.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Unified the 401 return writer and reader on one isSafeReturnPath predicate defined in config.ts, with the unsafe-page fallback to /. A throwing onUnauthenticated is now logged and no longer masks the 401. JSDoc documents the trust assumptions of the base-URL fallbacks and the cross-origin redirect. Tests for both behaviours are added.
           findings:
             - V6al
             - dYMj
             - X1dW
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-04-001
+            commit:
+                - 3b2ee27
             merge: null
         - number: 2
           slug: fix-loginform-onsuccess-doc
           title: Correct LoginForm onSuccess Return-Path Validation Doc
           path: phase-04-remediation-01/002-fix-loginform-onsuccess-doc.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Corrected the LoginForm onSuccess JSDoc (comments only). Typecheck and tests pass.
           findings:
             - uOkV
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/users-gui-integration-seams-04-002
+            commit:
+                - 4a54458
+            merge: 632a3efc40c9ac125c353a1e21ae1ef302c37347
