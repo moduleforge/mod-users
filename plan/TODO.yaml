@@ -66,7 +66,7 @@ phases:
             branch: plan/users-gui-integration-seams-01-005
             commit:
                 - 5b235e9
-            merge: null
+            merge: 48e55f42d7e184a32fee62946a093553f83e38eb
         - number: 6
           slug: oidc-config-page-migration
           title: Migrate OidcConfigPage and OidcSetupGate Into users-gui
