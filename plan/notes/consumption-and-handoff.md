@@ -42,7 +42,7 @@ The full integration guide is `gui/README.md`; these are the review-derived cave
 - **Absolute redirect plus return param leaks the page.** An absolute `unauthenticatedRedirectUrl` with `unauthenticatedReturnParam` sends the current `pathname + search` to that origin; wave 2 uses the relative `/login`-style `USERS_GUI_ROUTES.login`, so this does not apply.
 - **`isSafeReturnPath` is the one shared predicate** (401 handler writes with it; `readReturnPath` and `OidcCallbackPage` read with it). An **explicit `returnPath` prop** to `LoginForm`/`AuthPage` is passed through unvalidated: the app validates it. `onUnauthenticated`'s `ctx.returnPath` is only guaranteed a safe site path; run `isSafeReturnPath` before using it as a navigation target.
 - **A throwing `onUnauthenticated` is caught and logged** (`console.error`); the request still rejects with the 401 `ApiRequestError`.
-- **`AuthProvider`'s same-path guard uses exact `window.location.pathname` equality**: under a `basePath` or trailing-slash URLs it does not match and can still navigate to the page it is on (known limitation; app-mfmanager has no `basePath`).
+- **`AuthProvider`'s same-path guard uses exact `window.location.pathname` equality**: under a `basePath` or trailing-slash URLs it does not match and can still navigate to the page it is on (known limitation; wave 2 should not serve under a `basePath`).
 - **`ClientLayout` has no `loginPath` prop and `SidebarNav` hard-codes `/auth/login`**; app-mfmanager should use `AuthProvider` and `OidcSetupGate` directly rather than `ClientLayout`.
 - `allowRegistration={false}` is UI-only (the API register endpoint stays open); there is no `/step-up` page and `AuthPage` has no email-code link.
 
