@@ -45,6 +45,7 @@ phases:
           path: phase-01-gui-seams/004-fix-styles-export.md
           done: false
           tier: sonnet-low
+          digest: Removed the dangling ./styles.css export from gui/package.json; no source imports it, and the build is unchanged.
           git:
             branch: null
             commit: []
