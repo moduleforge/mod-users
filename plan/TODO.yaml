@@ -11,7 +11,7 @@ phases:
           slug: ssh-key-label-hardening
           title: SSH Key Label Hardening
           path: phase-01-ssh-keys-panel-and-hardening/001-ssh-key-label-hardening.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Added control and bidi character rejection for supplied SSH key labels (stripping for comment-derived defaults), with the new users.ssh_key_label_invalid detail code, OpenAPI docs and tests. No surprises.
           git:
