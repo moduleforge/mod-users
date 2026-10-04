@@ -194,6 +194,67 @@ describe('refreshUser', () => {
   });
 });
 
+describe('loginPath', () => {
+  function LogoutProbe() {
+    const auth = useAuth();
+    return (
+      <div>
+        <div data-testid="loading">{String(auth.isLoading)}</div>
+        <button onClick={() => auth.logout()}>logout</button>
+        <button onClick={() => void auth.refreshUser()}>refresh</button>
+      </div>
+    );
+  }
+
+  async function renderWith(loginPath?: string, calls: string[] = []) {
+    render(
+      <AuthProvider onNavigate={(p) => calls.push(p)} loginPath={loginPath}>
+        <LogoutProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+  }
+
+  test('logout navigates to /auth/login by default', async () => {
+    const calls: string[] = [];
+    await renderWith(undefined, calls);
+    fireEvent.click(screen.getByText('logout'));
+    expect(calls).toEqual(['/auth/login']);
+  });
+
+  test('logout navigates to the configured loginPath', async () => {
+    const calls: string[] = [];
+    await renderWith('/signin', calls);
+    fireEvent.click(screen.getByText('logout'));
+    expect(calls).toEqual(['/signin']);
+  });
+
+  test('the refreshUser 401 path navigates to the configured loginPath', async () => {
+    const calls: string[] = [];
+    await renderWith('/signin', calls);
+    stubFetch({ error: { code: 'unauthenticated', message: 'nope' } }, 401);
+    fireEvent.click(screen.getByText('refresh'));
+    await waitFor(() => expect(calls).toEqual(['/signin']));
+  });
+
+  test('an invalid loginPath falls back to the default with a console.error', async () => {
+    const originalError = console.error;
+    const errors: unknown[][] = [];
+    console.error = (...a: unknown[]) => {
+      errors.push(a);
+    };
+    try {
+      const calls: string[] = [];
+      await renderWith('//evil.test', calls);
+      fireEvent.click(screen.getByText('logout'));
+      expect(calls).toEqual(['/auth/login']);
+      expect(errors.length).toBeGreaterThan(0);
+    } finally {
+      console.error = originalError;
+    }
+  });
+});
+
 describe('completeExternalLogin', () => {
   test('ApiActionRequiredError keeps the token, navigates, and does not rethrow', async () => {
     const navigateCalls: string[] = [];

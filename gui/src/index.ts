@@ -40,7 +40,7 @@ export {
   getTokenStorageKey,
   USERS_TOKEN_KEY,
 } from './lib/config';
-export type { UsersApiConfig } from './lib/config';
+export type { UsersApiConfig, UnauthenticatedContext } from './lib/config';
 
 // ─── Auth context ─────────────────────────────────────────────────────────────
 export { AuthProvider, useAuth, useOptionalAuth } from './lib/auth-context';
