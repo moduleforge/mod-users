@@ -555,3 +555,13 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: 'api/internal/email/sender.go SMTPSender.Send has no Reply-To parameter (the From address is fixed at construction), ignores its context (net/smtp.SendMail has no timeout, so a hung relay blocks the caller), and wraps failures as "smtp: send to <address>: ..." which puts the recipient address in the error text. The composing app''s notice hook (flow-accounts cmd/server/appsetup/notices.go) works around each: it names the NOTICES_REPLY_TO support address in the message body, sends from a bounded goroutine pool, and logs only an address-free error class, never the error text. A Sender that takes a Reply-To and a context deadline (including a bounded dial) and does not embed the address in its errors would let the hook set a real Reply-To header. Origin: flow-accounts followup Jpla.'
+    - title: plan/ docs orphaned, no policy exclusion
+      id: Rvii
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] No flow/policy.yaml exists in this repo, so the link-chain check''s "expected-orphan" patterns are not declared/excused: every one of the 23 files under plan/ (plan/overview.md, every plan/plan-summary-*.md and plan/summary*.md, and the current phase-01/phase-02 task docs) is unreachable from README.md, and several of those plan-summary docs also carry dangling forward-links into historical phase directories removed after earlier plans completed (e.g. plan/plan-summary-ssh-public-keys.md references phase-01-ssh-public-keys/* and notes/ssh-key-design.md, neither of which exist; similar dangling links in plan-summary-catalog-readiness.md, summary-gui-lib-conversion.md, summary.md, and others). Recommend declaring plan/ in flow/policy.yaml''s link_check.excluded_dirs (one entry resolves all of these) rather than leaving them as silent, undeclared orphans.'
