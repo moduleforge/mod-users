@@ -67,7 +67,8 @@ export interface LoginFormProps {
   /**
    * Site-relative path echoed back once the OIDC provider round trip
    * completes; passed as the `return` query param on the OIDC start URL.
-   * Defaults to `'/'`.
+   * Defaults to `'/'`. It feeds only that OIDC `start` URL — navigation after
+   * a local (email/password) login is the app's job via `onSuccess`.
    */
   returnPath?: string;
   /**
@@ -77,6 +78,13 @@ export interface LoginFormProps {
    * works standalone (Ladle stories, other consumers).
    */
   idPrefix?: string;
+  /**
+   * When supplied, renders a "Forgot password?" text button between the
+   * password field and the submit button and calls this on click. The
+   * consumer owns navigation to its `ForgotPasswordPage`. Absent: nothing
+   * extra is rendered.
+   */
+  onForgotPassword?: () => void;
 }
 
 export function LoginForm({
@@ -84,6 +92,7 @@ export function LoginForm({
   initialError = null,
   returnPath = '/',
   idPrefix = 'login',
+  onForgotPassword,
 }: LoginFormProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -160,6 +169,15 @@ export function LoginForm({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
           />
         </div>
+        {onForgotPassword && (
+          <button
+            type="button"
+            className="self-start text-sm text-foreground hover:underline"
+            onClick={onForgotPassword}
+          >
+            Forgot password?
+          </button>
+        )}
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? 'Signing in...' : 'Sign in'}
         </Button>

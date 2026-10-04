@@ -33,3 +33,9 @@ architectural_impact: true
 - After the `isSafeReturnPath` move and its tests
 - After the `allowRegistration` and `onForgotPassword` props and tests
 - After stories are updated
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `bun run typecheck` and `bun test` (72 pass, 0 fail) green; `isSafeReturnPath` has one definition (`gui/src/lib/return-path.ts`), an import in `oidc-callback-page.tsx`, an export in `index.ts`, and tests; diff touches only `gui/src/`.
+- Source: `gui/src/components/auth-page.tsx`, `gui/src/components/login-form.tsx`, `gui/src/components/oidc-callback-page.tsx`, `gui/src/lib/return-path.ts`, `gui/src/index.ts`, `gui/src/components/auth-page.test.tsx`, `gui/src/lib/return-path.test.ts`, `gui/src/stories/AuthPage.stories.tsx`, `gui/src/stories/LoginForm.stories.tsx`.

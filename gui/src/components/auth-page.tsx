@@ -27,6 +27,20 @@ export interface AuthPageProps {
   initialError?: string | null;
   /** Forwarded to `LoginForm`'s OIDC `return` path. Defaults to `'/'`. */
   returnPath?: string;
+  /**
+   * Whether the UI offers registration. Defaults to `true`. When `false`, the
+   * "Create one" control and the register panel are not rendered (no
+   * `RegisterForm` is mounted) and login mode is forced even when
+   * `initialMode="register"`. This is a UI affordance only — the API's
+   * register endpoint stays open.
+   */
+  allowRegistration?: boolean;
+  /**
+   * Forwarded to `LoginForm`. When supplied, a "Forgot password?" control is
+   * rendered in the login form; the consumer owns navigation to its
+   * `ForgotPasswordPage`.
+   */
+  onForgotPassword?: () => void;
 }
 
 export function AuthPage({
@@ -34,12 +48,15 @@ export function AuthPage({
   onAuthenticated,
   initialError = null,
   returnPath = '/',
+  allowRegistration = true,
+  onForgotPassword,
 }: AuthPageProps) {
   // Internal, uncontrolled mode state — this module does not own routing
   // (per docs/mod-users-spec.md's Non-goals), so mode-switching must not
   // require the consumer to change URL or route. `initialMode` only seeds
   // the first render; subsequent toggling is entirely internal.
-  const [mode, setMode] = useState<AuthMode>(initialMode ?? 'login');
+  const [requestedMode, setMode] = useState<AuthMode>(initialMode ?? 'login');
+  const mode: AuthMode = allowRegistration ? requestedMode : 'login';
 
   return (
     <div className="flex min-h-full items-center justify-center p-6">
@@ -63,42 +80,47 @@ export function AuthPage({
               onSuccess={onAuthenticated}
               initialError={initialError}
               returnPath={returnPath}
+              onForgotPassword={onForgotPassword}
             />
           </CardContent>
-          <CardFooter className="text-sm text-center">
-            <p className="text-muted-foreground">
-              No account?{' '}
-              <button
-                type="button"
-                className="text-foreground hover:underline"
-                onClick={() => setMode('register')}
-              >
-                Create one
-              </button>
-            </p>
-          </CardFooter>
+          {allowRegistration && (
+            <CardFooter className="text-sm text-center">
+              <p className="text-muted-foreground">
+                No account?{' '}
+                <button
+                  type="button"
+                  className="text-foreground hover:underline"
+                  onClick={() => setMode('register')}
+                >
+                  Create one
+                </button>
+              </p>
+            </CardFooter>
+          )}
         </div>
-        <div className={mode === 'register' ? 'contents' : 'hidden'}>
-          <CardHeader>
-            <CardTitle>Create an account</CardTitle>
-            <CardDescription>Fill in your details to get started</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RegisterForm idPrefix="register" onSuccess={onAuthenticated} />
-          </CardContent>
-          <CardFooter className="text-sm text-center">
-            <p className="text-muted-foreground">
-              Already have an account?{' '}
-              <button
-                type="button"
-                className="text-foreground hover:underline"
-                onClick={() => setMode('login')}
-              >
-                Sign in
-              </button>
-            </p>
-          </CardFooter>
-        </div>
+        {allowRegistration && (
+          <div className={mode === 'register' ? 'contents' : 'hidden'}>
+            <CardHeader>
+              <CardTitle>Create an account</CardTitle>
+              <CardDescription>Fill in your details to get started</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RegisterForm idPrefix="register" onSuccess={onAuthenticated} />
+            </CardContent>
+            <CardFooter className="text-sm text-center">
+              <p className="text-muted-foreground">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  className="text-foreground hover:underline"
+                  onClick={() => setMode('login')}
+                >
+                  Sign in
+                </button>
+              </p>
+            </CardFooter>
+          </div>
+        )}
       </Card>
     </div>
   );
