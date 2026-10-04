@@ -2,7 +2,7 @@ slug: mfgit-upstream-modules
 version: 1
 title: ""
 remediation:
-    rounds: 1
+    rounds: 2
     tasks_added: 1
 phases:
     - number: 1
@@ -96,3 +96,8 @@ phases:
             commit:
                 - 9da9374
             merge: 3f9fe6e53681499e0d59274cae611f40428f74fa
+    - number: 6
+      slug: remediation-02
+      title: Remediation Round 2
+      kind: remediation
+      tasks: []
