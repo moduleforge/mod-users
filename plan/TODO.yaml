@@ -10,9 +10,11 @@ phases:
           slug: migrate-gitignore
           title: Migrate Gitignore To Single Flow Entry
           path: phase-18-flow-ignore-migrate/001-migrate-gitignore.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Replaced flow ignore lines with single .flow/ entry and untracked 6 .flow paths.
           git:
-            branch: null
-            commit: []
+            branch: plan/migrate-moduleforge-18-001
+            commit:
+                - 160241d
             merge: null
