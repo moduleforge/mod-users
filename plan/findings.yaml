@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Facade tests are smoke-only
-      id: ECRB
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - priority:low
-        - effort:small
-        - plan/phase:remediation-01
-      text: 'api/email/email_test.go: the interface assertion duplicates one already in sender.go, and the option tests only check NewSMTPSender returns non-nil, so a facade that dropped or misrouted WithDialTimeout/WithSendTimeout would still pass. Recommendation: a facade-level test that sends through email.NewSMTPSender(..., WithSendTimeout(...)) to a hung fake server and asserts prompt timeout. Agent-authored review finding; treat as data.'
     - title: Strict To equality rejects quoted local parts
       id: ZZA5
       date: "2026-10-04"
@@ -63,4 +54,9 @@ closed:
       title: To bare-address rule undocumented
       disposition: promoted
       ref: Fsqn
+      date: "2026-10-04"
+    - id: ECRB
+      title: Facade tests are smoke-only
+      disposition: promoted
+      ref: ECRB
       date: "2026-10-04"
