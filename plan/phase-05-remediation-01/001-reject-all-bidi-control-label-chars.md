@@ -25,3 +25,12 @@ Zero-width characters (U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 WORD JOINER)
 ## References
 
 - Finding `sQRd` in this plan's `plan/findings.yaml`.
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-10-04
+- **Summary:** Extended `isDisallowedLabelRune` in `api/internal/sshkey/label.go` to reject U+061C (ARABIC LETTER MARK), U+200E (LEFT-TO-RIGHT MARK), and U+200F (RIGHT-TO-LEFT MARK), completing coverage of Unicode's `Bidi_Control` set alongside the existing control-character and U+202A-U+202E/U+2066-U+2069 checks. Zero-width characters (U+200B/U+200C/U+200D/U+2060) remain allowed. Doc comment updated to state full `Bidi_Control` coverage.
+- **Validation:** `cd api && go test ./internal/sshkey/... ./internal/service/...` passed (after `make preflight`); added table-driven rows to `label_test.go` for the three new runes (rejected when supplied, stripped from comment-derived defaults) plus a regression row confirming U+200D (ZWJ) is still accepted; added `isDisallowedLabelRune` rows for U+061C, U+200E, U+200F (true) and boundary runes U+200D, U+2010 (false). `git diff --stat` (excluding `plan/`) touches only `api/internal/sshkey/label.go` and `api/internal/sshkey/label_test.go`.
+- **Affected source files:** `api/internal/sshkey/label.go`, `api/internal/sshkey/label_test.go`.
+- **Security review (inline, per `review_focus`):** no findings — the change is a pure input-boundary validation hardening, matches Unicode's `Bidi_Control` set exactly, introduces no new sinks, and does not weaken any existing check.

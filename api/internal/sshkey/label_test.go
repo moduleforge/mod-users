@@ -16,6 +16,8 @@ func TestNormalizeLabel(t *testing.T) {
 	surrounded := "  my key\n"
 	nul, newline, tab := "a\x00b", "a\nb", "a\tb"
 	del, rlo, lri := "a\u007fb", "a\u202eb", "a\u2066b"
+	lrm, rlm, alm := "a\u200eb", "a\u200fb", "a\u061cb"
+	zwj := "a\u200db"
 
 	tests := []struct {
 		name      string
@@ -36,9 +38,14 @@ func TestNormalizeLabel(t *testing.T) {
 		{name: "explicit label with DEL is rejected", requested: &del, wantErr: ErrLabelInvalidChars},
 		{name: "explicit label with U+202E is rejected", requested: &rlo, wantErr: ErrLabelInvalidChars},
 		{name: "explicit label with U+2066 is rejected", requested: &lri, wantErr: ErrLabelInvalidChars},
+		{name: "explicit label with U+200E (LRM) is rejected", requested: &lrm, wantErr: ErrLabelInvalidChars},
+		{name: "explicit label with U+200F (RLM) is rejected", requested: &rlm, wantErr: ErrLabelInvalidChars},
+		{name: "explicit label with U+061C (ALM) is rejected", requested: &alm, wantErr: ErrLabelInvalidChars},
+		{name: "explicit label with U+200D (ZWJ) is still accepted", requested: &zwj, want: zwj},
 		{name: "explicit label with only surrounding whitespace is valid", requested: &surrounded, want: "my key"},
 		{name: "comment control and bidi characters are stripped", requested: nil, comment: "a\u202eb\x00c", want: "abc"},
 		{name: "comment empty after stripping yields empty label", requested: nil, comment: "\x00\u202e", want: ""},
+		{name: "comment with U+200E, U+200F, U+061C is stripped", requested: nil, comment: "a\u200eb\u200fc\u061cd", want: "abcd"},
 		{name: "nil request truncates an over-length comment to 100 runes without error", requested: nil, comment: over100, want: exactly100},
 	}
 
@@ -112,6 +119,11 @@ func TestIsDisallowedLabelRune(t *testing.T) {
 		{0x2066, true},
 		{0x2069, true},
 		{0x206A, false},
+		{0x061C, true},
+		{0x200E, true},
+		{0x200F, true},
+		{0x200D, false},
+		{0x2010, false},
 	}
 	for _, tc := range tests {
 		if got := isDisallowedLabelRune(tc.r); got != tc.want {
