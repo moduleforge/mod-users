@@ -55,5 +55,6 @@ phases:
             - KKhL
           git:
             branch: plan/smtp-sender-replyto-timeout-02-002
-            commit: []
+            commit:
+                - e1c0127
             merge: null
