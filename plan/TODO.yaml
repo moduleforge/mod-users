@@ -67,7 +67,7 @@ phases:
           slug: update-architecture-docs
           title: Update Architecture Docs
           path: phase-02-doc-updates/001-update-architecture-docs.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Updated docs/architecture.md, docs/mod-users-spec.md, and docs/project-structure.md to describe the new public SSHKeysPanel component and its router-agnostic action delegation/inline step-up behavior, and to document the new users.ssh_key_label_invalid refusal and strip-from-comment rule (described in its current, phase-5-extended full-Bidi_Control-set form). docs/architecture/ssh-keys.md and AGENTS.md were reviewed and needed no change.
           git:
