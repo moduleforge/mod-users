@@ -108,6 +108,10 @@ export { ResetPasswordPage } from './components/reset-password-page';
 export type { ResetPasswordPageProps } from './components/reset-password-page';
 export { VerifyEmailPage } from './components/verify-email-page';
 export type { VerifyEmailPageProps } from './components/verify-email-page';
+export { OidcConfigPage } from './components/oidc-config-page';
+export type { OidcConfigPageProps } from './components/oidc-config-page';
+export { OidcSetupGate } from './components/oidc-setup-gate';
+export type { OidcSetupGateProps } from './components/oidc-setup-gate';
 
 // ─── Standard frontend routes ─────────────────────────────────────────────────
 export { USERS_GUI_ROUTES } from './lib/routes';
