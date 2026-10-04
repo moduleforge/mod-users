@@ -93,11 +93,13 @@ phases:
           slug: credential-401-inline-errors
           title: Credential-Failure 401s Show Inline Errors Instead of Redirecting
           path: phase-01-gui-seams/008-credential-401-inline-errors.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Credential-failure 401s (login, email-code verify, reset-password confirm) now opt out of the redirect inside the api client and show fixed inline errors at the call sites. The request() 401 branch is untouched. Added credential-401.test.tsx covering the three components, the requestEmailCode non-401 path and two regression guards.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-01-008
+            commit:
+                - 5ae9597
             merge: null
     - number: 2
       slug: consumer-docs-and-handoff
