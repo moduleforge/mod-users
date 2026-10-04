@@ -64,7 +64,8 @@ phases:
           digest: Added api.auth.verifyEmail and the optional purpose and options arguments on the client. Added the USERS_GUI_ROUTES constant and a router-agnostic VerifyEmailPage with an email fallback, resend cooldown, 401 mapping, user refresh and a success state. Tests and stories were added; no surprises.
           git:
             branch: plan/users-gui-integration-seams-01-005
-            commit: []
+            commit:
+                - 5b235e9
             merge: null
         - number: 6
           slug: oidc-config-page-migration
