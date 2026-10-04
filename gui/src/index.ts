@@ -95,6 +95,8 @@ export { ForgotPasswordPage } from './components/forgot-password-page';
 export type { ForgotPasswordPageProps } from './components/forgot-password-page';
 export { ResetPasswordPage } from './components/reset-password-page';
 export type { ResetPasswordPageProps } from './components/reset-password-page';
+export { SSHKeysPanel } from './components/ssh-keys-panel';
+export type { SSHKeysPanelProps } from './components/ssh-keys-panel';
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger } from './components/ui/dialog';
