@@ -36,6 +36,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: fix-styles-export
+          title: Remove the Dangling ./styles.css Package Export
+          path: phase-01-gui-seams/004-fix-styles-export.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
