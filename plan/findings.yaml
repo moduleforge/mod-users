@@ -1,0 +1,21 @@
+version: 2
+items:
+    - title: The gui half of make test.unit cannot pass in
+      id: WAAG
+      date: "2026-10-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-keys-panel-and-hardening
+        - priority:unspecified
+        - effort:unspecified
+      text: The gui half of make test.unit cannot pass in this environment because react is missing from the sibling mod-core/gui/node_modules. Install it there if a green full run is needed.
+    - title: 'Environment: mod-core/gui/node_modules/react'
+      id: YPQ2
+      date: "2026-10-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:ssh-keys-panel-and-hardening
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Environment: mod-core/gui/node_modules/react is a dangling symlink to a sibling worktree''s bun cache (the AGENTS.md Known gap: bun installed through the worktree symlink). It makes bun test fail in the worktree even on the base. Before final validation, run bun install && bun run build in mod-core''s real checkout (mod-core/gui) so the full gui test suite runs natively.'
+closed: []

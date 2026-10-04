@@ -11,21 +11,25 @@ phases:
           slug: ssh-key-label-hardening
           title: SSH Key Label Hardening
           path: phase-01-ssh-keys-panel-and-hardening/001-ssh-key-label-hardening.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added control and bidi character rejection for supplied SSH key labels (stripping for comment-derived defaults), with the new users.ssh_key_label_invalid detail code, OpenAPI docs and tests. No surprises.
           git:
-            branch: null
-            commit: []
+            branch: plan/mfgit-upstream-modules-01-001
+            commit:
+                - 0bf56dd
             merge: null
         - number: 2
           slug: ssh-keys-client-methods
           title: SSH Keys Client Methods
           path: phase-01-ssh-keys-panel-and-hardening/002-ssh-keys-client-methods.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Added typed sshKeys and stepUp client groups, the SSH-key types, and the five type exports. All changes are additive hunks in api.ts that avoid the lines the seams plan rewrites. stepUp.verify uses skipAuthRedirect: true, with a regression test. Tests pass (38/38) only when core-gui resolves, which it does not in the worktree itself.'
           git:
-            branch: null
-            commit: []
+            branch: plan/mfgit-upstream-modules-01-002
+            commit:
+                - 0e8fe5c
             merge: null
         - number: 3
           slug: ssh-keys-panel
@@ -41,12 +45,14 @@ phases:
           slug: mod-users-schema-ops-note
           title: Mod Users Schema Ops Note
           path: phase-01-ssh-keys-panel-and-hardening/004-mod-users-schema-ops-note.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Documented the mod_users privilege sets (read-only vs write) and the public-scoped tooling caveat in the architecture doc's Data model and D1. Aligned ssh-keys.md D1 with them. The audit found nothing to fix.
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/mfgit-upstream-modules-01-004
+            commit:
+                - 1ebb059
+            merge: f63edaebda9e9302abf24e81b5052339479622f4
     - number: 2
       slug: doc-updates
       title: Documentation Updates
