@@ -13,8 +13,8 @@ Records how consumers obtain `@moduleforge/users-gui`, what that means for deliv
 ## Consumers
 
 - **app-mftodo** (workspace member `.gui-siblings/mod-users/gui`, refreshed from the aggregate checkout's working tree on `make gui.deps`; pin `mod-users` in `versions.lock.yaml` for CI). All seams are additive and default-preserving, so it needs **no change** and no pin bump. Optional later cleanup (separate, app-mftodo-owned): drop `gui/src/lib/configure-users-gui.ts` (use `configureUsersApi({ baseUrl: window.location.origin })`) and the `/auth/login` compat route (use `unauthenticatedRedirectUrl: '/login'`); closes its followup ZyTU.
-- **app-mfdemo** (Next 15 via yalc): unchanged; additive API only. Its `/auth/reset` vs emailed `/reset-password` mismatch is pre-existing (followup filed in that repo).
-- **app-mfmanager**: not a consumer yet; wave 2 adds it.
+- **app-mfdemo** (Next 15 via yalc): unchanged by this plan; additive API only. In **wave 5** (a later plan, which owns app-mfdemo) it deletes `src/app/oidc-config/` and mounts the standard `OidcConfigPage` (`onComplete` doing a full-page navigation to login) inside its existing `ClientLayout` (`onNavigateToConfig` unchanged); the migration is behavior-preserving, so no other change is expected. It may also pass the new `VerifyEmailPage` at `/verify-email` (it has no such route today). Its `/auth/reset` vs emailed `/reset-password` mismatch is pre-existing (followup filed in that repo).
+- **app-mfmanager**: not a consumer yet; wave 2 adds it, mounting `VerifyEmailPage` at `/verify-email` and `OidcConfigPage` at `/oidc-config` (replacing the static notice pages it would otherwise build) and optionally wrapping the app in `OidcSetupGate`.
 
 ## Exact hand-off wave 2 needs
 
@@ -24,7 +24,8 @@ Records how consumers obtain `@moduleforge/users-gui`, what that means for deliv
 4. app-mfmanager's `versions.lock.yaml`: `make pins.update REPOS="mod-users"` to the merge SHA (plus `mod-core` to a SHA that builds users-gui; users-gui's own lock pins an old mod-core `14fa8f5` which is harmless here, but app-mfmanager's single mod-core pin must satisfy both users-gui and core-gui consumers).
 5. app-mfmanager build wiring (app-side, not mod-users work), extending its core-gui pattern: add `../mod-users/gui` as a second bun workspace member and a named Docker context after core-gui in the ordered `gui.deps`; extend the single-React check to three packages; install users-gui's runtime deps (`radix-ui`, `class-variance-authority`, `lucide-react`, `tailwind-merge`, `tw-animate-css`) via the workspace; `@source` users-gui `dist/` in its CSS.
 6. App-side configuration (see the overview interface): `configureUsersApi({ baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8090', tokenStorageKey: 'mfmanager_session_token' (or accept the default and a one-time sign-out), unauthenticatedRedirectUrl: '/login', unauthenticatedReturnParam: 'return' })`, `AuthProvider loginPath="/login"`.
-7. No npm publish, no `yalc`, no version bump.
+7. Route mounting in app-mfmanager: `USERS_GUI_ROUTES.verifyEmail` and `.oidcConfig` render the standard pages (props in the overview); `AuthProvider onNavigate` already receives these paths from action-required responses.
+8. No npm publish, no `yalc`, no version bump.
 
 ## Open points for the manager
 

@@ -57,7 +57,9 @@ Why not delegate `request()` to core-gui's (mod-core's note suggests it as the l
 - `LoginForm.onForgotPassword` / `AuthPage.onForgotPassword` (optional): renders a "Forgot password?" text button when supplied; absent renders nothing, so existing consumers (app-mftodo, app-mfdemo) are unchanged.
 - `isSafeReturnPath` moves to `src/lib/return-path.ts`, is imported by `OidcCallbackPage` (behavior identical) and exported for apps, so MFManager can validate `?return=` with the same rules rather than re-implementing them.
 
-Not planned (listed so wave 2 does not assume them): an `AuthPage` login-return callback argument (apps read their own `?return=` and pass the sanitized value as `returnPath` for OIDC and navigate in `onAuthenticated`); an email-code link in `AuthPage`; `ClientLayout`/`SidebarNav` changes (admin chrome, not used by MFManager); an `/oidc-config` page component (only the data helpers are exported today).
+Revised (user decision: standard unless there is a design reason): `AuthPage`/`LoginForm` callbacks now receive the validated return path when `unauthenticatedReturnParam` is configured (task 007; opt-in, so default behavior is unchanged); `VerifyEmailPage` and `OidcConfigPage` (with `OidcSetupGate`) become standard pages (tasks 005, 006); `USERS_GUI_ROUTES` exports the standard paths. Design notes: the verify page is code-entry only because the backend emails a 6-digit code, not a link; every call that can legitimately return `401` for a wrong code passes `skipAuthRedirect`; the oidc-config page keeps the reference's use of `window.location`/`history.replaceState` inside effects only and delegates navigation to `onComplete`; `AuthProvider` skips navigation to the current path because `GET /v1/self` itself returns the `/oidc-config` action-required `503` when OIDC is unconfirmed.
+
+Still not planned (listed so wave 2 does not assume them): an email-code link in `AuthPage`; `SidebarNav` changes and `ClientLayout` behavior changes (admin chrome, not used by MFManager; only the gate is extracted); a `/step-up` page.
 
 ### Styles export
 
