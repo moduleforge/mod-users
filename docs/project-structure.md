@@ -66,11 +66,12 @@ api/
 
 ### `gui/` — TypeScript/React component library
 
-Exports `@moduleforge/users-gui`: React components and an API client. The library ships no bundled CSS; consumers generate their own via Tailwind v4 `@source` scanning of the built `dist/` output.
+Exports `@moduleforge/users-gui`: React components and an API client; [`gui/README.md`](../gui/README.md) is the consumer integration guide. The library ships no bundled CSS (and no `./styles.css` package export); consumers generate their own via Tailwind v4 `@source` scanning of the built `dist/` output.
 
 ```
 gui/
   package.json          # declares the npm package name and build scripts
+  README.md             # consumer integration guide (configuration, routes, standard pages, Next.js/React Router examples)
   Makefile
   tsconfig.json
   tsup.config.ts        # library bundler config (outputs CJS + ESM + .d.ts; no CSS)
@@ -81,7 +82,15 @@ gui/
   src/
     index.ts            # package entry point — re-exports all public components
     components/         # React UI components (auth flows, account credentials, profile, admin views)
+      verify-email-page.tsx          # /verify-email standard screen (emailed-code flow)
+      oidc-config-page.tsx           # /oidc-config standard screen (setup-token and admin modes)
+      oidc-provider-add-modal.tsx    # OIDC provider add dialog used by oidc-config-page
+      oidc-provider-edit-modal.tsx   # OIDC provider edit dialog used by oidc-config-page
+      oidc-setup-gate.tsx            # render-prop gate routing an unconfirmed deployment to /oidc-config
     lib/                # API client, hooks, shared utilities
+      config.ts         # runtime configuration (configureUsersApi), token storage, 401 handler, isSafeReturnPath
+      return-path.ts    # readReturnPath(); re-exports isSafeReturnPath
+      routes.ts         # USERS_GUI_ROUTES standard path set
     stories/            # Ladle story files (exploratory; not the primary showcase)
 ```
 

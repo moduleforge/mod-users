@@ -13,8 +13,30 @@ import {
   ApiRequestError,
   type UserAccountSelf,
 } from './api';
+import {
+  DEFAULT_UNAUTHENTICATED_REDIRECT_URL,
+  getStoredToken,
+  getTokenStorageKey,
+  isSafeSitePath,
+} from './config';
 
-const TOKEN_KEY = 'auth_token';
+function storeToken(token: string): void {
+  localStorage.setItem(getTokenStorageKey(), token);
+}
+
+function removeToken(): void {
+  localStorage.removeItem(getTokenStorageKey());
+}
+
+/**
+ * True when the browser is already on `path`. `GET /v1/self` itself returns
+ * an action-required envelope while e.g. OIDC is unconfirmed, so a provider
+ * mounted above the target page (`/oidc-config`) must not navigate to the
+ * page it is already on.
+ */
+function isCurrentPath(path: string): boolean {
+  return typeof window !== 'undefined' && window.location.pathname === path;
+}
 
 interface AuthContextValue {
   token: string | null;
@@ -52,26 +74,47 @@ interface AuthProviderProps {
    * in isolation (stories, tests).
    */
   onNavigate?: (path: string) => void;
+  /**
+   * Site-relative path `logout()` (and the 401 branch of `refreshUser`)
+   * navigates to. Defaults to `'/auth/login'`; an invalid value logs an error
+   * and falls back to the default. Note the provider navigates through
+   * `onNavigate`, while the fetch-layer 401 handler navigates through
+   * `window.location`; apps with a router should set both `loginPath` and
+   * `configureUsersApi({ unauthenticatedRedirectUrl })` to their login route.
+   */
+  loginPath?: string;
 }
 
-export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
+export function AuthProvider({
+  children,
+  onNavigate,
+  loginPath,
+}: AuthProviderProps) {
   const navigate = onNavigate ?? (() => {});
+  let resolvedLoginPath = DEFAULT_UNAUTHENTICATED_REDIRECT_URL;
+  if (loginPath !== undefined) {
+    if (isSafeSitePath(loginPath)) {
+      resolvedLoginPath = loginPath;
+    } else {
+      console.error('[auth] rejected unsafe loginPath', loginPath);
+    }
+  }
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserAccountSelf | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const setTokenAndUser = useCallback((newToken: string, newUser: UserAccountSelf) => {
-    localStorage.setItem(TOKEN_KEY, newToken);
+    storeToken(newToken);
     setToken(newToken);
     setUser(newUser);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    removeToken();
     setToken(null);
     setUser(null);
-    navigate('/auth/login');
-  }, [navigate]);
+    navigate(resolvedLoginPath);
+  }, [navigate, resolvedLoginPath]);
 
   const refreshUser = useCallback(async () => {
     try {
@@ -82,7 +125,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
         // Action-required: navigate, don't alarm. The session stays intact —
         // do not call logout() — the user just needs to complete an
         // out-of-band step (e.g. email verification) before continuing.
-        navigate(err.path);
+        if (!isCurrentPath(err.path)) navigate(err.path);
       } else if (err instanceof ApiRequestError && err.status === 401) {
         logout();
       }
@@ -91,7 +134,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
   // Validate token on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
+    const storedToken = getStoredToken();
     if (!storedToken) {
       setIsLoading(false);
       return;
@@ -107,10 +150,10 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           // Action-required: navigate, don't alarm. Unlike a 401, this keeps
           // the stored token/session intact and routes the already-
           // authenticated user to finish an out-of-band step.
-          navigate(err.path);
+          if (!isCurrentPath(err.path)) navigate(err.path);
           return;
         }
-        localStorage.removeItem(TOKEN_KEY);
+        removeToken();
         setToken(null);
       })
       .finally(() => {
@@ -130,7 +173,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     async (newToken: string) => {
       // Store the token first so the shared `request()` helper in api.ts
       // picks it up via localStorage for the `/v1/self` call below.
-      localStorage.setItem(TOKEN_KEY, newToken);
+      storeToken(newToken);
       try {
         // `skipAuthRedirect` ensures a bad/expired token surfaces as a thrown
         // ApiRequestError instead of the shared helper hard-redirecting to
@@ -148,11 +191,11 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           // token already persisted to localStorage, and do not rethrow so
           // the caller doesn't render this as an error.
           setToken(newToken);
-          navigate(err.path);
+          if (!isCurrentPath(err.path)) navigate(err.path);
           return;
         }
         // Bad/expired token or API failure: don't leave a stale token behind.
-        localStorage.removeItem(TOKEN_KEY);
+        removeToken();
         setToken(null);
         setUser(null);
         throw err;

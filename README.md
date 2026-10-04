@@ -32,6 +32,8 @@ npm install @moduleforge/users-gui
 > [`docs/mf-standards/building-applications.md`'s First-time setup
 > section](./docs/mf-standards/building-applications.md#first-time-setup) for the mechanism.
 
+For embedding the components in an app (configuration, routes, Next.js and React Router examples), see the [users-gui consumer integration guide](./gui/README.md).
+
 ## Additional documentation
 
 - [AGENTS.md](./AGENTS.md) — build, test, and development commands for contributors and AI agents

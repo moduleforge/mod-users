@@ -163,6 +163,8 @@ is ever published to a registry — and composes them into an application shell.
 
 **Outcome:** Components render the auth, SSH-key management, profile, admin, and OIDC-config surfaces. The `app-mfdemo` Next.js project (at the aggregate level) demonstrates all components in a working context; it is the component showcase (the role Ladle plays in other projects). The demo app requires the API running locally.
 
+The library is router-agnostic: it owns no route files and reads no router; the app creates each route and injects navigation through callback props. It ships page components for the paths the backend fixes — `/verify-email` (`VerifyEmailPage`, target of `users.email_unverified`), `/oidc-config` (`OidcConfigPage`, with `OidcSetupGate`, target of `users.oidc_not_confirmed`), and `/reset-password` (`ResetPasswordPage`, the password-reset email's link target) — and exports the standard path set as `USERS_GUI_ROUTES`; mounting those routes and wiring `AuthProvider`'s `onNavigate` to a real navigation is the app's job. The `/step-up` action-required path has no page yet. The app configures the client once at startup through `configureUsersApi`: API base URL, token storage key, the unauthenticated redirect URL, an optional return-path query parameter (opt-in return handling on login), and an `onUnauthenticated` handler that replaces the default redirect. Components accept further props (for example `AuthPage allowRegistration`, `returnPath`, `onForgotPassword`). The package ships no CSS file (consumers `@source`-scan `dist/`). The field-level reference and integration examples are in [`gui/README.md`](../gui/README.md).
+
 ---
 
 ### 15. Create a guest account and optionally upgrade it
@@ -357,7 +359,7 @@ App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served
 
 - **Email delivery.** The module generates codes and tokens for email-code login, verification, and password reset. It does not implement or bundle an email transport; the application provides the mail sender.
 
-- **User interface routing and application shell.** The `gui/` component library provides components; it does not provide routing, navigation state, or an app shell. The `app-mfdemo` Next.js project (at the aggregate level) shows one way to compose the components but is not production application code.
+- **User interface routing and application shell.** The `gui/` component library provides components, including page components for the backend-fixed paths (`/verify-email`, `/oidc-config`, `/reset-password`) and a `USERS_GUI_ROUTES` path constant; it does not provide routing, route files, navigation state, or an app shell — the consuming app owns the routes and injects navigation (see [use case 14](#14-gui-component-rendering-and-demo-app)). The `app-mfdemo` Next.js project (at the aggregate level) shows one way to compose the components but is not production application code.
 
 - **Multi-tenancy beyond app membership.** Application-level tenancy (mod-core's `apps` entity plus this module's `apps_user_accounts` membership join) is available, but the module does not enforce cross-tenant data isolation; that is an application composition concern.
 

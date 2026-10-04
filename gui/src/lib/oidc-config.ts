@@ -1,4 +1,5 @@
-import { API_BASE_URL, ApiRequestError, type ApiErrorResponse } from './api';
+import { ApiRequestError, type ApiErrorResponse } from './api';
+import { getApiBaseUrl } from './config';
 
 /**
  * OIDC onboarding API helpers. These endpoints are unauthenticated
@@ -89,7 +90,7 @@ async function parseError(response: Response): Promise<ApiRequestError> {
 export async function fetchOIDCStatus(): Promise<OIDCStatus> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/v1/oidc-config/status`, {
+    response = await fetch(`${getApiBaseUrl()}/v1/oidc-config/status`, {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
@@ -145,7 +146,7 @@ export async function postOIDCConfirm(
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/v1/oidc-config/confirm`, {
+    response = await fetch(`${getApiBaseUrl()}/v1/oidc-config/confirm`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -173,7 +174,7 @@ export async function postOIDCConfirm(
 export async function fetchOIDCSaved(): Promise<OIDCSavedConfig> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/v1/oidc-config/saved`, {
+    response = await fetch(`${getApiBaseUrl()}/v1/oidc-config/saved`, {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {

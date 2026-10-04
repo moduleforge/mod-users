@@ -1,4 +1,5 @@
-import { API_BASE_URL, ApiRequestError, type ApiErrorResponse } from './api';
+import { ApiRequestError, type ApiErrorResponse } from './api';
+import { getApiBaseUrl } from './config';
 
 /**
  * Per-provider OIDC override CRUD helpers (phase 9.11b). These wrap the
@@ -124,7 +125,7 @@ export async function fetchOIDCProvider(
   let response: Response;
   try {
     response = await fetch(
-      `${API_BASE_URL}/v1/oidc-config/providers/${encodeURIComponent(id)}`,
+      `${getApiBaseUrl()}/v1/oidc-config/providers/${encodeURIComponent(id)}`,
       {
         method: 'GET',
         headers: authHeaders(auth),
@@ -155,7 +156,7 @@ export async function updateOIDCProvider(
   let response: Response;
   try {
     response = await fetch(
-      `${API_BASE_URL}/v1/oidc-config/providers/${encodeURIComponent(id)}`,
+      `${getApiBaseUrl()}/v1/oidc-config/providers/${encodeURIComponent(id)}`,
       {
         method: 'PUT',
         headers: authHeaders(auth),
@@ -187,7 +188,7 @@ export async function createOIDCProvider(
 ): Promise<OIDCProviderView> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/v1/oidc-config/providers`, {
+    response = await fetch(`${getApiBaseUrl()}/v1/oidc-config/providers`, {
       method: 'POST',
       headers: authHeaders(auth),
       body: JSON.stringify(
@@ -220,7 +221,7 @@ export async function revertOIDCProvider(
   let response: Response;
   try {
     response = await fetch(
-      `${API_BASE_URL}/v1/oidc-config/providers/${encodeURIComponent(id)}`,
+      `${getApiBaseUrl()}/v1/oidc-config/providers/${encodeURIComponent(id)}`,
       {
         method: 'DELETE',
         headers: authHeaders(auth),
@@ -285,5 +286,5 @@ export const WELL_KNOWN_HINTS: Record<string, WellKnownHint> = {
  * `test_result=…` query string instead of minting a session.
  */
 export function testProviderURL(id: string): string {
-  return `${API_BASE_URL}/v1/auth/oidc/${encodeURIComponent(id)}/start?mode=test`;
+  return `${getApiBaseUrl()}/v1/auth/oidc/${encodeURIComponent(id)}/start?mode=test`;
 }

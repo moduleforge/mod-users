@@ -234,6 +234,66 @@ describe('request() action.path same-origin-relative guard', () => {
   });
 });
 
+describe('auth.verifyEmail / requestEmailCode purpose', () => {
+  const calls: { url: string; init: RequestInit }[] = [];
+
+  function stubRecordingFetch(status: number, body?: unknown): void {
+    calls.length = 0;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(body === undefined ? null : JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+  }
+
+  test('verifyEmail POSTs purpose verify_email and resolves void on 204', async () => {
+    stubRecordingFetch(204);
+    const result = await client.auth.verifyEmail({ email: 'a@b.co', code: '123456' });
+    expect(result).toBeUndefined();
+    expect(calls[0]!.url).toBe('http://localhost:8080/v1/auth/email-code/verify');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      email: 'a@b.co',
+      code: '123456',
+      purpose: 'verify_email',
+    });
+  });
+
+  test('verifyEmail surfaces a 401 as ApiRequestError without clearing the token', async () => {
+    localStorage.setItem('auth_token', 'keep-me');
+    stubRecordingFetch(401, { error: { code: 'unauthenticated', message: 'invalid or expired code' } });
+    const err = await client.auth
+      .verifyEmail({ email: 'a@b.co', code: '000000' })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiRequestError);
+    expect((err as ApiRequestError).status).toBe(401);
+    expect(localStorage.getItem('auth_token')).toBe('keep-me');
+    localStorage.clear();
+  });
+
+  test('requestEmailCode omits purpose from the body when not supplied', async () => {
+    stubRecordingFetch(204);
+    await client.auth.requestEmailCode({ email: 'a@b.co' });
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ email: 'a@b.co' });
+  });
+
+  test('requestEmailCode forwards purpose and skipAuthRedirect', async () => {
+    localStorage.setItem('auth_token', 'keep-me');
+    stubRecordingFetch(401, {});
+    const err = await client.auth
+      .requestEmailCode({ email: 'a@b.co', purpose: 'verify_email' }, { skipAuthRedirect: true })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiRequestError);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      email: 'a@b.co',
+      purpose: 'verify_email',
+    });
+    expect(localStorage.getItem('auth_token')).toBe('keep-me');
+    localStorage.clear();
+  });
+});
+
 // ─── SSH keys / step-up client methods ───────────────────────────────────────
 
 interface RecordedCall {
