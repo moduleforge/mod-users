@@ -26,6 +26,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: auth-component-props
+          title: AuthPage Registration Toggle, Forgot-Password Link, and Exported isSafeReturnPath
+          path: phase-01-gui-seams/003-auth-component-props.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
