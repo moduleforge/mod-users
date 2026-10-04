@@ -68,9 +68,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:documentation
-        - priority:unspecified
-        - effort:unspecified
         - plan/phase:ssh-keys-panel-and-hardening
+        - priority:medium
+        - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/mf-standards is a registered but uninitialized git submodule (directory present, zero files) in this checkout. Several links in the README-reachable chain dangle into it: README.md''s own Installation section links ./docs/mf-standards/building-applications.md#first-time-setup (the install instructions'' own forward-link dead-ends); AGENTS.md links ./docs/mf-standards/building-common.md#building-inside-a-task-worktree; docs/architecture.md links ./mf-standards/architecture.md (twice), ./mf-standards/architecture/entity-typing.md, and ./mf-standards/architecture/db-considerations.md; docs/mod-users-spec.md links ./mf-standards/architecture.md, ./mf-standards/architecture/api-response-design.md, and ./mf-standards/architecture/authorization-design.md. Recommend checking in/populating the docs-mf-standards submodule before publication, or replacing these forward-links with concrete local steps until the submodule is live.'
     - title: Deploy/model docs unreachable from README
       id: 124J
