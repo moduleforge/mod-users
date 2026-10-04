@@ -26,3 +26,9 @@ Update architecture and spec documentation to reflect the users-gui seams this p
 
 - Each named file was reviewed; `grep -n "configureUsersApi" docs/architecture.md` and `grep -n "styles.css" docs/ AGENTS.md` show accurate (non-stale) statements, and no doc still claims a `./styles.css` export exists.
 - `git diff --stat` shows only the named doc files changed.
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Updated [docs/architecture.md](../../docs/architecture.md) (runtime config and 401 seam, standard screens and backend-to-path contract, no `./styles.css` export), [docs/mod-users-spec.md](../../docs/mod-users-spec.md) (use case 14 and the routing non-goal), [docs/project-structure.md](../../docs/project-structure.md) (new `gui/` files), and [AGENTS.md](../../AGENTS.md) (layout table); all link to [gui/README.md](../../gui/README.md) rather than duplicating it.
+- Validation: `configureUsersApi` appears in `docs/architecture.md`; remaining `styles.css` mentions are the Ladle workbench entry or state that no export exists; diff touches only the four named doc files.
