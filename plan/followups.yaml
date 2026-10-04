@@ -601,3 +601,13 @@ items:
         The recommended live-stack manual check (make dev.start, make preview, Mailpit step-up) was not performed.
 
         Open question (internal-escalation gated off, surfaced for manager decision): "Should the recommended live-stack manual check of SSHKeysPanel (make dev.start, make preview, register/revoke an Ed25519 key, Mailpit step-up) be performed before plan close-out, or recorded as not performed?" Options considered: (1) perform the manual check before close-out; (2) record it as not performed and close on automated coverage (29 component tests, api unit tests). Recommended option: (2) record it as not performed and close on automated coverage.
+    - title: AuthProvider path guard and render-time log
+      id: aQ2V
+      date: "2026-10-04"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/phase:gui-seams
+        - plan/slug:users-gui-integration-seams
+      text: 'gui/src/lib/auth-context.tsx: (1) the isCurrentPath guard (~lines 19-39, 88-95, 128, 153, 194) compares err.path to window.location.pathname by exact equality, so an app under a basePath or with trailing-slash URLs (pathname `/app/verify-email/` vs err.path `/verify-email`) never matches and the provider navigates to the page it is already on, the redundant navigation the guard was added to prevent. Normalize a trailing slash before comparing, consider a basePath-suffix match, or accept a `currentPath` prop as OidcSetupGate already does. (2) An invalid `loginPath` is validated and logged with console.error during render (~lines 92-99), repeating on every render and noisy under StrictMode; resolve it with useMemo/ref and log once from an effect.'
