@@ -44,6 +44,15 @@ items:
         - plan/phase:gui-seams
         - effort:unspecified
       text: 'gui/src/lib/config.ts: (1) `getApiBaseUrl()` (~lines 172-190) validates a base URL only when set through configureUsersApi; the fallbacks `process.env.NEXT_PUBLIC_API_BASE_URL` and `window.__USERS_API_URL__` are returned with only a typeof-string check, skipping the scheme/control-character/`//` checks and trailing-slash stripping, yet request() sends the Bearer token to that base. Run them through `normalizeBaseUrl` (fall back to default or throw on rejection) or document them as trusted deploy-time inputs. (2) `unauthenticatedRedirectUrl` (~lines 100-118, 232-250) accepts any absolute http(s) URL and, when `unauthenticatedReturnParam` is set, appends the current pathname+search, so the page''s query string can be sent to a different origin. Document this, or add a pathname-only option / an allow-list for external targets. Both are defense in depth for developer-supplied config.'
+    - title: OIDC config UI hardening nits
+      id: 0e3P
+      date: "2026-10-04"
+      tags:
+        - type:security
+        - priority:low
+        - plan/phase:gui-seams
+        - effort:unspecified
+      text: 'gui OIDC config UI, defense-in-depth items (admin-facing; none exploitable for script injection): (1) gui/src/components/oidc-provider-edit-modal.tsx (~line 605) `window.open(testProviderURL(providerId), ''_blank'')` omits ''noopener''; the base URL can now be set at runtime so the target is not necessarily same-site; use `window.open(url, ''_blank'', ''noopener'')` if the result banner does not rely on window.opener (it appears to use redirect query params). (2) gui/src/components/oidc-config-page.tsx TestResultBanner (~lines 56-72, 628-665) renders test_provider/test_email/test_sub/test_issuer/test_error from unsigned, unbounded URL query params as React text, so a crafted link can show a spoofed "Test succeeded / Verified identity" banner; cap value lengths, or show the banner only with an admin session, or label it as from URL parameters. (3) The setup-token input (~lines 417-426) is type="text", showing the single-use bootstrap token on screen unlike the client-secret fields; use type="password" with an optional show/hide toggle. Reviewer confidence: low to medium.'
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
