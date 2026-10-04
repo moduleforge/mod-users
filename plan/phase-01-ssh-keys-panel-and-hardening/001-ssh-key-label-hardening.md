@@ -40,3 +40,10 @@ Scope: `api/internal/sshkey/` (`label.go`, `errors.go`, tests), `api/internal/se
 - [The design note's label hardening section](../notes/ssh-keys-panel-design.md#label-hardening-grc7).
 - `api/internal/sshkey/label.go`, `api/internal/sshkey/errors.go`, `api/internal/service/ssh_keys.go` (`mapSSHKeyLabelError`, `mapSSHKeyParseError`).
 - `docs/mod-users-spec.md`, Security requirements, "Algorithm policy" bullet (updated later by the phase-2 doc task, not here).
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `go test ./internal/sshkey/... ./internal/service/...` passed; `make build.api` passed; api unit tests in `make test.unit` passed (the gui half of `make test.unit` fails on a sibling-environment issue: `react` missing from `mod-core/gui/node_modules`); grep hits only the expected files; `openapi.yaml` parses; diff limited to the scoped files.
+- Requirement 6 answer: yes, the comment path is reachable for NUL and bidi characters. `sshkey.Parse` returns them intact in `Comment` (`ssh.ParseAuthorizedKey` does not filter them; covered by `TestParse_CommentCanCarryControlCharacters`). A newline cannot reach the comment: it splits the input into a second line and `Parse` refuses it with `ErrInvalid`. CR and tab were not separately probed.
+- Files: `api/internal/sshkey/{label.go,errors.go,label_test.go}`, `api/internal/service/{ssh_keys.go,ssh_keys_test.go}`, `api/openapi.yaml`.

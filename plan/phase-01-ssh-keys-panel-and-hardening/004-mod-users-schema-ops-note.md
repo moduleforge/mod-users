@@ -39,3 +39,7 @@ Resolve followup `AWmf`. `mod_users.ssh_public_keys` (migration `0103`) is the e
 - [The design note's `AWmf` section](../notes/ssh-keys-panel-design.md#mod_users-schema-operations-note-awmf).
 - `docs/architecture.md` (Data model, Key decisions D1), `docs/architecture/ssh-keys.md` (D1), `model/migrations/sql/0103_ssh_public_keys.sql`, `model/queries/ssh_public_keys.sql`, `api/internal/service/ssh_key_resolver.go`.
 - `/Users/zane/playground/moduleforge/.flow/app-mfgit-managed-mode-r1-schema-review.md`, "Operational tooling blind spots" row (read-only context).
+
+## Status
+
+Succeeded, 2026-10-04. Edited [docs/architecture.md](../../docs/architecture.md) (Data model, Key decisions D1) and aligned the "Operational consequence" paragraph in [docs/architecture/ssh-keys.md](../../docs/architecture/ssh-keys.md). Audit found no `public`-only tooling in mod-users; validation checks passed.
