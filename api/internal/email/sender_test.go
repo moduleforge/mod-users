@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -26,9 +27,20 @@ type fakeServer struct {
 	hung     bool          // accept and never speak
 	accepted chan struct{} // signalled per accepted connection
 	data     chan string   // DATA payloads received
+
+	starttls bool   // advertise STARTTLS and fail the handshake
+	authAdv  bool   // advertise AUTH PLAIN
+	authCode string // when set, reply to AUTH with this full line
 }
 
-func newFakeServer(t *testing.T, hung, rejectRcpt bool) *fakeServer {
+type fakeOpt func(*fakeServer)
+
+func withBrokenStartTLS() fakeOpt { return func(fs *fakeServer) { fs.starttls = true } }
+func withAuth(reply string) fakeOpt {
+	return func(fs *fakeServer) { fs.authAdv = true; fs.authCode = reply }
+}
+
+func newFakeServer(t *testing.T, hung, rejectRcpt bool, opts ...fakeOpt) *fakeServer {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -40,6 +52,9 @@ func newFakeServer(t *testing.T, hung, rejectRcpt bool) *fakeServer {
 		rejectRc: rejectRcpt,
 		accepted: make(chan struct{}, 16),
 		data:     make(chan string, 16),
+	}
+	for _, o := range opts {
+		o(fs)
 	}
 	go fs.serve()
 	t.Cleanup(func() { _ = ln.Close() })
@@ -81,7 +96,32 @@ func (fs *fakeServer) handle(conn net.Conn) {
 		cmd := strings.ToUpper(strings.TrimSpace(line))
 		switch {
 		case strings.HasPrefix(cmd, "EHLO"), strings.HasPrefix(cmd, "HELO"):
-			write("250 fake")
+			var exts []string
+			if fs.starttls {
+				exts = append(exts, "STARTTLS")
+			}
+			if fs.authAdv {
+				exts = append(exts, "AUTH PLAIN")
+			}
+			if len(exts) == 0 {
+				write("250 fake")
+				break
+			}
+			write("250-fake")
+			for i, e := range exts {
+				sep := "-"
+				if i == len(exts)-1 {
+					sep = " "
+				}
+				write("250" + sep + e)
+			}
+		case strings.HasPrefix(cmd, "STARTTLS"):
+			write("220 ready")
+			// Not a TLS server: send garbage so the client handshake fails.
+			_, _ = conn.Write([]byte("this is not a TLS handshake\r\n"))
+			return
+		case strings.HasPrefix(cmd, "AUTH"):
+			write(fs.authCode)
 		case strings.HasPrefix(cmd, "MAIL"):
 			write("250 ok")
 		case strings.HasPrefix(cmd, "RCPT"):
@@ -301,6 +341,102 @@ func TestValidationRejectsWithoutConnecting(t *testing.T) {
 			}
 			assertAddressFree(t, err)
 		})
+	}
+}
+
+func TestRecipientMustBeBareAddress(t *testing.T) {
+	t.Parallel()
+	fs := newFakeServer(t, false, false)
+	for _, to := range []string{"a@x> NOTIFY=NEVER <b", "Name <a@x>", "a@x, b@y", "<a@x>", ""} {
+		err := fs.sender().SendMessage(context.Background(), Message{To: to, Subject: "s", TextBody: "b"})
+		if err == nil || err.Error() != "smtp: validate: invalid recipient address" {
+			t.Errorf("To %q: err = %v, want smtp: validate: invalid recipient address", to, err)
+		}
+	}
+	select {
+	case <-fs.accepted:
+		t.Error("a connection was made for an invalid recipient")
+	default:
+	}
+}
+
+func TestBodyLineEndingsNormalized(t *testing.T) {
+	t.Parallel()
+	fs := newFakeServer(t, false, false)
+	body := "a\r.\r\nb\r\r.c\n.d"
+	if err := fs.sender().SendMessage(context.Background(), Message{To: testRecipient, Subject: "s", TextBody: body}); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+	p := recvData(t, fs)
+	_, got, _ := strings.Cut(p, "\r\n\r\n")
+	if want := "a\r\n..\r\nb\r\n\r\n..c\r\n..d\r\n"; got != want {
+		t.Errorf("body on the wire = %q, want %q", got, want)
+	}
+	for i := 0; i < len(p); i++ {
+		if p[i] == '\r' && (i+1 >= len(p) || p[i+1] != '\n') {
+			t.Fatalf("bare CR at offset %d in payload %q", i, p)
+		}
+	}
+}
+
+func TestStartTLSHandshakeFailure(t *testing.T) {
+	t.Parallel()
+	fs := newFakeServer(t, false, false, withBrokenStartTLS())
+	err := fs.sender().SendMessage(context.Background(), Message{To: testRecipient, Subject: "s", TextBody: "b"})
+	if err == nil || !strings.HasPrefix(err.Error(), "smtp: starttls: ") {
+		t.Fatalf("err = %v, want smtp: starttls: ...", err)
+	}
+	assertAddressFree(t, err)
+}
+
+func TestAuthNotAdvertised(t *testing.T) {
+	t.Parallel()
+	fs := newFakeServer(t, false, false)
+	s := NewSMTPSender("127.0.0.1", fs.port(), testFrom, "user", "pass")
+	err := s.SendMessage(context.Background(), Message{To: testRecipient, Subject: "s", TextBody: "b"})
+	if err == nil || err.Error() != "smtp: auth: server does not support AUTH" {
+		t.Fatalf("err = %v, want smtp: auth: server does not support AUTH", err)
+	}
+}
+
+func TestAuthRejectedShowsOnlyCode(t *testing.T) {
+	t.Parallel()
+	fs := newFakeServer(t, false, false, withAuth("535 5.7.8 Bad credentials for user"))
+	s := NewSMTPSender("127.0.0.1", fs.port(), testFrom, "user", "pass")
+	err := s.SendMessage(context.Background(), Message{To: testRecipient, Subject: "s", TextBody: "b"})
+	if err == nil || !strings.HasPrefix(err.Error(), "smtp: auth: ") || !strings.Contains(err.Error(), "535") {
+		t.Fatalf("err = %v, want smtp: auth: ... with code 535", err)
+	}
+	if strings.Contains(err.Error(), "Bad credentials") || strings.Contains(err.Error(), "5.7.8") {
+		t.Errorf("err = %q leaks the server message", err)
+	}
+	if errors.Unwrap(err) != nil {
+		t.Errorf("reply error exposes a cause: %v", errors.Unwrap(err))
+	}
+}
+
+func TestFailRedactsErrorChain(t *testing.T) {
+	t.Parallel()
+	tx := &transaction{ctx: context.Background(), secrets: []string{testRecipient, testReplyTo, testFrom}}
+
+	leaky := fmt.Errorf("lookup %s: no such host", testRecipient)
+	err := tx.fail("dial", leaky)
+	if strings.Contains(err.Error(), testRecipient) || !strings.Contains(err.Error(), "[redacted]") {
+		t.Errorf("Error() = %q, want address redacted", err)
+	}
+	for e := error(err); e != nil; e = errors.Unwrap(e) {
+		if strings.Contains(e.Error(), testRecipient) {
+			t.Errorf("Unwrap chain element %q contains the address", e)
+		}
+	}
+	if errors.Is(err, leaky) {
+		t.Error("unredacted cause reachable through Unwrap")
+	}
+
+	// An address-free error keeps its cause for errors.Is.
+	sentinel := errors.New("boom")
+	if err := tx.fail("dial", sentinel); !errors.Is(err, sentinel) {
+		t.Errorf("address-free cause lost: %v", err)
 	}
 }
 

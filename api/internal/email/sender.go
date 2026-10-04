@@ -134,6 +134,12 @@ func (s *SMTPSender) SendMessage(ctx context.Context, msg Message) error {
 			return &sendError{stage: "validate", detail: "header value contains line break"}
 		}
 	}
+	// To must be a bare addr-spec: it is used verbatim as the RCPT TO argument
+	// and the To header, so a display name, angle brackets, or an address list
+	// would be passed through to the relay.
+	if a, err := mail.ParseAddress(msg.To); err != nil || a.Address != msg.To {
+		return &sendError{stage: "validate", detail: "invalid recipient address"}
+	}
 	if msg.ReplyTo != "" {
 		if _, err := mail.ParseAddress(msg.ReplyTo); err != nil {
 			return &sendError{stage: "validate", detail: "invalid reply-to address"}
@@ -150,7 +156,7 @@ func (s *SMTPSender) SendMessage(ctx context.Context, msg Message) error {
 		"MIME-Version: 1.0\r\n" +
 		"Content-Type: text/plain; charset=UTF-8\r\n" +
 		"\r\n" +
-		msg.TextBody)
+		normalizeLineEndings(msg.TextBody))
 
 	t := &transaction{
 		s:        s,
@@ -163,6 +169,14 @@ func (s *SMTPSender) SendMessage(ctx context.Context, msg Message) error {
 		t.ctxDeadline = d
 	}
 	return t.run(msg.To, []byte(b.String()))
+}
+
+// normalizeLineEndings converts CRLF and bare CR to LF so the DATA writer's
+// CRLF conversion and dot-stuffing apply uniformly and no bare CR reaches the
+// wire.
+func normalizeLineEndings(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.ReplaceAll(s, "\r", "\n")
 }
 
 // transaction holds the state of one SendMessage call.
@@ -269,12 +283,23 @@ func (t *transaction) fail(stage string, err error) error {
 			detail = strings.ReplaceAll(detail, s, "[redacted]")
 		}
 	}
-	return &sendError{stage: stage, detail: detail, cause: err}
+	// The unredacted error text may carry an address; expose the cause through
+	// Unwrap only when it carries none, so the chain is address-free too.
+	var cause error = err
+	raw := err.Error()
+	for _, s := range t.secrets {
+		if s != "" && strings.Contains(raw, s) {
+			cause = nil
+			break
+		}
+	}
+	return &sendError{stage: stage, detail: detail, cause: cause}
 }
 
 // sendError is an SMTP failure whose text never contains message addresses.
 // cause is exposed through Unwrap only for non-reply errors (context and
-// network errors), so callers can use errors.Is/As on them.
+// network errors) whose own text carries no message address, so the Unwrap
+// chain is address-free and callers can use errors.Is/As on it.
 type sendError struct {
 	stage  string
 	detail string

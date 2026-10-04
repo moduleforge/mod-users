@@ -23,3 +23,7 @@ Remediates findings L7ky, GS7Y, Zr31, and KKhL (in this plan's `plan/findings.ya
 
 - Findings L7ky, GS7Y, Zr31, KKhL, in this plan's `plan/findings.yaml`.
 - `api/internal/email/sender.go`, `api/internal/email/sender_test.go`.
+
+## Status
+
+Outcome: succeeded (2026-10-04). Changed `api/internal/email/sender.go` (body line-ending normalization, bare-address To validation, address-free Unwrap chain) and `api/internal/email/sender_test.go` (fake server extended; tests for STARTTLS failure, AUTH not advertised, AUTH 535, redaction, dot-stuffing/bare CR, invalid recipients). Validation: `go test -race -count=20`, `make build.api`, `make test`, `make lint.api` all pass. The optional RCPT-550-vs-cancel race test was not added (no deterministic sync).
