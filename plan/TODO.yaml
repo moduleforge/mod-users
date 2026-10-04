@@ -147,6 +147,7 @@ phases:
     - number: 4
       slug: remediation-01
       title: Remediation Round 1
+      diff_base: 4dedaf0bb919aceb51ff5fd559f842bc613f368a
       kind: remediation
       security_review: required
       tasks:
@@ -168,11 +169,13 @@ phases:
           slug: fix-loginform-onsuccess-doc
           title: Correct LoginForm onSuccess Return-Path Validation Doc
           path: phase-04-remediation-01/002-fix-loginform-onsuccess-doc.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Corrected the LoginForm onSuccess JSDoc (comments only). Typecheck and tests pass.
           findings:
             - uOkV
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-04-002
+            commit:
+                - 4a54458
             merge: null

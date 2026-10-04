@@ -45,6 +45,15 @@ items:
         - plan/phase:gui-seams
         - effort:small
       text: (1) gui/src/components/login-form.tsx onSuccess doc (~lines 58-67, 141-145) says the value is already validated by isSafeReturnPath, but when the `returnPath` prop is supplied it is echoed unvalidated (`returnPath ?? readReturnPath()`); only the query-param fallback is validated. AuthPage's doc admits the echo, LoginForm's does not. Reword the doc, or validate the prop (which changes the documented explicit-value-wins contract and needs a decision). (2) gui/src/components/client-layout.tsx (~lines 36-58) builds `<AuthProvider onNavigate={onNavigate}>` with no way to pass `loginPath`, and gui/src/components/sidebar-nav.tsx (~lines 88-91) hard-codes `/auth/login`, so an app using ClientLayout with a custom login route cannot make provider logout/401 navigation or the sidebar link honour it. Add an optional `loginPath` prop to ClientLayout forwarded to AuthProvider and derive the sidebar login href from it.
+    - title: gui/src/components/auth-page.tsx onAuthentica
+      id: HNPY
+      date: "2026-10-04"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-01
+        - priority:unspecified
+        - effort:unspecified
+      text: gui/src/components/auth-page.tsx onAuthenticated doc (lines 23-30) still says 'Already validated by isSafeReturnPath', which is inaccurate when an explicit returnPath prop is supplied (it is echoed as supplied; only the readReturnPath fallback is validated). Same inaccuracy just corrected in login-form.tsx; correct the AuthPage wording to match (comments only).
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
