@@ -47,6 +47,7 @@ phases:
           path: phase-02-remediation-01/002-harden-sender-body-recipient-and-error-chain.md
           done: false
           tier: sonnet-med
+          digest: Hardened the SMTP sender against bare-CR dot-stuffing bypass, non-bare-address recipients, and address leakage through the Unwrap chain. Added tests for each, plus the previously uncovered STARTTLS, AUTH and redaction branches.
           findings:
             - L7ky
             - GS7Y
