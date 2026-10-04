@@ -42,7 +42,7 @@ phases:
             branch: plan/smtp-sender-replyto-timeout-02-001
             commit:
                 - 4c74bfc
-            merge: null
+            merge: 335361f633cb23626b2308a91bd9a934ea0aeace
         - number: 2
           slug: harden-sender-body-recipient-and-error-chain
           title: Stuff Bare-CR Dots, Validate To as a Bare Address, Redact the Error Chain, and Cover Untested Branches
