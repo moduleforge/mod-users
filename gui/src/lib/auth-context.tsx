@@ -13,7 +13,12 @@ import {
   ApiRequestError,
   type UserAccountSelf,
 } from './api';
-import { getStoredToken, getTokenStorageKey } from './config';
+import {
+  DEFAULT_UNAUTHENTICATED_REDIRECT_URL,
+  getStoredToken,
+  getTokenStorageKey,
+  isSafeSitePath,
+} from './config';
 
 function storeToken(token: string): void {
   localStorage.setItem(getTokenStorageKey(), token);
@@ -59,10 +64,31 @@ interface AuthProviderProps {
    * in isolation (stories, tests).
    */
   onNavigate?: (path: string) => void;
+  /**
+   * Site-relative path `logout()` (and the 401 branch of `refreshUser`)
+   * navigates to. Defaults to `'/auth/login'`; an invalid value logs an error
+   * and falls back to the default. Note the provider navigates through
+   * `onNavigate`, while the fetch-layer 401 handler navigates through
+   * `window.location`; apps with a router should set both `loginPath` and
+   * `configureUsersApi({ unauthenticatedRedirectUrl })` to their login route.
+   */
+  loginPath?: string;
 }
 
-export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
+export function AuthProvider({
+  children,
+  onNavigate,
+  loginPath,
+}: AuthProviderProps) {
   const navigate = onNavigate ?? (() => {});
+  let resolvedLoginPath = DEFAULT_UNAUTHENTICATED_REDIRECT_URL;
+  if (loginPath !== undefined) {
+    if (isSafeSitePath(loginPath)) {
+      resolvedLoginPath = loginPath;
+    } else {
+      console.error('[auth] rejected unsafe loginPath', loginPath);
+    }
+  }
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserAccountSelf | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,8 +103,8 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     removeToken();
     setToken(null);
     setUser(null);
-    navigate('/auth/login');
-  }, [navigate]);
+    navigate(resolvedLoginPath);
+  }, [navigate, resolvedLoginPath]);
 
   const refreshUser = useCallback(async () => {
     try {

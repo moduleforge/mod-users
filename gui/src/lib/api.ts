@@ -14,7 +14,7 @@ import type {
   FieldErrorData,
 } from '@moduleforge/core-gui';
 import { ApiRequestError } from '@moduleforge/core-gui';
-import { clearStoredToken, getApiBaseUrl, getStoredToken } from './config';
+import { getApiBaseUrl, getStoredToken, handleUnauthenticated } from './config';
 
 export type { ApiError, ApiErrorResponse, FieldErrorData };
 export { ApiRequestError };
@@ -166,7 +166,7 @@ export interface RequestOptions extends RequestInit {
   /**
    * When true, a 401 response is surfaced to the caller as an
    * `ApiRequestError` without clearing the stored token or triggering a hard
-   * redirect to `/auth/login`. Use this when the caller needs to handle
+   * redirect (default `/auth/login`, see `configureUsersApi`). Use this when the caller needs to handle
    * authentication failures itself (e.g., the OAuth return page, which must
    * redirect to a login URL that carries an `?error=...` message).
    *
@@ -372,9 +372,8 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
     }
 
     if (response.status === 401) {
-      if (!skipAuthRedirect && typeof window !== 'undefined') {
-        clearStoredToken();
-        window.location.href = '/auth/login';
+      if (!skipAuthRedirect) {
+        handleUnauthenticated();
       }
       // Unconditional: this throw is intentional and relied upon even when
       // skipAuthRedirect suppresses the redirect above — see the
