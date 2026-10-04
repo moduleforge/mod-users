@@ -33,8 +33,8 @@ items:
       tags:
         - type:ambiguity
         - plan/phase:ssh-keys-panel-and-hardening
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: The recommended live-stack manual check (make dev.start, make preview, Mailpit step-up) was not performed.
     - title: 'Label spoof: weak bidi/ZW marks allowed'
       id: sQRd
