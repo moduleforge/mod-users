@@ -66,6 +66,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 7
+          slug: login-return-path-standard
+          title: Standard Login Return-Path Handling in AuthPage and LoginForm
+          path: phase-01-gui-seams/007-login-return-path-standard.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
