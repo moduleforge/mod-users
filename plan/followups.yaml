@@ -518,3 +518,13 @@ items:
         - effort:unspecified
         - cross-repo/origin:mod-billing
       text: 'mod-billing''s holdersView helper (api/service/seats.go) loops a team''s current seat assignments and calls usersdb.Querier.GetUserAccountByID once per holder — O(team size) round trips per call — under a full multi-table (billing-account -> subscription -> team) lock chain for at least one call site (a team-view/rename read), extending that lock hold by one round trip per current holder and contending with every other seat mutation on the same team. mod-users'' usersdb.Querier (model/db/querier.go) exposes only single-row lookups: GetUserAccountByAccountHolder, GetUserAccountByEmail, GetUserAccountByID, GetUserAccountByUUID — no batch form. Requested: a batch lookup, e.g. GetUserAccountsByIDs(ctx, ids []int64) ([]UserAccount, error) (or a narrower projection), returning at least each account''s id (for re-keying against the caller''s own holder list), uuid, and email — the fields mod-billing''s per-holder view type needs — so a caller holding a multi-table lock chain can resolve every holder in one round trip instead of one per holder. Source: mod-billing''s mod-billing-hardening plan, phase-04 task-006 (followup i2jv).'
+    - title: Password-reset email link path hard-coded
+      id: sUuz
+      date: "2026-10-03"
+      tags:
+        - type:enhancement
+        - plan/slug:users-gui-integration-seams
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/internal/handlers/auth/reset.go (around line 78) builds the password-reset email link as <GUI_BASE_URL>/reset-password?token=..., with the path hard-coded and no configuration, while the OIDC return URL is env-configurable (AUTH_FRONTEND_RETURN_URL). Embedding apps must therefore serve ResetPasswordPage at exactly /reset-password (or redirect to it). Consider a configurable reset path (env or option) so apps with a different route layout need no alias route. Related: the onboarding setup-token banner (api/handlers/onboarding_boot.go) hard-codes <GUI_BASE_URL>/oidc-config similarly.'
+      scope_rationale: Backend/deployment concern outside the GUI-seams plan; must survive plan teardown.
