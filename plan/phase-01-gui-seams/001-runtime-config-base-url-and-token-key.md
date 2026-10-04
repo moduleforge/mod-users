@@ -45,3 +45,9 @@ architectural_impact: true
 - After creating `config.ts` and its tests
 - After refactoring `api.ts` consumers
 - After refactoring `auth-context.tsx` and the OIDC helpers
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `cd gui && bun run typecheck && bun test` passed (56 tests, 0 failures); greps clean (only deprecated `API_BASE_URL` in `api.ts`, its `index.ts` re-export; `'auth_token'` only in `config.ts` and tests); literal `process.env.NEXT_PUBLIC_API_BASE_URL` form confirmed; scratch same-origin check yielded `/v1/auth/providers`.
+- Source: `gui/src/lib/config.ts` (new), `gui/src/lib/config.test.ts` (new), `gui/src/lib/api.ts`, `gui/src/lib/auth-context.tsx`, `gui/src/lib/oidc-config.ts`, `gui/src/lib/oidc-provider.ts`, `gui/src/components/login-form.tsx`, `gui/src/index.ts`, `gui/src/lib/auth-context.test.tsx`.

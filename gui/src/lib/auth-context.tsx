@@ -13,8 +13,15 @@ import {
   ApiRequestError,
   type UserAccountSelf,
 } from './api';
+import { getStoredToken, getTokenStorageKey } from './config';
 
-const TOKEN_KEY = 'auth_token';
+function storeToken(token: string): void {
+  localStorage.setItem(getTokenStorageKey(), token);
+}
+
+function removeToken(): void {
+  localStorage.removeItem(getTokenStorageKey());
+}
 
 interface AuthContextValue {
   token: string | null;
@@ -61,13 +68,13 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   const setTokenAndUser = useCallback((newToken: string, newUser: UserAccountSelf) => {
-    localStorage.setItem(TOKEN_KEY, newToken);
+    storeToken(newToken);
     setToken(newToken);
     setUser(newUser);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    removeToken();
     setToken(null);
     setUser(null);
     navigate('/auth/login');
@@ -91,7 +98,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
 
   // Validate token on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
+    const storedToken = getStoredToken();
     if (!storedToken) {
       setIsLoading(false);
       return;
@@ -110,7 +117,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           navigate(err.path);
           return;
         }
-        localStorage.removeItem(TOKEN_KEY);
+        removeToken();
         setToken(null);
       })
       .finally(() => {
@@ -130,7 +137,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
     async (newToken: string) => {
       // Store the token first so the shared `request()` helper in api.ts
       // picks it up via localStorage for the `/v1/self` call below.
-      localStorage.setItem(TOKEN_KEY, newToken);
+      storeToken(newToken);
       try {
         // `skipAuthRedirect` ensures a bad/expired token surfaces as a thrown
         // ApiRequestError instead of the shared helper hard-redirecting to
@@ -152,7 +159,7 @@ export function AuthProvider({ children, onNavigate }: AuthProviderProps) {
           return;
         }
         // Bad/expired token or API failure: don't leave a stale token behind.
-        localStorage.removeItem(TOKEN_KEY);
+        removeToken();
         setToken(null);
         setUser(null);
         throw err;
