@@ -537,3 +537,12 @@ items:
         - effort:medium
         - plan/slug:users-gui-integration-seams
       text: The backend sends users to /step-up (409 users.step_up_required, api/internal/handlers/identities.go:663-668) but no users-gui page renders it and AuthProvider has no step-up navigation (related project followup u353; mod-users plan/summary.md left mounting it to consuming apps). Same standard-screen treatment as VerifyEmailPage/OidcConfigPage is warranted once an identities/credential management UI exists to trigger it. Deliberately NOT implemented by users-gui-integration-seams.
+    - title: Expose email_verified_at on GET /v1/self
+      id: QCRD
+      date: "2026-10-04"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/slug:users-gui-integration-seams
+      text: UserAccountSelf (gui/src/lib/api.ts) has no email_verified_at, so VerifyEmailPage cannot tell that the signed-in user is already verified and cannot skip itself or redirect onward. Backend change (self response + openapi + GUI type) outside this plan.
