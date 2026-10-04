@@ -1,6 +1,9 @@
 slug: users-gui-integration-seams
 version: 1
 title: ""
+remediation:
+    rounds: 1
+    tasks_added: 0
 phases:
     - number: 1
       slug: gui-seams
@@ -141,3 +144,8 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 4
+      slug: remediation-01
+      title: Remediation Round 1
+      kind: remediation
+      tasks: []
