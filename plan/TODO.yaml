@@ -73,6 +73,7 @@ phases:
           path: phase-01-gui-seams/006-oidc-config-page-migration.md
           done: false
           tier: opus-med
+          digest: Moved app-mfdemo's /oidc-config page and its add/edit provider modals into users-gui. The copies differ from the originals only in imports, names, and the new props. The page is exported as OidcConfigPage; the hard-coded redirect to /auth/login is replaced by an onComplete prop that fires after redirectDelayMs (default 2000) and is cancelled if the page unmounts. Moved the OIDC readiness check out of ClientLayout into an exported OidcSetupGate with a ready/setup render-prop; ClientLayout now uses it and renders the same DOM. AuthProvider no longer navigates to an action-required path the browser is already on. Added 33 tests and a mocked-fetch Ladle story.
           git:
             branch: null
             commit: []
