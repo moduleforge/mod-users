@@ -35,6 +35,15 @@ items:
         - plan/phase:gui-seams
         - effort:unspecified
       text: 'gui/src/lib/config.ts `handleUnauthenticated` (~lines 262-277) calls the consumer''s `onUnauthenticated` callback unguarded. If it throws, the exception propagates out of `request()` in gui/src/lib/api.ts and replaces the intended ApiRequestError(''unauthenticated'', 401), so callers that test `err instanceof ApiRequestError && status === 401` (AuthProvider''s refreshUser and mount effect) miss the 401 branch and skip logout(). Wrap the custom handler call in try/catch (log the error) so request() still throws the 401 ApiRequestError, or call handleUnauthenticated inside try/finally in request(). Reviewer confidence: medium.'
+    - title: Base URL fallbacks and redirect hardening
+      id: X1dW
+      date: "2026-10-04"
+      tags:
+        - type:security
+        - priority:low
+        - plan/phase:gui-seams
+        - effort:unspecified
+      text: 'gui/src/lib/config.ts: (1) `getApiBaseUrl()` (~lines 172-190) validates a base URL only when set through configureUsersApi; the fallbacks `process.env.NEXT_PUBLIC_API_BASE_URL` and `window.__USERS_API_URL__` are returned with only a typeof-string check, skipping the scheme/control-character/`//` checks and trailing-slash stripping, yet request() sends the Bearer token to that base. Run them through `normalizeBaseUrl` (fall back to default or throw on rejection) or document them as trusted deploy-time inputs. (2) `unauthenticatedRedirectUrl` (~lines 100-118, 232-250) accepts any absolute http(s) URL and, when `unauthenticatedReturnParam` is set, appends the current pathname+search, so the page''s query string can be sent to a different origin. Document this, or add a pathname-only option / an allow-list for external targets. Both are defense in depth for developer-supplied config.'
 closed:
     - id: Y7W0
       title: Standard /step-up page not implemented
