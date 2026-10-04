@@ -50,9 +50,9 @@ items:
       date: "2026-10-04"
       tags:
         - type:documentation
-        - priority:unspecified
-        - effort:unspecified
         - plan/phase:ssh-keys-panel-and-hardening
+        - priority:low
+        - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening architecture-conformance gate finding arch-review-001, minor] docs/architecture.md''s "GUI component library" section still lists only the pre-existing auth components and five full-page compositions; it does not mention the new, exported SSHKeysPanel component (gui/src/components/ssh-keys-panel.tsx). A reader of the architecture doc would not learn this component exists. Expected to be closed by the phase-02 doc-updates task already registered in this plan; flagging here in case that task''s scope needs confirming before plan close-out.'
     - title: plan/ docs orphaned, no policy exclusion
       id: Rvii
