@@ -89,6 +89,6 @@ phases:
           findings:
             - sQRd
           git:
-            branch: null
+            branch: plan/mfgit-upstream-modules-05-001
             commit: []
             merge: null
