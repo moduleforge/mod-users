@@ -42,7 +42,7 @@ items:
         - type:security
         - priority:low
         - plan/phase:gui-seams
-        - effort:unspecified
+        - effort:small
       text: 'gui/src/lib/config.ts: (1) `getApiBaseUrl()` (~lines 172-190) validates a base URL only when set through configureUsersApi; the fallbacks `process.env.NEXT_PUBLIC_API_BASE_URL` and `window.__USERS_API_URL__` are returned with only a typeof-string check, skipping the scheme/control-character/`//` checks and trailing-slash stripping, yet request() sends the Bearer token to that base. Run them through `normalizeBaseUrl` (fall back to default or throw on rejection) or document them as trusted deploy-time inputs. (2) `unauthenticatedRedirectUrl` (~lines 100-118, 232-250) accepts any absolute http(s) URL and, when `unauthenticatedReturnParam` is set, appends the current pathname+search, so the page''s query string can be sent to a different origin. Document this, or add a pathname-only option / an allow-list for external targets. Both are defense in depth for developer-supplied config.'
     - title: OIDC config UI hardening nits
       id: 0e3P
