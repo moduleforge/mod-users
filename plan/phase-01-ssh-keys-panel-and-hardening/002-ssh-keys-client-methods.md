@@ -62,3 +62,9 @@ Record which case applied in the task report.
 - `gui/src/lib/api.ts`, `gui/src/lib/api.test.ts`, `gui/src/index.ts`.
 - `api/openapi.yaml` (`/v1/self/ssh-keys`, `SSHKey`, `SSHKeyCreate`, `PaginatedSSHKeys`); `api/internal/handlers/identities.go` (`StepUpRequest`, `StepUpVerify`).
 - The seams plan's `plan/phase-01-gui-seams/001-runtime-config-base-url-and-token-key.md` in worktree `worktrees/plan/users-gui-integration-seams` (read-only), for what it changes in `api.ts`.
+
+## Status
+
+- Outcome: succeeded (2026-10-04). Seams 001 case: `gui/src/lib/config.ts` did NOT exist on the base, so additions were made against today's `api.ts` as separate hunks (types section before Client factory, `sshKeys`/`stepUp` groups after `apps`); the seams-only test was skipped.
+- Validation: `tsc --noEmit` passes. `bun test` fails identically on the unmodified base in this worktree (dangling `mod-core/gui/node_modules/react` symlink, the AGENTS.md known gap); run against a scratch copy with core-gui resolved, 38 pass / 0 fail.
+- Files: `gui/src/lib/api.ts`, `gui/src/lib/api.test.ts`, `gui/src/index.ts`.
