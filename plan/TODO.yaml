@@ -35,11 +35,13 @@ phases:
           slug: ssh-keys-panel
           title: SSH Keys Panel
           path: phase-01-ssh-keys-panel-and-hardening/003-ssh-keys-panel.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Built SSHKeysPanel (list, add with field-error mapping, revoke dialog, inline email-code step-up, host delegation of action-required errors) on the shared api singleton, plus 29 behavior tests, five Ladle stories, and an append-only export. Tests pass only with the environment workaround below.
           git:
-            branch: null
-            commit: []
+            branch: plan/mfgit-upstream-modules-01-003
+            commit:
+                - f01bde4
             merge: null
         - number: 4
           slug: mod-users-schema-ops-note
