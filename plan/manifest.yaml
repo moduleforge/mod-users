@@ -5,3 +5,8 @@ plans:
       wave:
         slug: home-app-switcher
         leadProject: app-mfmanager
+    - slug: mfgit-upstream-modules
+      status: working
+      wave:
+        slug: app-mfgit-managed-launch
+        leadProject: mfmanager

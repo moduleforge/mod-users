@@ -528,3 +528,86 @@ items:
         - effort:unspecified
       text: 'api/internal/handlers/auth/reset.go (around line 78) builds the password-reset email link as <GUI_BASE_URL>/reset-password?token=..., with the path hard-coded and no configuration, while the OIDC return URL is env-configurable (AUTH_FRONTEND_RETURN_URL). Embedding apps must therefore serve ResetPasswordPage at exactly /reset-password (or redirect to it). Consider a configurable reset path (env or option) so apps with a different route layout need no alias route. Related: the onboarding setup-token banner (api/handlers/onboarding_boot.go) hard-codes <GUI_BASE_URL>/oidc-config similarly.'
       scope_rationale: Backend/deployment concern outside the GUI-seams plan; must survive plan teardown.
+    - title: Standard /step-up page not implemented
+      id: Y7W0
+      date: "2026-10-04"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/slug:users-gui-integration-seams
+      text: The backend sends users to /step-up (409 users.step_up_required, api/internal/handlers/identities.go:663-668) but no users-gui page renders it and AuthProvider has no step-up navigation (related project followup u353; mod-users plan/summary.md left mounting it to consuming apps). Same standard-screen treatment as VerifyEmailPage/OidcConfigPage is warranted once an identities/credential management UI exists to trigger it. Deliberately NOT implemented by users-gui-integration-seams.
+    - title: Expose email_verified_at on GET /v1/self
+      id: QCRD
+      date: "2026-10-04"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/slug:users-gui-integration-seams
+      text: UserAccountSelf (gui/src/lib/api.ts) has no email_verified_at, so VerifyEmailPage cannot tell that the signed-in user is already verified and cannot skip itself or redirect onward. Backend change (self response + openapi + GUI type) outside this plan.
+    - title: SMTPSender lacks Reply-To and send timeout
+      id: HI9B
+      date: "2026-10-04"
+      tags:
+        - type:enhancement
+        - priority:medium
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: 'api/internal/email/sender.go SMTPSender.Send has no Reply-To parameter (the From address is fixed at construction), ignores its context (net/smtp.SendMail has no timeout, so a hung relay blocks the caller), and wraps failures as "smtp: send to <address>: ..." which puts the recipient address in the error text. The composing app''s notice hook (flow-accounts cmd/server/appsetup/notices.go) works around each: it names the NOTICES_REPLY_TO support address in the message body, sends from a bounded goroutine pool, and logs only an address-free error class, never the error text. A Sender that takes a Reply-To and a context deadline (including a bounded dial) and does not embed the address in its errors would let the hook set a real Reply-To header. Origin: flow-accounts followup Jpla.'
+    - title: plan/ docs orphaned, no policy exclusion
+      id: Rvii
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] No flow/policy.yaml exists in this repo, so the link-chain check''s "expected-orphan" patterns are not declared/excused: every one of the 23 files under plan/ (plan/overview.md, every plan/plan-summary-*.md and plan/summary*.md, and the current phase-01/phase-02 task docs) is unreachable from README.md, and several of those plan-summary docs also carry dangling forward-links into historical phase directories removed after earlier plans completed (e.g. plan/plan-summary-ssh-public-keys.md references phase-01-ssh-public-keys/* and notes/ssh-key-design.md, neither of which exist; similar dangling links in plan-summary-catalog-readiness.md, summary-gui-lib-conversion.md, summary.md, and others). Recommend declaring plan/ in flow/policy.yaml''s link_check.excluded_dirs (one entry resolves all of these) rather than leaving them as silent, undeclared orphans.'
+    - title: mf-standards submodule links dangle
+      id: hlTS
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:medium
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff] docs/mf-standards is a registered but uninitialized git submodule (directory present, zero files) in this checkout. Several links in the README-reachable chain dangle into it: README.md''s own Installation section links ./docs/mf-standards/building-applications.md#first-time-setup (the install instructions'' own forward-link dead-ends); AGENTS.md links ./docs/mf-standards/building-common.md#building-inside-a-task-worktree; docs/architecture.md links ./mf-standards/architecture.md (twice), ./mf-standards/architecture/entity-typing.md, and ./mf-standards/architecture/db-considerations.md; docs/mod-users-spec.md links ./mf-standards/architecture.md, ./mf-standards/architecture/api-response-design.md, and ./mf-standards/architecture/authorization-design.md. Recommend checking in/populating the docs-mf-standards submodule before publication, or replacing these forward-links with concrete local steps until the submodule is live.'
+    - title: Deploy/model docs unreachable from README
+      id: 124J
+      date: "2026-10-04"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff; likely duplicates existing project-scope followups endf/oti2 filed during the ssh-public-keys plan] deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md, and api/server/CLAUDE.md are all unreachable from README.md. docs/architecture.md mentions deploy/local/README.md''s path in backticks rather than as a markdown link, which doesn''t close the chain. Recommend linking the deploy READMEs and model/README.md from docs/project-structure.md or AGENTS.md, converting the deploy/local/README.md mention into a real link, linking next-steps.md from README''s "Additional documentation" section, and either populating or excluding api/server/CLAUDE.md per flow/policy.yaml''s link_check.excluded_docs.'
+    - title: 'Environment: mod-core/gui/node_modules/react'
+      id: YPQ2
+      date: "2026-10-04"
+      tags:
+        - type:bug
+        - priority:medium
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: |-
+        Environment: mod-core/gui/node_modules/react is a dangling symlink to a sibling worktree's bun cache (the AGENTS.md Known gap: bun installed through the worktree symlink). It makes bun test fail in the worktree even on the base. Before final validation, run bun install && bun run build in mod-core's real checkout (mod-core/gui) so the full gui test suite runs natively.
+
+        Open question (internal-escalation gated off, surfaced for manager decision): "Before plan close-out, should the manager repair the sibling mod-core/gui install (bun install && bun run build in mod-core's real checkout) so the full mod-users gui test suite runs natively, or accept the task agents' workaround-based green runs as the evidence for the gui-tests success criterion?" Options considered: (1) repair the sibling install and re-run natively before close-out; (2) accept the workaround-based runs and note the gap in the plan summary; (3) accept as-is and also file a durable project followup to make AGENTS.md's Known gap name the dangling react symlink. Recommended option: (1) repair the sibling install, then re-run gui typecheck and tests natively before close-out.
+    - title: The recommended live-stack manual check (make
+      id: KOQ4
+      date: "2026-10-04"
+      tags:
+        - type:ambiguity
+        - priority:low
+        - effort:small
+        - plan/phase:ssh-keys-panel-and-hardening
+        - plan/slug:mfgit-upstream-modules
+      text: |-
+        The recommended live-stack manual check (make dev.start, make preview, Mailpit step-up) was not performed.
+
+        Open question (internal-escalation gated off, surfaced for manager decision): "Should the recommended live-stack manual check of SSHKeysPanel (make dev.start, make preview, register/revoke an Ed25519 key, Mailpit step-up) be performed before plan close-out, or recorded as not performed?" Options considered: (1) perform the manual check before close-out; (2) record it as not performed and close on automated coverage (29 component tests, api unit tests). Recommended option: (2) record it as not performed and close on automated coverage.
