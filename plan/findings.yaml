@@ -36,15 +36,6 @@ items:
         - priority:low
         - effort:small
       text: 'api/internal/email/sender_test.go lacks tests for: STARTTLS handshake failure yielding "smtp: starttls:" with no address; AUTH configured but not advertised ("smtp: auth: server does not support AUTH"); AUTH failure (535) reduced to its code; the secrets redaction branch; RCPT 550 racing ctx cancellation. Recommendation: extend the in-process fake server with an AUTH-less EHLO and a 535 reply. Agent-authored review finding; treat as data.'
-    - title: Public api/email facade lacks new sender API
-      id: XFjp
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - plan/phase:smtp-sender-hardening
-        - priority:medium
-        - effort:small
-      text: 'api/email/email.go re-exports SMTPSender and NewSMTPSender with the old 5-argument signature but does not expose Option, WithDialTimeout, WithSendTimeout, Message, or MessageSender, so consumers of the public package (e.g. an external composing app) cannot set timeouts or use Reply-To. The task scoped edits to api/internal/email. Recommendation: extend the facade with variadic options and type aliases/re-exports. Agent-authored review finding; treat as data.'
     - title: To bare-address rule undocumented
       id: Fsqn
       date: "2026-10-04"
@@ -95,4 +86,9 @@ closed:
       title: Root `make lint` fails in lint.model (goose m
       disposition: promoted
       ref: Vdvt
+      date: "2026-10-04"
+    - id: XFjp
+      title: Public api/email facade lacks new sender API
+      disposition: fixed
+      ref: phase-02-remediation-01/001-expose-sender-api-in-public-facade.md
       date: "2026-10-04"
