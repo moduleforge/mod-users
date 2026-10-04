@@ -40,7 +40,8 @@ phases:
           digest: Built SSHKeysPanel (list, add with field-error mapping, revoke dialog, inline email-code step-up, host delegation of action-required errors) on the shared api singleton, plus 29 behavior tests, five Ladle stories, and an append-only export. Tests pass only with the environment workaround below.
           git:
             branch: plan/mfgit-upstream-modules-01-003
-            commit: []
+            commit:
+                - f01bde4
             merge: null
         - number: 4
           slug: mod-users-schema-ops-note
