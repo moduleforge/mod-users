@@ -94,8 +94,8 @@ var jwtSecretBootstrapLockKey = func() int64 {
 }()
 
 // bootstrapJWTSecretDDL must stay byte-for-byte identical to the Up
-// block of model/migrations/sql/0102_auth_jwt_secrets.sql (see that
-// file's own header comment for why IF NOT EXISTS is required here).
+// auth_jwt_secrets section of model/migrations/sql/0100_baseline.sql (see
+// that section's own header comment for why IF NOT EXISTS is required here).
 // A drift-guard test in jwtsecret_bootstrap_test.go asserts this file's
 // content contains this exact string.
 const bootstrapJWTSecretDDL = `CREATE TABLE IF NOT EXISTS auth_jwt_secrets (

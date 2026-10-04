@@ -62,7 +62,7 @@ provides:
 
     # anonymousActor — the shared, zero-authority anonymous system actor.
     # Resolved once at startup by slug (system_actors.slug = 'anonymous',
-    # seeded by migration 0101_system_actors.sql); NewAnonymousActor asserts
+    # seeded by migration 0100_baseline.sql); NewAnonymousActor asserts
     # at boot that the actor holds zero grants and refuses to start if it
     # finds any. Consumed only by resolveActorOrAnonymous below — this
     # service entry has no other consumer.
@@ -72,7 +72,7 @@ provides:
     # — and therefore this service — is constructed in *every* consuming
     # app's composition root, whether or not that app uses the middleware.
     # That means every consuming app now hard-fails at boot if this module's
-    # 0101_system_actors.sql has not been applied. This is intentional
+    # 0100_baseline.sql has not been applied. This is intentional
     # fail-fast design, and it is safe because generated composition roots
     # run all module migrations before constructing services.
     - name: anonymousActor
@@ -474,7 +474,7 @@ provides:
     # therefore the anonymousActor service it depends on — is constructed in
     # every consuming app's composition root whether or not that app opts
     # in, so every consuming app now hard-fails at boot if this module's
-    # 0101_system_actors.sql has not been applied. See the anonymousActor
+    # 0100_baseline.sql has not been applied. See the anonymousActor
     # service entry's comment above for why this is intentional and safe.
     - name: resolveActorOrAnonymous
       constructor: auth.NewResolveActorOrAnonymous

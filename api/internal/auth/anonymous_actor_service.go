@@ -14,7 +14,7 @@ import (
 
 // anonymousActorSlug is the well-known system_actors.slug for the shared,
 // zero-authority anonymous actor. Seeded by mod-users migration
-// 0101_system_actors.sql.
+// 0100_baseline.sql.
 const anonymousActorSlug = "anonymous"
 
 // AnonymousActor holds the entity id of the seeded, zero-authority anonymous
@@ -97,7 +97,7 @@ func newAnonymousActor(ctx context.Context, lookup lookupSystemActorBySlugFn, ha
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf(
-				"auth: anonymous system actor not found (slug %q); has mod-users migration 0101_system_actors.sql been applied?",
+				"auth: anonymous system actor not found (slug %q); has mod-users migration 0100_baseline.sql been applied?",
 				anonymousActorSlug,
 			)
 		}

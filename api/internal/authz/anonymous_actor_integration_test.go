@@ -6,7 +6,7 @@ package authz_test
 // the composed schema applied, the database-enforced invariants that make
 // the anonymous system actor provably zero-authority (per the anonymous
 // actor architecture proposal, plan/notes/anonymous-actor-architecture-
-// proposal.md, and mod-users/model/migrations/0101_system_actors.sql):
+// proposal.md, and mod-users/model/migrations/sql/0100_baseline.sql):
 //
 //   - It can never own an entity (entities_no_system_actor_owner, fired on
 //     both INSERT and UPDATE).
@@ -190,8 +190,8 @@ func TestInteg_AnonymousActor_OwnershipGuard_RejectsInsert(t *testing.T) {
 // 'entities_no_system_actor_owner' sorts alphabetically before
 // 'entities_owner_immutable', and Postgres fires same-event row triggers in
 // name order -- so the system-actor guard's message is what surfaces here.
-// This is documented, expected behavior (see 0101_system_actors.sql's (d)
-// comment), not a bug; the assertion pins it so a future rename that
+// This is documented, expected behavior (see 0100_baseline.sql's system-actors
+// section (d) comment), not a bug; the assertion pins it so a future rename that
 // disturbs the alphabetical ordering is caught.
 func TestInteg_AnonymousActor_OwnershipGuard_RejectsUpdate(t *testing.T) {
 	ctx := context.Background()

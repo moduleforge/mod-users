@@ -160,7 +160,7 @@ func (q *Queries) ListActiveSSHPublicKeysByUserAccount(ctx context.Context, arg 
 const resolveActiveSSHPublicKey = `-- name: ResolveActiveSSHPublicKey :one
 SELECT ua.account_holder
 FROM mod_users.ssh_public_keys k
-JOIN public.user_accounts ua ON ua.id = k.user_account_id
+JOIN user_accounts ua ON ua.id = k.user_account_id
 WHERE k.fingerprint_sha256 = $1 AND k.public_key = $2 AND k.archived_at IS NULL
 `
 

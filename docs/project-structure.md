@@ -27,7 +27,7 @@ model/
   Makefile              # model-specific build targets
   sqlc.yaml             # sqlc configuration
   schema/               # Postgres table definitions (source of truth)
-  migrations/           # goose-managed migration files (numbered, in order)
+  migrations/           # goose-managed migration files (numbered in the 100–199 range; currently the single 0100_baseline.sql)
   queries/              # SQL queries that sqlc compiles to Go
   db/                   # sqlc-generated Go code (committed; do not edit)
   internal/             # shared model utilities
