@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: smtp-sender-hardening
       title: SMTP Sender Reply-To, Bounded Dial, and Address-Free Errors
-      tasks: []
+      tasks:
+        - number: 1
+          slug: harden-smtp-sender
+          title: 'Harden SMTPSender: Reply-To, Context-Bounded Send, Address-Free Errors'
+          path: phase-01-smtp-sender-hardening/001-harden-smtp-sender.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
