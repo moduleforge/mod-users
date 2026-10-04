@@ -14,6 +14,7 @@ import type {
   FieldErrorData,
 } from '@moduleforge/core-gui';
 import { ApiRequestError } from '@moduleforge/core-gui';
+import { clearStoredToken, getApiBaseUrl, getStoredToken } from './config';
 
 export type { ApiError, ApiErrorResponse, FieldErrorData };
 export { ApiRequestError };
@@ -318,7 +319,8 @@ export interface AddAppMemberRequest {
  * Options for {@link createUsersClient}.
  */
 export interface UsersClientOptions {
-  baseUrl: string;
+  /** A fixed base URL, or a function resolved on every request. */
+  baseUrl: string | (() => string);
 }
 
 /**
@@ -331,9 +333,11 @@ export interface UsersClientOptions {
  * ```
  */
 export function createUsersClient({ baseUrl }: UsersClientOptions) {
+  const resolveBaseUrl = (): string =>
+    typeof baseUrl === 'function' ? baseUrl() : baseUrl;
+
   function getToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('auth_token');
+    return getStoredToken();
   }
 
   async function request<T>(
@@ -353,7 +357,7 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
 
     let response: Response;
     try {
-      response = await fetch(`${baseUrl}${path}`, {
+      response = await fetch(`${resolveBaseUrl()}${path}`, {
         ...fetchOptions,
         headers,
       });
@@ -369,7 +373,7 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
 
     if (response.status === 401) {
       if (!skipAuthRedirect && typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
+        clearStoredToken();
         window.location.href = '/auth/login';
       }
       // Unconditional: this throw is intentional and relied upon even when
@@ -438,7 +442,9 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
 
   return {
     /** The configured base URL, e.g. for use in OIDC redirect construction. */
-    baseUrl,
+    get baseUrl(): string {
+      return resolveBaseUrl();
+    },
 
     auth: {
       login: (email: string, password: string) =>
@@ -554,19 +560,18 @@ export type UsersClient = ReturnType<typeof createUsersClient>;
 // enough for 95% of use cases. Consumers that need SSR-safe base URL injection
 // can instead use `createUsersClient` directly.
 
-export const API_BASE_URL =
-  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE_URL
-    ? process.env.NEXT_PUBLIC_API_BASE_URL
-    : typeof window !== 'undefined' && (window as { __USERS_API_URL__?: string }).__USERS_API_URL__
-      ? (window as { __USERS_API_URL__?: string }).__USERS_API_URL__!
-      : 'http://localhost:8080';
+/**
+ * Computed once at module load.
+ * @deprecated Use `getApiBaseUrl()` (evaluated lazily) and `configureUsersApi()`.
+ */
+export const API_BASE_URL: string = getApiBaseUrl();
 
 /**
  * Module-level singleton used by `AuthProvider` and the OIDC config helpers.
  * Configured from `NEXT_PUBLIC_API_BASE_URL` (or the `window.__USERS_API_URL__`
  * escape hatch for non-Next.js consumers).
  */
-export const api = createUsersClient({ baseUrl: API_BASE_URL });
+export const api = createUsersClient({ baseUrl: getApiBaseUrl });
 
 /**
  * Fetches the list of configured OIDC providers for the login page.
@@ -577,7 +582,7 @@ export const api = createUsersClient({ baseUrl: API_BASE_URL });
  */
 export async function fetchProviders(): Promise<OIDCProvider[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/auth/providers`, {
+    const response = await fetch(`${getApiBaseUrl()}/v1/auth/providers`, {
       headers: { 'Content-Type': 'application/json' },
     });
     if (!response.ok) {

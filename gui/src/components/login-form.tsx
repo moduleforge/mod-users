@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { Button, Input, Label } from '@moduleforge/core-gui';
 import { ErrorMessage } from './error-message';
 import { useAuth } from '../lib/auth-context';
-import { API_BASE_URL, ApiRequestError, fetchProviders, type OIDCProvider } from '../lib/api';
+import { ApiRequestError, fetchProviders, type OIDCProvider } from '../lib/api';
+import { getApiBaseUrl } from '../lib/config';
 
 // Inline brand glyphs keep the bundle small and avoid pulling in an icon
 // package for two logos. Colors are the brand-correct Google/Microsoft marks.
@@ -109,7 +110,7 @@ export function LoginForm({
     // provider's authorization endpoint, and the `return` param is echoed
     // back through the OAuth round-trip.
     window.location.assign(
-      `${API_BASE_URL}/v1/auth/oidc/${encodeURIComponent(providerId)}/start?return=${encodeURIComponent(returnPath)}`,
+      `${getApiBaseUrl()}/v1/auth/oidc/${encodeURIComponent(providerId)}/start?return=${encodeURIComponent(returnPath)}`,
     );
   }
 
