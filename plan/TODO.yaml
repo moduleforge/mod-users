@@ -6,3 +6,7 @@ phases:
       slug: gui-seams
       title: users-gui Integration Seams
       tasks: []
+    - number: 2
+      slug: consumer-docs-and-handoff
+      title: Consumer Guide, Consumption Verification, and Hand-off
+      tasks: []
