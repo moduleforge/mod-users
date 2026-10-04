@@ -43,11 +43,13 @@ phases:
           slug: fix-styles-export
           title: Remove the Dangling ./styles.css Package Export
           path: phase-01-gui-seams/004-fix-styles-export.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Removed the dangling ./styles.css export from gui/package.json; no source imports it, and the build is unchanged.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-gui-integration-seams-01-004
+            commit:
+                - 41a8f8b
             merge: null
         - number: 5
           slug: verify-email-page-and-routes
