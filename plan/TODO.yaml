@@ -46,6 +46,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: verify-email-page-and-routes
+          title: Standard VerifyEmailPage and Exported USERS_GUI_ROUTES
+          path: phase-01-gui-seams/005-verify-email-page-and-routes.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: consumer-docs-and-handoff
       title: Consumer Guide, Consumption Verification, and Hand-off
