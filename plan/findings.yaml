@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: '"sixth component" ordinal unclear'
-      id: uNF5
-      date: "2026-10-04"
-      tags:
-        - type:documentation
-        - plan/phase:doc-updates
-        - priority:low
-        - effort:small
-      text: '[doc-updates gate correctness-lens finding correctness-002, suggestion] docs/architecture.md line 150 calls SSHKeysPanel "a sixth component," but the paragraph names seven other pieces before this sentence (LoginForm, RegisterForm, AuthPage, OidcCallbackPage, ForgotPasswordPage, ResetPasswordPage, EmailCodePage), so a literal count reads as the eighth named item, not the sixth; the "sixth" framing only parses under a non-obvious reading (the sixth member of "the five full-page compositions plus this one"). Recommend dropping the ordinal or making the counted set explicit.'
+items: []
 closed:
     - id: WAAG
       title: The gui half of make test.unit cannot pass in
@@ -68,5 +59,11 @@ closed:
       title: architecture.md misdescribes fallback alert
       disposition: dismissed
       reason: 'Fixed by remediation task phase-06-remediation-02/001-fix-ssh-keys-panel-doc-wording.md: docs/architecture.md now states the inline alert always shows and the onActionRequired callback is also invoked when supplied, matching handleActionRequired exactly. Independently verified by the round-2 gate''s correctness lens.'
+      ref: 9a195841f8959005f0f01a299b4d1d3f7ef87e7a
+      date: "2026-10-04"
+    - id: uNF5
+      title: '"sixth component" ordinal unclear'
+      disposition: dismissed
+      reason: 'Fixed by remediation task phase-06-remediation-02/001-fix-ssh-keys-panel-doc-wording.md: docs/architecture.md now calls SSHKeysPanel "an additional component" rather than the miscounted "a sixth component." Independently verified by the round-2 gate''s correctness lens.'
       ref: 9a195841f8959005f0f01a299b4d1d3f7ef87e7a
       date: "2026-10-04"
