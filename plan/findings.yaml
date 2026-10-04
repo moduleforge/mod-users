@@ -27,15 +27,6 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening security-lens gate finding security-001, suggestion] api/internal/sshkey/label.go''s isDisallowedLabelRune rejects every Unicode control character plus the bidi override/embedding (U+202A-U+202E) and isolate (U+2066-U+2069) characters, but not the weaker formatting marks U+200E/U+200F (LRM/RLM), U+061C (ALM), or zero-width characters U+200B/U+200C/U+200D/U+2060 (ZWSP/ZWNJ/ZWJ/WORD JOINER). A label built from these could still render misleadingly or compare unequal to a visually identical label, though it can no longer force a strong directional override. Matches the task''s stated scope (control + bidi override/isolate only), so likely intentional, but leaves a residual spoofing surface. Recommend extending isDisallowedLabelRune''s ranges to cover these marks if full confusable-resistance for labels becomes a goal.'
-    - title: Deploy/model docs unreachable from README
-      id: 124J
-      date: "2026-10-04"
-      tags:
-        - type:documentation
-        - plan/phase:ssh-keys-panel-and-hardening
-        - priority:low
-        - effort:small
-      text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff; likely duplicates existing project-scope followups endf/oti2 filed during the ssh-public-keys plan] deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md, and api/server/CLAUDE.md are all unreachable from README.md. docs/architecture.md mentions deploy/local/README.md''s path in backticks rather than as a markdown link, which doesn''t close the chain. Recommend linking the deploy READMEs and model/README.md from docs/project-structure.md or AGENTS.md, converting the deploy/local/README.md mention into a real link, linking next-steps.md from README''s "Additional documentation" section, and either populating or excluding api/server/CLAUDE.md per flow/policy.yaml''s link_check.excluded_docs.'
 closed:
     - id: WAAG
       title: The gui half of make test.unit cannot pass in
@@ -64,4 +55,9 @@ closed:
       title: mf-standards submodule links dangle
       disposition: promoted
       ref: hlTS
+      date: "2026-10-04"
+    - id: 124J
+      title: Deploy/model docs unreachable from README
+      disposition: promoted
+      ref: 124J
       date: "2026-10-04"
