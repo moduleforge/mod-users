@@ -29,3 +29,10 @@ architectural_impact: true
 
 - After the helper and its tests
 - After the component prop changes and tests
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `cd gui && bun run typecheck && bun test` pass (139 tests, 0 fail); diff touches only `gui/src/` (plus this doc).
+- Affected: `gui/src/lib/return-path.ts` (`readReturnPath`), `gui/src/lib/config.ts` (`getUnauthenticatedReturnParam` getter), `gui/src/components/login-form.tsx`, `gui/src/components/auth-page.tsx`, `gui/src/index.ts` (exports `readReturnPath`), tests `gui/src/lib/return-path.test.ts` and `gui/src/components/login-return-path.test.tsx`.
+- Stories unchanged (signatures compatible).

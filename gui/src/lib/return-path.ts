@@ -1,3 +1,5 @@
+import { getUnauthenticatedReturnParam } from './config';
+
 /**
  * Validates that a candidate return path is a safe, same-origin relative
  * path. Rejects absolute URLs, protocol-relative URLs (`//evil.com`), and
@@ -33,4 +35,18 @@ export function isSafeReturnPath(candidate: string | null): candidate is string 
       : candidate.slice(1, firstSlashAfterStart);
   if (firstSegment.includes(':')) return false;
   return true;
+}
+
+/**
+ * Reads the post-login return path the library wrote on a 401 redirect.
+ * Returns `null` unless `unauthenticatedReturnParam` is configured and a
+ * window exists; otherwise returns the configured query param's value from
+ * `window.location.search` only when `isSafeReturnPath` accepts it. Reads at
+ * call time; holds no module state.
+ */
+export function readReturnPath(): string | null {
+  const param = getUnauthenticatedReturnParam();
+  if (param === null || typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get(param);
+  return isSafeReturnPath(value) ? value : null;
 }

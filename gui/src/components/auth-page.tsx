@@ -11,21 +11,36 @@ import {
 } from '@moduleforge/core-gui';
 import { LoginForm } from './login-form';
 import { RegisterForm } from './register-form';
+import { readReturnPath } from '../lib/return-path';
 
 export type AuthMode = 'login' | 'register';
 
 export interface AuthPageProps {
   /** Which mode to render first. Defaults to `'login'`. */
   initialMode?: AuthMode;
-  /** Called after a successful login or registration (either mode). */
-  onAuthenticated?: () => void;
+  /**
+   * Called after a successful login or registration (either mode) with the
+   * effective return path (the `returnPath` prop, else the validated
+   * `?<unauthenticatedReturnParam>=` value, else `null`). Already validated
+   * by `isSafeReturnPath`, so apps navigate with one line:
+   * `onAuthenticated={(r) => router.replace(r ?? '/')}`. Apps that do not
+   * configure `unauthenticatedReturnParam` see `null` unless they pass
+   * `returnPath` themselves, which is echoed. Zero-argument callbacks keep
+   * working unchanged.
+   */
+  onAuthenticated?: (returnPath: string | null) => void;
   /**
    * Initial error message forwarded into `LoginForm` — e.g. surfaced from an
    * OIDC callback's `?error=` query param by the consuming app. Only applies
    * while in login mode.
    */
   initialError?: string | null;
-  /** Forwarded to `LoginForm`'s OIDC `return` path. Defaults to `'/'`. */
+  /**
+   * Forwarded to `LoginForm`'s OIDC `return` path and echoed to
+   * `onAuthenticated`. An explicit value always wins over the
+   * `unauthenticatedReturnParam` query value; the OIDC path falls back to
+   * `'/'` when neither is present.
+   */
   returnPath?: string;
   /**
    * Whether the UI offers registration. Defaults to `true`. When `false`, the
@@ -47,7 +62,7 @@ export function AuthPage({
   initialMode,
   onAuthenticated,
   initialError = null,
-  returnPath = '/',
+  returnPath,
   allowRegistration = true,
   onForgotPassword,
 }: AuthPageProps) {
@@ -105,7 +120,10 @@ export function AuthPage({
               <CardDescription>Fill in your details to get started</CardDescription>
             </CardHeader>
             <CardContent>
-              <RegisterForm idPrefix="register" onSuccess={onAuthenticated} />
+              <RegisterForm
+                idPrefix="register"
+                onSuccess={() => onAuthenticated?.(returnPath ?? readReturnPath())}
+              />
             </CardContent>
             <CardFooter className="text-sm text-center">
               <p className="text-muted-foreground">
