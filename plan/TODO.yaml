@@ -198,5 +198,6 @@ phases:
             - HNPY
           git:
             branch: plan/users-gui-integration-seams-05-001
-            commit: []
+            commit:
+                - 5753f86
             merge: null
