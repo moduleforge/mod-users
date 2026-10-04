@@ -45,6 +45,9 @@ export type { UsersApiConfig } from './lib/config';
 // ─── Auth context ─────────────────────────────────────────────────────────────
 export { AuthProvider, useAuth, useOptionalAuth } from './lib/auth-context';
 
+// ─── Return-path safety ───────────────────────────────────────────────────────
+export { isSafeReturnPath } from './lib/return-path';
+
 // ─── OIDC config helpers ──────────────────────────────────────────────────────
 export {
   fetchOIDCStatus,
