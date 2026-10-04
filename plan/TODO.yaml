@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 2
-    tasks_added: 1
+    tasks_added: 2
 phases:
     - number: 1
       slug: ssh-keys-panel-and-hardening
@@ -100,4 +100,17 @@ phases:
       slug: remediation-02
       title: Remediation Round 2
       kind: remediation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fix-ssh-keys-panel-doc-wording
+          title: Correct SSHKeysPanel Action-Required And Ordinal Wording In Architecture Doc
+          path: phase-06-remediation-02/001-fix-ssh-keys-panel-doc-wording.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - 3oGr
+            - uNF5
+          git:
+            branch: null
+            commit: []
+            merge: null
