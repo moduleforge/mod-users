@@ -33,3 +33,11 @@ architectural_impact: false
 
 - [`../notes/consumption-and-handoff.md`](../notes/consumption-and-handoff.md), [`../notes/embedding-and-routes.md`](../notes/embedding-and-routes.md), [`../overview.md`](../overview.md)
 - mod-core `shared-home-switcher` plan `phase-02-consumption-handoff/001-verify-consumption-and-handoff.md` (the pattern mirrored; read-only)
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: all requirement-1 exports found in `gui/dist/index.d.ts`; no router imports and no `use client` in the bundle; SSR smoke script passed (no `window`); wave-2-shaped consumer and all 8 `gui/README.md` tsx snippets type-check clean (no README fix needed); backward-compat scratch passed; `cd gui && bun run typecheck && bun test` pass (185 tests).
+- Deviation: bundle does not import `class-variance-authority` (expected in the external list); no interface deviation.
+- Scratch lived in gitignored `gui/node_modules/.scratch-smoke/` and was removed. Logs in `.flow/validation-logs/`.
+- Updated: `plan/notes/consumption-and-handoff.md` (verification result, current interface and trust notes; merge SHA left for the manager).
