@@ -33,7 +33,7 @@ items:
         - type:bug
         - priority:medium
         - plan/phase:gui-seams
-        - effort:unspecified
+        - effort:small
       text: 'gui/src/lib/config.ts `handleUnauthenticated` (~lines 262-277) calls the consumer''s `onUnauthenticated` callback unguarded. If it throws, the exception propagates out of `request()` in gui/src/lib/api.ts and replaces the intended ApiRequestError(''unauthenticated'', 401), so callers that test `err instanceof ApiRequestError && status === 401` (AuthProvider''s refreshUser and mount effect) miss the 401 branch and skip logout(). Wrap the custom handler call in try/catch (log the error) so request() still throws the 401 ApiRequestError, or call handleUnauthenticated inside try/finally in request(). Reviewer confidence: medium.'
     - title: Base URL fallbacks and redirect hardening
       id: X1dW
