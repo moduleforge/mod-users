@@ -27,15 +27,6 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening security-lens gate finding security-001, suggestion] api/internal/sshkey/label.go''s isDisallowedLabelRune rejects every Unicode control character plus the bidi override/embedding (U+202A-U+202E) and isolate (U+2066-U+2069) characters, but not the weaker formatting marks U+200E/U+200F (LRM/RLM), U+061C (ALM), or zero-width characters U+200B/U+200C/U+200D/U+2060 (ZWSP/ZWNJ/ZWJ/WORD JOINER). A label built from these could still render misleadingly or compare unequal to a visually identical label, though it can no longer force a strong directional override. Matches the task''s stated scope (control + bidi override/isolate only), so likely intentional, but leaves a residual spoofing surface. Recommend extending isDisallowedLabelRune''s ranges to cover these marks if full confusable-resistance for labels becomes a goal.'
-    - title: architecture.md omits SSHKeysPanel
-      id: 5ffL
-      date: "2026-10-04"
-      tags:
-        - type:documentation
-        - plan/phase:ssh-keys-panel-and-hardening
-        - priority:low
-        - effort:small
-      text: '[phase-01-ssh-keys-panel-and-hardening architecture-conformance gate finding arch-review-001, minor] docs/architecture.md''s "GUI component library" section still lists only the pre-existing auth components and five full-page compositions; it does not mention the new, exported SSHKeysPanel component (gui/src/components/ssh-keys-panel.tsx). A reader of the architecture doc would not learn this component exists. Expected to be closed by the phase-02 doc-updates task already registered in this plan; flagging here in case that task''s scope needs confirming before plan close-out.'
     - title: plan/ docs orphaned, no policy exclusion
       id: Rvii
       date: "2026-10-04"
@@ -75,4 +66,10 @@ closed:
       disposition: dismissed
       reason: Duplicate of YPQ2, which carries the more specific cause/remedy and is being escalated.
       ref: YPQ2
+      date: "2026-10-04"
+    - id: 5ffL
+      title: architecture.md omits SSHKeysPanel
+      disposition: dismissed
+      reason: 'Already planned: covered by this plan''s own pending task phase-02-doc-updates/001-update-architecture-docs.md, whose requirements add SSHKeysPanel to docs/architecture.md''s GUI component library section and whose validation greps for it.'
+      ref: phase-02-doc-updates/001-update-architecture-docs.md
       date: "2026-10-04"
