@@ -216,7 +216,7 @@ phases:
           slug: fix-readme-authprovider-401-wording
           title: Correct AuthProvider 401 Navigation Wording In GUI README
           path: phase-06-remediation-03/001-fix-readme-authprovider-401-wording.md
-          done: false
+          done: true
           tier: haiku-med
           digest: 'Reworded two gui/README.md statements about AuthProvider 401 navigation (the loginPath bullet and the components-table row) to match the code: navigation via onNavigate on logout() and when refreshUser() receives a 401; the mount-time /v1/self check on a 401 only clears the stored token. No code was changed.'
           findings:
