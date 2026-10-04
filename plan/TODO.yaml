@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 3
+    tasks_added: 4
 phases:
     - number: 1
       slug: gui-seams
@@ -210,4 +210,16 @@ phases:
       slug: remediation-03
       title: Remediation Round 3
       kind: remediation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fix-readme-authprovider-401-wording
+          title: Correct AuthProvider 401 Navigation Wording In GUI README
+          path: phase-06-remediation-03/001-fix-readme-authprovider-401-wording.md
+          done: false
+          tier: haiku-med
+          findings:
+            - aaEB
+          git:
+            branch: null
+            commit: []
+            merge: null
