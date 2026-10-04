@@ -1,4 +1,2 @@
 version: 1
-plans:
-    - slug: smtp-sender-replyto-timeout
-      status: working
+plans: []
