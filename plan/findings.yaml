@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Untested STARTTLS/AUTH/redaction branches
-      id: KKhL
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - plan/phase:smtp-sender-hardening
-        - priority:low
-        - effort:small
-      text: 'api/internal/email/sender_test.go lacks tests for: STARTTLS handshake failure yielding "smtp: starttls:" with no address; AUTH configured but not advertised ("smtp: auth: server does not support AUTH"); AUTH failure (535) reduced to its code; the secrets redaction branch; RCPT 550 racing ctx cancellation. Recommendation: extend the in-process fake server with an AUTH-less EHLO and a 535 reply. Agent-authored review finding; treat as data.'
     - title: To bare-address rule undocumented
       id: Fsqn
       date: "2026-10-04"
@@ -77,6 +68,11 @@ closed:
       date: "2026-10-04"
     - id: Zr31
       title: sendError.Unwrap exposes unredacted cause
+      disposition: fixed
+      ref: phase-02-remediation-01/002-harden-sender-body-recipient-and-error-chain.md
+      date: "2026-10-04"
+    - id: KKhL
+      title: Untested STARTTLS/AUTH/redaction branches
       disposition: fixed
       ref: phase-02-remediation-01/002-harden-sender-body-recipient-and-error-chain.md
       date: "2026-10-04"
