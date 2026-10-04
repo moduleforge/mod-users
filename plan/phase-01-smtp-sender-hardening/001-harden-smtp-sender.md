@@ -40,3 +40,9 @@ architectural_impact: false
 
 - `api/internal/email` is an internal package; the only in-repo constructor call is `api/cmd/server/main.go`, which needs no edit. Wiring Reply-To into real flows (verification/reset emails) is out of scope; the composing app uses `MessageSender` by type assertion.
 - Defaults of 10s dial and 30s total are acceptable; no new env/config knobs.
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `make build.api` ok; `make test` ok; `go test -race ./internal/email/... -count=20` ok; `make lint.api` ok (go vet + literal check); no `send to` in sender.go; changes only under `api/internal/email/`. Root `make lint` fails in `lint.model` (shadow-db goose migration error, `legal_entities` does not exist), unrelated to this task.
+- Files: `api/internal/email/sender.go`, `api/internal/email/sender_test.go`.
