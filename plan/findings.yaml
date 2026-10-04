@@ -13,10 +13,10 @@ items:
       id: YPQ2
       date: "2026-10-04"
       tags:
-        - type:ambiguity
+        - type:bug
         - plan/phase:ssh-keys-panel-and-hardening
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: 'Environment: mod-core/gui/node_modules/react is a dangling symlink to a sibling worktree''s bun cache (the AGENTS.md Known gap: bun installed through the worktree symlink). It makes bun test fail in the worktree even on the base. Before final validation, run bun install && bun run build in mod-core''s real checkout (mod-core/gui) so the full gui test suite runs natively.'
     - title: Environment gap (pre-existing, not caused by
       id: xcHA
