@@ -528,3 +528,12 @@ items:
         - effort:unspecified
       text: 'api/internal/handlers/auth/reset.go (around line 78) builds the password-reset email link as <GUI_BASE_URL>/reset-password?token=..., with the path hard-coded and no configuration, while the OIDC return URL is env-configurable (AUTH_FRONTEND_RETURN_URL). Embedding apps must therefore serve ResetPasswordPage at exactly /reset-password (or redirect to it). Consider a configurable reset path (env or option) so apps with a different route layout need no alias route. Related: the onboarding setup-token banner (api/handlers/onboarding_boot.go) hard-codes <GUI_BASE_URL>/oidc-config similarly.'
       scope_rationale: Backend/deployment concern outside the GUI-seams plan; must survive plan teardown.
+    - title: Standard /step-up page not implemented
+      id: Y7W0
+      date: "2026-10-04"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/slug:users-gui-integration-seams
+      text: The backend sends users to /step-up (409 users.step_up_required, api/internal/handlers/identities.go:663-668) but no users-gui page renders it and AuthProvider has no step-up navigation (related project followup u353; mod-users plan/summary.md left mounting it to consuming apps). Same standard-screen treatment as VerifyEmailPage/OidcConfigPage is warranted once an identities/credential management UI exists to trigger it. Deliberately NOT implemented by users-gui-integration-seams.
