@@ -43,6 +43,7 @@ phases:
           path: phase-01-ssh-keys-panel-and-hardening/004-mod-users-schema-ops-note.md
           done: false
           tier: sonnet-low
+          digest: Documented the mod_users privilege sets (read-only vs write) and the public-scoped tooling caveat in the architecture doc's Data model and D1. Aligned ssh-keys.md D1 with them. The audit found nothing to fix.
           git:
             branch: null
             commit: []
