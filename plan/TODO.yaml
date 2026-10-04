@@ -42,7 +42,7 @@ phases:
             branch: plan/users-gui-integration-seams-01-003
             commit:
                 - e2c2355
-            merge: null
+            merge: ddf03dd3142060166518c09de1d1fff824431bdd
         - number: 4
           slug: fix-styles-export
           title: Remove the Dangling ./styles.css Package Export
