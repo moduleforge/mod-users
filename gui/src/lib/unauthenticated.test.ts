@@ -1,11 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { ApiRequestError, createUsersClient } from './api';
 import {
   configureUsersApi,
   getTokenStorageKey,
+  handleUnauthenticated,
   resetUsersApiConfig,
   type UnauthenticatedContext,
 } from './config';
+import { readReturnPath } from './return-path';
 
 // Replaceable window.location stub: records every href assignment.
 const realLocationDescriptor = Object.getOwnPropertyDescriptor(window, 'location');
@@ -251,5 +253,63 @@ describe('validation', () => {
     resetUsersApiConfig();
     await hit();
     expect(hrefs).toEqual(['/auth/login']);
+  });
+});
+
+describe('throwing onUnauthenticated', () => {
+  test('does not replace the 401: token cleared, error logged, ApiRequestError 401 thrown', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      configureUsersApi({
+        onUnauthenticated: () => {
+          throw new Error('handler boom');
+        },
+      });
+      const err = await hit();
+      expect(err instanceof ApiRequestError).toBe(true);
+      expect((err as ApiRequestError).status).toBe(401);
+      expect(localStorage.getItem('auth_token')).toBeNull();
+      expect(errorSpy).toHaveBeenCalled();
+      expect(hrefs).toEqual([]);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
+
+describe('return value round-trip', () => {
+  function roundTrip(pageUrl: string): string | null {
+    stubLocation(pageUrl);
+    configureUsersApi({
+      unauthenticatedRedirectUrl: '/login',
+      unauthenticatedReturnParam: 'return',
+    });
+    handleUnauthenticated();
+    expect(hrefs.length).toBe(1);
+    const written = new URL(hrefs[0], 'http://app.test');
+    stubLocation(`http://app.test${written.pathname}${written.search}`);
+    return readReturnPath();
+  }
+
+  test('colon-in-first-segment page falls back to / and the reader accepts it', () => {
+    expect(roundTrip('http://app.test/team:alpha/x')).toBe('/');
+  });
+
+  test('colon in the query of a slashless path falls back consistently', () => {
+    expect(roundTrip('http://app.test/team?next=a:b')).toBe('/');
+  });
+
+  test('an ordinary page round-trips unchanged', () => {
+    expect(roundTrip('http://app.test/deployments/3?tab=a:b')).toBe(
+      '/deployments/3?tab=a:b',
+    );
+  });
+
+  test('custom handler still receives the colon path as returnPath', () => {
+    stubLocation('http://app.test/team:alpha/x');
+    const calls: UnauthenticatedContext[] = [];
+    configureUsersApi({ onUnauthenticated: (c) => calls.push(c) });
+    handleUnauthenticated();
+    expect(calls).toEqual([{ returnPath: '/team:alpha/x' }]);
   });
 });

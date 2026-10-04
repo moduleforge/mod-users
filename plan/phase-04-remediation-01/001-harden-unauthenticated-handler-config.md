@@ -24,3 +24,10 @@ Remediates findings V6al, dYMj and X1dW in `gui/src/lib/config.ts` and its neigh
 - Finding V6al in this plan's `plan/findings.yaml` ("Duplicate site-path safety check").
 - Finding dYMj in this plan's `plan/findings.yaml` ("Throwing onUnauthenticated masks the 401").
 - Finding X1dW in this plan's `plan/findings.yaml` ("Base URL fallbacks and redirect hardening").
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `bun test` in `gui/` 185 pass / 0 fail; `bun run typecheck` clean.
+- Changes: `gui/src/lib/config.ts` (single `isSafeReturnPath` predicate defined here, layered on `isSafeSitePath` plus the colon-in-first-segment rule; handler errors caught and logged; JSDoc trust notes), `gui/src/lib/return-path.ts` (re-exports `isSafeReturnPath` from config), `gui/src/lib/unauthenticated.test.ts` (throwing-handler and round-trip tests).
+- Decisions: `loginPath`/`unauthenticatedRedirectUrl` validation (`isSafeSitePath`) does NOT adopt the colon rule (developer-supplied config, not page-derived); the colon rule applies only to return values. A page failing the return predicate is written as `/` to the return param; a custom handler's `returnPath` is unchanged (still the site-path-safe value).
