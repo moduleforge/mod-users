@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: The gui half of make test.unit cannot pass in
-      id: WAAG
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - plan/phase:ssh-keys-panel-and-hardening
-        - priority:medium
-        - effort:small
-      text: The gui half of make test.unit cannot pass in this environment because react is missing from the sibling mod-core/gui/node_modules. Install it there if a green full run is needed.
     - title: 'Environment: mod-core/gui/node_modules/react'
       id: YPQ2
       date: "2026-10-04"
@@ -81,4 +72,10 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01-ssh-keys-panel-and-hardening gate - documentation link-chain check, pre-existing, unrelated to this phase''s diff; likely duplicates existing project-scope followups endf/oti2 filed during the ssh-public-keys plan] deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md, model/README.md, next-steps.md, and api/server/CLAUDE.md are all unreachable from README.md. docs/architecture.md mentions deploy/local/README.md''s path in backticks rather than as a markdown link, which doesn''t close the chain. Recommend linking the deploy READMEs and model/README.md from docs/project-structure.md or AGENTS.md, converting the deploy/local/README.md mention into a real link, linking next-steps.md from README''s "Additional documentation" section, and either populating or excluding api/server/CLAUDE.md per flow/policy.yaml''s link_check.excluded_docs.'
-closed: []
+closed:
+    - id: WAAG
+      title: The gui half of make test.unit cannot pass in
+      disposition: dismissed
+      reason: Duplicate of YPQ2, which carries the more specific cause/remedy and is being escalated.
+      ref: YPQ2
+      date: "2026-10-04"
