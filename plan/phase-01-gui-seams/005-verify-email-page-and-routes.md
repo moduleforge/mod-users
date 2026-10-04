@@ -55,3 +55,10 @@ architectural_impact: true
 - After the `api.ts` additions and `routes.ts` with tests
 - After the component and its tests
 - After stories and exports
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `cd gui && bun run typecheck && bun test` green (75 pass, 0 fail); no `react-router`/`next/` in `gui/src`; `index.ts` exports `VerifyEmailPage` and `USERS_GUI_ROUTES`; diff touches only `gui/src/` (plus this doc).
+- Files: `gui/src/lib/api.ts` (`EmailCodePurpose`, `purpose` on request types, `requestEmailCode` options arg, `auth.verifyEmail`), `gui/src/lib/routes.ts`, `gui/src/lib/routes.test.ts`, `gui/src/lib/api.test.ts`, `gui/src/components/verify-email-page.tsx`, `gui/src/components/verify-email-page.test.tsx`, `gui/src/stories/VerifyEmailPage.stories.tsx`, `gui/src/index.ts`.
+- Decisions: exported an extra `EmailCodePurpose` type and `UsersGuiRoutes` type; no existing literals were swapped for the constant (not a no-op); cooldown starts after a successful send only (not on mount); the 401 mapping applies to both the resend and verify calls.

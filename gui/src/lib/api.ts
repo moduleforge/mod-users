@@ -206,13 +206,21 @@ export interface RegisterResponse {
   email_verification_required: boolean;
 }
 
+/**
+ * What the emailed code is for. Omitted keeps the wire body unchanged (the
+ * backend defaults to `'login'`).
+ */
+export type EmailCodePurpose = 'login' | 'verify_email';
+
 export interface EmailCodeRequest {
   email: string;
+  purpose?: EmailCodePurpose;
 }
 
 export interface EmailCodeVerifyRequest {
   email: string;
   code: string;
+  purpose?: EmailCodePurpose;
 }
 
 export interface ForgotPasswordRequest {
@@ -470,16 +478,33 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
           body: JSON.stringify(data),
         }),
 
-      requestEmailCode: (data: EmailCodeRequest) =>
+      requestEmailCode: (
+        data: EmailCodeRequest,
+        options?: Pick<RequestOptions, 'skipAuthRedirect'>,
+      ) =>
         request<void>('/v1/auth/email-code/request', {
           method: 'POST',
           body: JSON.stringify(data),
+          ...options,
         }),
 
       verifyEmailCode: (data: EmailCodeVerifyRequest) =>
         request<LoginResponse>('/v1/auth/email-code/verify', {
           method: 'POST',
           body: JSON.stringify(data),
+        }),
+
+      /**
+       * Marks the address verified using the emailed code (`purpose:
+       * 'verify_email'`); the backend answers `204 No Content` (no token).
+       * Passes `skipAuthRedirect` because a wrong or expired code is a `401`
+       * that must not clear the session or redirect to login.
+       */
+      verifyEmail: (data: { email: string; code: string }) =>
+        request<void>('/v1/auth/email-code/verify', {
+          method: 'POST',
+          body: JSON.stringify({ ...data, purpose: 'verify_email' }),
+          skipAuthRedirect: true,
         }),
     },
 
