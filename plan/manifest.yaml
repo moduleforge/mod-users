@@ -5,3 +5,5 @@ plans:
       wave:
         slug: home-app-switcher
         leadProject: app-mfmanager
+    - slug: smtp-sender-replyto-timeout
+      status: working
