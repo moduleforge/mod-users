@@ -39,7 +39,7 @@ phases:
           findings:
             - XFjp
           git:
-            branch: null
+            branch: plan/smtp-sender-replyto-timeout-02-001
             commit: []
             merge: null
         - number: 2
