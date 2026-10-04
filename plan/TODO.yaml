@@ -16,7 +16,8 @@ phases:
           digest: Added control and bidi character rejection for supplied SSH key labels (stripping for comment-derived defaults), with the new users.ssh_key_label_invalid detail code, OpenAPI docs and tests. No surprises.
           git:
             branch: plan/mfgit-upstream-modules-01-001
-            commit: []
+            commit:
+                - 0bf56dd
             merge: null
         - number: 2
           slug: ssh-keys-client-methods
