@@ -546,15 +546,6 @@ items:
         - effort:medium
         - plan/slug:users-gui-integration-seams
       text: UserAccountSelf (gui/src/lib/api.ts) has no email_verified_at, so VerifyEmailPage cannot tell that the signed-in user is already verified and cannot skip itself or redirect onward. Backend change (self response + openapi + GUI type) outside this plan.
-    - title: SMTPSender lacks Reply-To and send timeout
-      id: HI9B
-      date: "2026-10-04"
-      tags:
-        - type:enhancement
-        - priority:medium
-        - cross-repo/origin:flow-accounts
-        - effort:unspecified
-      text: 'api/internal/email/sender.go SMTPSender.Send has no Reply-To parameter (the From address is fixed at construction), ignores its context (net/smtp.SendMail has no timeout, so a hung relay blocks the caller), and wraps failures as "smtp: send to <address>: ..." which puts the recipient address in the error text. The composing app''s notice hook (flow-accounts cmd/server/appsetup/notices.go) works around each: it names the NOTICES_REPLY_TO support address in the message body, sends from a bounded goroutine pool, and logs only an address-free error class, never the error text. A Sender that takes a Reply-To and a context deadline (including a bounded dial) and does not embed the address in its errors would let the hook set a real Reply-To header. Origin: flow-accounts followup Jpla.'
     - title: plan/ docs orphaned, no policy exclusion
       id: Rvii
       date: "2026-10-04"
