@@ -40,7 +40,8 @@ phases:
             - XFjp
           git:
             branch: plan/smtp-sender-replyto-timeout-02-001
-            commit: []
+            commit:
+                - 4c74bfc
             merge: null
         - number: 2
           slug: harden-sender-body-recipient-and-error-chain
