@@ -39,7 +39,7 @@ phases:
           tier: sonnet-med
           digest: Moved isSafeReturnPath verbatim into lib/return-path.ts and exported it from index.ts. Added allowRegistration and onForgotPassword props to AuthPage and LoginForm, all default-preserving. Documented that returnPath feeds only the OIDC start URL. Added tests and stories; typecheck and the full suite pass.
           git:
-            branch: null
+            branch: plan/users-gui-integration-seams-01-003
             commit: []
             merge: null
         - number: 4
