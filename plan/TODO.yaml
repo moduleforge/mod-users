@@ -17,4 +17,4 @@ phases:
             branch: plan/migrate-moduleforge-18-001
             commit:
                 - 160241d
-            merge: null
+            merge: 926fefb
