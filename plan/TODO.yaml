@@ -108,6 +108,7 @@ phases:
           path: phase-06-remediation-02/001-fix-ssh-keys-panel-doc-wording.md
           done: false
           tier: sonnet-low
+          digest: Corrected two factual inaccuracies in docs/architecture.md's SSHKeysPanel description (a miscounted ordinal and a mischaracterized fallback-only alert) to match the merged ssh-keys-panel.tsx implementation, closing findings 3oGr and uNF5.
           findings:
             - 3oGr
             - uNF5
