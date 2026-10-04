@@ -166,7 +166,7 @@ phases:
             branch: plan/users-gui-integration-seams-04-001
             commit:
                 - 3b2ee27
-            merge: null
+            merge: deb0dccf5bbb945e9f85a65e30c477579fc86a6e
         - number: 2
           slug: fix-loginform-onsuccess-doc
           title: Correct LoginForm onSuccess Return-Path Validation Doc
