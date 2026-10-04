@@ -193,6 +193,7 @@ phases:
           path: phase-05-remediation-02/001-fix-authpage-onauthenticated-doc.md
           done: false
           tier: haiku-med
+          digest: 'Updated the AuthPage onAuthenticated JSDoc to state that only the query-param fallback (readReturnPath) is validated by isSafeReturnPath, while an explicit returnPath prop is passed through as supplied so the app owns its validation; wording matches LoginForm''s corrected onSuccess doc. Comments only. Manager re-ran bun test in the task worktree: 185 pass, 0 fail (the agent''s reported 78 failures were not reproducible).'
           findings:
             - HNPY
           git:
