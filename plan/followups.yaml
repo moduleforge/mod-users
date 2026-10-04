@@ -692,11 +692,3 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth/oidc.go redirectToTestResult (~line 338) assigns u.Path = "/oidc-config" over the operator-supplied FrontendReturnURL (AUTH_FRONTEND_RETURN_URL), dropping any mount prefix the app is served under (for example /manage), so the OIDC provider test result lands on the wrong URL. Loud failure (a 404 or wrong page after the provider test), admin-only flow. Derive the redirect from the FrontendReturnURL's own path (or a configured oidc-config path) instead of overwriting it, and add a test with a prefixed return URL. Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 2).
-    - title: 0103 hardcodes public.user_accounts
-      id: PfEK
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - priority:high
-        - effort:medium
-      text: 'Moved from app-mfmanager finding SXaM. model/migrations/sql/0103_ssh_public_keys.sql creates mod_users.ssh_public_keys with `REFERENCES public.user_accounts(id)`, and model/queries/ssh_public_keys.sql:36 (ResolveActiveSSHPublicKey, generated into model/db/ssh_public_keys.sql.go:163) has `JOIN public.user_accounts`. Under the displaced-schema layout (core in public, mod-users run with search_path mod_<app>,public) user_accounts lives in the displaced schema, so goose up fails with 42P01 and app-mfmanager api/pgownership tests TestEntityWriteSeam_DisplacedLayout, TestGrantFoundationAndCanonicalAccess_ResolvesDisplacedFoundationTables and TestGrantModuleCanonicalReferences_ResolvesDisplacedCanonicalTable fail. mod-users convention is unqualified names resolved via search_path. Owner decision (2026-10-04): reset mod-users'' schema into a single baseline migration (nothing is public yet) rather than patching 0103. Research: .flow/schema-reset-research.md.'
