@@ -222,6 +222,6 @@ phases:
           findings:
             - aaEB
           git:
-            branch: null
+            branch: plan/users-gui-integration-seams-06-001
             commit: []
             merge: null
