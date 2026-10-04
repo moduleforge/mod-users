@@ -51,3 +51,11 @@ architectural_impact: true
 - After `onComplete`/`redirectDelayMs` and the `AuthProvider` guard, with tests
 - After the `OidcSetupGate` extraction and `ClientLayout` test
 - After modal/test-banner tests and exports
+
+## Status
+
+- Outcome: succeeded (2026-10-04).
+- Validation: `cd gui && bun run typecheck && bun test` pass (157 tests, 12 files); the router/self-import grep and the `window.location.assign|auth/login` grep find nothing; `git diff --stat` touches only `gui/src/` (no ClientLayout stories/tests existed before; new ClientLayout tests added and passing).
+- Files: `gui/src/components/oidc-config-page.tsx`, `gui/src/components/oidc-provider-add-modal.tsx`, `gui/src/components/oidc-provider-edit-modal.tsx`, `gui/src/components/oidc-setup-gate.tsx`, `gui/src/components/client-layout.tsx`, `gui/src/lib/auth-context.tsx`, `gui/src/index.ts`, tests `gui/src/components/oidc-config-page.test.tsx`, `gui/src/components/oidc-setup-gate.test.tsx`, `gui/src/lib/auth-context.test.tsx`, story `gui/src/stories/OidcConfigPage.stories.tsx`.
+- Reference parity: `diff` of each migrated file against the app-mfdemo original shows only import rewrites, the `Oidc*` renames, the `OidcConfigPageProps`/`onComplete`/`redirectDelayMs` additions with unmount cleanup, and two doc comments. No JSX text, placeholder, `title`, or `aria-label` line differs, so every visible string is unchanged.
+- Notes: the `OidcSetupGate` render-prop children are wrapped in a fragment, so the `ClientLayout` DOM is unchanged. Tests set the URL with `window.happyDOM.setURL`, because happy-dom starts at `about:blank`, where `history.replaceState` cannot set a path.
