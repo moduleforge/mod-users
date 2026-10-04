@@ -11,6 +11,13 @@ export interface UsersApiConfig {
   /**
    * API base URL. `''` means same-origin; otherwise an absolute http(s) URL or
    * a single-slash-rooted path. Trailing slashes are stripped.
+   *
+   * Trust note: this configured value is validated by `configureUsersApi`, but
+   * the fallbacks used when it is unset (`NEXT_PUBLIC_API_BASE_URL` and
+   * `window.__USERS_API_URL__`, see `getApiBaseUrl`) are trusted deploy-time
+   * inputs used as-is, WITHOUT that validation. The bearer token is sent to
+   * whatever base URL is resolved, so those fallbacks must come only from
+   * deploy-time configuration, never from user-controlled input.
    */
   baseUrl?: string;
   /** localStorage key holding the auth token. Must be a non-empty string. */
@@ -19,17 +26,28 @@ export interface UsersApiConfig {
    * Where a 401 response sends the browser (default `'/auth/login'`). Either a
    * path starting with exactly one `/`, or an absolute http(s) URL. Apps with
    * a client-side router should also set `AuthProvider`'s `loginPath`.
+   *
+   * Security note: an absolute URL target combined with
+   * `unauthenticatedReturnParam` sends the current `pathname + search` to that
+   * origin as a query parameter. Only point it at an origin you trust with
+   * those values.
    */
   unauthenticatedRedirectUrl?: string;
   /**
    * Query parameter name under which the current path is appended to the
    * redirect target on a 401 (e.g. `'return'`). `null` (the default) appends
-   * nothing. Must match `/^[A-Za-z0-9_-]+$/`.
+   * nothing. Must match `/^[A-Za-z0-9_-]+$/`. When the redirect target is an
+   * absolute URL, the current `pathname + search` is sent to that origin (see
+   * `unauthenticatedRedirectUrl`). The appended value is always one
+   * `isSafeReturnPath` accepts; a current page it would reject (for example
+   * `/team:alpha/x`) is replaced by `'/'`.
    */
   unauthenticatedReturnParam?: string | null;
   /**
    * Custom 401 handler, called after the stored token is cleared; replaces the
-   * default redirect. `null` restores the default handler.
+   * default redirect. `null` restores the default handler. If the handler
+   * throws, the error is logged via `console.error` and the 401 is still
+   * surfaced to the caller as usual.
    */
   onUnauthenticated?: ((ctx: UnauthenticatedContext) => void) | null;
 }
@@ -84,7 +102,14 @@ function normalizeBaseUrl(value: unknown): string {
   );
 }
 
-/** True for a site-relative path: one leading `/`, no `//`, backslash, or control chars. */
+/**
+ * True for a site-relative path: one leading `/`, no `//`, backslash, or control
+ * chars. Used to validate `unauthenticatedRedirectUrl` and `AuthProvider`'s
+ * `loginPath`. Deliberately does NOT apply the colon-in-first-segment rule:
+ * those are developer-supplied configuration, not page-derived values, so
+ * `isSafeReturnPath` (which layers that rule on top of this predicate) is the
+ * single rule for any value derived from the current page.
+ */
 export function isSafeSitePath(value: unknown): boolean {
   return (
     typeof value === 'string' &&
@@ -93,6 +118,32 @@ export function isSafeSitePath(value: unknown): boolean {
     !value.includes('\\') &&
     !CONTROL_CHARS.test(value)
   );
+}
+
+/**
+ * Validates that a candidate return path is a safe, same-origin relative
+ * path: `isSafeSitePath` plus a rejection of any `:` in the first path
+ * segment (so no scheme-like `javascript:...` prefix can sneak in). Rejects
+ * absolute URLs, protocol-relative URLs (`//evil.com`), backslashes and C0
+ * control characters (the WHATWG URL parser strips these, so `/\t/evil.com`
+ * would collapse into `//evil.com`).
+ *
+ * This is the one predicate for return paths: the 401 handler uses it before
+ * appending a return value, and `readReturnPath`/`OidcCallbackPage` use it
+ * before accepting one. Defined here (config.ts imports no other lib module)
+ * and re-exported from `return-path.ts` and the package index.
+ *
+ * Exported so consuming apps can validate their own `?return=` values with
+ * the same rules before navigating to them.
+ */
+export function isSafeReturnPath(candidate: string | null): candidate is string {
+  if (typeof candidate !== 'string' || !isSafeSitePath(candidate)) return false;
+  const firstSlashAfterStart = candidate.indexOf('/', 1);
+  const firstSegment =
+    firstSlashAfterStart === -1
+      ? candidate.slice(1)
+      : candidate.slice(1, firstSlashAfterStart);
+  return !firstSegment.includes(':');
 }
 
 function validateRedirectUrl(value: unknown): string {
@@ -195,6 +246,11 @@ export function resetUsersApiConfig(): void {
  * Resolves the API base URL: configured value, then NEXT_PUBLIC_API_BASE_URL
  * (when defined, including ''), then window.__USERS_API_URL__ (when a string,
  * including ''), then the localhost default. Evaluated on every call.
+ *
+ * Trust note: the `NEXT_PUBLIC_API_BASE_URL` and `window.__USERS_API_URL__`
+ * fallbacks are trusted deploy-time inputs, used as-is WITHOUT the validation
+ * `configureUsersApi` applies to `baseUrl`. The bearer token is sent to the
+ * resolved URL, so they must never carry user-controlled data.
  */
 export function getApiBaseUrl(): string {
   if (configuredBaseUrl !== undefined) return configuredBaseUrl;
@@ -237,6 +293,7 @@ export function clearStoredToken(): void {
   localStorage.removeItem(getTokenStorageKey());
 }
 
+/** Current `pathname + search` when it is a safe site path, else `'/'`. */
 function currentReturnPath(): string {
   if (typeof window === 'undefined') return '/';
   const candidate = window.location.pathname + window.location.search;
@@ -264,14 +321,22 @@ export function handleUnauthenticated(): void {
   clearStoredToken();
   const returnPath = currentReturnPath();
   if (configuredOnUnauthenticated) {
-    configuredOnUnauthenticated({ returnPath });
+    try {
+      configuredOnUnauthenticated({ returnPath });
+    } catch (error) {
+      // A throwing consumer handler must not replace the 401 the caller is
+      // about to receive; surface it for debugging instead.
+      console.error('users: onUnauthenticated handler threw', error);
+    }
     return;
   }
   let target = configuredRedirectUrl ?? DEFAULT_UNAUTHENTICATED_REDIRECT_URL;
   const param = configuredReturnParam ?? null;
   if (param !== null) {
     if (sameOriginPathname(target) === window.location.pathname) return;
-    target += `${target.includes('?') ? '&' : '?'}${param}=${encodeURIComponent(returnPath)}`;
+    // Only ever write a value readReturnPath will accept; otherwise fall back.
+    const value = isSafeReturnPath(returnPath) ? returnPath : '/';
+    target += `${target.includes('?') ? '&' : '?'}${param}=${encodeURIComponent(value)}`;
   }
   window.location.href = target;
 }
