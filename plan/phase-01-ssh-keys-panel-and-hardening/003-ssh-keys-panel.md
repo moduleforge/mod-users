@@ -90,3 +90,11 @@ architectural_impact: true
 - After the add form with field-error mapping
 - After the inline step-up flow and its tests
 - After revoke, the story, and the export
+
+## Status
+
+- Outcome: succeeded (2026-10-04). Seams 001 case: `gui/src/lib/config.ts` did NOT exist on the base, so the panel inherits today's `API_BASE_URL` singleton and the `configureUsersApi({ baseUrl: '' })` test case was skipped. Task `001`'s `users.ssh_key_label_invalid` copy is included regardless.
+- Validation: `tsc --noEmit` passes; `bun run build` succeeds and `dist/index.d.ts` mentions `SSHKeysPanel` (3 matches); the URL/env, token-storage, and router greps behave as required (the token appears only as a function parameter and a local variable; the only `console` use is `console.error` of caught unexpected errors). `bun test` fails identically on the unmodified base here (dangling `mod-core/gui/node_modules/*` symlinks, the known gap); run against a scratch copy of core-gui with its dependencies resolved, 67 pass / 0 fail (29 new). `ladle build` also succeeds with the new stories.
+- Manual check against a live stack: not done (no local stack available to this agent).
+- Decisions: the step-up challenge is a single inline section below the list; a revoke that hits step-up closes the confirmation dialog and holds the key. The form's submit button is disabled while a challenge is open. The inline `Alert` for `users.email_unverified` uses the fixed "verified" sentence; other action codes show `error.message`. A list-time action-required error also shows a generic load-error banner with Retry.
+- Files: `gui/src/components/ssh-keys-panel.tsx`, `gui/src/components/ssh-keys-panel.test.tsx`, `gui/src/stories/SSHKeysPanel.stories.tsx`, `gui/src/index.ts`.
