@@ -45,7 +45,7 @@ phases:
           slug: harden-sender-body-recipient-and-error-chain
           title: Stuff Bare-CR Dots, Validate To as a Bare Address, Redact the Error Chain, and Cover Untested Branches
           path: phase-02-remediation-01/002-harden-sender-body-recipient-and-error-chain.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Hardened the SMTP sender against bare-CR dot-stuffing bypass, non-bare-address recipients, and address leakage through the Unwrap chain. Added tests for each, plus the previously uncovered STARTTLS, AUTH and redaction branches.
           findings:
