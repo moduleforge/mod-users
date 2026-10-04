@@ -15,6 +15,6 @@ phases:
           tier: sonnet-med
           digest: Replaced smtp.SendMail with an explicit context-bounded SMTP flow (DialContext, conn deadline, watcher goroutine that closes the connection on ctx.Done and is always joined). Added Message, MessageSender, Options, Reply-To and CR/LF validation, and address-free stage errors. Tests cover everything the task listed and are stable under -race -count=20.
           git:
-            branch: null
+            branch: plan/smtp-sender-replyto-timeout-01-001
             commit: []
             merge: null
