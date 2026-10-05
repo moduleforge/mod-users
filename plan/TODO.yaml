@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: authorize-type-api
+          title: Reproduce Type-Target Confusion And Add AuthorizeType
+          path: phase-01-type-target-authorization/002-authorize-type-api.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
