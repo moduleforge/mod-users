@@ -26,3 +26,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: migrate-type-level-call-sites
+          title: Audit And Migrate mod-users Type-Level Authorize Call Sites
+          path: phase-01-type-target-authorization/003-migrate-type-level-call-sites.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
