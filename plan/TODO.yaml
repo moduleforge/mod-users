@@ -36,3 +36,7 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 2
+      slug: doc-updates
+      title: Documentation Updates
+      tasks: []
