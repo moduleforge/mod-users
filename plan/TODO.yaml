@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: type-target-authorization
       title: Type-Target Authorization
-      tasks: []
+      tasks:
+        - number: 1
+          slug: throwaway-postgres-integration-harness
+          title: Throwaway Postgres Integration Harness
+          path: phase-01-type-target-authorization/001-throwaway-postgres-integration-harness.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
