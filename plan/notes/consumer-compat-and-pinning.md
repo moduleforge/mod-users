@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-Covers how the mod-users change reaches its consumers (mod-authz, app-mfmanager, app-mftodo, mod-repos test suites), what stays API-stable, and what the mod-authz slice of this federated plan needs from mod-users.
+Covers how the mod-users change reaches its consumers (mod-authz, mod-core, mod-workflows, app-mfmanager, app-mftodo, app-mfgit, mod-repos test suites), what stays API-stable, and what the other slices of this four-project federated plan (mod-authz 3-4, mod-core 5-6, mod-workflows 7-8) need from mod-users.
 
 ## API stability
 
@@ -22,6 +22,9 @@ Covers how the mod-users change reaches its consumers (mod-authz, app-mfmanager,
 - **Do not cut a git tag** for this change. No consumer resolves tags, and adding a one-off tag would create a convention nobody reads. The close-out merge commit on mod-users `main` is the consumable artifact. Report its SHA to the manager so the mod-authz slice and app pin bumps can reference it.
 - **mod-users' own `versions.lock.yaml` needs no change.** mod-users does not consume mod-authz's fix. It imports only `authz-api/authz` (the operation registry) and `authz-model`.
 - **Ordering:** mod-users lands first, merged and pushed to `origin/main`. Then the mod-authz slice migrates its four type-id call sites using the structural assert-or-nil-fallback pattern. Then app-mfmanager (and app-mftodo, if it composes mod-authz group services) bump the `mod-users` and `mod-authz` pins in one `make pins.update` and re-run their smoke tests. The app pin bumps are outside this plan and are filed as followups.
+- **Four-project landing order.** All dependencies are soft. Preferred order: mod-users, mod-core, mod-authz, mod-workflows, so production takes the explicit `AuthorizeType` path. Each slice closes the hole through the nil fallback even against today's mod-users.
+- **Pin-bump consumers (followups, after everything lands):** app-mfmanager (`zdj9`), app-mftodo (`mJ3M`), and mod-core, which is pinned by app-mfgit and mod-users.
+- **mod-core's helper.** mod-core adds `authz.TypeAuthorizer` and `authz.AuthorizeType` in core-api with a method signature identical to `localAuthz.TypeAuthorizer`, so `*Authorizer` satisfies it automatically. mod-users does not depend on it. Optional follow-on after both land: alias `localAuthz.TypeAuthorizer` to core's (note only, no task).
 - **Soft dependency, flagged to the manager:** mod-authz's fallback branch (`Authorize(ctx, op, nil)`) closes the hole even against today's mod-users. So mod-authz's fix is safe to land in either order, but only the combination gives the explicit type-level API.
 
 ## Guidance for the mod-authz slice (informational; mod-users does not edit mod-authz)

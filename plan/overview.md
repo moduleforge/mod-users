@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-This plan fixes an authorization bypass in mod-users' grants-table `Authorizer` (`api/internal/authz/authz.go`, exported as `api/localAuthz`). This is the **mod-users slice of a federated two-project plan**. The mod-authz slice follows in higher-numbered phases (3 and up) and depends on this slice landing first. This plan edits nothing outside mod-users.
+This plan fixes an authorization bypass in mod-users' grants-table `Authorizer` (`api/internal/authz/authz.go`, exported as `api/localAuthz`). This is the **mod-users slice of a federated four-project plan**: mod-users (phases 1-2, this project), mod-authz (phases 3-4), mod-core (phases 5-6), and mod-workflows (phases 7-8). The other slices have only soft dependencies on this one (see Federation hand-off). This slice edits nothing outside mod-users.
 
 **Problem.** `Authorize(ctx, op, target *int64)` treats every non-nil target as an `entities.id` (in `checkGrantOrOwn`: grants through `TargetChain`, plus an `entities.owner_id` ownership arm). The ecosystem convention (`docs-mf-standards/architecture/authorization-design.md` call-shape table) has type-level `create` and `list` pass a **`types.id`** in that same parameter. So an actor who owns the entity whose id equals the type id, or holds any grant over it, passes the type-level check. This was reproduced in app-mfmanager (finding `ilu6`, app-mfmanager plan `managed-app-home-nav`): an ordinary user gets 403 then 201 on actor-group creation once they own entity 7. The same pattern exists inside mod-users itself: `UserAccountService.Create` authorizes `create` with the `natural_person` type id. Root cause and design: [type target design](./notes/type-target-design.md).
 
@@ -19,7 +19,7 @@ This plan fixes an authorization bypass in mod-users' grants-table `Authorizer` 
 - The `mod-core` `Authorizer` interface, `Authorize`'s signature, and `Authorize`'s behavior for entity targets and nil targets.
 - `localAuthz.New`'s signature.
 - Schema and migrations.
-- Anything outside the mod-users repository. mod-authz, mod-core, docs-mf-standards, and the apps get followups instead.
+- Anything outside the mod-users repository. Other repos are handled by their own slices (mod-authz, mod-core, mod-workflows) or by followups (docs-mf-standards `rsiV`, mod-authz `qWTH`, the app pin bumps).
 
 **Success criteria:**
 
@@ -55,4 +55,19 @@ Tasks are sequential. Each depends on the previous one.
 
 ### Federation hand-off
 
-The mod-authz slice (phases 3 and up) migrates `ActorGroupService` and `TargetGroupService` `create`/`list` (four call sites) to the structural assert-or-nil-fallback pattern, without importing mod-users. Out-of-scope items are filed as followups: mod-core's and mod-workflows' own type-id call sites, the core contract and the docs-mf-standards call-shape table, type-scoped grants, and the app-mfmanager/app-mftodo pin bumps.
+The plan was widened from two projects to four:
+
+| Project | Phases | Covers |
+|---|---|---|
+| mod-users | 1-2 | `AuthorizeType` and `localAuthz.TypeAuthorizer` (this slice) |
+| mod-authz | 3-4 | `ActorGroupService` and `TargetGroupService` `create`/`list` (four call sites), structural assert-or-nil-fallback, no mod-users import |
+| mod-core | 5-6 | Followup `ls1q`: four create call sites, plus `authz.TypeAuthorizer` and `authz.AuthorizeType` in core-api |
+| mod-workflows | 7-8 | Followup `eiFh`: workflow definition and instance `create`/`list` call sites |
+
+Followups `ls1q` (mod-core) and `eiFh` (mod-workflows) are **now in scope** of this plan, no longer out of scope. Still followups: docs-mf-standards `rsiV` (call-shape table), mod-authz `qWTH`, and the app pin bumps.
+
+**Landing order.** All dependencies are soft: each slice closes the hole through the nil fallback (`Authorize(ctx, op, nil)`) even against today's mod-users. The preferred order is mod-users, then mod-core, then mod-authz, then mod-workflows, so production takes the explicit `AuthorizeType` path.
+
+**mod-core's `TypeAuthorizer`.** mod-core adds `authz.TypeAuthorizer` and an `authz.AuthorizeType` helper in core-api. Its method signature is identical to mod-users' `localAuthz.TypeAuthorizer`/`AuthorizeType`, so `*Authorizer` satisfies it automatically. mod-users does **not** depend on it; `localAuthz.TypeAuthorizer` stays as designed. Optional follow-on once both land: make `localAuthz.TypeAuthorizer` an alias of core's. This is a followup-style note only, with no task in this plan.
+
+**Pin bumps.** After everything lands, bump pins in the consumers: app-mfmanager (`zdj9`) and app-mftodo (`mJ3M`), plus mod-core, which is pinned by app-mfgit and mod-users. These are followups, outside this plan.
