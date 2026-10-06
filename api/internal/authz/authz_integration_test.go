@@ -7,7 +7,25 @@ package authz_test
 // and (scenario 9) the generic entities.owner_id own-predicate that folded
 // into checkGrantOrOwn (see the authz-single-row-own plan, Phase 1 Task 1).
 //
-// Run with:
+// Run with (preferred): a throwaway Postgres container with a unique name and
+// a random host port. Safe on a shared Docker host; never touches
+// users-module-postgres.
+//
+//	name="mod-users-authz-integ-$(openssl rand -hex 4)"
+//	docker run -d --rm --name "$name" -e POSTGRES_USER=users -e POSTGRES_PASSWORD=users \
+//	  -e POSTGRES_DB=postgres -p 127.0.0.1::5432 postgres:16
+//	port="$(docker port "$name" 5432/tcp | head -1 | sed 's/.*://')"
+//	# wait for readiness: until docker exec "$name" pg_isready -U users; do sleep 1; done
+//	make -C model compose
+//	(cd api && AUTHZ_DEV_PG_HOST=127.0.0.1 AUTHZ_DEV_PG_PORT="$port" \
+//	   go test -tags=integration -p 1 -count=1 ./internal/authz/...)
+//	docker rm -f "$name"
+//
+// When AUTHZ_DEV_PG_HOST is set, checkPrereqs skips the users-module-postgres
+// docker-inspect check. AUTHZ_DEV_PG_PORT defaults to 5432.
+//
+// Legacy alternative (shared container; do NOT use on a shared Docker host
+// since make dev.start manages the shared users-module-postgres container):
 //
 //	cd mod-users && make dev.start   # or an equivalent Postgres; see below
 //	cd mod-users/api && \
@@ -115,13 +133,14 @@ func TestMain(m *testing.M) {
 	}
 
 	pgHost := resolveHost()
+	pgPort := resolvePort()
 
-	if err := resetDB(pgHost); err != nil {
+	if err := resetDB(pgHost, pgPort); err != nil {
 		fmt.Fprintf(os.Stderr, "integration: DB reset failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	dsn := fmt.Sprintf("postgres://users:users@%s:5432/%s?sslmode=disable", pgHost, integDevDB)
+	dsn := fmt.Sprintf("postgres://users:users@%s:%s/%s?sslmode=disable", pgHost, pgPort, integDevDB)
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "integration: open pool: %v\n", err)
@@ -141,13 +160,17 @@ func TestMain(m *testing.M) {
 }
 
 func checkPrereqs() error {
-	cmd := exec.Command("docker", "inspect", "--format={{.State.Running}}", "users-module-postgres")
-	out, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("docker inspect: %w", err)
-	}
-	if strings.TrimSpace(string(out)) != "true" {
-		return fmt.Errorf("container users-module-postgres is not running")
+	// An explicit AUTHZ_DEV_PG_HOST means the caller supplied their own
+	// Postgres (e.g. a throwaway container); the shared container need not run.
+	if os.Getenv("AUTHZ_DEV_PG_HOST") == "" {
+		cmd := exec.Command("docker", "inspect", "--format={{.State.Running}}", "users-module-postgres")
+		out, err := cmd.Output()
+		if err != nil {
+			return fmt.Errorf("docker inspect: %w", err)
+		}
+		if strings.TrimSpace(string(out)) != "true" {
+			return fmt.Errorf("container users-module-postgres is not running")
+		}
 	}
 	if _, err := exec.LookPath("goose"); err != nil {
 		return fmt.Errorf("goose not in PATH: %w", err)
@@ -182,9 +205,17 @@ func resolveHost() string {
 	return "172.23.0.3"
 }
 
-func resetDB(pgHost string) error {
+// resolvePort returns the Postgres host port: AUTHZ_DEV_PG_PORT, default 5432.
+func resolvePort() string {
+	if p := os.Getenv("AUTHZ_DEV_PG_PORT"); p != "" {
+		return p
+	}
+	return "5432"
+}
+
+func resetDB(pgHost, pgPort string) error {
 	ctx := context.Background()
-	adminURL := fmt.Sprintf("postgres://users:users@%s:5432/postgres?sslmode=disable", pgHost)
+	adminURL := fmt.Sprintf("postgres://users:users@%s:%s/postgres?sslmode=disable", pgHost, pgPort)
 
 	conn, err := pgx.Connect(ctx, adminURL)
 	if err != nil {
@@ -201,7 +232,7 @@ func resetDB(pgHost string) error {
 		}
 	}
 
-	dsn := fmt.Sprintf("postgres://users:users@%s:5432/%s?sslmode=disable", pgHost, integDevDB)
+	dsn := fmt.Sprintf("postgres://users:users@%s:%s/%s?sslmode=disable", pgHost, pgPort, integDevDB)
 	cmd := exec.Command("goose", "-dir", migrationsDir(), "postgres", dsn, "up") //nolint:gosec // fixed args/resolved paths, not user input
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("goose up: %w\n%s", err, out)
