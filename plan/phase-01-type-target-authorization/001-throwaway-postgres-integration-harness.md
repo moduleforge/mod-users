@@ -46,3 +46,10 @@ The Docker host is **shared**. Never run `make dev.start`, `dev.restart`, `dev.s
 - `api/internal/authz/authz_integration_test.go`: `TestMain`, `checkPrereqs`, `resolveHost`, `resetDB`, and the goose and pool DSNs.
 - `AGENTS.md`: "Test commands" and "Working in worktrees".
 - `docs/mf-standards/building-common.md#building-inside-a-task-worktree`: sibling symlinks (`make preflight`).
+
+## Status
+
+- Outcome: succeeded (2026-10-05).
+- Validation: `go vet -tags=integration` and unit tests pass; full integration suite passed against a throwaway postgres:16 container (random port, removed afterwards, no leftover rows); no-env path unchanged by review.
+- Files: `api/internal/authz/authz_integration_test.go`, `AGENTS.md`.
+- jwtsecret_bootstrap_integration_test.go left alone; followup filed (type:test-gap).
