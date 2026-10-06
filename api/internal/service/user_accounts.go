@@ -162,6 +162,30 @@ func NewUserAccountService(
 	}
 }
 
+// typeAuthorizer is the structural form of localAuthz.TypeAuthorizer: an
+// Authorizer that can answer type-level questions (create or list of a
+// resource type) distinctly from entity-level ones.
+type typeAuthorizer interface {
+	AuthorizeType(ctx context.Context, operation string, typeID int64) error
+}
+
+// authorizeType performs a type-level authorization check for operation op on
+// the resource type typeID (a types.id, never an entities.id).
+//
+// When az implements AuthorizeType it is used. Otherwise (decorators and test
+// stubs may not implement AuthorizeType) the check falls back to
+// az.Authorize(ctx, op, nil). A nil target is the core contract's "no specific
+// target", which is wildcard-only in mod-users' implementation, so the
+// fallback stays fail-closed. It must never fall back to Authorize with
+// &typeID: Authorize treats its target as an entities.id, so a type id there
+// would be matched against owner_id and grants.target_id of unrelated entities.
+func authorizeType(ctx context.Context, az coreAuthz.Authorizer, op string, typeID int64) error {
+	if ta, ok := az.(typeAuthorizer); ok {
+		return ta.AuthorizeType(ctx, op, typeID)
+	}
+	return az.Authorize(ctx, op, nil)
+}
+
 // Create creates a NaturalPerson entity and a UserAccount row in a single
 // atomic transaction. Requires admin authorization.
 func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInput) (UserAccount, error) {
@@ -188,9 +212,11 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		})
 	}
 
-	// Authorize: create is admin-only; use type ID per convention.
+	// Authorize: create is a type-level, wildcard-only operation. typeID is a
+	// types.id, not an entities.id, so it must go through authorizeType and
+	// never be passed to Authorize as a target.
 	typeID := s.typeRes.IDForSlugMust("natural_person")
-	if err := s.az.Authorize(ctx, "create", &typeID); err != nil {
+	if err := authorizeType(ctx, s.az, "create", typeID); err != nil {
 		return UserAccount{}, err
 	}
 

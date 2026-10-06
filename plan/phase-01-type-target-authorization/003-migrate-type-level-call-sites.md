@@ -55,3 +55,43 @@ architectural_impact: true
 - After the red service tests are recorded.
 - After the helper and the `Create` migration, with the service tests green.
 - After the integration regression.
+
+## Status
+
+Outcome: succeeded (2026-10-05). All validation checks passed. Logs are under `.flow/validation-logs/` in the task worktree.
+
+### Final audit table
+
+Re-run of `grep -rn --include='*.go' -E '\.Authorize\(' api model | grep -v _test.go` (line numbers are post-edit for `user_accounts.go`, shifted by about +25 after the helper insertion).
+
+| Site | Op | Target | Kind | Verdict |
+|---|---|---|---|---|
+| `api/internal/service/user_accounts.go` `UserAccountService.Create` | `create` | was `&typeID` (`IDForSlugMust("natural_person")`) | type id | Vulnerable; migrated to `authorizeType(ctx, s.az, "create", typeID)` |
+| `user_accounts.go` List | `list` | `nil` | none | unchanged |
+| `user_accounts.go` Get/Update/Delete | `read`/`update`/`delete` | `&eid` | entity | unchanged |
+| `user_accounts.go` login / assume | `login` / `assume` | `&entityID` / `&targetEntityID` | entity | unchanged |
+| `api/internal/service/ssh_keys.go:111` | op | `&accountHolder` | entity | unchanged |
+| `api/internal/handlers/apps.go` (4 sites) | `update`/`read` | `nil` | none | unchanged |
+| `api/cmd/server/main.go:202,445,464` | `manage` | `nil` | none | unchanged |
+
+- `IDForSlug`/`IDForSlugMust` trace: the only non-test hit in `api` and `model` is `user_accounts.go` `Create`. `types.Resolver` is otherwise only passed through constructors (`main.go`, `usersservice.NewUserAccountService`, and `authzservice.Deps.TypeResolver` / `coreservice.New` into sibling modules, which are out of scope and already covered by the planning audit's ecosystem table).
+- Exported surfaces `api/localAuthz`, `api/usersservice`, `api/handlers`, `api/auth`: no `Authorize` calls (grep empty); they only carry or alias the authorizer.
+- `grep -n 'Authorize(ctx, "create", &typeID)' api/internal/service/user_accounts.go` returns nothing.
+
+### Red-run evidence
+
+Service tests were written first and run against the unmodified `user_accounts.go` (log: `.flow/validation-logs/01-red-service-tests.log`). Failures:
+
+- `Create_TypeLevelDenialNotBypassedByEntityAuthority`: Create returned the transaction error instead of ErrForbidden; `Authorize("create")` called with non-nil target 4242; `AuthorizeType` never called; transaction started.
+- `Create_PlainAuthorizerGetsNilTarget`: Authorize target was 4242, want nil.
+- `Create_TypeAuthorizerAllowProceedsToTransaction`: entity-level Authorize was called once.
+
+After the change all pass.
+
+### Implementation notes
+
+- `api/internal/service/user_accounts.go`: added unexported `typeAuthorizer` (structural) and `authorizeType`; `Create` now calls `authorizeType`. Authorization stays after input validation and before the transaction. The helper never falls back to `&typeID`.
+- `api/internal/service/user_accounts_create_authz_test.go` (new): cases (a), (b), (c), a validation-before-authorization test, and a compile-time assertion that `*localAuthz.Authorizer` satisfies `typeAuthorizer`. Case (c) is feasible without a DB because a stub `txhelper.DB` fails on `BeginTx`, which proves Create passed authorization. The existing stubs were left untouched; new stubs record the target.
+- `api/internal/authz/user_account_create_integration_test.go` (new, `integration` tag): wires the real `UserAccountService` (external test package, no import cycle) to the real `Authorizer`. An actor with entity-level authority over entity `T = types.id('natural_person')` is denied Create without a transaction starting; a wildcard manage holder reaches the transaction.
+- Integration run: `go test -tags=integration -p 1 -count=1 ./internal/authz/...` against a throwaway postgres:16 container (unique name, random port, removed afterwards): ok (log: `.flow/validation-logs/04-integration.log`).
+- `go build ./... && go vet ./... && go test ./...` pass; `make -C api lint` clean. Existing handler and service tests pass unmodified.
