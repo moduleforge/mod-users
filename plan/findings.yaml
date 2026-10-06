@@ -1,0 +1,12 @@
+version: 2
+items:
+    - title: jwtsecret integ test hard-codes 5432
+      id: R9KP
+      date: "2026-10-05"
+      tags:
+        - type:enhancement
+        - plan/phase:type-target-authorization
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Test gap: api/internal/config/jwtsecret_bootstrap_integration_test.go hard-codes port 5432 and the users-module-postgres container name, so it cannot run against a throwaway Postgres container on a shared Docker host. It lacks the AUTHZ_DEV_PG_PORT / explicit-host override that api/internal/authz/authz_integration_test.go now has.'
+closed: []
