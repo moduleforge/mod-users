@@ -18,7 +18,7 @@ phases:
             branch: plan/fix-actor-group-target-confusion-01-001
             commit:
                 - 164e952
-            merge: null
+            merge: 9d2cf5e5e352a5ee45e21b0f36ef0fc943477416
         - number: 2
           slug: authorize-type-api
           title: Reproduce Type-Target Confusion And Add AuthorizeType
