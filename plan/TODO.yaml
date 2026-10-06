@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: type-target-authorization
       title: Type-Target Authorization
+      diff_base: d1475c3235827567cd11d5364728998e5041d6be
       tasks:
         - number: 1
           slug: throwaway-postgres-integration-harness
