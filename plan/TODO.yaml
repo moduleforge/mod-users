@@ -30,7 +30,7 @@ phases:
             branch: plan/fix-actor-group-target-confusion-01-002
             commit:
                 - d1a492b
-            merge: null
+            merge: f1b0fe0dad737b85e383e203a946e859e17394ba
         - number: 3
           slug: migrate-type-level-call-sites
           title: Audit And Migrate mod-users Type-Level Authorize Call Sites
