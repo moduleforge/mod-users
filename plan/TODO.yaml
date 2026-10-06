@@ -16,7 +16,8 @@ phases:
           digest: Added an AUTHZ_DEV_PG_PORT override and an explicit-host bypass of the shared-container check to the authz integration suite. Documented the throwaway-container recipe in the test header and AGENTS.md. The full integration suite passes against a throwaway postgres:16, which was removed afterwards.
           git:
             branch: plan/fix-actor-group-target-confusion-01-001
-            commit: []
+            commit:
+                - 164e952
             merge: null
         - number: 2
           slug: authorize-type-api
