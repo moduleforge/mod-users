@@ -27,7 +27,7 @@ phases:
           tier: sonnet-high
           digest: Reproduced the type-id-as-entity-id confusion with failing unit and real-DB tests against a naive delegate. Then added AuthorizeType (wildcard-only, with a shared prelude with Authorize) and the exported localAuthz.TypeAuthorizer, and rewrote the docs that described the bug. Full unit and integration suites are green.
           git:
-            branch: null
+            branch: plan/fix-actor-group-target-confusion-01-002
             commit: []
             merge: null
         - number: 3
