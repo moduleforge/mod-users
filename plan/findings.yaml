@@ -33,8 +33,8 @@ items:
       tags:
         - type:documentation
         - priority:low
+        - effort:small
         - plan/phase:type-target-authorization
-        - effort:unspecified
       text: 'Review finding (low confidence, agent-authored data; likely pre-existing and outside this phase''s diff): the link-chain check reported docs/CLAUDE.md and next-steps.md as not reachable from README.md. The same agent also reported that AGENTS.md carried no throwaway-Postgres recipe, which contradicts the merged diff, so it may have read the main checkout rather than the plan worktree; re-verify against the plan branch before acting. Fix would be linking the docs from README.md or relocating them.'
     - title: Integ harness host override skips DB guard
       id: Ap8y
