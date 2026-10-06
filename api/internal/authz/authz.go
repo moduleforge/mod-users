@@ -186,6 +186,12 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 	return ErrForbidden
 }
 
+// AuthorizeType is a TEMPORARY naive delegate used only to reproduce the
+// type-target confusion; it is replaced by the real implementation.
+func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID int64) error {
+	return a.Authorize(ctx, operation, &typeID)
+}
+
 // effectiveActor returns the entity ID that should be used for policy checks.
 // It delegates to opctx.EffectiveActorEntityID, which applies the
 // sudo-first-then-actor policy (the sudo actor wins when one is set on ctx,
