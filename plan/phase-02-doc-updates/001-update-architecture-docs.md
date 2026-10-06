@@ -31,3 +31,12 @@ Update mod-users' architecture and spec docs to reflect the type-level vs entity
 - `docs/architecture/ssh-keys.md` was reviewed. Record "no change needed" or the edit made in Status/notes.
 - `git diff --stat` (excluding `plan/`) touches only files under `docs/`, and none under `docs/mf-standards/`.
 - Markdown follows the project's markdown standards: sentence-case headings and inline links.
+
+## Status
+
+Outcome: succeeded (2026-10-05).
+
+- `docs/architecture.md`: added key decision D12 (type-level vs entity-level authorization; D12 is the next free number after D11) and an API layer paragraph listing the exported `localAuthz` facade and `TypeAuthorizer`.
+- `docs/mod-users-spec.md`: Security requirements, Authorization bullet now states account creation is authorized at the type level (wildcard grant), not satisfied by owning or holding grants over any entity.
+- `docs/architecture/ssh-keys.md`: reviewed, no change needed (entity targets only; its `Authorize(ctx, op, &accountHolderEntity)` usage is unaffected).
+- `docs/mf-standards/` untouched. Validation: grep checks for `AuthorizeType`, `TypeAuthorizer`, wildcard-only, and nil-target fallback in `docs/architecture.md` pass; diff touches only `docs/` (plus this task doc).
