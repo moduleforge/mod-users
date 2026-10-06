@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: UserAccountService.List not on AuthorizeType
-      id: 4dka
-      date: "2026-10-05"
-      tags:
-        - type:style
-        - priority:low
-        - effort:small
-        - plan/phase:type-target-authorization
-      text: 'Review finding (suggestion, medium confidence; agent-authored data): UserAccountService.List in api/internal/service/user_accounts.go still calls Authorize(ctx, "list", nil). That is correct and fail-closed (wildcard-only) today and has no bypass, but it does not use the new type-level API. If type-scoped grants are introduced later, migrate List to authorizeType for consistency. No action needed now.'
     - title: docs/CLAUDE.md, next-steps.md unreachable
       id: CYCl
       date: "2026-10-05"
@@ -37,4 +28,9 @@ closed:
       title: authorizeType fallback ignores typeID guard
       disposition: promoted
       ref: 5pBA
+      date: "2026-10-06"
+    - id: 4dka
+      title: UserAccountService.List not on AuthorizeType
+      disposition: promoted
+      ref: 4dka
       date: "2026-10-06"
