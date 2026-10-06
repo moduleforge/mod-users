@@ -56,6 +56,6 @@ phases:
           tier: sonnet-high
           digest: Docs-only update. Added D12 and a localAuthz facade paragraph to the architecture doc, and added the type-level authorization statement to the spec's Authorization bullet. The ssh-keys doc needed no change.
           git:
-            branch: null
+            branch: plan/fix-actor-group-target-confusion-02-001
             commit: []
             merge: null
