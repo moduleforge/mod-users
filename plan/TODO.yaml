@@ -35,7 +35,7 @@ phases:
           slug: migrate-type-level-call-sites
           title: Audit And Migrate mod-users Type-Level Authorize Call Sites
           path: phase-01-type-target-authorization/003-migrate-type-level-call-sites.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Routed UserAccountService.Create through a new fail-closed authorizeType helper, which asserts AuthorizeType and otherwise falls back to a nil target, never &typeID. The audit found no other type-id sites. Red-first service tests and a real-Authorizer integration regression cover the bypass.
           git:
