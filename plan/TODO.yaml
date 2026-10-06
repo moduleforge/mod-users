@@ -52,7 +52,7 @@ phases:
           slug: update-architecture-docs
           title: Update Architecture Docs
           path: phase-02-doc-updates/001-update-architecture-docs.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Docs-only update. Added D12 and a localAuthz facade paragraph to the architecture doc, and added the type-level authorization statement to the spec's Authorization bullet. The ssh-keys doc needed no change.
           git:
