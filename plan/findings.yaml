@@ -18,4 +18,13 @@ items:
         - plan/phase:type-target-authorization
         - effort:unspecified
       text: 'Review finding (suggestion, medium confidence; agent-authored data): in api/internal/service/user_accounts.go the authorizeType fallback for a non-TypeAuthorizer calls Authorize(ctx, op, nil) and ignores typeID, so the typeID <= 0 fail-closed guard does not apply on that path, and the nil-target wildcard-only property holds only for mod-users'' own Authorizer. Not exploitable today: production wires the concrete Authorizer and typeID comes from IDForSlugMust. Optional hardening: return ErrForbidden when typeID <= 0 in the fallback, or require a TypeAuthorizer at construction so a decorated Authorizer fails loudly.'
+    - title: UserAccountService.List not on AuthorizeType
+      id: 4dka
+      date: "2026-10-05"
+      tags:
+        - type:bug
+        - priority:low
+        - plan/phase:type-target-authorization
+        - effort:unspecified
+      text: 'Review finding (suggestion, medium confidence; agent-authored data): UserAccountService.List in api/internal/service/user_accounts.go still calls Authorize(ctx, "list", nil). That is correct and fail-closed (wildcard-only) today and has no bypass, but it does not use the new type-level API. If type-scoped grants are introduced later, migrate List to authorizeType for consistency. No action needed now.'
 closed: []
