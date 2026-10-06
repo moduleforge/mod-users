@@ -79,3 +79,19 @@ architectural_impact: true
 - After the red tests are recorded against the naive delegate.
 - After the shared-prelude refactor, with all existing tests still green.
 - After the real `AuthorizeType`, the `localAuthz.TypeAuthorizer` interface, and the doc rewrites.
+
+## Status
+
+Outcome: succeeded (2026-10-05).
+
+Red run (against the temporary naive delegate `return a.Authorize(ctx, op, &typeID)`), logs in `.flow/validation-logs/01-red-unit.log` and `02-red-integration.log`:
+
+- Unit: `TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied/{create,list}`: `expected ErrForbidden for entity-N owner with typeID==N, got: <nil>` and `grant-or-own check must never be invoked by AuthorizeType, got 1 call(s)`. `TestAuthorizeType_BadTypeID`: `typeID=0 / -1 should return ErrForbidden even for a wildcard holder, got: <nil>`.
+- Integration (types.id authz_actor_group=8, natural_person=3; ownership arm exercised in that run because entities 8 and 3 did not yet exist): `TestInteg_TypeTarget_EntityAuthorityDoesNotAnswerTypeCheck/{authz_actor_group,natural_person}`: `AuthorizeType(create, 8) for entity-8 authority holder: got <nil>, want ErrForbidden` (same for list and for id 3). `TestInteg_TypeTarget_OwnershipArm_Deterministic`: `AuthorizeType(create, 13) where 13 is an entity owned by the actor: got <nil>`. `TestInteg_TypeTarget_TargetedGrantArm_Deterministic`: `AuthorizeType(create, 15) with a targeted grant over entity 15: got <nil>`. `TestInteg_TypeTarget_WildcardHolders_Allowed`: bad typeID 0 / -1 allowed for wildcard manager.
+- Arm coverage: the two deterministic tests pin each arm of `checkGrantOrOwn` regardless of DB state. In the full-suite run the type-id repro used the targeted-grant arm (entities 8 and 3 already existed); in the filtered red run it used the ownership arm.
+
+After the fix: full unit suite, full `-tags=integration ./internal/authz/...` suite (throwaway postgres:16 container, removed afterwards), `go build`, `go vet`, `make -C api lint` all pass. Existing test files are unmodified except for additions to `authz_test.go`.
+
+Files: `api/internal/authz/authz.go`, `api/internal/authz/authz_test.go`, `api/internal/authz/type_target_integration_test.go`, `api/localAuthz/authz.go`.
+
+Decisions: shared `authorizePrelude` helper returns `(actor, opIDs, done, err)`; `AuthorizeType` checks actor presence (ErrUnauthenticated) and `typeID <= 0` (ErrForbidden) before any DB work, so an unauthenticated caller with a bad id still gets the 401-class error. `export_test.go` needed no change.

@@ -13,9 +13,21 @@
 // opctx.EffectiveActorEntityID, which applies the sudo-first-then-actor
 // policy (a sudo actor, when set, takes priority over the real actor).
 //
-// Operations with a nil target (list, or other admin-only operations) are
-// denied for non-wildcard-admin actors. A wildcard grant satisfies nil-target
-// operations because the wildcard check runs before the nil-target denial.
+// Authorize is an entity-level check: its target is always an entities.id, or
+// nil for "no specific entity". Operations with a nil target (list, or other
+// admin-only operations) are denied for non-wildcard-admin actors. A wildcard
+// grant satisfies nil-target operations because the wildcard check runs before
+// the nil-target denial.
+//
+// Type-level checks (create or list of a resource type, where the caller holds
+// a types.id) are a different question and use AuthorizeType. Passing a types.id
+// to Authorize is a caller bug that Authorize cannot detect (both are int64):
+// it would be matched against entities.owner_id and grants.target_id as if it
+// were an entity id. Callers that hold only a coreAuthz.Authorizer must assert
+// the TypeAuthorizer capability and otherwise fall back to
+// Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID). No grant can
+// target a type (grants.target_id references entities), so type-level
+// authority is wildcard-only today.
 //
 // The Authorizer's single-row check issues one recursive-CTE SQL query
 // (checkGrantOrOwn) that walks UP from the actor through actor groups, checks
@@ -88,7 +100,19 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 	return &Authorizer{authzQ: authzQ, opReg: opReg, pool: pool}
 }
 
-// Authorize enforces the policy described in the package doc.
+// Authorize enforces the policy described in the package doc for an
+// entity-level check: may the effective actor perform operation on the entity
+// whose entities.id is *target?
+//
+// The target is ALWAYS an entities.id (or nil for "no specific entity"). It is
+// never a types.id. Passing a types.id here is a caller bug that Authorize
+// cannot detect, because both ids are plain int64: the value would be matched
+// as an entity id against entities.owner_id and grants.target_id, so any actor
+// who owns, or holds a grant over, the unrelated entity whose id happens to
+// equal that type id would be allowed. Type-level checks (create or list of a
+// resource type) must use AuthorizeType instead. A caller that holds only a
+// coreAuthz.Authorizer must assert TypeAuthorizer and otherwise fall back to
+// Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID).
 //
 // The effective actor is whichever entity ID is set on ctx:
 //   - When SudoActorEntityID is set, that is the effective actor (admin is
@@ -106,63 +130,27 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 //  5. If target != nil: run checkGrantOrOwn — a single recursive-CTE query
 //     that resolves a grant via the actor/target group chains, OR-ed with an
 //     entities.owner_id ownership check against the target.
+//
+// Steps 1-3 are shared with AuthorizeType via authorizePrelude so the two
+// entry points cannot drift.
 func (a *Authorizer) Authorize(ctx context.Context, operation string, target *int64) error {
-	// Resolve effective actor. Assumed actor takes priority over real actor.
-	actorEntityID, ok := effectiveActor(ctx)
-	if !ok {
-		return ErrUnauthenticated
-	}
-
-	// Compute the satisfied-by closure for the requested operation. opIDs is used
-	// by both the wildcard check and the targeted grant check.
-	//
-	// SatisfiedBy may return an error if the operation slug is not in the registry.
-	// As of this writing, every in-tree caller passes a registered operation slug
-	// (verified across mod-authz, mod-users, mod-tasks, mod-tags, and mod-core);
-	// this branch is defense-in-depth against an uninitialized or lagging
-	// registry, not a documented reliance on an unregistered slug. For the
-	// wildcard check, we fall back to the "manage" opIDs if the slug is
-	// unknown — a wildcard manage grant means full control over any operation.
-	opIDs, err := a.opReg.SatisfiedBy(operation)
-	if err != nil {
-		// Unknown slug: use "manage" opIDs for the wildcard check.
-		// If the actor has a wildcard manage grant, allow. Otherwise deny.
-		manageIDs, mErr := a.opReg.SatisfiedBy("manage")
-		if mErr != nil {
-			// Even "manage" is unknown (uninitialized registry). Deny.
-			return ErrForbidden
-		}
-		wildcardAllowed, wErr := a.checkWildcardGrantDispatch(ctx, actorEntityID, manageIDs)
-		if wErr != nil {
-			return wErr
-		}
-		if wildcardAllowed {
-			return nil // wildcard manage admin can do anything
-		}
-		return ErrForbidden
-	}
-
-	// Wildcard grant check: if the actor (or any actor group they belong to)
-	// holds a grant with target_id IS NULL and operation_id in the opIDs closure,
-	// allow unconditionally. This replaces the is_admin column short-circuit.
-	wildcardAllowed, err := a.checkWildcardGrantDispatch(ctx, actorEntityID, opIDs)
-	if err != nil {
+	actorEntityID, opIDs, done, err := a.authorizePrelude(ctx, operation)
+	if done {
 		return err
-	}
-	if wildcardAllowed {
-		return nil
 	}
 
 	// Non-wildcard-admin. Check target.
 	if target == nil {
-		// Nil target means list or other operations with no entity to resolve
-		// a grant or own-predicate against. Type-level checks — a non-nil
-		// target that is a type entity ID rather than an owned resource, e.g.
-		// registered actor-group/target-group "create" calls — are supported;
-		// they fall through to checkGrantOrOwn below like any other non-nil
-		// target.
-		// With a nil target there is nothing to resolve a grant against, so
-		// only a wildcard grant (already checked above) can satisfy this call.
+		// Nil target means "no specific entity" (list, or other operations with
+		// no entity to resolve a grant or own-predicate against), so there is
+		// nothing to resolve a grant or the ownership predicate against: only a
+		// wildcard grant (already checked in the prelude) can satisfy this call.
+		//
+		// A non-nil target is always treated as an entities.id and handed to
+		// checkGrantOrOwn below. In particular a types.id must never be passed
+		// here as a "type-level" target: Authorize cannot tell the two apart,
+		// and the value would be matched against unrelated entities. Type-level
+		// create/list checks go through AuthorizeType.
 		return ErrForbidden
 	}
 
@@ -186,10 +174,105 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 	return ErrForbidden
 }
 
-// AuthorizeType is a TEMPORARY naive delegate used only to reproduce the
-// type-target confusion; it is replaced by the real implementation.
+// AuthorizeType answers "may the effective actor perform operation on
+// resources of type typeID?" — the type-level counterpart of Authorize, used
+// for create and list of a resource type. typeID is a types.id, never an
+// entities.id.
+//
+// No grant can target a type (grants.target_id references entities), so
+// type-level authority is wildcard-only today: the call is allowed exactly when
+// the effective actor (sudo first) holds a wildcard grant (target_id IS NULL,
+// actor chain) whose operation is in the SatisfiedBy closure of operation, for
+// example manage, which implies create. Anything else returns ErrForbidden, as
+// does typeID <= 0 (fail closed, even for a wildcard holder).
+//
+// AuthorizeType deliberately never consults entity-level authority: it does
+// not call checkGrantOrOwn and never compares typeID with entities.id,
+// entities.owner_id, or grants.target_id. Doing so would let any actor who owns
+// or holds a grant over the unrelated entity whose id equals typeID pass the
+// type-level check. A genuine DB error propagates rather than being swallowed
+// into a denial.
+//
+// If type-scoped grants are ever introduced they slot in here as an extra arm
+// keyed on types.id; callers do not change.
 func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID int64) error {
-	return a.Authorize(ctx, operation, &typeID)
+	// Report a missing actor as 401-class even for a malformed typeID, then
+	// fail closed on a non-positive type id before any DB work: never "no
+	// target, so allow", and not even a wildcard holder passes it.
+	if _, ok := effectiveActor(ctx); !ok {
+		return ErrUnauthenticated
+	}
+	if typeID <= 0 {
+		return ErrForbidden
+	}
+
+	_, _, done, err := a.authorizePrelude(ctx, operation)
+	if done {
+		return err // nil: wildcard grant allows; non-nil: denial or DB error
+	}
+
+	// No wildcard grant. There is no entity-level fallback for a type, so deny.
+	return ErrForbidden
+}
+
+// authorizePrelude runs the steps Authorize and AuthorizeType share, so the two
+// entry points cannot drift: resolve the effective actor, compute the
+// SatisfiedBy closure for operation (with the unknown-slug fallback to a
+// wildcard-manage check), and run the wildcard grant check.
+//
+// When done is true the outcome is final and err is it: nil means a wildcard
+// grant allows the call; ErrUnauthenticated, ErrForbidden, or a propagated DB
+// error otherwise. When done is false the actor holds no wildcard grant for
+// operation; actorEntityID and opIDs are valid for any further, entity-level
+// check the caller chooses to make.
+func (a *Authorizer) authorizePrelude(ctx context.Context, operation string) (actorEntityID int64, opIDs []int32, done bool, err error) {
+	// Resolve effective actor. Assumed actor takes priority over real actor.
+	actorEntityID, ok := effectiveActor(ctx)
+	if !ok {
+		return 0, nil, true, ErrUnauthenticated
+	}
+
+	// Compute the satisfied-by closure for the requested operation. opIDs is used
+	// by both the wildcard check and the targeted grant check.
+	//
+	// SatisfiedBy may return an error if the operation slug is not in the registry.
+	// As of this writing, every in-tree caller passes a registered operation slug
+	// (verified across mod-authz, mod-users, mod-tasks, mod-tags, and mod-core);
+	// this branch is defense-in-depth against an uninitialized or lagging
+	// registry, not a documented reliance on an unregistered slug. For the
+	// wildcard check, we fall back to the "manage" opIDs if the slug is
+	// unknown — a wildcard manage grant means full control over any operation.
+	opIDs, sErr := a.opReg.SatisfiedBy(operation)
+	if sErr != nil {
+		// Unknown slug: use "manage" opIDs for the wildcard check.
+		// If the actor has a wildcard manage grant, allow. Otherwise deny.
+		manageIDs, mErr := a.opReg.SatisfiedBy("manage")
+		if mErr != nil {
+			// Even "manage" is unknown (uninitialized registry). Deny.
+			return 0, nil, true, ErrForbidden
+		}
+		wildcardAllowed, wErr := a.checkWildcardGrantDispatch(ctx, actorEntityID, manageIDs)
+		if wErr != nil {
+			return 0, nil, true, wErr
+		}
+		if wildcardAllowed {
+			return 0, nil, true, nil // wildcard manage admin can do anything
+		}
+		return 0, nil, true, ErrForbidden
+	}
+
+	// Wildcard grant check: if the actor (or any actor group they belong to)
+	// holds a grant with target_id IS NULL and operation_id in the opIDs closure,
+	// allow unconditionally. This replaces the is_admin column short-circuit.
+	wildcardAllowed, wErr := a.checkWildcardGrantDispatch(ctx, actorEntityID, opIDs)
+	if wErr != nil {
+		return 0, nil, true, wErr
+	}
+	if wildcardAllowed {
+		return 0, nil, true, nil
+	}
+
+	return actorEntityID, opIDs, false, nil
 }
 
 // effectiveActor returns the entity ID that should be used for policy checks.
