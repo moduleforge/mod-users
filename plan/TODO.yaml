@@ -25,6 +25,7 @@ phases:
           path: phase-01-type-target-authorization/002-authorize-type-api.md
           done: false
           tier: sonnet-high
+          digest: Reproduced the type-id-as-entity-id confusion with failing unit and real-DB tests against a naive delegate. Then added AuthorizeType (wildcard-only, with a shared prelude with Authorize) and the exported localAuthz.TypeAuthorizer, and rewrote the docs that described the bug. Full unit and integration suites are green.
           git:
             branch: null
             commit: []
