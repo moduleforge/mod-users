@@ -357,3 +357,136 @@ func TestAuthorize_WildcardAdmin_Create_InspectsOpIDs(t *testing.T) {
 		t.Errorf(`expected wildcard-manage actor to be allowed "create", got: %v`, err)
 	}
 }
+
+// --- AuthorizeType (type-level) tests ---
+//
+// AuthorizeType answers "may the effective actor perform operation on
+// resources of type typeID?" typeID is a types.id, never an entities.id, so
+// entity-level ownership and targeted grants must never influence the result.
+
+// countingGrantOrOwnFn returns a grant-or-own stub that reports true exactly
+// when targetEntityID == matchID (simulating owning, or holding a grant over,
+// the entity whose id happens to equal a type id) and counts its invocations.
+func countingGrantOrOwnFn(matchID int64, calls *int) func(context.Context, int64, int64, []int32) (bool, error) {
+	return func(_ context.Context, _, targetEntityID int64, _ []int32) (bool, error) {
+		*calls++
+		return targetEntityID == matchID, nil
+	}
+}
+
+// TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied is the unit-level
+// reproduction of the type-target confusion: an actor with entity-level
+// authority over entity N, where N equals the type id, must be denied a
+// type-level create, and the entity-level check must never be consulted.
+func TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied(t *testing.T) {
+	const typeID = int64(7)
+
+	for _, op := range []string{"create", "list"} {
+		t.Run(op, func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardDenyFn)
+			calls := 0
+			az.SetGrantOrOwnFn(countingGrantOrOwnFn(typeID, &calls))
+
+			err := az.AuthorizeType(ctxWithActor(1), op, typeID)
+			if !errors.Is(err, authz.ErrForbidden) {
+				t.Errorf("expected ErrForbidden for entity-N owner with typeID==N, got: %v", err)
+			}
+			if calls != 0 {
+				t.Errorf("grant-or-own check must never be invoked by AuthorizeType, got %d call(s)", calls)
+			}
+		})
+	}
+}
+
+// TestAuthorizeType_WildcardHolder_Allowed verifies a wildcard holder is
+// allowed, again without consulting the entity-level check.
+func TestAuthorizeType_WildcardHolder_Allowed(t *testing.T) {
+	for _, op := range []string{"create", "list"} {
+		t.Run(op, func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardAllowFn)
+			calls := 0
+			az.SetGrantOrOwnFn(countingGrantOrOwnFn(7, &calls))
+
+			if err := az.AuthorizeType(ctxWithActor(1), op, 7); err != nil {
+				t.Errorf("wildcard holder should be allowed %q, got: %v", op, err)
+			}
+			if calls != 0 {
+				t.Errorf("grant-or-own check must never be invoked, got %d call(s)", calls)
+			}
+		})
+	}
+}
+
+// TestAuthorizeType_NoActor verifies an unauthenticated context returns
+// ErrUnauthenticated.
+func TestAuthorizeType_NoActor(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
+
+	err := az.AuthorizeType(context.Background(), "create", 7)
+	if !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Errorf("expected ErrUnauthenticated, got: %v", err)
+	}
+}
+
+// TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor verifies the
+// wildcard check receives the effective (sudo) actor id, so a wildcard-holding
+// real actor does not escalate a non-admin sudo identity.
+func TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor(t *testing.T) {
+	var seen []int64
+	az := authz.NewWithStubOpReg(func(_ context.Context, actor int64, _ []int32) (bool, error) {
+		seen = append(seen, actor)
+		return actor == 1, nil // only the real actor (1) is a wildcard admin
+	})
+	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
+
+	err := az.AuthorizeType(ctxWithSudoActor(1, 50), "create", 7)
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("sudo non-admin user should be forbidden from type-level create: got %v", err)
+	}
+	if len(seen) != 1 || seen[0] != 50 {
+		t.Errorf("wildcard check should receive the sudo actor id 50, got %v", seen)
+	}
+}
+
+// TestAuthorizeType_UnknownOperation mirrors Authorize's unknown-slug
+// fallback: a non-admin is forbidden, a wildcard-manage holder is allowed.
+func TestAuthorizeType_UnknownOperation(t *testing.T) {
+	t.Run("non-admin", func(t *testing.T) {
+		az := authz.NewWithStubOpReg(wildcardDenyFn)
+		err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7)
+		if !errors.Is(err, authz.ErrForbidden) {
+			t.Errorf("non-admin with unknown operation should return ErrForbidden, got: %v", err)
+		}
+	})
+	t.Run("wildcard-manage", func(t *testing.T) {
+		az := authz.NewWithStubOpReg(wildcardAllowFn)
+		if err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7); err != nil {
+			t.Errorf("wildcard-manage holder with unknown operation should be allowed, got: %v", err)
+		}
+	})
+}
+
+// TestAuthorizeType_BadTypeID verifies typeID <= 0 fails closed, even for a
+// wildcard holder.
+func TestAuthorizeType_BadTypeID(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
+
+	for _, typeID := range []int64{0, -1} {
+		err := az.AuthorizeType(ctxWithActor(1), "create", typeID)
+		if !errors.Is(err, authz.ErrForbidden) {
+			t.Errorf("typeID=%d should return ErrForbidden even for a wildcard holder, got: %v", typeID, err)
+		}
+	}
+}
+
+// TestAuthorizeType_WildcardDBError verifies a wildcard-check DB error
+// propagates rather than being swallowed into a denial.
+func TestAuthorizeType_WildcardDBError(t *testing.T) {
+	dbErr := errors.New("pool connection lost")
+	az := authz.NewWithStubOpReg(wildcardErrFn(dbErr))
+
+	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	if !errors.Is(err, dbErr) {
+		t.Errorf("expected DB error to propagate, got: %v", err)
+	}
+}

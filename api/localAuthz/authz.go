@@ -3,6 +3,8 @@
 package localAuthz
 
 import (
+	"context"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authzapi "github.com/moduleforge/authz-api/authz"
@@ -12,6 +14,25 @@ import (
 
 // Authorizer is the grants-table implementation of coreAuthz.Authorizer.
 type Authorizer = inner.Authorizer
+
+// TypeAuthorizer is implemented by Authorizers that can answer type-level
+// questions (create or list of a resource type) distinctly from entity-level
+// ones. AuthorizeType's typeID is a types.id, never an entities.id; it is
+// allowed only to actors holding a wildcard grant covering the operation, and
+// is never answered by entity ownership or targeted grants.
+//
+// Consumer contract: a caller holding only a coreAuthz.Authorizer must assert
+// this capability and use it for type-level checks. When the assertion fails
+// (for example a decorator hides the method) the caller must fall back to
+// Authorize(ctx, op, nil), which is fail-safe, and never to
+// Authorize(ctx, op, &typeID): Authorize treats its target as an entities.id,
+// so a type id there is matched against unrelated entities.
+type TypeAuthorizer interface {
+	AuthorizeType(ctx context.Context, operation string, typeID int64) error
+}
+
+// Compile-time assertion: Authorizer implements TypeAuthorizer.
+var _ TypeAuthorizer = (*Authorizer)(nil)
 
 // New constructs an Authorizer backed by the authz grants table.
 func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpool.Pool) *Authorizer {
