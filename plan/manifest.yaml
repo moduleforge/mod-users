@@ -2,3 +2,12 @@ version: 1
 plans:
     - slug: type-scoped-grants
       status: working
+      dependencies:
+        /Users/zane/playground/moduleforge/mod-authz:
+            phase: authz phase
+            task: type-target grant rules
+            note: mod-users AuthorizeType depends on authz grant/group semantics
+        /Users/zane/playground/moduleforge/mod-core:
+            phase: core schema phase
+            task: types.entity_id + sentinel root type
+            note: AuthorizeType arm reads types.entity_id
