@@ -5,7 +5,17 @@ phases:
     - number: 6
       slug: authorize-type-grant-arm
       title: AuthorizeType Type-Grant Arm
-      tasks: []
+      tasks:
+        - number: 1
+          slug: authorize-type-arm
+          title: AuthorizeType Arm
+          path: phase-06-authorize-type-grant-arm/001-authorize-type-arm.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: doc-updates
       title: Documentation Updates
