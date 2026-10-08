@@ -742,3 +742,11 @@ items:
         - priority:medium
         - effort:small
       text: handlers/user_accounts_authz_test.go tests a hand-copied shim that never calls AuthorizeCreate; the bb11bd2 decode-failure branch in the real UserAccountsHandler.Create is untested. Replace shim with the real constructor and add 403-vs-400 regression tests. Land before/with the other authz-ordering fixes.
+    - title: Minor authz-ordering/hygiene cleanups
+      id: 1eYt
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+      text: 'From audit: Assume returns 404 where 401 is right when no actor; Update accepts empty email and ignores UpdateNaturalPerson error; SetPassword checks length before current_password; grant-admin/revoke-admin map every lookup error to 404; document path-uuid 400s (parseUUIDParam) as accepted; PUT /self (self.go:61) ordering can''t-tell — read mod-core UpdateByEntityUUID; /self credential endpoints reachable in assume sessions (decide; see also 1mnX); SetupToken trusts loopback RemoteAddr behind same-host proxy; unauthenticated GET /oidc-config/status leaks provider init errors; email_taken 409 enumeration oracle (deliberate, document).'
