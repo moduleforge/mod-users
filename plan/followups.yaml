@@ -734,3 +734,11 @@ items:
         - priority:low
         - effort:small
       text: 'POST /user-accounts/{uuid}/ssh-keys (handlers/ssh_keys.go:263-282) returns body 400 before Register authorizes (service/ssh_keys.go:133); a non-admin targeting another account sees request shape (existence stays masked). Needs an interface change plus stub update. Add operator-route denial tests (self-route tests at ssh_keys_test.go:710/738/759 stay valid). Audit: scratchpad mod-users-authz-ordering-audit.md.'
+    - title: Real-handler test for Create decode-failure
+      id: N9AG
+      date: "2026-10-08"
+      tags:
+        - type:bug
+        - priority:medium
+        - effort:small
+      text: handlers/user_accounts_authz_test.go tests a hand-copied shim that never calls AuthorizeCreate; the bb11bd2 decode-failure branch in the real UserAccountsHandler.Create is untested. Replace shim with the real constructor and add 403-vs-400 regression tests. Land before/with the other authz-ordering fixes.
