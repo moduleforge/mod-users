@@ -742,3 +742,11 @@ items:
         - priority:low
         - effort:small
       text: 'From audit: Assume returns 404 where 401 is right when no actor; Update accepts empty email and ignores UpdateNaturalPerson error; SetPassword checks length before current_password; grant-admin/revoke-admin map every lookup error to 404; document path-uuid 400s (parseUUIDParam) as accepted; PUT /self (self.go:61) ordering can''t-tell — read mod-core UpdateByEntityUUID; /self credential endpoints reachable in assume sessions (decide; see also 1mnX); SetupToken trusts loopback RemoteAddr behind same-host proxy; unauthenticated GET /oidc-config/status leaks provider init errors; email_taken 409 enumeration oracle (deliberate, document).'
+    - title: Authz before 400 on OIDC confirm/writes
+      id: 7J9z
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+      text: handlers/oidc_config.go:304 (Confirm) and oidc_providers.go:162,:188 (provider Update/Create) return 400 before 401 because setup_token is read from the body, though the admin session / X-Setup-Token header need no body. Authorize first, then report malformed body. Update TestConfirm_BadJSON (oidc_config_test.go:585) to expect 401 unauthenticated and add an authorized-caller 400 case.
