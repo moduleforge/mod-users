@@ -712,13 +712,3 @@ items:
         - plan/phase:type-target-authorization
         - plan/slug:fix-actor-group-target-confusion
       text: 'Review finding (low confidence, agent-authored data; likely pre-existing and outside this phase''s diff): the link-chain check reported docs/CLAUDE.md and next-steps.md as not reachable from README.md. The same agent also reported that AGENTS.md carried no throwaway-Postgres recipe, which contradicts the merged diff, so it may have read the main checkout rather than the plan worktree; re-verify against the plan branch before acting. Fix would be linking the docs from README.md or relocating them.'
-    - title: D12 wording implies list uses AuthorizeType
-      id: X5HE
-      date: "2026-10-05"
-      tags:
-        - type:documentation
-        - priority:low
-        - effort:small
-        - plan/phase:doc-updates
-        - plan/slug:fix-actor-group-target-confusion
-      text: 'Review finding (suggestion, medium confidence; agent-authored data): docs/architecture.md key decision D12 says type-level create/list go through AuthorizeType, but in this repo only create does (UserAccountService.Create via authorizeType). UserAccountService.List (api/internal/service/user_accounts.go) still calls Authorize(ctx, "list", nil), which is safe because a nil target is wildcard-only. Suggested: say create uses AuthorizeType and list uses a nil target, or phrase it as create/list being type-level checks that must not pass a types.id.'
