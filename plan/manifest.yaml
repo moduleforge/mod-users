@@ -1,2 +1,4 @@
 version: 1
-plans: []
+plans:
+    - slug: type-scoped-grants
+      status: working
