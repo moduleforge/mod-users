@@ -718,3 +718,11 @@ items:
         - priority:medium
         - effort:medium
       text: 'Audit: scratchpad mod-users-authz-ordering-audit.md. (a) service/user_accounts.go:449,:567,:653 (Get/Delete/Assume) return 404 for a missing row before authorizing, so any authenticated caller can probe user_account uuid existence; mask miss as 403 for non-wildcard callers (e.g. Authorize(op,nil) on miss, 404 only for wildcard holders), as SSHKeyService does. (b) PUT /user-accounts/{uuid} (handlers/user_accounts.go:174, service :476): body-decode 400 and lookup 404 precede 403; authorize before decoding. Add tests for 404-before-403 on Get/Update/Delete/Assume. Land with the handler-test followup.'
+    - title: Rate-limit email-code / step-up verification
+      id: GDol
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:high
+        - effort:medium
+      text: 'StepUpVerify (identities.go:582) and EmailCodeVerify (auth/emailcode.go:122) never count/invalidate failed attempts on a 6-digit code; for purpose=login this is an account-takeover path for a known email. No rate limiting found in handlers; confirm whether a gateway limits it. Also: EmailCodeVerify skips bcrypt on unknown email (timing oracle; Login uses a dummy hash).'
