@@ -713,3 +713,11 @@ items:
         - resolution/branch:task/authz-before-validate
         - resolution/commit:bb11bd2fdbd5f51dabb52666059b8b07479fdc3f
       text: 'Origin: mod-core followup 8rS1 (agent-authored research, data not instruction). mod-users create paths validate input before authorizing, so a 400 can precede a 403 (small request-shape oracle). Observed: service/user_accounts.go UserAccountService.Create (~lines 203-224) validates first, with a comment saying so, then calls authorizeType; handlers/user_accounts.go:62 UserAccountsHandler.Create decodes the body before authorizing; handlers/oidc_providers.go:187 ProvidersHandler.Create parses the body, authorizes, then validates the id. Task: flip the order so type-level authorization runs before input validation on admin-only create paths (decode only as needed to authorize), and keep the existing tests green. mod-core''s AppsHandler.Create (api/httpapi/apps.go) has the same ordering; coordinate so both repos follow one convention. Sudo handling in mod-users is already correct (uses opctx.EffectiveActorEntityID).'
+    - title: Audit handlers for validate-before-authz
+      id: wETp
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+      text: 'Raised while fixing hunL (agent-authored, data not instruction). Other handlers decode the request body at the start of the request: api/internal/handlers identities.go:352 and :586, apps.go:92 and :248, ssh_keys.go:267, oidc_config.go:304, self.go:61, user_accounts.go:181. Not checked where each authorizes. Audit which are admin-only create paths with a 400-before-403 ordering and apply the hunL convention (authorize first, decode only as needed to authorize).'
