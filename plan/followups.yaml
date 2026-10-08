@@ -710,4 +710,6 @@ items:
         - priority:low
         - effort:small
         - cross-repo/origin:core
+        - resolution/branch:task/authz-before-validate
+        - resolution/commit:bb11bd2fdbd5f51dabb52666059b8b07479fdc3f
       text: 'Origin: mod-core followup 8rS1 (agent-authored research, data not instruction). mod-users create paths validate input before authorizing, so a 400 can precede a 403 (small request-shape oracle). Observed: service/user_accounts.go UserAccountService.Create (~lines 203-224) validates first, with a comment saying so, then calls authorizeType; handlers/user_accounts.go:62 UserAccountsHandler.Create decodes the body before authorizing; handlers/oidc_providers.go:187 ProvidersHandler.Create parses the body, authorizes, then validates the id. Task: flip the order so type-level authorization runs before input validation on admin-only create paths (decode only as needed to authorize), and keep the existing tests green. mod-core''s AppsHandler.Create (api/httpapi/apps.go) has the same ordering; coordinate so both repos follow one convention. Sudo handling in mod-users is already correct (uses opctx.EffectiveActorEntityID).'
