@@ -62,6 +62,12 @@ type createUserAccountRequest struct {
 func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
 	if err := server.Decode(r, &req); err != nil {
+		// Authorize before reporting a malformed body so an unauthorized
+		// caller gets 403, not a 400 request-shape oracle.
+		if aerr := h.svc.AuthorizeCreate(r.Context()); aerr != nil {
+			writeServiceError(w, r, aerr)
+			return
+		}
 		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
