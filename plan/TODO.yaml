@@ -16,6 +16,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: type-grant-integration-matrix
+          title: Type-Grant Integration Matrix
+          path: phase-06-authorize-type-grant-arm/002-type-grant-integration-matrix.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: doc-updates
       title: Documentation Updates
