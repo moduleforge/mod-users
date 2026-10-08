@@ -43,4 +43,14 @@ phases:
     - number: 8
       slug: type-grant-instance-semantics
       title: Type-Grant Instance Semantics, Optional Q1
-      tasks: []
+      tasks:
+        - number: 1
+          slug: instance-semantics-arm
+          title: Instance Semantics Arm
+          path: phase-08-type-grant-instance-semantics/001-instance-semantics-arm.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
