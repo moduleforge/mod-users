@@ -104,7 +104,8 @@ EXIT CODES
      --pinned materialized every requested sibling.
   1  --strict only: at least one sibling is not `ok`.
   2  Usage error: unknown flag, conflicting modes, unknown --repos key.
-  3  Precondition failure: lockfile missing or malformed; not inside a git
+  3  Precondition failure: lockfile missing or malformed (including an
+     `overrides` entry with no matching pin or an unknown override field); not inside a git
      repo; --pinned invoked from inside a Flow worktree (pins govern CI and
      fresh clones only -- use `make preflight` there); a pinned SHA cannot be
      fetched from its remote (almost always an unpushed local commit).
@@ -133,7 +134,8 @@ EOF
 # depends on the same one-key-per-line shape for exact-line rewrites).
 # ---------------------------------------------------------------------------
 
-# Populates globals: LF_HOST, LF_OWNER, LF_KEYS (ordered array), LF_SHA (map).
+# Populates globals: LF_HOST, LF_OWNER, LF_KEYS (ordered array), LF_SHA (map),
+# and the per-key overrides maps LF_OV_HOST / LF_OV_OWNER / LF_OV_REPO.
 read_lockfile() {
 	local file="$1"
 	if [ ! -f "$file" ]; then
@@ -152,13 +154,77 @@ read_lockfile() {
 	# Pin lines are the only lines indented by exactly two spaces (host/owner/
 	# lockfileVersion are top-level, zero-indent); this alone disambiguates
 	# them from the header comment block without tracking "after pins:" state.
-	while IFS= read -r line; do
-		if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+([0-9a-fA-F]{40}) ]]; then
-			local key="${BASH_REMATCH[1]}" sha="${BASH_REMATCH[2]}"
-			LF_KEYS+=("$key")
-			LF_SHA["$key"]="$sha"
+	# The optional top-level `overrides:` block (see versions-lockfile.md, "The
+	# `overrides` block") is the one place that needs section state: its
+	# entries are `  <key>:` at two spaces with fields at four, so lines are
+	# only treated as pins while outside it.
+	local in_overrides=0 cur_ov="" line stripped fname fval
+	local -a ov_keys=()
+	while IFS= read -r line || [ -n "$line" ]; do
+		# Top-level (zero-indent, non-comment, non-blank) line switches section.
+		if [[ "$line" =~ ^[^[:space:]#] ]]; then
+			if [[ "$line" =~ ^overrides:[[:space:]]*(#.*)?$ ]]; then
+				in_overrides=1
+			else
+				in_overrides=0
+			fi
+			cur_ov=""
+			continue
+		fi
+		if [ "$in_overrides" -eq 0 ]; then
+			if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+([0-9a-fA-F]{40}) ]]; then
+				local key="${BASH_REMATCH[1]}" sha="${BASH_REMATCH[2]}"
+				LF_KEYS+=("$key")
+				LF_SHA["$key"]="$sha"
+			fi
+			continue
+		fi
+		# Inside overrides: skip blanks and comment-only lines.
+		stripped="${line%%#*}"
+		[[ "$stripped" =~ ^[[:space:]]*$ ]] && continue
+		if [[ "$stripped" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]*$ ]]; then
+			cur_ov="${BASH_REMATCH[1]}"
+			if [ -n "${LF_OV_SEEN[$cur_ov]+x}" ]; then
+				err "malformed lockfile: duplicate overrides entry '$cur_ov': $file"
+				exit 3
+			fi
+			LF_OV_SEEN["$cur_ov"]=1
+			ov_keys+=("$cur_ov")
+		elif [ -n "$cur_ov" ] && [[ "$stripped" =~ ^\ \ \ \ ([A-Za-z0-9_]+):[[:space:]]*(.*)$ ]]; then
+			fname="${BASH_REMATCH[1]}"
+			fval="${BASH_REMATCH[2]}"
+			# trim trailing whitespace, then one layer of matching quotes
+			fval="${fval%"${fval##*[![:space:]]}"}"
+			if [[ "$fval" =~ ^\"(.*)\"$ ]] || [[ "$fval" =~ ^\'(.*)\'$ ]]; then
+				fval="${BASH_REMATCH[1]}"
+			fi
+			case "$fname" in
+			host)
+				[[ "$fval" =~ ^[A-Za-z0-9.-]+$ ]] || { err "malformed lockfile: overrides.$cur_ov.host is empty or has invalid characters: $file"; exit 3; }
+				LF_OV_HOST["$cur_ov"]="$fval"
+				;;
+			owner | repo)
+				[[ "$fval" =~ ^[A-Za-z0-9._-]+$ ]] || { err "malformed lockfile: overrides.$cur_ov.$fname is empty or has invalid characters: $file"; exit 3; }
+				if [ "$fname" = owner ]; then LF_OV_OWNER["$cur_ov"]="$fval"; else LF_OV_REPO["$cur_ov"]="$fval"; fi
+				;;
+			*)
+				err "malformed lockfile: unknown field '$fname' in overrides.$cur_ov (only host, owner, repo are accepted): $file"
+				exit 3
+				;;
+			esac
+		else
+			err "malformed lockfile: unrecognized line in overrides block: $stripped ($file)"
+			exit 3
 		fi
 	done <"$file"
+
+	local ok
+	for ok in "${ov_keys[@]}"; do
+		if [ -z "${LF_SHA[$ok]+x}" ]; then
+			err "malformed lockfile: overrides.$ok has no matching key under pins: $file"
+			exit 3
+		fi
+	done
 
 	if [ "${#LF_KEYS[@]}" -eq 0 ]; then
 		err "malformed lockfile: no pins found: $file"
@@ -170,12 +236,19 @@ read_lockfile() {
 # Remote / auth
 # ---------------------------------------------------------------------------
 
+# Clone URL per versions-lockfile.md: host/owner/repo each resolve
+# independently -- overrides.<key>.<field> if present, else the top-level
+# host/owner, else (for repo) the pin key itself. The on-disk checkout dir
+# stays the pin key; only the URL uses the resolved repo.
 clone_url() {
-	local key="$1"
+	local key="$1" host owner repo
+	host="${LF_OV_HOST[$key]:-$LF_HOST}"
+	owner="${LF_OV_OWNER[$key]:-$LF_OWNER}"
+	repo="${LF_OV_REPO[$key]:-$key}"
 	if [ "$TOKEN_SET" -eq 1 ]; then
-		printf 'https://%s/%s/%s.git' "$LF_HOST" "$LF_OWNER" "$key"
+		printf 'https://%s/%s/%s.git' "$host" "$owner" "$repo"
 	else
-		printf 'git@%s:%s/%s.git' "$LF_HOST" "$LF_OWNER" "$key"
+		printf 'git@%s:%s/%s.git' "$host" "$owner" "$repo"
 	fi
 }
 
@@ -672,7 +745,7 @@ REPO_NAME="$(basename "$R")"
 
 LOCKFILE="${LOCKFILE:-$R/versions.lock.yaml}"
 
-declare -A LF_SHA=()
+declare -A LF_SHA=() LF_OV_HOST=() LF_OV_OWNER=() LF_OV_REPO=() LF_OV_SEEN=()
 LF_KEYS=()
 read_lockfile "$LOCKFILE"
 
