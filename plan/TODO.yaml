@@ -54,3 +54,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: instance-semantics-warning-docs
+          title: Instance Semantics Warning Docs
+          path: phase-08-type-grant-instance-semantics/002-instance-semantics-warning-docs.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
