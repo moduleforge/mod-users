@@ -84,6 +84,24 @@ cd api   && go test ./...
 cd gui   && bun test
 ```
 
+### Authz integration tests against a throwaway Postgres
+
+On a shared Docker host, run `api/internal/authz` integration tests against a throwaway container rather than `users-module-postgres`:
+
+```sh
+name="mod-users-authz-integ-$(openssl rand -hex 4)"
+docker run -d --rm --name "$name" -e POSTGRES_USER=users -e POSTGRES_PASSWORD=users \
+  -e POSTGRES_DB=postgres -p 127.0.0.1::5432 postgres:16
+port="$(docker port "$name" 5432/tcp | head -1 | sed 's/.*://')"
+until docker exec "$name" pg_isready -U users; do sleep 1; done
+make -C model compose
+(cd api && AUTHZ_DEV_PG_HOST=127.0.0.1 AUTHZ_DEV_PG_PORT="$port" \
+   go test -tags=integration -p 1 -count=1 ./internal/authz/...)
+docker rm -f "$name"
+```
+
+See the header of `api/internal/authz/authz_integration_test.go` for detail.
+
 ## Dev stack commands
 
 ```sh
