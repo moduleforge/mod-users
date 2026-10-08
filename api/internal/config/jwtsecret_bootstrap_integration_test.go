@@ -144,13 +144,22 @@ func TestMain(m *testing.M) {
 // (clean skip) avoids every test in this file failing individually on it
 // later.
 func checkJWTSecretIntegPrereqs(pgHost string) error {
-	cmd := exec.Command("docker", "inspect", "--format={{.State.Running}}", jwtSecretIntegContainer)
-	out, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("docker inspect: %w", err)
-	}
-	if strings.TrimSpace(string(out)) != "true" {
-		return fmt.Errorf("container %s is not running", jwtSecretIntegContainer)
+	// An explicit AUTHZ_DEV_PG_HOST means the caller supplied their own
+	// Postgres (e.g. a throwaway container); skip the shared-container check,
+	// but refuse the default port unless confirmed (this suite drops and
+	// recreates a database).
+	if os.Getenv("AUTHZ_DEV_PG_HOST") == "" {
+		cmd := exec.Command("docker", "inspect", "--format={{.State.Running}}", jwtSecretIntegContainer)
+		out, err := cmd.Output()
+		if err != nil {
+			return fmt.Errorf("docker inspect: %w", err)
+		}
+		if strings.TrimSpace(string(out)) != "true" {
+			return fmt.Errorf("container %s is not running", jwtSecretIntegContainer)
+		}
+	} else if resolveJWTSecretIntegPort() == "5432" && os.Getenv("AUTHZ_DEV_PG_CONFIRM_SHARED") != "1" {
+		return fmt.Errorf("refusing to run: AUTHZ_DEV_PG_HOST is set but AUTHZ_DEV_PG_PORT is unset or 5432 (likely a shared Postgres); " +
+			"set AUTHZ_DEV_PG_PORT to a throwaway container's port, or AUTHZ_DEV_PG_CONFIRM_SHARED=1 to confirm using the shared instance")
 	}
 	if _, err := exec.LookPath("goose"); err != nil {
 		return fmt.Errorf("goose not in PATH: %w", err)
@@ -193,12 +202,21 @@ func resolveJWTSecretIntegHost() string {
 	return "172.23.0.3"
 }
 
+// resolveJWTSecretIntegPort returns the Postgres host port: AUTHZ_DEV_PG_PORT
+// (same variable as authz_integration_test.go), default 5432.
+func resolveJWTSecretIntegPort() string {
+	if p := os.Getenv("AUTHZ_DEV_PG_PORT"); p != "" {
+		return p
+	}
+	return "5432"
+}
+
 func jwtSecretIntegAdminDSN(pgHost string) string {
-	return fmt.Sprintf("postgres://users:users@%s:5432/postgres?sslmode=disable", pgHost)
+	return fmt.Sprintf("postgres://users:users@%s:%s/postgres?sslmode=disable", pgHost, resolveJWTSecretIntegPort())
 }
 
 func jwtSecretIntegShadowDSN(pgHost string) string {
-	return fmt.Sprintf("postgres://users:users@%s:5432/%s?sslmode=disable", pgHost, jwtSecretIntegDB)
+	return fmt.Sprintf("postgres://users:users@%s:%s/%s?sslmode=disable", pgHost, resolveJWTSecretIntegPort(), jwtSecretIntegDB)
 }
 
 // resetJWTSecretShadowDB drops and recreates jwt_secret_integ_users so every

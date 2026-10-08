@@ -195,3 +195,20 @@ func TestUserAccountService_Create_ValidatesInputBeforeAuthorizing(t *testing.T)
 // fall back to the nil target and deny every non-wildcard caller; this
 // compile-time check makes that drift a build failure instead.
 var _ typeAuthorizer = (*localAuthz.Authorizer)(nil)
+
+// The nil-target fallback must fail closed on a non-positive type id, like the
+// TypeAuthorizer path, without consulting the authorizer at all.
+func TestAuthorizeType_PlainAuthorizerNonPositiveTypeIDFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	for _, typeID := range []int64{0, -1} {
+		az := &plainAuthorizer{decision: nil} // would allow if consulted
+		err := authorizeType(context.Background(), az, "create", typeID)
+		if !errors.Is(err, apiresp.ErrForbidden) {
+			t.Errorf("typeID %d: got %v, want ErrForbidden", typeID, err)
+		}
+		if len(az.calls) != 0 {
+			t.Errorf("typeID %d: Authorize called %d times, want 0", typeID, len(az.calls))
+		}
+	}
+}

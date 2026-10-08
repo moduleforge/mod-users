@@ -100,6 +100,8 @@ make -C model compose
 docker rm -f "$name"
 ```
 
+`AUTHZ_DEV_PG_HOST` (explicit host, skips the `users-module-postgres` check) and `AUTHZ_DEV_PG_PORT` (default 5432) apply to both the authz and the `internal/config` jwtsecret integration suites. These suites drop and recreate a database, so an explicit host with the default port 5432 is refused unless `AUTHZ_DEV_PG_CONFIRM_SHARED=1` is set to confirm use of a shared Postgres.
+
 See the header of `api/internal/authz/authz_integration_test.go` for detail.
 
 ## Dev stack commands

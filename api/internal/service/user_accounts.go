@@ -183,6 +183,11 @@ func authorizeType(ctx context.Context, az coreAuthz.Authorizer, op string, type
 	if ta, ok := az.(typeAuthorizer); ok {
 		return ta.AuthorizeType(ctx, op, typeID)
 	}
+	// Fail closed on a non-positive type id, matching the TypeAuthorizer
+	// path (which rejects typeID <= 0 even for a wildcard holder).
+	if typeID <= 0 {
+		return apiresp.ErrForbidden
+	}
 	return az.Authorize(ctx, op, nil)
 }
 
