@@ -702,16 +702,6 @@ items:
         - plan/phase:type-target-authorization
         - plan/slug:fix-actor-group-target-confusion
       text: 'Test gap: api/internal/config/jwtsecret_bootstrap_integration_test.go hard-codes port 5432 and the users-module-postgres container name, so it cannot run against a throwaway Postgres container on a shared Docker host. It lacks the AUTHZ_DEV_PG_PORT / explicit-host override that api/internal/authz/authz_integration_test.go now has.'
-    - title: authorizeType fallback ignores typeID guard
-      id: 5pBA
-      date: "2026-10-05"
-      tags:
-        - type:security
-        - priority:high
-        - effort:small
-        - plan/phase:type-target-authorization
-        - plan/slug:fix-actor-group-target-confusion
-      text: 'Review finding (suggestion, medium confidence; agent-authored data): in api/internal/service/user_accounts.go the authorizeType fallback for a non-TypeAuthorizer calls Authorize(ctx, op, nil) and ignores typeID, so the typeID <= 0 fail-closed guard does not apply on that path, and the nil-target wildcard-only property holds only for mod-users'' own Authorizer. Not exploitable today: production wires the concrete Authorizer and typeID comes from IDForSlugMust. Optional hardening: return ErrForbidden when typeID <= 0 in the fallback, or require a TypeAuthorizer at construction so a decorated Authorizer fails loudly. Escalation (quoted data): no remediation budget was available when this finding was evaluated (the server returned no budget block, so the evaluator treated it as exhausted); internal escalation is off, so the question "promote to the backlog at priority:high, or dismiss?" is surfaced to the user. Recommended option: promote (small, local fix).'
     - title: UserAccountService.List not on AuthorizeType
       id: 4dka
       date: "2026-10-05"
