@@ -75,7 +75,16 @@ read_lockfile() {
 	fi
 
 	LF_KEYS=()
-	while IFS= read -r line; do
+	# The optional `overrides:` block is hand-authored and never touched by this
+	# script (only individual pin lines are rewritten); skip it here so its
+	# entries are never mistaken for pins. checkout-deps.sh validates it.
+	local in_overrides=0
+	while IFS= read -r line || [ -n "$line" ]; do
+		if [[ "$line" =~ ^[^[:space:]#] ]]; then
+			if [[ "$line" =~ ^overrides:[[:space:]]*(#.*)?$ ]]; then in_overrides=1; else in_overrides=0; fi
+			continue
+		fi
+		[ "$in_overrides" -eq 1 ] && continue
 		if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+([0-9a-fA-F]{40}) ]]; then
 			local key="${BASH_REMATCH[1]}" sha="${BASH_REMATCH[2]}"
 			LF_KEYS+=("$key")

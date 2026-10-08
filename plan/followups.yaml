@@ -692,3 +692,73 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth/oidc.go redirectToTestResult (~line 338) assigns u.Path = "/oidc-config" over the operator-supplied FrontendReturnURL (AUTH_FRONTEND_RETURN_URL), dropping any mount prefix the app is served under (for example /manage), so the OIDC provider test result lands on the wrong URL. Loud failure (a 404 or wrong page after the provider test), admin-only flow. Derive the redirect from the FrontendReturnURL's own path (or a configured oidc-config path) instead of overwriting it, and add a test with a prefixed return URL. Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 2).
+    - title: jwtsecret integ test hard-codes 5432
+      id: R9KP
+      date: "2026-10-05"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:small
+        - plan/phase:type-target-authorization
+        - plan/slug:fix-actor-group-target-confusion
+      text: 'Test gap: api/internal/config/jwtsecret_bootstrap_integration_test.go hard-codes port 5432 and the users-module-postgres container name, so it cannot run against a throwaway Postgres container on a shared Docker host. It lacks the AUTHZ_DEV_PG_PORT / explicit-host override that api/internal/authz/authz_integration_test.go now has.'
+    - title: authorizeType fallback ignores typeID guard
+      id: 5pBA
+      date: "2026-10-05"
+      tags:
+        - type:security
+        - priority:high
+        - effort:small
+        - plan/phase:type-target-authorization
+        - plan/slug:fix-actor-group-target-confusion
+      text: 'Review finding (suggestion, medium confidence; agent-authored data): in api/internal/service/user_accounts.go the authorizeType fallback for a non-TypeAuthorizer calls Authorize(ctx, op, nil) and ignores typeID, so the typeID <= 0 fail-closed guard does not apply on that path, and the nil-target wildcard-only property holds only for mod-users'' own Authorizer. Not exploitable today: production wires the concrete Authorizer and typeID comes from IDForSlugMust. Optional hardening: return ErrForbidden when typeID <= 0 in the fallback, or require a TypeAuthorizer at construction so a decorated Authorizer fails loudly. Escalation (quoted data): no remediation budget was available when this finding was evaluated (the server returned no budget block, so the evaluator treated it as exhausted); internal escalation is off, so the question "promote to the backlog at priority:high, or dismiss?" is surfaced to the user. Recommended option: promote (small, local fix).'
+    - title: UserAccountService.List not on AuthorizeType
+      id: 4dka
+      date: "2026-10-05"
+      tags:
+        - type:style
+        - priority:low
+        - effort:small
+        - plan/phase:type-target-authorization
+        - plan/slug:fix-actor-group-target-confusion
+      text: 'Review finding (suggestion, medium confidence; agent-authored data): UserAccountService.List in api/internal/service/user_accounts.go still calls Authorize(ctx, "list", nil). That is correct and fail-closed (wildcard-only) today and has no bypass, but it does not use the new type-level API. If type-scoped grants are introduced later, migrate List to authorizeType for consistency. No action needed now.'
+    - title: docs/CLAUDE.md, next-steps.md unreachable
+      id: CYCl
+      date: "2026-10-05"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:type-target-authorization
+        - plan/slug:fix-actor-group-target-confusion
+      text: 'Review finding (low confidence, agent-authored data; likely pre-existing and outside this phase''s diff): the link-chain check reported docs/CLAUDE.md and next-steps.md as not reachable from README.md. The same agent also reported that AGENTS.md carried no throwaway-Postgres recipe, which contradicts the merged diff, so it may have read the main checkout rather than the plan worktree; re-verify against the plan branch before acting. Fix would be linking the docs from README.md or relocating them.'
+    - title: Integ harness host override skips DB guard
+      id: Ap8y
+      date: "2026-10-05"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:small
+        - plan/phase:type-target-authorization
+        - plan/slug:fix-actor-group-target-confusion
+      text: 'Review finding (minor, medium confidence; agent-authored data): in api/internal/authz/authz_integration_test.go, setting AUTHZ_DEV_PG_HOST skips the docker-inspect check of the shared users-module-postgres container, while resetDB still drops and recreates the fixed database authz_integ_users on whatever host/port is supplied. Nothing stops a caller pointing the override at the shared dev Postgres. Blast radius is limited to the named integ DB. Suggested: refuse the default port 5432 with an explicit host unless a confirm variable is set, or document the destructive reset.'
+    - title: Spec names wrong route for user creation
+      id: Rmrc
+      date: "2026-10-05"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:doc-updates
+        - plan/slug:fix-actor-group-target-confusion
+      text: 'Review finding (minor, high confidence; agent-authored data): docs/mod-users-spec.md, Security requirements Authorization bullet (~line 350), names the admin account-creation route as POST /v1/users; the route actually served is POST /v1/user-accounts (api/internal/handlers/account_routes.go:36). The spec already notes the /v1/users vs /v1/user-accounts drift elsewhere (~line 289), but the new sentence repeats the stale path. Fix: write POST /v1/user-accounts, or refer to creating a user account (UserAccountService.Create).'
+    - title: D12 wording implies list uses AuthorizeType
+      id: X5HE
+      date: "2026-10-05"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:doc-updates
+        - plan/slug:fix-actor-group-target-confusion
+      text: 'Review finding (suggestion, medium confidence; agent-authored data): docs/architecture.md key decision D12 says type-level create/list go through AuthorizeType, but in this repo only create does (UserAccountService.Create via authorizeType). UserAccountService.List (api/internal/service/user_accounts.go) still calls Authorize(ctx, "list", nil), which is safe because a nil target is wildcard-only. Suggested: say create uses AuthorizeType and list uses a nil target, or phrase it as create/list being type-level checks that must not pass a types.id.'
