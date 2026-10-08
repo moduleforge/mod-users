@@ -173,8 +173,9 @@ func TestUserAccountService_Create_TypeAuthorizerAllowProceedsToTransaction(t *t
 	}
 }
 
-// Input validation still runs before authorization.
-func TestUserAccountService_Create_ValidatesInputBeforeAuthorizing(t *testing.T) {
+// Authorization runs before input validation: an unauthorized caller sending
+// invalid input gets 403, not an input-validation error.
+func TestUserAccountService_Create_AuthorizesBeforeValidatingInput(t *testing.T) {
 	t.Parallel()
 
 	az := &entityOwnerAuthorizer{typeErr: apiresp.ErrForbidden}
@@ -182,11 +183,38 @@ func TestUserAccountService_Create_ValidatesInputBeforeAuthorizing(t *testing.T)
 
 	_, err := svc.Create(context.Background(), CreateUserAccountInput{})
 
-	if errors.Is(err, apiresp.ErrForbidden) {
-		t.Errorf("Create error: got ErrForbidden, want an input-validation error")
+	if !errors.Is(err, apiresp.ErrForbidden) {
+		t.Errorf("Create error: got %v, want ErrForbidden", err)
 	}
-	if len(az.typeCalls) != 0 || len(az.calls) != 0 {
-		t.Error("authorizer consulted before input validation")
+	if len(az.typeCalls) != 1 {
+		t.Errorf("AuthorizeType calls: got %d, want 1", len(az.typeCalls))
+	}
+}
+
+// An authorized caller sending invalid input still gets a validation error.
+func TestUserAccountService_Create_AuthorizedInvalidInputIsValidationError(t *testing.T) {
+	t.Parallel()
+
+	az := &entityOwnerAuthorizer{}
+	d := &beginTxDB{}
+	svc := newCreateAuthzTestService(az, d)
+
+	_, err := svc.Create(context.Background(), CreateUserAccountInput{})
+
+	if !errors.Is(err, apiresp.ErrInvalidInput) {
+		t.Errorf("Create error: got %v, want ErrInvalidInput", err)
+	}
+	if d.calls != 0 {
+		t.Error("transaction started despite invalid input")
+	}
+}
+
+func TestUserAccountService_AuthorizeCreate_Denied(t *testing.T) {
+	t.Parallel()
+
+	svc := newCreateAuthzTestService(&entityOwnerAuthorizer{typeErr: apiresp.ErrForbidden}, &beginTxDB{})
+	if err := svc.AuthorizeCreate(context.Background()); !errors.Is(err, apiresp.ErrForbidden) {
+		t.Errorf("AuthorizeCreate error: got %v, want ErrForbidden", err)
 	}
 }
 

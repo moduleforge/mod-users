@@ -191,10 +191,27 @@ func authorizeType(ctx context.Context, az coreAuthz.Authorizer, op string, type
 	return az.Authorize(ctx, op, nil)
 }
 
+// AuthorizeCreate performs only the type-level create authorization used by
+// Create. Handlers call it to deny an unauthorized caller before reporting a
+// request-shape error (e.g. an undecodable body).
+func (s *UserAccountService) AuthorizeCreate(ctx context.Context) error {
+	// Create is a type-level, wildcard-only operation. typeID is a types.id,
+	// not an entities.id, so it must go through authorizeType and never be
+	// passed to Authorize as a target.
+	typeID := s.typeRes.IDForSlugMust("natural_person")
+	return authorizeType(ctx, s.az, "create", typeID)
+}
+
 // Create creates a NaturalPerson entity and a UserAccount row in a single
 // atomic transaction. Requires admin authorization.
 func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInput) (UserAccount, error) {
-	// Validate input before touching the authorizer.
+	// Authorize before validating input.
+	if err := s.AuthorizeCreate(ctx); err != nil {
+		return UserAccount{}, err
+	}
+
+	// Validate input only after authorization, so an unauthorized caller
+	// always gets 403 and never a 400 that reveals request-shape rules.
 	in.Email = strings.TrimSpace(strings.ToLower(in.Email))
 	if in.Email == "" {
 		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
@@ -215,14 +232,6 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
 			Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
 		})
-	}
-
-	// Authorize: create is a type-level, wildcard-only operation. typeID is a
-	// types.id, not an entities.id, so it must go through authorizeType and
-	// never be passed to Authorize as a target.
-	typeID := s.typeRes.IDForSlugMust("natural_person")
-	if err := authorizeType(ctx, s.az, "create", typeID); err != nil {
-		return UserAccount{}, err
 	}
 
 	var out UserAccount
