@@ -712,16 +712,6 @@ items:
         - plan/phase:type-target-authorization
         - plan/slug:fix-actor-group-target-confusion
       text: 'Review finding (low confidence, agent-authored data; likely pre-existing and outside this phase''s diff): the link-chain check reported docs/CLAUDE.md and next-steps.md as not reachable from README.md. The same agent also reported that AGENTS.md carried no throwaway-Postgres recipe, which contradicts the merged diff, so it may have read the main checkout rather than the plan worktree; re-verify against the plan branch before acting. Fix would be linking the docs from README.md or relocating them.'
-    - title: Integ harness host override skips DB guard
-      id: Ap8y
-      date: "2026-10-05"
-      tags:
-        - type:bug
-        - priority:low
-        - effort:small
-        - plan/phase:type-target-authorization
-        - plan/slug:fix-actor-group-target-confusion
-      text: 'Review finding (minor, medium confidence; agent-authored data): in api/internal/authz/authz_integration_test.go, setting AUTHZ_DEV_PG_HOST skips the docker-inspect check of the shared users-module-postgres container, while resetDB still drops and recreates the fixed database authz_integ_users on whatever host/port is supplied. Nothing stops a caller pointing the override at the shared dev Postgres. Blast radius is limited to the named integ DB. Suggested: refuse the default port 5432 with an explicit host unless a confirm variable is set, or document the destructive reset.'
     - title: Spec names wrong route for user creation
       id: Rmrc
       date: "2026-10-05"
