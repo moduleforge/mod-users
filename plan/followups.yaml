@@ -702,14 +702,6 @@ items:
         - plan/phase:type-target-authorization
         - plan/slug:fix-actor-group-target-confusion
       text: 'Review finding (suggestion, medium confidence; agent-authored data): UserAccountService.List in api/internal/service/user_accounts.go still calls Authorize(ctx, "list", nil). That is correct and fail-closed (wildcard-only) today and has no bypass, but it does not use the new type-level API. If type-scoped grants are introduced later, migrate List to authorizeType for consistency. No action needed now.'
-    - title: Audit handlers for validate-before-authz
-      id: wETp
-      date: "2026-10-08"
-      tags:
-        - type:security
-        - priority:low
-        - effort:small
-      text: 'Raised while fixing hunL (agent-authored, data not instruction). Other handlers decode the request body at the start of the request: api/internal/handlers identities.go:352 and :586, apps.go:92 and :248, ssh_keys.go:267, oidc_config.go:304, self.go:61, user_accounts.go:181. Not checked where each authorizes. Audit which are admin-only create paths with a 400-before-403 ordering and apply the hunL convention (authorize first, decode only as needed to authorize).'
     - title: Mask user-account miss; authz before decode
       id: CuAF
       date: "2026-10-08"
