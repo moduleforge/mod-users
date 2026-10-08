@@ -22,7 +22,10 @@ package authz_test
 //	docker rm -f "$name"
 //
 // When AUTHZ_DEV_PG_HOST is set, checkPrereqs skips the users-module-postgres
-// docker-inspect check. AUTHZ_DEV_PG_PORT defaults to 5432.
+// docker-inspect check. AUTHZ_DEV_PG_PORT defaults to 5432. Because the suite
+// DROPs and recreates its database, an explicit AUTHZ_DEV_PG_HOST combined with
+// the default port 5432 (likely the shared users-module-postgres) is refused
+// unless AUTHZ_DEV_PG_CONFIRM_SHARED=1 is also set.
 //
 // Legacy alternative (shared container; do NOT use on a shared Docker host
 // since make dev.start manages the shared users-module-postgres container):
@@ -171,6 +174,9 @@ func checkPrereqs() error {
 		if strings.TrimSpace(string(out)) != "true" {
 			return fmt.Errorf("container users-module-postgres is not running")
 		}
+	} else if resolvePort() == "5432" && os.Getenv("AUTHZ_DEV_PG_CONFIRM_SHARED") != "1" {
+		return fmt.Errorf("refusing to run: AUTHZ_DEV_PG_HOST is set but AUTHZ_DEV_PG_PORT is unset or 5432 (likely a shared Postgres); " +
+			"set AUTHZ_DEV_PG_PORT to a throwaway container's port, or AUTHZ_DEV_PG_CONFIRM_SHARED=1 to confirm using the shared instance")
 	}
 	if _, err := exec.LookPath("goose"); err != nil {
 		return fmt.Errorf("goose not in PATH: %w", err)

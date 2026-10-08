@@ -40,6 +40,7 @@ For embedding the components in an app (configuration, routes, Next.js and React
 - [docs/mod-users-spec.md](./docs/mod-users-spec.md) — feature specification and behavioral contracts
 - [docs/architecture.md](./docs/architecture.md) — system design, sub-project relationships, and key design decisions
 - [docs/project-structure.md](./docs/project-structure.md) — directory layout and sub-project conventions
+- [next-steps.md](./next-steps.md) — forward-looking residue: pending manual verification and deferred work
 - [.claude/CLAUDE.md](./.claude/CLAUDE.md) — Claude Code configuration and project-specific AI agent guidance
 
 ## License
