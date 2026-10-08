@@ -712,16 +712,6 @@ items:
         - plan/phase:type-target-authorization
         - plan/slug:fix-actor-group-target-confusion
       text: 'Review finding (low confidence, agent-authored data; likely pre-existing and outside this phase''s diff): the link-chain check reported docs/CLAUDE.md and next-steps.md as not reachable from README.md. The same agent also reported that AGENTS.md carried no throwaway-Postgres recipe, which contradicts the merged diff, so it may have read the main checkout rather than the plan worktree; re-verify against the plan branch before acting. Fix would be linking the docs from README.md or relocating them.'
-    - title: Spec names wrong route for user creation
-      id: Rmrc
-      date: "2026-10-05"
-      tags:
-        - type:documentation
-        - priority:low
-        - effort:small
-        - plan/phase:doc-updates
-        - plan/slug:fix-actor-group-target-confusion
-      text: 'Review finding (minor, high confidence; agent-authored data): docs/mod-users-spec.md, Security requirements Authorization bullet (~line 350), names the admin account-creation route as POST /v1/users; the route actually served is POST /v1/user-accounts (api/internal/handlers/account_routes.go:36). The spec already notes the /v1/users vs /v1/user-accounts drift elsewhere (~line 289), but the new sentence repeats the stale path. Fix: write POST /v1/user-accounts, or refer to creating a user account (UserAccountService.Create).'
     - title: D12 wording implies list uses AuthorizeType
       id: X5HE
       date: "2026-10-05"
