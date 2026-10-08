@@ -726,3 +726,11 @@ items:
         - priority:high
         - effort:medium
       text: 'StepUpVerify (identities.go:582) and EmailCodeVerify (auth/emailcode.go:122) never count/invalidate failed attempts on a 6-digit code; for purpose=login this is an account-takeover path for a known email. No rate limiting found in handlers; confirm whether a gateway limits it. Also: EmailCodeVerify skips bcrypt on unknown email (timing oracle; Login uses a dummy hash).'
+    - title: 'Authz before validation: operator ssh-key add'
+      id: HHFv
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+      text: 'POST /user-accounts/{uuid}/ssh-keys (handlers/ssh_keys.go:263-282) returns body 400 before Register authorizes (service/ssh_keys.go:133); a non-admin targeting another account sees request shape (existence stays masked). Needs an interface change plus stub update. Add operator-route denial tests (self-route tests at ssh_keys_test.go:710/738/759 stay valid). Audit: scratchpad mod-users-authz-ordering-audit.md.'
