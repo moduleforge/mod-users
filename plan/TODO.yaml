@@ -6,3 +6,7 @@ phases:
       slug: authorize-type-grant-arm
       title: AuthorizeType Type-Grant Arm
       tasks: []
+    - number: 7
+      slug: doc-updates
+      title: Documentation Updates
+      tasks: []
