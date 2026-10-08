@@ -692,16 +692,6 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth/oidc.go redirectToTestResult (~line 338) assigns u.Path = "/oidc-config" over the operator-supplied FrontendReturnURL (AUTH_FRONTEND_RETURN_URL), dropping any mount prefix the app is served under (for example /manage), so the OIDC provider test result lands on the wrong URL. Loud failure (a 404 or wrong page after the provider test), admin-only flow. Derive the redirect from the FrontendReturnURL's own path (or a configured oidc-config path) instead of overwriting it, and add a test with a prefixed return URL. Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 2).
-    - title: jwtsecret integ test hard-codes 5432
-      id: R9KP
-      date: "2026-10-05"
-      tags:
-        - type:enhancement
-        - priority:low
-        - effort:small
-        - plan/phase:type-target-authorization
-        - plan/slug:fix-actor-group-target-confusion
-      text: 'Test gap: api/internal/config/jwtsecret_bootstrap_integration_test.go hard-codes port 5432 and the users-module-postgres container name, so it cannot run against a throwaway Postgres container on a shared Docker host. It lacks the AUTHZ_DEV_PG_PORT / explicit-host override that api/internal/authz/authz_integration_test.go now has.'
     - title: UserAccountService.List not on AuthorizeType
       id: 4dka
       date: "2026-10-05"
