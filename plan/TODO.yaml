@@ -67,4 +67,14 @@ phases:
     - number: 9
       slug: type-grant-list-symmetry-and-list-migration
       title: Type-Grant List Symmetry and UserAccountService.List Migration
-      tasks: []
+      tasks:
+        - number: 1
+          slug: production-type-grant-symmetry
+          title: Production Type-Grant List/Single-Row Symmetry
+          path: phase-09-type-grant-list-symmetry-and-list-migration/001-production-type-grant-symmetry.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
