@@ -795,3 +795,13 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: 'api/internal/handlers/auth/routes.go RegisterRoutes always mounts POST /anonymous, and a composer''s app manifest cannot unmount a module route. An app with no anonymous use case can only answer 404 in a wrapper in front of the router. Add an option (a RegisterRoutes parameter or a module manifest toggle) that leaves the anonymous route unregistered. Related defect: in a generated composition Handler.SetUserSvc is never called (only mod-users'' own api/cmd/server/main.go calls it), so Anonymous dereferences a nil userSvc; with that wired, CreateAnonymousUser then fails with "audit: no actor on context" because the route is unauthenticated. The route cannot succeed when composed by mfgen.'
+    - title: Docker was unreachable in the sandbox; the in
+      id: adeO
+      date: "2026-10-09"
+      tags:
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:authorize-type-grant-arm
+        - plan/slug:type-scoped-grants
+      text: Docker was unreachable in the sandbox; the integration suite ran against a throwaway local Postgres 14.23 instead of postgres:16 (nothing version-specific); re-run the postgres:16 recipe at merge for exact parity.
