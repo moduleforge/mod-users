@@ -750,3 +750,12 @@ items:
         - priority:low
         - effort:small
       text: handlers/oidc_config.go:304 (Confirm) and oidc_providers.go:162,:188 (provider Update/Create) return 400 before 401 because setup_token is read from the body, though the admin session / X-Setup-Token header need no body. Authorize first, then report malformed body. Update TestConfirm_BadJSON (oidc_config_test.go:585) to expect 401 unauthenticated and add an authorized-caller 400 case.
+    - title: mod-users first-user hook should be opt-in
+      id: sxjM
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: moduleforge.module.yaml declares hooks.firstUserGrant (users.NewFirstUserHook, registered on userResolver.SetFirstUserHook and authHandler.SetFirstUserHook), which grants wildcard manage to the first account created on an empty database, from the unauthenticated POST /v1/auth/register (api/internal/handlers/auth/register.go) and from the OIDC resolver (api/internal/auth/resolver.go). A composing app cannot remove a module hook, because mfgen reads hooks only from module manifests; flow-accounts clears it with two startup hooks that call SetFirstUserHook(nil). Make the hook opt-in (an app manifest switch, or no default registration) so an app that wants an explicit operator bootstrap does not have to undo the module's default, and document the first-registrant-becomes-admin behavior where it is declared.
