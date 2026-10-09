@@ -5,16 +5,19 @@ phases:
     - number: 6
       slug: authorize-type-grant-arm
       title: AuthorizeType Type-Grant Arm
+      diff_base: 28915dd51372a54404fc11ebd3ce982236362b6a
       tasks:
         - number: 1
           slug: authorize-type-arm
           title: AuthorizeType Arm
           path: phase-06-authorize-type-grant-arm/001-authorize-type-arm.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Added checkTypeGrant, a recursive-CTE query seeded from types.entity_id WHERE types.id = typeID with no owner or parent walk, failing closed on unknown types; AuthorizeType keeps its prelude (wildcard first) and consults the arm via checkTypeGrantDispatch. Contract comments reworded. Unit tests cover the full stub matrix; the two invalidated integration tests were reworked. Integration suite passed against a local Postgres 14 (docker unavailable); api build, test, lint pass.
           git:
-            branch: null
-            commit: []
+            branch: plan/type-scoped-grants-06-001
+            commit:
+                - 8791b2c
             merge: null
         - number: 2
           slug: type-grant-integration-matrix
