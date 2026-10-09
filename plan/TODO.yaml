@@ -83,6 +83,7 @@ phases:
     - number: 9
       slug: type-grant-list-symmetry-and-list-migration
       title: Type-Grant List Symmetry and UserAccountService.List Migration
+      diff_base: cb56b3955e71f3ee3b7500d0e5c0cdd1bbef39e7
       tasks:
         - number: 1
           slug: production-type-grant-symmetry
