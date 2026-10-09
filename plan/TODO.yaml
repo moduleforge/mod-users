@@ -2,7 +2,7 @@ slug: type-scoped-grants
 version: 1
 title: ""
 remediation:
-    rounds: 1
+    rounds: 2
     tasks_added: 1
 phases:
     - number: 6
@@ -126,3 +126,8 @@ phases:
             commit:
                 - d508731
             merge: 783cc5bdf1d800d9106c2908cadd1a40a504ee68
+    - number: 11
+      slug: remediation-02
+      title: Remediation Round 2
+      kind: remediation
+      tasks: []
