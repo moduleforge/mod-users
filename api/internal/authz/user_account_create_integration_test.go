@@ -36,7 +36,14 @@ func (d *integBeginTxDB) BeginTx(_ context.Context, _ pgx.TxOptions) (pgx.Tx, er
 
 func newIntegCreateService(t *testing.T, d *integBeginTxDB) *service.UserAccountService {
 	t.Helper()
-	typeRes := types.NewFromMap(map[string]int64{"natural_person": typeIDForSlug(t, "natural_person")})
+	return newIntegCreateServiceFor(d, typeIDForSlug(t, "natural_person"))
+}
+
+// newIntegCreateServiceFor builds the service with its type resolver mapping
+// natural_person to typeID, whatever that id is. The service passes the
+// resolved id straight to AuthorizeType.
+func newIntegCreateServiceFor(d *integBeginTxDB, typeID int64) *service.UserAccountService {
+	typeRes := types.NewFromMap(map[string]int64{"natural_person": typeID})
 	return service.NewUserAccountService(d, nil, nil, integAZ, &observer.ObserverGroup{}, nil, typeRes, nil)
 }
 
@@ -101,6 +108,43 @@ func TestInteg_UserAccountService_Create_WildcardManageAllowed(t *testing.T) {
 
 	if !errors.Is(err, errIntegBeginTx) {
 		t.Errorf("Create as wildcard manage holder: got %v, want the transaction sentinel (authorized)", err)
+	}
+	if d.calls != 1 {
+		t.Errorf("BeginTx calls: got %d, want 1", d.calls)
+	}
+}
+
+// TestInteg_UserAccountService_Create_Ilu6_TestOnlyType is the end-to-end form
+// of the ilu6 regression. The resolver maps natural_person to a test-only
+// type's id, and an instance entity sits at exactly that id. A create grant on
+// the instance is entity-level authority and is denied before BeginTx; a create
+// grant on the test type's own type entity reaches the transaction stub.
+func TestInteg_UserAccountService_Create_Ilu6_TestOnlyType(t *testing.T) {
+	testTypeID, testTypeEntity := registerTestType(t, "svc-ilu6")
+	seedEntityWithExplicitID(t, testTypeID, nil)
+
+	instanceHolder := seedUser(t, "typegrant-svc-ilu6-instance@example.com", false)
+	targetedGrant(t, instanceHolder, testTypeID, "create")
+	// Characterization: the grant is real entity-level authority.
+	if err := integAZ.Authorize(actorCtx(instanceHolder), "create", &testTypeID); err != nil {
+		t.Fatalf("precondition: Authorize(create, &%d): got %v, want nil", testTypeID, err)
+	}
+
+	d := &integBeginTxDB{}
+	_, err := newIntegCreateServiceFor(d, testTypeID).Create(actorCtx(instanceHolder), integCreateInput())
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("Create with a create grant on the instance at id %d: got %v, want ErrForbidden", testTypeID, err)
+	}
+	if d.calls != 0 {
+		t.Error("transaction was started despite the authorization denial")
+	}
+
+	typeHolder := seedUser(t, "typegrant-svc-ilu6-type@example.com", false)
+	targetedGrant(t, typeHolder, testTypeEntity, "create")
+	d = &integBeginTxDB{}
+	_, err = newIntegCreateServiceFor(d, testTypeID).Create(actorCtx(typeHolder), integCreateInput())
+	if !errors.Is(err, errIntegBeginTx) {
+		t.Errorf("Create with a create grant on the test type's entity %d: got %v, want the transaction sentinel (authorized)", testTypeEntity, err)
 	}
 	if d.calls != 1 {
 		t.Errorf("BeginTx calls: got %d, want 1", d.calls)
