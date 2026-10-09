@@ -122,6 +122,6 @@ phases:
             - n4t2
             - 16do
           git:
-            branch: null
+            branch: plan/type-scoped-grants-10-001
             commit: []
             merge: null
