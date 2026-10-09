@@ -88,6 +88,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: self-email-verified-at
+          title: Expose emailVerifiedAt On Self
+          path: phase-04-users-gui-improvements/002-self-email-verified-at.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: checkout-deps-token-handling
       title: checkout-deps token handling - gsl4
