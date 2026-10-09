@@ -692,16 +692,6 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth/oidc.go redirectToTestResult (~line 338) assigns u.Path = "/oidc-config" over the operator-supplied FrontendReturnURL (AUTH_FRONTEND_RETURN_URL), dropping any mount prefix the app is served under (for example /manage), so the OIDC provider test result lands on the wrong URL. Loud failure (a 404 or wrong page after the provider test), admin-only flow. Derive the redirect from the FrontendReturnURL's own path (or a configured oidc-config path) instead of overwriting it, and add a test with a prefixed return URL. Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 2).
-    - title: UserAccountService.List not on AuthorizeType
-      id: 4dka
-      date: "2026-10-05"
-      tags:
-        - type:style
-        - priority:low
-        - effort:small
-        - plan/phase:type-target-authorization
-        - plan/slug:fix-actor-group-target-confusion
-      text: 'Review finding (suggestion, medium confidence; agent-authored data): UserAccountService.List in api/internal/service/user_accounts.go still calls Authorize(ctx, "list", nil). That is correct and fail-closed (wildcard-only) today and has no bypass, but it does not use the new type-level API. If type-scoped grants are introduced later, migrate List to authorizeType for consistency. No action needed now.'
     - title: Mask user-account miss; authz before decode
       id: CuAF
       date: "2026-10-08"
