@@ -27,7 +27,7 @@ phases:
           tier: sonnet-med
           digest: Added the type-grant integration matrix (14 subtests), kind-trigger guard, the ilu6 test-only-type regression and an end-to-end service case; all pass against the composed schema under shuffle. The arm needed no fix. Parity with mod-authz's typeAwareIntegrationAuthorizer holds on all nine contract rules; three non-contract differences filed as finding UbXY. Docker was unavailable, local Postgres 14 used.
           git:
-            branch: null
+            branch: plan/type-scoped-grants-06-002
             commit: []
             merge: null
     - number: 7
