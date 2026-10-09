@@ -3,14 +3,14 @@
 package authz_test
 
 // instance_semantics_integration_test.go proves the instance-semantics arm
-// of entity-level Authorize (checkGrantOrOwn): a grant over a type's entity also
-// confers the operation over every instance of exactly that type, and never
-// over type entities themselves.
+// of entity-level Authorize (checkGrantOrOwn): a grant over a type's entity
+// also confers the operation over every instance of exactly that type, and
+// never over type entities themselves.
 //
 // This is security-sensitive: manage on natural_person's type entity confers
-// assume of every user account. The tests pin that, the exact-type (no parent type walk)
-// boundary, and the type-entity exclusion (a grant on the sentinel "type"
-// entity must not reach any type entity).
+// assume of every user account. The tests pin that, the exact-type (no parent
+// type walk) boundary, and the type-entity exclusion (a grant on the sentinel
+// "type" entity must not reach any type entity).
 //
 // Every fixture target group holds only type entities or only instance
 // entities (mod-authz's kind trigger). Ids are resolved at runtime. Run with

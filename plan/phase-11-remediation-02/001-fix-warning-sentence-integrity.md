@@ -28,3 +28,7 @@ It is a comment and documentation change only. Do not change any production code
 - Finding `oDuA` in this plan's `plan/findings.yaml` (warning paragraph splits a sentence).
 - Finding `HIBp` in this plan's `plan/findings.yaml` (wording precision).
 - `plan/phase-10-remediation-01/001-complete-instance-warning-and-tests.md` (the change being corrected).
+
+## Status
+
+Outcome: succeeded (2026-10-09). Moved the escalation-paths block after the intact parenthetical in the package and `Authorize` docs, corrected the membership-authority wording and the anonymous system actor phrasing in all five warning locations, and reflowed the two test header comments. All validation checks passed (`make -C api build test lint`, greps, `go doc`). Files: `api/internal/authz/authz.go`, `api/localAuthz/authz.go`, `docs/architecture.md`, `api/internal/authz/type_grant_integration_test.go`, `api/internal/authz/instance_semantics_integration_test.go`.
