@@ -129,18 +129,21 @@ phases:
     - number: 11
       slug: remediation-02
       title: Remediation Round 2
+      diff_base: 08296179d7dccb11698fc58b2dc9225d51d366ba
       kind: remediation
       tasks:
         - number: 1
           slug: fix-warning-sentence-integrity
           title: Fix Warning Sentence Integrity and Wording Precision
           path: phase-11-remediation-02/001-fix-warning-sentence-integrity.md
-          done: false
+          done: true
           tier: haiku-med
+          digest: 'Comment and doc-only fix of the instance-semantics warning: escalation block now follows the intact parenthetical (verified with go doc), group-membership authority wording corrected (update alone only permits removal), anonymous system actor wording fixed, two test header comments reflowed. api build/test/lint pass.'
           findings:
             - oDuA
             - HIBp
           git:
-            branch: null
-            commit: []
+            branch: plan/type-scoped-grants-11-001
+            commit:
+                - 6d228fd
             merge: null
