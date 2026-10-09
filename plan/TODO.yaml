@@ -5,6 +5,7 @@ phases:
     - number: 6
       slug: authorize-type-grant-arm
       title: AuthorizeType Type-Grant Arm
+      diff_base: 28915dd51372a54404fc11ebd3ce982236362b6a
       tasks:
         - number: 1
           slug: authorize-type-arm
