@@ -64,3 +64,7 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 9
+      slug: type-grant-list-symmetry-and-list-migration
+      title: Type-Grant List Symmetry and UserAccountService.List Migration
+      tasks: []
