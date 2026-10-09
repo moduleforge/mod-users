@@ -122,3 +122,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: audit-sibling-checkout-deps
+          title: Audit Sibling checkout-deps Copies
+          path: phase-05-checkout-deps-token-handling/002-audit-sibling-checkout-deps.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
