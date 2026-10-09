@@ -40,7 +40,7 @@ phases:
           slug: update-architecture-docs
           title: Update Architecture Docs
           path: phase-07-doc-updates/001-update-architecture-docs.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Restated D12, the API-layer paragraph and the spec Authorization bullet for the shipped type-grant arm, worded to match mod-core's contract, with a rollout sentence (manage vs create-only authority) added. No instance-semantics claims; qjI3 verified accurate, no finding needed.
           git:
