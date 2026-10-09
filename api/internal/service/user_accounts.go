@@ -175,10 +175,11 @@ type typeAuthorizer interface {
 // When az implements AuthorizeType it is used. Otherwise (decorators and test
 // stubs may not implement AuthorizeType) the check falls back to
 // az.Authorize(ctx, op, nil). A nil target is the core contract's "no specific
-// target", which is wildcard-only in mod-users' implementation, so the
-// fallback stays fail-closed. It must never fall back to Authorize with
-// &typeID: Authorize treats its target as an entities.id, so a type id there
-// would be matched against owner_id and grants.target_id of unrelated entities.
+// target", which only a wildcard grant satisfies in mod-users' implementation,
+// so the fallback denies type-grant holders and stays fail-closed. It must
+// never fall back to Authorize with &typeID: Authorize treats its target as an
+// entities.id, so a type id there would be matched against owner_id and
+// grants.target_id of unrelated entities.
 func authorizeType(ctx context.Context, az coreAuthz.Authorizer, op string, typeID int64) error {
 	if ta, ok := az.(typeAuthorizer); ok {
 		return ta.AuthorizeType(ctx, op, typeID)
@@ -195,7 +196,8 @@ func authorizeType(ctx context.Context, az coreAuthz.Authorizer, op string, type
 // Create. Handlers call it to deny an unauthorized caller before reporting a
 // request-shape error (e.g. an undecodable body).
 func (s *UserAccountService) AuthorizeCreate(ctx context.Context) error {
-	// Create is a type-level, wildcard-only operation. typeID is a types.id,
+	// Create is a type-level operation: a wildcard grant, or a grant on
+	// natural_person's type entity, authorizes it. typeID is a types.id,
 	// not an entities.id, so it must go through authorizeType and never be
 	// passed to Authorize as a target.
 	typeID := s.typeRes.IDForSlugMust("natural_person")
@@ -203,7 +205,8 @@ func (s *UserAccountService) AuthorizeCreate(ctx context.Context) error {
 }
 
 // Create creates a NaturalPerson entity and a UserAccount row in a single
-// atomic transaction. Requires admin authorization.
+// atomic transaction. Requires the type-level create authorization of
+// AuthorizeCreate: a wildcard grant, or a grant on natural_person's type entity.
 func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInput) (UserAccount, error) {
 	// Authorize before validating input.
 	if err := s.AuthorizeCreate(ctx); err != nil {
