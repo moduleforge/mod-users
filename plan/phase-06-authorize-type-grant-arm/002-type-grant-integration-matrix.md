@@ -83,3 +83,12 @@ Files in scope:
 - After the matrix passes.
 - After the `ilu6` and end-to-end service cases pass.
 - After the parity check is recorded.
+
+## Status
+
+Outcome: succeeded (2026-10-09).
+
+- Files: `api/internal/authz/type_grant_integration_test.go` (new: helpers `seedTargetGroup`, `addTargetGroupMember`, `addActorGroupMember`, `registerTestType`, kind-trigger guard, full matrix, `ilu6` test-only-type regression), `api/internal/authz/type_target_integration_test.go` (`seedEntityWithExplicitID` gained an optional `ownerID` so the instance can be owned at insert time), `api/internal/authz/user_account_create_integration_test.go` (end-to-end `ilu6` case). `authz.go` unchanged: no test exposed a defect in the arm.
+- Helper reuse: `typeEntityID` from the task is the existing `typeEntityIDForSlug` (scanning a NULL into int64 fails the test).
+- Validation: sibling precondition greps match after `make -C model compose`; `./internal/authz/...` integration suite passes with `-count=1`, and with `-shuffle=on` (three runs); `make test` and `make lint` in `api/` pass (golangci-lint with the integration tag shows only pre-existing issues in files this task does not own); the hard-coded-id grep finds nothing; diff touches only in-scope files. Postgres: Docker `run` returned a 500 from the daemon, so a throwaway local Postgres 14 (Homebrew initdb, trust auth, random port) was used and removed afterwards.
+- Parity with mod-authz's `typeAwareIntegrationAuthorizer` (phase 4 task 001 has landed there): all nine rules match (wildcard, exact type, target-group walk direction, actor chain, no ownership, no parent walk, `typeID` never compared with entity ids, no deprecation check, unknown type id fails closed). Three behaviors outside those rules differ and are filed as one `type:conflict` finding (`UbXY`): the stand-in ignores the sudo actor, returns `ErrForbidden` instead of `ErrUnauthenticated` with no actor, and denies an unregistered operation slug instead of falling back to wildcard manage.

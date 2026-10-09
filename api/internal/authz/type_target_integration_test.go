@@ -73,15 +73,17 @@ func entityOwnerIsNull(t *testing.T, id int64) bool {
 	return unowned
 }
 
-// seedEntityWithExplicitID inserts an unowned corporation-typed entity with an
-// explicit id, then advances the entities id sequence so later inserts cannot
-// collide with the explicit id. The sequence is never moved backwards.
-func seedEntityWithExplicitID(t *testing.T, id int64) {
+// seedEntityWithExplicitID inserts a corporation-typed entity with an explicit
+// id, then advances the entities id sequence so later inserts cannot collide
+// with the explicit id. The sequence is never moved backwards. A nil ownerID
+// leaves the entity unowned; otherwise owner_id is set at insert time (it is
+// immutable afterwards).
+func seedEntityWithExplicitID(t *testing.T, id int64, ownerID *int64) {
 	t.Helper()
 	ctx := context.Background()
 
-	const insertSQL = `INSERT INTO entities (id, fundamental_type_id) VALUES ($1, $2)`
-	if _, err := integPool.Exec(ctx, insertSQL, id, corporationTypeID(t)); err != nil {
+	const insertSQL = `INSERT INTO entities (id, fundamental_type_id, owner_id) VALUES ($1, $2, $3)`
+	if _, err := integPool.Exec(ctx, insertSQL, id, corporationTypeID(t), ownerID); err != nil {
 		t.Fatalf("seedEntityWithExplicitID: insert entity %d: %v", id, err)
 	}
 
