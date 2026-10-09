@@ -768,3 +768,12 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth/register.go logs "user registered" with the new account's email address (email=...) through the global slog default, so every registration writes an address to the application log. The platform rule is that logs carry the account uuid and never an address; log user_account_uuid only. The line is visible in the composed server's output during any registration.
+    - title: register.go logs registrant email at INFO
+      id: DGW8
+      date: "2026-10-08"
+      tags:
+        - type:bug
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: api/internal/handlers/auth/register.go (Register, near the "user registered" slog.InfoContext call, about line 264) logs the registrant's email as an attribute at INFO. An email address is personal data and should not reach the application log; log the user_account_uuid only, as login.go does.
