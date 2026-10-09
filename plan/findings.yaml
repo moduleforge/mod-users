@@ -9,6 +9,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
+    - title: 'List migration: stale comments, test gaps'
+      id: QpDq
+      date: "2026-10-09"
+      tags:
+        - type:bug
+        - priority:medium
+        - plan/phase:type-grant-list-symmetry-and-list-migration
+        - effort:unspecified
+      text: 'Four small items from the UserAccountService.List migration review. (1) api/internal/handlers/user_accounts.go: the List handler comment carries only a short form of the email-exposure warning; add one sentence that the result includes accounts held by corporations and that the grant is exact-type, with the trust guidance (grant list or manage on natural_person''s type entity only to principals trusted with every account''s email), or point to the service List doc comment. (2) api/internal/handlers/account_routes.go: the comment above r.Get("/user-accounts", h.List) still says list/create require wildcard admin; both are authorized at the type level (a wildcard grant or a grant on natural_person''s type entity), so reword it. (3) api/internal/authz/user_account_list_integration_test.go: the matrix seeds only natural-person-held accounts, so a mutation that filtered corporation-held accounts out of the result would pass; seed one user_accounts row whose account_holder is a corporation and assert its email appears for a list holder (this pins the documented warning). (4) api/internal/authz/authz_integration_test.go, TestInteg_OwnerPredicate_ListSingleRowSymmetry: every type-grant fixture grants read, list or manage, so a mutation that drops the operation filter on the type-grant arm of both sides would pass because the two sides would still agree; add a fixture with an operation that does not satisfy read (for example create or update on corporation''s type entity) and pin that both sides return no instances. Optional hardening: a nested actor-group chain fixture, an archived instance, and an entity type-entity case.'
 closed:
     - id: adeO
       title: Docker was unreachable in the sandbox; the in
