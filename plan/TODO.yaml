@@ -16,6 +16,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: public-key-verifier-mode
+          title: Public-Key Verifier Mode And Rotation
+          path: phase-01-eddsa-verify-only-key/002-public-key-verifier-mode.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: cors-safe-default
       title: CORS safe default - 5K4Q
