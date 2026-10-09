@@ -18,4 +18,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
+    - title: Stand-in ignores sudo, unauth, unknown-op
+      id: UbXY
+      date: "2026-10-09"
+      tags:
+        - type:conflict
+        - plan/phase:authorize-type-grant-arm
+        - priority:unspecified
+        - effort:unspecified
+      text: typeAwareIntegrationAuthorizer.AuthorizeType in mod-authz api/service/type_level_authz_integration_test.go diverges from (*Authorizer).AuthorizeType in mod-users api/internal/authz/authz.go on three behaviors outside the type-grant query itself (the grant query matches on all nine contract rules). (1) The stand-in resolves the actor with opctx.ActorEntityID, so a sudo actor is ignored; the real arm uses the effective (sudo-first) actor. (2) With no actor on the context the stand-in returns ErrForbidden; the real arm returns ErrUnauthenticated. (3) For an unregistered operation slug the stand-in returns ErrForbidden; the real prelude falls back to a wildcard-manage check. Low impact while the stand-in is only exercised with real actors and registered slugs; mod-authz is not editable from mod-users.
 closed: []
