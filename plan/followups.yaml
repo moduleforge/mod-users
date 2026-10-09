@@ -786,3 +786,12 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth (login.go, emailcode.go, reset.go) has no per-account lockout or backoff on wrong passwords or codes, and no per-email cap on email-code request and password-reset request mail. The composer's app-level throttle (per source network, plus a keyed hash of the email at the HTTP layer) is the only bound, and it can lock a victim's email for its window, so the module should own an account-keyed lockout/backoff and per-recipient send caps. Also export a limiter seam on the auth Handler (a small interface like the SetUserSvc/SetFirstUserHook setters) so a composer can supply the limiter instead of wrapping the server handler.
+    - title: Option to leave anonymous route unregistered
+      id: 5cJ8
+      date: "2026-10-08"
+      tags:
+        - type:enhancement
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: 'api/internal/handlers/auth/routes.go RegisterRoutes always mounts POST /anonymous, and a composer''s app manifest cannot unmount a module route. An app with no anonymous use case can only answer 404 in a wrapper in front of the router. Add an option (a RegisterRoutes parameter or a module manifest toggle) that leaves the anonymous route unregistered. Related defect: in a generated composition Handler.SetUserSvc is never called (only mod-users'' own api/cmd/server/main.go calls it), so Anonymous dereferences a nil userSvc; with that wired, CreateAnonymousUser then fails with "audit: no actor on context" because the route is unauthenticated. The route cannot succeed when composed by mfgen.'
