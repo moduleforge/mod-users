@@ -3,11 +3,11 @@
 package authz_test
 
 // user_account_create_integration_test.go wires the real UserAccountService
-// to the real grants-table Authorizer and proves the type-target bypass is
-// closed at the service layer: an actor with entity-level authority over
-// entity T, where T is the natural_person types.id, is denied Create, while a
-// wildcard manage holder is authorized. The transaction is replaced by a
-// stub that fails on BeginTx, so the test observes whether Create got past
+// to the real grants-table Authorizer and proves, at the service layer, that
+// Create is authorized by a wildcard grant or by a grant on natural_person's
+// type entity (types.entity_id), and by nothing else: a create grant on an
+// instance entity does not authorize it. The transaction is replaced by a stub
+// that fails on BeginTx, so the test observes whether Create got past
 // authorization without writing any rows.
 //
 // Run with the throwaway-Postgres recipe in authz_integration_test.go's header.
@@ -44,24 +44,49 @@ func integCreateInput() service.CreateUserAccountInput {
 	return service.CreateUserAccountInput{Email: "typetarget-create@example.com", GivenName: "T", FamilyName: "T"}
 }
 
-func TestInteg_UserAccountService_Create_EntityAuthorityOverTypeIDDenied(t *testing.T) {
-	typeID := typeIDForSlug(t, "natural_person")
-	userU := seedUser(t, "typetarget-svc-u@example.com", false)
-	arm := grantEntityLevelAuthorityOver(t, userU, typeID)
-	t.Logf("natural_person types.id=%d; entity-level authority over entity %d via %s", typeID, typeID, arm)
+// TestInteg_UserAccountService_Create_TypeEntityGrantAllowed: a create grant on
+// natural_person's type entity (resolved through types.entity_id, never assumed
+// equal to the type id) lets Create reach the transaction.
+func TestInteg_UserAccountService_Create_TypeEntityGrantAllowed(t *testing.T) {
+	typeEntityID := typeEntityIDForSlug(t, "natural_person")
+	userU := seedUser(t, "typetarget-svc-typegrant@example.com", false)
+	targetedGrant(t, userU, typeEntityID, "create")
 
-	// Characterization: the pre-fix call (entity-level Authorize with the type
-	// id) would have allowed this actor.
+	d := &integBeginTxDB{}
+	_, err := newIntegCreateService(t, d).Create(actorCtx(userU), integCreateInput())
+
+	if !errors.Is(err, errIntegBeginTx) {
+		t.Errorf("Create as natural_person type-entity (%d) create-grant holder: got %v, want the transaction sentinel (authorized)", typeEntityID, err)
+	}
+	if d.calls != 1 {
+		t.Errorf("BeginTx calls: got %d, want 1", d.calls)
+	}
+}
+
+// TestInteg_UserAccountService_Create_InstanceEntityGrantDenied: a create grant
+// on an instance entity does not authorize Create. The instance is a freshly
+// seeded user's entity, whose id is not natural_person's type entity.
+func TestInteg_UserAccountService_Create_InstanceEntityGrantDenied(t *testing.T) {
+	typeEntityID := typeEntityIDForSlug(t, "natural_person")
+	userU := seedUser(t, "typetarget-svc-instgrant-u@example.com", false)
+	instance := seedUser(t, "typetarget-svc-instgrant-i@example.com", false)
+	if instance == typeEntityID {
+		t.Fatalf("precondition: instance entity %d must differ from natural_person's type entity", instance)
+	}
+	targetedGrant(t, userU, instance, "create")
+
+	// Characterization: the grant is real entity-level authority over the
+	// instance, which is exactly why it must not answer the type-level check.
 	ctxU := actorCtx(userU)
-	if err := integAZ.Authorize(ctxU, "create", &typeID); err != nil {
-		t.Fatalf("precondition: Authorize(create, &%d): got %v, want nil", typeID, err)
+	if err := integAZ.Authorize(ctxU, "create", &instance); err != nil {
+		t.Fatalf("precondition: Authorize(create, &%d): got %v, want nil", instance, err)
 	}
 
 	d := &integBeginTxDB{}
 	_, err := newIntegCreateService(t, d).Create(ctxU, integCreateInput())
 
 	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("Create as entity-%d authority holder: got %v, want ErrForbidden", typeID, err)
+		t.Errorf("Create as instance-entity (%d) create-grant holder: got %v, want ErrForbidden", instance, err)
 	}
 	if d.calls != 0 {
 		t.Error("transaction was started despite the authorization denial")

@@ -90,3 +90,12 @@ architectural_impact: true
 - After the arm, the hook and the unit tests pass.
 - After the doc-comment rewrites.
 - After the reworked integration tests pass against the composed plan-branch schema.
+
+## Status
+
+- Outcome: succeeded (2026-10-09).
+- Built against the sibling plan branches (staging dir with mod-core and mod-authz plan worktrees, mod-audit main). Both precondition greps matched after `make -C model compose`.
+- Validation: `make -C api build|test|lint` pass. The `./internal/authz/...` integration suite (`-tags=integration -p 1 -count=1`) passes, 82 PASS lines, no skips. It ran against a local Postgres 14.23 (Homebrew) on a random port, because the Docker daemon was unreachable in the sandbox. Greps clean: no "wildcard-only today", "No grant can target a type", "slot in here" or `parent_id` in `authz.go`/`localAuthz/authz.go`. The only `owner_id` SQL use is `checkGrantOrOwn`'s.
+- Observed layout: `natural_person` types.id 3 equals its type entity id 3. `authz_actor_group` types.id 9 has type entity 10, and entity 9 is an unrelated instance.
+- Files: `api/internal/authz/authz.go`, `export_test.go`, `authz_test.go`, `type_target_integration_test.go`, `user_account_create_integration_test.go`, `api/localAuthz/authz.go` (comments), `api/internal/service/user_accounts.go` (comments).
+- `seedEntityWithExplicitID(t, id)` lost its owner parameter and is currently unused; task 002 reuses it and its sequence-advance logic.
