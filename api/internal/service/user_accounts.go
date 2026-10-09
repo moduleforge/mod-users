@@ -412,10 +412,29 @@ func (s *UserAccountService) CreateAnonymousUser(ctx context.Context, in CreateA
 }
 
 // List returns all user accounts matching the optional search term, with
-// pagination. Requires admin authorization.
+// pagination.
+//
+// Listing is a type-level check: it requires the list operation on
+// natural_person, satisfied by a wildcard grant or by a grant on
+// natural_person's type entity (directly or through type-only target groups,
+// by the actor or its actor groups). The check is exact-type: a grant on
+// legal_entity's or entity's type entity, a grant on any account or person
+// instance, and ownership of one's own entity do not authorize it.
+//
+// Warning: such a type-level grant (list, or manage, which implies it) returns
+// every user account with its email address, because the search is not scoped
+// per row. That includes accounts held by a corporation:
+// user_accounts.account_holder references legal_entities, and the search does
+// not filter by holder type. Grant list or manage on natural_person's type
+// entity only to principals trusted with every account's email address. The
+// same grant also confers read on every natural_person instance; see decision
+// D13 in docs/architecture.md.
 func (s *UserAccountService) List(ctx context.Context, in ListUserAccountsInput) ([]UserAccount, error) {
-	// Authorize: list is admin-only; nil target → admin-only per convention.
-	if err := s.az.Authorize(ctx, "list", nil); err != nil {
+	// Authorize before any query. typeID is a types.id, not an entities.id, so
+	// it goes through authorizeType and is never passed to Authorize as a
+	// target.
+	typeID := s.typeRes.IDForSlugMust("natural_person")
+	if err := authorizeType(ctx, s.az, "list", typeID); err != nil {
 		return nil, err
 	}
 
