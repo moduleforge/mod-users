@@ -73,3 +73,10 @@ architectural_impact: true
 
 - After the SQL change and doc comments, with the existing suite green.
 - After the new integration matrix passes.
+
+## Status
+
+- Outcome: succeeded (2026-10-09).
+- Changed: `api/internal/authz/authz.go` (TargetChain seeded with the target's exact-type entity via `entities.fundamental_type_id` -> `types.entity_id`, skipped when the target is itself a type entity; package, `Authorize` and `checkGrantOrOwn` docs carry the warning); new `api/internal/authz/instance_semantics_integration_test.go` (full task matrix plus mutation-checked exclusion and `types.id`-vs-`types.entity_id` tests). `AuthorizeType` and `checkTypeGrant` untouched.
+- Validation: sibling precondition greps matched after `make -C model compose`; `./internal/authz/...` integration suite passed (`-count=1`, local throwaway Postgres 14, Docker unreachable); `make -C api build|test|lint` passed; no `parent_id` in `authz.go`; no diff hunk in `AuthorizeType`/`checkTypeGrant`.
+- Symmetry gap: no list/single-row symmetry assertion was added for type-grant holders, because mod-core's `GrantTableGenerator` instance arm has not landed. The manager should attach the assertion to whichever arm lands second.

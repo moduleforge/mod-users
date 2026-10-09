@@ -43,6 +43,25 @@
 // effective actor's entity id. A NULL owner_id matches no actor, so entities
 // that keep a NULL owner by design (corporation, authz_actor_group,
 // authz_target_group) stay inaccessible via this predicate.
+//
+// Instance semantics: the target chain is also seeded with the entity of the
+// target's exact type, so a grant on a type's entity (directly or through a
+// type-only target group) confers the same operation over EVERY existing and
+// future instance of exactly that type, for every operation in its SatisfiedBy
+// closure. manage on a type entity is therefore full control of every instance
+// (read, update, delete, assume, grant, revoke, ...); for natural_person that
+// includes assume of every user account and installing SSH keys through the
+// operator routes. list implies read, so a type-level list grant reads every
+// instance. manage or grant on a type-only target group confers this for every
+// type in the group. It does not extend to subtypes or parent types and never
+// applies to type entities themselves (a grant on the sentinel "type" entity
+// confers nothing over type entities). Grant on type entities only to
+// principals trusted with every instance: a holder of grant on a type entity
+// can hand out instance-wide authority over that type. Until mod-core's
+// matching GrantTableGenerator arm lands, single-row Authorize and the
+// list-side accessible_*_ids_for_actor functions disagree for type-grant
+// holders (single-row allows, list omits). AuthorizeType is unchanged: an
+// instance grant never satisfies a type-level check.
 package authz
 
 import (
@@ -140,8 +159,29 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 //     against; only a wildcard grant, already checked in step 3, can satisfy
 //     a nil-target operation).
 //  5. If target != nil: run checkGrantOrOwn — a single recursive-CTE query
-//     that resolves a grant via the actor/target group chains, OR-ed with an
-//     entities.owner_id ownership check against the target.
+//     that resolves a grant via the actor/target group chains (the target
+//     chain is seeded with the target and, unless the target is itself a type
+//     entity, the entity of its exact type), OR-ed with an entities.owner_id
+//     ownership check against the target.
+//
+// WARNING, instance semantics: the target chain is also seeded with the entity of the
+// target's exact type, so a grant on a type's entity (directly or through a
+// type-only target group) confers the same operation over EVERY existing and
+// future instance of exactly that type, for every operation in its SatisfiedBy
+// closure. manage on a type entity is therefore full control of every instance
+// (read, update, delete, assume, grant, revoke, ...); for natural_person that
+// includes assume of every user account and installing SSH keys through the
+// operator routes. list implies read, so a type-level list grant reads every
+// instance. manage or grant on a type-only target group confers this for every
+// type in the group. It does not extend to subtypes or parent types and never
+// applies to type entities themselves (a grant on the sentinel "type" entity
+// confers nothing over type entities). Grant on type entities only to
+// principals trusted with every instance: a holder of grant on a type entity
+// can hand out instance-wide authority over that type. Until mod-core's
+// matching GrantTableGenerator arm lands, single-row Authorize and the
+// list-side accessible_*_ids_for_actor functions disagree for type-grant
+// holders (single-row allows, list omits). AuthorizeType is unchanged: an
+// instance grant never satisfies a type-level check.
 //
 // Steps 1-3 are shared with AuthorizeType via authorizePrelude so the two
 // entry points cannot drift.
@@ -388,6 +428,14 @@ SELECT EXISTS(
 //	    TargetChain AS (
 //	        SELECT targetEntityID AS tid
 //	        UNION
+//	        -- instance semantics: the entity of the target's exact type, unless
+//	        -- the target is itself a type entity
+//	        SELECT t.entity_id
+//	        FROM entities e JOIN types t ON t.id = e.fundamental_type_id
+//	        WHERE e.id = targetEntityID
+//	          AND t.entity_id IS NOT NULL
+//	          AND NOT EXISTS (SELECT 1 FROM types tt WHERE tt.entity_id = targetEntityID)
+//	        UNION
 //	        SELECT atgm.group_id FROM authz_target_group_members atgm JOIN TargetChain tc ON atgm.member_id = tc.tid
 //	    )
 //	SELECT
@@ -402,6 +450,33 @@ SELECT EXISTS(
 //	        WHERE e.id = targetEntityID
 //	          AND e.owner_id = actorEntityID
 //	    )
+//
+// Instance semantics: TargetChain is seeded with the target AND the entity of
+// the target's exact fundamental type (types.entity_id of
+// entities.fundamental_type_id), so a grant on a type's entity, directly or
+// through a type-only target group (the group walk starts from the seeded type
+// entity), also confers the operation over every instance of exactly that
+// type. The type-entity seed is skipped when the target is itself a type
+// entity: its fundamental type is the sentinel "type", so without the guard a
+// grant on the sentinel's own entity would confer the operation over every type
+// entity, and grant or manage there would let its holder grant authority over
+// every type. A target id with no entities row seeds nothing and fails closed.
+// There is no parent or child type walk, and AuthorizeType is unaffected.
+//
+// WARNING: this makes a type grant instance-wide. It confers the operation
+// over every existing and future instance of exactly that type, for every
+// operation in the SatisfiedBy closure: manage on a type entity is full control
+// of every instance (read, update, delete, assume, grant, revoke, ...), which
+// for natural_person includes assume of every user account and installing SSH
+// keys through the operator routes. list implies read, so a type-level list
+// grant also reads every instance. manage or grant on a type-only target group
+// confers all of this for every type in the group. It does not extend to
+// subtypes or parent types, and never applies to type entities themselves. A
+// holder of grant on a type entity can hand out instance-wide authority over
+// that type, so grant on type entities only to principals trusted with every
+// instance. Until mod-core's matching GrantTableGenerator arm lands, this
+// single-row check and the list-side accessible_*_ids_for_actor functions
+// disagree for type-grant holders (single-row allows, list omits).
 //
 // The ownership arm is a single, resource-agnostic predicate — it is not
 // scoped per resource type, and it is not gated on the operation or on
@@ -431,6 +506,13 @@ WITH RECURSIVE
     ),
     TargetChain AS (
         SELECT $2::bigint AS tid
+        UNION
+        SELECT t.entity_id
+        FROM entities e
+        JOIN types t ON t.id = e.fundamental_type_id
+        WHERE e.id = $2::bigint
+          AND t.entity_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM types tt WHERE tt.entity_id = $2::bigint)
         UNION
         SELECT atgm.group_id
         FROM authz_target_group_members atgm
