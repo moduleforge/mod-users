@@ -18,7 +18,13 @@ import (
 // on a type's entity (directly or through a type-only target group) confers the
 // same operation over every existing and future instance of exactly that type,
 // so manage on a type entity is full control of every instance (for
-// natural_person, including assume of every user account). Grant on type
+// natural_person, including assume of every user account). That reaches
+// accounts holding wildcard or admin grants, so manage on natural_person is
+// effectively full admin; manage, grant or update on the type entity of
+// authz_actor_group or authz_target_group likewise confers authority over every
+// group of that kind, a path to groups holding wildcard grants and so to
+// privilege escalation, and the same holds for every other type with instances
+// (app, system_actor, the anonymous actor type, where they exist). Grant on type
 // entities only to principals trusted with every instance. See the Type grants
 // confer instance access decision in docs/architecture.md for the full warning.
 // TypeAuthorizer, below, is unchanged: an instance grant never satisfies a

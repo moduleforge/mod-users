@@ -109,7 +109,7 @@ func seedEntityWithExplicitID(t *testing.T, id int64, ownerID *int64) {
 //     does not imply list), and the type entity is unowned, so the allow cannot
 //     come from an ownership arm.
 //   - The entity at id == typeID is some other entity. The grant is then
-//     entity-level authority over an unrelated entity (the ilu6 confusion) and
+//     entity-level authority over an unrelated entity (the confusion of a type id with an entity id) and
 //     AuthorizeType must deny it.
 //
 // Which case applies depends on id layout, so the test logs it. The
