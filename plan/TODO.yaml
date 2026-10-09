@@ -78,3 +78,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: user-account-list-authorize-type
+          title: UserAccountService.List on AuthorizeType
+          path: phase-09-type-grant-list-symmetry-and-list-migration/002-user-account-list-authorize-type.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
