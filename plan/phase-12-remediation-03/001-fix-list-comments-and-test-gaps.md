@@ -28,3 +28,9 @@ Scope is two comment fixes and two test additions. Do not change production code
 - Finding `QpDq` in this plan's `plan/findings.yaml` (stale comments and test gaps).
 - `plan/phase-09-type-grant-list-symmetry-and-list-migration/001-production-type-grant-symmetry.md` and `002-user-account-list-authorize-type.md` (the work being refined).
 - `plan/notes/users-type-grant-design.md` (design and sibling-build recipe).
+
+## Status
+
+Succeeded, 2026-10-09. Handler `List` comment and the `/user-accounts` route comment updated (comment lines only). Added a corporation-held `user_accounts` row to the list authorization integration test (asserted in the allow cases) and a `create`-on-corporation-type-entity fixture to the type-grant symmetry subtest. A `update` fixture was tried and dropped: `update` satisfies `read`, so it is admitted by design. Mutation checks (corporation-held row absent; operation filter dropped in `checkGrantOrOwn`) each failed the new assertions and were reverted. Integration run of `./internal/authz/...` and `make -C api build test lint` pass against the composed plan-branch schema (throwaway local Postgres; Docker unreachable).
+
+Files: `api/internal/handlers/user_accounts.go`, `api/internal/handlers/account_routes.go`, `api/internal/authz/user_account_list_integration_test.go`, `api/internal/authz/authz_integration_test.go`.

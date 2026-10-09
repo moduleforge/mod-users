@@ -29,7 +29,8 @@ import "github.com/go-chi/chi/v5"
 //	PUT    /apps/{uuid}/user-accounts/{user_account_uuid}/roles
 func RegisterAccountRoutes(r chi.Router, h *UserAccountsHandler, assume *AssumeHandler, apps *AppsHandler) {
 	// User account management. Authorization is enforced at the service layer:
-	// list/create require wildcard admin; get/update/delete enforce per-entity
+	// list/create are authorized at the type level (a wildcard grant or a grant
+	// on natural_person's type entity); get/update/delete enforce per-entity
 	// authorization. RequireAdmin middleware has been removed; the Authorizer is
 	// the sole gate.
 	r.Get("/user-accounts", h.List)

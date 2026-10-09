@@ -973,6 +973,8 @@ func testTypeGrantListSingleRowSymmetry(t *testing.T) {
 			map[string]bool{"np-other": true, "actor": true}, false},
 		{"read on legal_entity type entity (exact type only)", func(a int64) { targetedGrant(t, a, leTE, "read") },
 			map[string]bool{"actor": true}, false},
+		{"create on corporation type entity (operation does not satisfy read)", func(a int64) { targetedGrant(t, a, corpTE, "create") },
+			map[string]bool{"actor": true}, false},
 		{"no grants (control)", func(int64) {}, map[string]bool{"actor": true}, false},
 		{"read on the sentinel type entity (reaches no type entity)", func(a int64) { targetedGrant(t, a, typeEntityIDForSlug(t, "type"), "read") },
 			map[string]bool{"actor": true}, true},

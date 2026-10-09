@@ -65,13 +65,29 @@ func requireListSeesEmails(t *testing.T, actor int64, why string, want ...string
 	}
 }
 
+// seedCorporationAccount inserts a user_accounts row whose account_holder is a
+// corporation (entity -> legal_entity -> corporation -> user_account) and
+// returns the corporation's entity ID.
+func seedCorporationAccount(t *testing.T, legalName, email string) int64 {
+	t.Helper()
+	corpID := seedUnownedCorporation(t, legalName)
+	const uaSQL = `INSERT INTO user_accounts (account_holder, email) VALUES ($1, $2)`
+	if _, err := integPool.Exec(context.Background(), uaSQL, corpID, email); err != nil {
+		t.Fatalf("seedCorporationAccount: insert user_account: %v", err)
+	}
+	return corpID
+}
+
 func TestInteg_UserAccountService_List_TypeLevelAuthorization(t *testing.T) {
 	npEnt := typeEntityIDForSlug(t, "natural_person")
 
 	// Other users whose emails the result must expose to a type-level holder.
 	otherA := seedUser(t, "typelist-other-a@example.com", false)
 	seedUser(t, "typelist-other-b@example.com", false)
-	emails := []string{"typelist-other-a@example.com", "typelist-other-b@example.com"}
+	// An account held by a corporation is exposed too: the search does not
+	// filter by holder type.
+	seedCorporationAccount(t, "Typelist Corp", "typelist-corp-held@example.com")
+	emails := []string{"typelist-other-a@example.com", "typelist-other-b@example.com", "typelist-corp-held@example.com"}
 
 	t.Run("list on natural_person type entity", func(t *testing.T) {
 		u := seedUser(t, "typelist-direct-list@example.com", false)
