@@ -51,16 +51,19 @@ phases:
     - number: 8
       slug: type-grant-instance-semantics
       title: Type-Grant Instance Semantics, Optional Q1
+      diff_base: 32c5789a203c750a9e8c5ec5e5d4159198e03862
       tasks:
         - number: 1
           slug: instance-semantics-arm
           title: Instance Semantics Arm
           path: phase-08-type-grant-instance-semantics/001-instance-semantics-arm.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added the Q1 instance-semantics seed to checkGrantOrOwn (target plus its exact type's entity via entities.fundamental_type_id -> types.entity_id) with the type-entity exclusion so a grant on the sentinel type entity confers nothing over other type entities. Warning documented in package, Authorize and checkGrantOrOwn docs; matrix integration tests added; mutation checks confirmed the tests catch a removed exclusion and a mis-joined seed. AuthorizeType and nil-target behaviour unchanged. Local Postgres 14 used (Docker unavailable).
           git:
-            branch: null
-            commit: []
+            branch: plan/type-scoped-grants-08-001
+            commit:
+                - 88735da
             merge: null
         - number: 2
           slug: instance-semantics-warning-docs
