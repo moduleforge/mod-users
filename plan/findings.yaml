@@ -26,6 +26,9 @@ items:
         - priority:medium
         - plan/phase:type-grant-instance-semantics
         - effort:unspecified
+        - resolution/task:phase-10-remediation-01/001-complete-instance-warning-and-tests.md
+        - resolution/plan:type-scoped-grants
+        - resolution/commit:d508731f91d66e061dca669b3e7975b6c8878b29
       text: 'The instance-semantics warning (package and Authorize doc comments in api/internal/authz/authz.go, decision D13 in docs/architecture.md, the localAuthz facade doc) is generic ("every instance"). It should also say explicitly: (1) manage, grant or update on the type entities of authz_actor_group and authz_target_group confers authority over every group instance, which is a path to groups that hold wildcard grants and so to privilege escalation; (2) it applies to every other type that has instances, naming app, system_actor and the anonymous actor type where they exist; (3) the assume of every user account that manage on the natural_person type entity confers includes accounts that themselves hold wildcard or admin grants, making that grant effectively full admin. Add one or two sentences to each location so the mandatory warning covers these concrete escalation paths. Verify against mod-authz which operations gate group membership edits.'
 closed:
     - id: adeO
