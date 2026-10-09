@@ -169,5 +169,6 @@ phases:
             - QpDq
           git:
             branch: plan/type-scoped-grants-12-001
-            commit: []
+            commit:
+                - 4781abb
             merge: null
