@@ -220,7 +220,7 @@ A **bun workspace** resolves the `@moduleforge/core-gui` peer dependency: the ro
   > - `manage` or `grant` on a type-only target group confers all of the above for every type in the group.
   > - It does not extend to subtypes or parent types, and it never applies to type entities themselves.
   > - A holder of `grant` on a type entity can hand out instance-wide authority over that type. Grant on type entities only to principals trusted with every instance, and prefer `create` and `list` for create-only or list-only authority.
-  > - Until mod-core's matching list-side arm lands, single-row `Authorize` and the list-side `accessible_*_ids_for_actor` functions disagree for type-grant holders: single-row checks allow, list results omit the instances.
+  > - Single-row `Authorize` and the list-side `accessible_*_ids_for_actor` functions agree for type-grant holders: mod-core's `GrantTableGenerator` carries the matching arm, and `TestInteg_OwnerPredicate_ListSingleRowSymmetry` asserts the agreement against the production `Authorizer`.
 
   The `localAuthz.Authorizer` doc comment carries a short form of this warning.
 

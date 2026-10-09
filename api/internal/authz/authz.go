@@ -69,9 +69,9 @@
 // effectively full admin.
 // Grant on type entities only to principals trusted with every instance: a
 // holder of grant on a type entity can hand out instance-wide authority over
-// that type. Until mod-core's matching GrantTableGenerator arm lands,
-// single-row Authorize and the list-side accessible_*_ids_for_actor functions
-// disagree for type-grant holders (single-row allows, list omits).
+// that type. Single-row Authorize and the list-side
+// accessible_*_ids_for_actor functions agree for type-grant holders, because
+// mod-core's GrantTableGenerator carries the matching arm.
 // AuthorizeType is unchanged: an instance grant never satisfies a type-level
 // check.
 package authz
@@ -201,9 +201,9 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 // effectively full admin.
 // Grant on type entities only to principals trusted with every instance: a
 // holder of grant on a type entity can hand out instance-wide authority over
-// that type. Until mod-core's matching GrantTableGenerator arm lands,
-// single-row Authorize and the list-side accessible_*_ids_for_actor functions
-// disagree for type-grant holders (single-row allows, list omits).
+// that type. Single-row Authorize and the list-side
+// accessible_*_ids_for_actor functions agree for type-grant holders, because
+// mod-core's GrantTableGenerator carries the matching arm.
 // AuthorizeType is unchanged: an instance grant never satisfies a type-level
 // check.
 //
@@ -509,9 +509,9 @@ SELECT EXISTS(
 // effectively full admin.
 // A holder of grant on a type entity can hand out instance-wide authority over
 // that type, so grant on type entities only to principals trusted with every
-// instance. Until mod-core's matching GrantTableGenerator arm lands, this
-// single-row check and the list-side accessible_*_ids_for_actor functions
-// disagree for type-grant holders (single-row allows, list omits).
+// instance. This single-row check and the list-side
+// accessible_*_ids_for_actor functions agree for type-grant holders, because
+// mod-core's GrantTableGenerator carries the matching arm.
 //
 // The ownership arm is a single, resource-agnostic predicate — it is not
 // scoped per resource type, and it is not gated on the operation or on
