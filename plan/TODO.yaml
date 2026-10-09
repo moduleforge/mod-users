@@ -14,3 +14,7 @@ phases:
       slug: cookie-base-path
       title: Cookie Path behind a strip-prefix proxy - E75T and hDB7
       tasks: []
+    - number: 4
+      slug: users-gui-improvements
+      title: users-gui improvements - 5F38, dnL0, lJE0
+      tasks: []
