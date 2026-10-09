@@ -144,5 +144,6 @@ phases:
             - HIBp
           git:
             branch: plan/type-scoped-grants-11-001
-            commit: []
+            commit:
+                - 6d228fd
             merge: null
