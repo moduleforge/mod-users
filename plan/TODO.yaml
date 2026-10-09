@@ -96,7 +96,7 @@ phases:
             branch: plan/type-scoped-grants-09-001
             commit:
                 - 2e110f1
-            merge: null
+            merge: 9d6cfdd0e9c8e29c5d391feb54066bee6d338f2e
         - number: 2
           slug: user-account-list-authorize-type
           title: UserAccountService.List on AuthorizeType
