@@ -16,9 +16,9 @@ package authz_test
 // entities (mod-authz's kind trigger). Ids are resolved at runtime. Run with
 // the throwaway-Postgres recipe in authz_integration_test.go's header.
 //
-// Symmetry gap: mod-core's matching GrantTableGenerator (list side) arm has not
-// landed, so this file deliberately asserts no list/single-row symmetry for
-// type-grant holders.
+// List/single-row symmetry for type-grant holders is asserted separately, by
+// TestInteg_OwnerPredicate_ListSingleRowSymmetry in authz_integration_test.go;
+// this file asserts single-row outcomes only.
 
 import (
 	"context"

@@ -72,3 +72,12 @@ Files in scope:
 
 - After `wireServices` installs the three functions and the existing suite is green.
 - After the new subtests pass and the mutation check is recorded.
+
+## Status
+
+- Outcome: succeeded (2026-10-09).
+- Preconditions: both schema greps and the `grant_table.go` phase 9 arm grep (line 140, one match) held after `make -C model compose`; staging sibling dir used as `MODULEFORGE_SIBLINGS_DIR`.
+- Changes: `api/internal/authz/authz_integration_test.go` (`wireServices` installs `corporation`, `natural_person`, `legal_entity`; `TestInteg_OwnerPredicate_ListSingleRowSymmetry` now has an unchanged `ownership` subtest plus a `type grants` subtest with the six specified fixtures and a seventh sentinel-`type`-entity fixture); time-bound "until mod-core's arm lands" sentences removed from `api/internal/authz/authz.go` (package, `Authorize`, `checkGrantOrOwn` docs; comment-only), `docs/architecture.md` (D13 bullet), and the stale "symmetry gap" header comment in `api/internal/authz/instance_semantics_integration_test.go`.
+- Postgres: Docker unreachable; used a throwaway local `initdb` cluster (random port, trust auth, TCP only), removed afterwards.
+- Validation: `-tags=integration ./internal/authz/...` -count=1 passed; `make -C api build|test|lint` passed.
+- Mutation checks (reverted): removing the type-entity seed from the target chain fails the corporation fixtures ("list side admitted, single-row Authorize (with slug filter) did not"); removing the `NOT EXISTS (... tt.entity_id = $2)` exclusion is caught only by the added sentinel-type-entity fixture's "Authorize admitted a type entity" check (the iff itself cannot see it, since type entities are never listed).

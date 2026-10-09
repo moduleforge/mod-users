@@ -72,6 +72,7 @@ package authz_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -255,13 +256,18 @@ func wireServices(ctx context.Context, pool *pgxpool.Pool) error {
 	integOpReg = opReg
 	integAZ = authz.New(authzQ, opReg, pool)
 
-	// Install the real accessible_corporation_ids_for_actor access function
-	// (0099_access_function_stubs.sql ships an empty-set stub; app startup
-	// normally replaces it via setup.ApplyFuncs). Scenario 9's list/single-row
-	// symmetry assertion runs this function directly, so it must be the real
-	// generic three-arm body, not the stub — otherwise the assertion would
-	// pass vacuously against an always-empty result set.
-	if err := authzsetup.ApplyFuncs(ctx, pool, authzsetup.NewGrantTableGenerator(), []string{"corporation"}); err != nil {
+	// Install the real accessible_<slug>_ids_for_actor access functions for
+	// the slugs the list/single-row symmetry assertions run
+	// (0099_access_function_stubs.sql ships empty-set stubs; app startup
+	// normally replaces them via setup.ApplyFuncs). The assertions run these
+	// functions directly, so they must be the real generic four-arm body
+	// (wildcard, targeted/group grant, ownership, type-grant instance
+	// semantics), not the stubs — otherwise the assertions would pass
+	// vacuously against an always-empty result set. The slugs are the subset
+	// of authzSlugs in cmd/server/main.go that the symmetry test exercises;
+	// "type" is deliberately absent because production never generates
+	// accessible_type_ids_for_actor.
+	if err := authzsetup.ApplyFuncs(ctx, pool, authzsetup.NewGrantTableGenerator(), []string{"corporation", "natural_person", "legal_entity"}); err != nil {
 		return fmt.Errorf("apply access functions: %w", err)
 	}
 	return nil
@@ -826,46 +832,202 @@ func TestInteg_OwnerPredicate_DoesNotLeakAcrossEntities(t *testing.T) {
 // claim: for the owned corporation, single-row Authorize("read", &owned)
 // succeeds, and the SAME row is returned by the list-side
 // accessible_corporation_ids_for_actor access function. wireServices
-// installs the REAL generic three-arm function body via
+// installs the REAL generic four-arm function body via
 // setup.ApplyFuncs/GrantTableGenerator (not the empty-set stub
 // 0099_access_function_stubs.sql ships, which app startup normally replaces
 // via setup.ApplyFuncs) — so this assertion cannot pass vacuously against
 // an always-empty result set.
 func TestInteg_OwnerPredicate_ListSingleRowSymmetry(t *testing.T) {
-	ownerID := seedUser(t, "owner-s9e@example.com", false)
-	corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9E")
-	ctx := actorCtx(ownerID)
+	t.Run("ownership", func(t *testing.T) {
+		ownerID := seedUser(t, "owner-s9e@example.com", false)
+		corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9E")
+		ctx := actorCtx(ownerID)
 
-	if err := integAZ.Authorize(ctx, "read", &corpID); err != nil {
-		t.Fatalf("list/single-row symmetry: single-row Authorize: got %v, want nil", err)
-	}
+		if err := integAZ.Authorize(ctx, "read", &corpID); err != nil {
+			t.Fatalf("list/single-row symmetry: single-row Authorize: got %v, want nil", err)
+		}
 
-	readOpIDs, err := integOpReg.SatisfiedBy("read")
+		readOpIDs, err := integOpReg.SatisfiedBy("read")
+		if err != nil {
+			t.Fatalf("list/single-row symmetry: SatisfiedBy(read): %v", err)
+		}
+
+		const accessSQL = `SELECT entity_id FROM accessible_corporation_ids_for_actor($1, $2)`
+		rows, err := integPool.Query(context.Background(), accessSQL, ownerID, readOpIDs)
+		if err != nil {
+			t.Fatalf("list/single-row symmetry: query access function: %v", err)
+		}
+		defer rows.Close()
+
+		found := false
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				t.Fatalf("list/single-row symmetry: scan: %v", err)
+			}
+			if id == corpID {
+				found = true
+			}
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("list/single-row symmetry: rows: %v", err)
+		}
+		if !found {
+			t.Errorf("list/single-row symmetry: accessible_corporation_ids_for_actor(%d, ...) did not include owned corporation %d — single-row Authorize and the list-side access function disagree", ownerID, corpID)
+		}
+	})
+	t.Run("type grants", testTypeGrantListSingleRowSymmetry)
+}
+
+// symmetrySlugs are the production list functions the type-grant symmetry
+// subtests cover. "type" is excluded: production never generates
+// accessible_type_ids_for_actor.
+var symmetrySlugs = []string{"corporation", "natural_person", "legal_entity"}
+
+// accessibleIDs returns the set of entity ids that
+// accessible_<slug>_ids_for_actor(actor, readOpIDs) lists. slug comes from the
+// fixed symmetrySlugs list, never from input.
+func accessibleIDs(t *testing.T, slug string, actor int64, opIDs []int32) map[int64]bool {
+	t.Helper()
+	sql := fmt.Sprintf(`SELECT entity_id FROM accessible_%s_ids_for_actor($1, $2)`, slug)
+	rows, err := integPool.Query(context.Background(), sql, actor, opIDs)
 	if err != nil {
-		t.Fatalf("list/single-row symmetry: SatisfiedBy(read): %v", err)
-	}
-
-	const accessSQL = `SELECT entity_id FROM accessible_corporation_ids_for_actor($1, $2)`
-	rows, err := integPool.Query(context.Background(), accessSQL, ownerID, readOpIDs)
-	if err != nil {
-		t.Fatalf("list/single-row symmetry: query access function: %v", err)
+		t.Fatalf("accessibleIDs(%s, actor=%d): %v", slug, actor, err)
 	}
 	defer rows.Close()
-
-	found := false
+	out := map[int64]bool{}
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			t.Fatalf("list/single-row symmetry: scan: %v", err)
+			t.Fatalf("accessibleIDs(%s, actor=%d): scan: %v", slug, actor, err)
 		}
-		if id == corpID {
-			found = true
-		}
+		out[id] = true
 	}
 	if err := rows.Err(); err != nil {
-		t.Fatalf("list/single-row symmetry: rows: %v", err)
+		t.Fatalf("accessibleIDs(%s, actor=%d): rows: %v", slug, actor, err)
 	}
-	if !found {
-		t.Errorf("list/single-row symmetry: accessible_corporation_ids_for_actor(%d, ...) did not include owned corporation %d — single-row Authorize and the list-side access function disagree", ownerID, corpID)
+	return out
+}
+
+// typeIsUnderSlug resolves, in SQL, whether the entity's fundamental type is
+// slug or descends from it.
+func typeIsUnderSlug(t *testing.T, entityID int64, slug string) bool {
+	t.Helper()
+	var ok bool
+	const q = `SELECT type_is_or_descends_from(fundamental_type_id, $2) FROM entities WHERE id = $1`
+	if err := integPool.QueryRow(context.Background(), q, entityID, slug).Scan(&ok); err != nil {
+		t.Fatalf("typeIsUnderSlug(%d, %q): %v", entityID, slug, err)
+	}
+	return ok
+}
+
+// testTypeGrantListSingleRowSymmetry proves, against the production
+// Authorizer and the production list functions, that for every actor fixture,
+// slug and candidate:
+//
+//	candidate listed by accessible_<slug>_ids_for_actor
+//	  iff Authorize(read) admits it AND its type is under slug.
+//
+// The slug filter is the only legitimate difference between the two sides.
+// Each fixture also pins the expected Authorize outcome for the instance
+// candidates, so a fixture cannot pass vacuously with both sides empty.
+func testTypeGrantListSingleRowSymmetry(t *testing.T) {
+	corpTE := typeEntityIDForSlug(t, "corporation")
+	npTE := typeEntityIDForSlug(t, "natural_person")
+	leTE := typeEntityIDForSlug(t, "legal_entity")
+
+	readOpIDs, err := integOpReg.SatisfiedBy("read")
+	if err != nil {
+		t.Fatalf("SatisfiedBy(read): %v", err)
+	}
+
+	corpBefore := seedUnownedCorporation(t, "Symmetry Corp Before")
+	npOther := seedGrantHolder(t, "sym-other-np")
+
+	type candidate struct {
+		name string
+		id   int64
+	}
+	type fixture struct {
+		name  string
+		setup func(actor int64)
+		// wantInstances names the instance candidates Authorize must admit.
+		wantInstances map[string]bool
+		// noTypeEntities asserts Authorize admits none of the type-entity
+		// candidates (the sentinel-"type" exclusion).
+		noTypeEntities bool
+	}
+	fixtures := []fixture{
+		{"read directly on corporation type entity", func(a int64) { targetedGrant(t, a, corpTE, "read") },
+			map[string]bool{"corp-before": true, "corp-after": true, "actor": true}, false},
+		{"list directly on corporation type entity", func(a int64) { targetedGrant(t, a, corpTE, "list") },
+			map[string]bool{"corp-before": true, "corp-after": true, "actor": true}, false},
+		{"read on type-only target group holding corporation type entity via actor group", func(a int64) {
+			ag := seedActorGroup(t, "sym-actor-group")
+			addActorGroupMember(t, ag, a)
+			g := seedTargetGroup(t, "sym-target-group")
+			addTargetGroupMember(t, g, corpTE)
+			targetedGrant(t, ag, g, "read")
+		}, map[string]bool{"corp-before": true, "corp-after": true, "actor": true}, false},
+		{"manage directly on natural_person type entity", func(a int64) { targetedGrant(t, a, npTE, "manage") },
+			map[string]bool{"np-other": true, "actor": true}, false},
+		{"read on legal_entity type entity (exact type only)", func(a int64) { targetedGrant(t, a, leTE, "read") },
+			map[string]bool{"actor": true}, false},
+		{"no grants (control)", func(int64) {}, map[string]bool{"actor": true}, false},
+		{"read on the sentinel type entity (reaches no type entity)", func(a int64) { targetedGrant(t, a, typeEntityIDForSlug(t, "type"), "read") },
+			map[string]bool{"actor": true}, true},
+	}
+
+	for _, fx := range fixtures {
+		t.Run(fx.name, func(t *testing.T) {
+			actor := seedGrantHolder(t, "sym-actor")
+			fx.setup(actor)
+			// Created after the grant: future instances must be covered.
+			corpAfter := seedUnownedCorporation(t, "Symmetry Corp After")
+
+			candidates := []candidate{
+				{"corp-before", corpBefore},
+				{"corp-after", corpAfter},
+				{"actor", actor},
+				{"np-other", npOther},
+				{"corporation type entity", corpTE},
+				{"legal_entity type entity", leTE},
+				{"natural_person type entity", npTE},
+			}
+
+			ctx := actorCtx(actor)
+			authzAdmits := map[int64]bool{}
+			for _, c := range candidates {
+				id := c.id
+				switch err := integAZ.Authorize(ctx, "read", &id); {
+				case err == nil:
+					authzAdmits[c.id] = true
+				case errors.Is(err, authz.ErrForbidden):
+				default:
+					t.Fatalf("fixture %q candidate %s (%d): Authorize returned %v, want nil or ErrForbidden", fx.name, c.name, c.id, err)
+				}
+				if isTE := strings.HasSuffix(c.name, "type entity"); isTE && fx.noTypeEntities && authzAdmits[c.id] {
+					t.Errorf("fixture %q candidate %s (%d): Authorize admitted a type entity, want forbidden", fx.name, c.name, c.id)
+				}
+				if want, isInstance := fx.wantInstances[c.name], !strings.HasSuffix(c.name, "type entity"); isInstance && authzAdmits[c.id] != want {
+					t.Errorf("fixture %q candidate %s (%d): Authorize admitted=%v, want %v", fx.name, c.name, c.id, authzAdmits[c.id], want)
+				}
+			}
+
+			for _, slug := range symmetrySlugs {
+				listed := accessibleIDs(t, slug, actor, readOpIDs)
+				for _, c := range candidates {
+					single := authzAdmits[c.id] && typeIsUnderSlug(t, c.id, slug)
+					if listed[c.id] != single {
+						side := "list side admitted, single-row Authorize (with slug filter) did not"
+						if single {
+							side = "single-row Authorize admitted, list side did not"
+						}
+						t.Errorf("fixture %q slug %s candidate %s (%d): %s (list=%v authorize+slug=%v)",
+							fx.name, slug, c.name, c.id, side, listed[c.id], single)
+					}
+				}
+			}
+		})
 	}
 }
