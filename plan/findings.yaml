@@ -9,30 +9,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
-    - title: 'Instance tests: vacuous child-walk case, ids'
-      id: 16do
-      date: "2026-10-09"
-      tags:
-        - type:bug
-        - priority:low
-        - plan/phase:type-grant-instance-semantics
-        - effort:unspecified
-        - resolution/task:phase-10-remediation-01/001-complete-instance-warning-and-tests.md
-        - resolution/plan:type-scoped-grants
-        - resolution/commit:d508731f91d66e061dca669b3e7975b6c8878b29
-      text: 'In api/internal/authz/instance_semantics_integration_test.go: (1) the "no child walk" subtest grants on the corporation type entity and asserts forbidden on the legal_entity type entity, but legal_entity''s entity is a type entity so the exclusion alone denies it; the subtest would pass even with a child-type walk and does not test what it claims. Replace it with a real no-subtype-walk test: extend registerTestType to take a parent, register a concrete child type, seed an instance of the child, grant on the parent''s type entity and assert forbidden (or rename/remove the vacuous case). (2) The wrong-join-key mutation is caught only by TestInteg_InstanceSemantics_TestOnlyType because the seeded types have types.id equal to types.entity_id; optionally add an actor-group plus nested target-group subtest on the test-only type as an extra guard. (3) The file header, subtest names and comments use plan shorthand ("Q1", "Q2") and the opaque regression label "ilu6"; rename them descriptively (instance semantics, no parent walk, type id never read as entity id) in this file and in the sibling type-grant test files that use the same labels.'
-    - title: Instance warning omits escalation paths
-      id: n4t2
-      date: "2026-10-09"
-      tags:
-        - type:security
-        - priority:medium
-        - plan/phase:type-grant-instance-semantics
-        - effort:unspecified
-        - resolution/task:phase-10-remediation-01/001-complete-instance-warning-and-tests.md
-        - resolution/plan:type-scoped-grants
-        - resolution/commit:d508731f91d66e061dca669b3e7975b6c8878b29
-      text: 'The instance-semantics warning (package and Authorize doc comments in api/internal/authz/authz.go, decision D13 in docs/architecture.md, the localAuthz facade doc) is generic ("every instance"). It should also say explicitly: (1) manage, grant or update on the type entities of authz_actor_group and authz_target_group confers authority over every group instance, which is a path to groups that hold wildcard grants and so to privilege escalation; (2) it applies to every other type that has instances, naming app, system_actor and the anonymous actor type where they exist; (3) the assume of every user account that manage on the natural_person type entity confers includes accounts that themselves hold wildcard or admin grants, making that grant effectively full admin. Add one or two sentences to each location so the mandatory warning covers these concrete escalation paths. Verify against mod-authz which operations gate group membership edits.'
 closed:
     - id: adeO
       title: Docker was unreachable in the sandbox; the in
@@ -43,4 +19,14 @@ closed:
       title: Stand-in ignores sudo, unauth, unknown-op
       disposition: promoted
       ref: UbXY
+      date: "2026-10-09"
+    - id: 16do
+      title: 'Instance tests: vacuous child-walk case, ids'
+      disposition: fixed
+      ref: phase-10-remediation-01/001-complete-instance-warning-and-tests.md
+      date: "2026-10-09"
+    - id: n4t2
+      title: Instance warning omits escalation paths
+      disposition: fixed
+      ref: phase-10-remediation-01/001-complete-instance-warning-and-tests.md
       date: "2026-10-09"
