@@ -27,4 +27,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: typeAwareIntegrationAuthorizer.AuthorizeType in mod-authz api/service/type_level_authz_integration_test.go diverges from (*Authorizer).AuthorizeType in mod-users api/internal/authz/authz.go on three behaviors outside the type-grant query itself (the grant query matches on all nine contract rules). (1) The stand-in resolves the actor with opctx.ActorEntityID, so a sudo actor is ignored; the real arm uses the effective (sudo-first) actor. (2) With no actor on the context the stand-in returns ErrForbidden; the real arm returns ErrUnauthenticated. (3) For an unregistered operation slug the stand-in returns ErrForbidden; the real prelude falls back to a wildcard-manage check. Low impact while the stand-in is only exercised with real actors and registered slugs; mod-authz is not editable from mod-users.
+    - title: 'Instance tests: vacuous child-walk case, ids'
+      id: 16do
+      date: "2026-10-09"
+      tags:
+        - type:bug
+        - priority:low
+        - plan/phase:type-grant-instance-semantics
+        - effort:unspecified
+      text: 'In api/internal/authz/instance_semantics_integration_test.go: (1) the "no child walk" subtest grants on the corporation type entity and asserts forbidden on the legal_entity type entity, but legal_entity''s entity is a type entity so the exclusion alone denies it; the subtest would pass even with a child-type walk and does not test what it claims. Replace it with a real no-subtype-walk test: extend registerTestType to take a parent, register a concrete child type, seed an instance of the child, grant on the parent''s type entity and assert forbidden (or rename/remove the vacuous case). (2) The wrong-join-key mutation is caught only by TestInteg_InstanceSemantics_TestOnlyType because the seeded types have types.id equal to types.entity_id; optionally add an actor-group plus nested target-group subtest on the test-only type as an extra guard. (3) The file header, subtest names and comments use plan shorthand ("Q1", "Q2") and the opaque regression label "ilu6"; rename them descriptively (instance semantics, no parent walk, type id never read as entity id) in this file and in the sibling type-grant test files that use the same labels.'
 closed: []
