@@ -1,0 +1,12 @@
+version: 2
+items:
+    - title: Docker was unreachable in the sandbox; the in
+      id: adeO
+      date: "2026-10-09"
+      tags:
+        - type:ambiguity
+        - plan/phase:authorize-type-grant-arm
+        - priority:unspecified
+        - effort:unspecified
+      text: Docker was unreachable in the sandbox; the integration suite ran against a throwaway local Postgres 14.23 instead of postgres:16 (nothing version-specific); re-run the postgres:16 recipe at merge for exact parity.
+closed: []
