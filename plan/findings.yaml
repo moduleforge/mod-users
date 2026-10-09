@@ -9,30 +9,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
-    - title: Warning paragraph splits a sentence in godoc
-      id: oDuA
-      date: "2026-10-09"
-      tags:
-        - type:documentation
-        - priority:high
-        - plan/phase:remediation-01
-        - effort:unspecified
-        - resolution/task:phase-11-remediation-02/001-fix-warning-sentence-integrity.md
-        - resolution/plan:type-scoped-grants
-        - resolution/commit:6d228fd622f3e133ed2ce066809ec2d5bef75e30
-      text: 'In api/internal/authz/authz.go the new "Escalation paths" block was pasted into the middle of an existing sentence in two doc comments: the package doc (around lines 56-71) and the Authorize doc (around lines 187-202). The existing sentence reads "(a grant on the sentinel "type" entity ... confers nothing over type entities). Grant on type entities only to ...", and the block now sits between "entity" and "confers nothing over type entities)", so rendered godoc reads "(a grant on the sentinel "type" entity Escalation paths: manage, grant or update ... effectively full admin. confers nothing over type entities)". The mandatory warning is garbled. Move the block after "...confers nothing over type entities)." (or before the parenthetical) in both places, comment-only, and re-read all five warning locations (package doc, Authorize doc, checkGrantOrOwn doc, localAuthz Authorizer doc, docs/architecture.md) for sentence integrity. Note the task-level "comment lines only" check does not catch this; verify by reading go doc output.'
-    - title: 'Warning wording: update, anonymous actor'
-      id: HIBp
-      date: "2026-10-09"
-      tags:
-        - type:documentation
-        - priority:low
-        - plan/phase:remediation-01
-        - effort:unspecified
-        - resolution/task:phase-11-remediation-02/001-fix-warning-sentence-integrity.md
-        - resolution/plan:type-scoped-grants
-        - resolution/commit:6d228fd622f3e133ed2ce066809ec2d5bef75e30
-      text: 'Wording precision in the instance-semantics warning (authz.go package, Authorize and checkGrantOrOwn docs, localAuthz Authorizer doc, docs/architecture.md): (1) it describes manage, grant or update on the actor-group and target-group type entities as equivalent escalation paths, but per mod-authz actor-group AddMember needs update and grant on the group plus grant on the member, target-group AddMember needs update on the group plus grant on the member, and RemoveMember needs only update on the group; so a bare type-level update only permits removing members, not adding them. Say that adding members needs grant on the member (and on actor groups, on the group), so update alone only permits removal. (2) "the anonymous actor type" is imprecise: the anonymous actor is a system_actors row with slug anonymous, an instance of the system_actor type; reword to "the anonymous system actor, an instance of system_actor" in all locations. (3) Some renamed test header comments (type_grant_integration_test.go, instance_semantics_integration_test.go) exceed the file''s wrap width; reflow them.'
 closed:
     - id: adeO
       title: Docker was unreachable in the sandbox; the in
@@ -53,4 +29,14 @@ closed:
       title: Instance warning omits escalation paths
       disposition: fixed
       ref: phase-10-remediation-01/001-complete-instance-warning-and-tests.md
+      date: "2026-10-09"
+    - id: oDuA
+      title: Warning paragraph splits a sentence in godoc
+      disposition: fixed
+      ref: phase-11-remediation-02/001-fix-warning-sentence-integrity.md
+      date: "2026-10-09"
+    - id: HIBp
+      title: 'Warning wording: update, anonymous actor'
+      disposition: fixed
+      ref: phase-11-remediation-02/001-fix-warning-sentence-integrity.md
       date: "2026-10-09"
