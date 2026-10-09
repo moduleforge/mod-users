@@ -69,7 +69,7 @@ phases:
           slug: instance-semantics-warning-docs
           title: Instance Semantics Warning Docs
           path: phase-08-type-grant-instance-semantics/002-instance-semantics-warning-docs.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Added decision D13 with the mandatory instance-wide warning (all design-note points incl. natural_person assume and SSH-key routes) to docs/architecture.md, aligned D12's rollout sentence, added the spec cross-reference, and a warning in the localAuthz Authorizer doc. Prose matches task 8.001's in-code comment. api lint passes.
           git:
