@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Docker was unreachable in the sandbox; the in
-      id: adeO
-      date: "2026-10-09"
-      tags:
-        - type:ambiguity
-        - plan/phase:authorize-type-grant-arm
-        - priority:unspecified
-        - effort:unspecified
-      text: Docker was unreachable in the sandbox; the integration suite ran against a throwaway local Postgres 14.23 instead of postgres:16 (nothing version-specific); re-run the postgres:16 recipe at merge for exact parity.
     - title: link-siblings.sh repointed the shared mod-use
       id: EJEa
       date: "2026-10-09"
@@ -45,4 +36,9 @@ items:
         - plan/phase:type-grant-instance-semantics
         - effort:unspecified
       text: 'The instance-semantics warning (package and Authorize doc comments in api/internal/authz/authz.go, decision D13 in docs/architecture.md, the localAuthz facade doc) is generic ("every instance"). It should also say explicitly: (1) manage, grant or update on the type entities of authz_actor_group and authz_target_group confers authority over every group instance, which is a path to groups that hold wildcard grants and so to privilege escalation; (2) it applies to every other type that has instances, naming app, system_actor and the anonymous actor type where they exist; (3) the assume of every user account that manage on the natural_person type entity confers includes accounts that themselves hold wildcard or admin grants, making that grant effectively full admin. Add one or two sentences to each location so the mandatory warning covers these concrete escalation paths. Verify against mod-authz which operations gate group membership edits.'
-closed: []
+closed:
+    - id: adeO
+      title: Docker was unreachable in the sandbox; the in
+      disposition: promoted
+      ref: adeO
+      date: "2026-10-09"
