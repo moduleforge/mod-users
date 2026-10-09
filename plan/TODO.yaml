@@ -168,6 +168,6 @@ phases:
           findings:
             - QpDq
           git:
-            branch: null
+            branch: plan/type-scoped-grants-12-001
             commit: []
             merge: null
