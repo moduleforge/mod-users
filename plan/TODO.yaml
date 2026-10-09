@@ -18,3 +18,7 @@ phases:
       slug: users-gui-improvements
       title: users-gui improvements - 5F38, dnL0, lJE0
       tasks: []
+    - number: 5
+      slug: checkout-deps-token-handling
+      title: checkout-deps token handling - gsl4
+      tasks: []
