@@ -83,27 +83,32 @@ phases:
     - number: 9
       slug: type-grant-list-symmetry-and-list-migration
       title: Type-Grant List Symmetry and UserAccountService.List Migration
+      diff_base: cb56b3955e71f3ee3b7500d0e5c0cdd1bbef39e7
       tasks:
         - number: 1
           slug: production-type-grant-symmetry
           title: Production Type-Grant List/Single-Row Symmetry
           path: phase-09-type-grant-list-symmetry-and-list-migration/001-production-type-grant-symmetry.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Production symmetry test added: the real GrantTableGenerator list functions (corporation, natural_person, legal_entity) agree with the real Authorizer for six type-grant fixtures plus a sentinel-type fixture; instance-seed mutation caught with a ''list side admitted'' message; exclusion mutation invisible to the iff so a direct assertion was added; time-bound ''until the arm lands'' sentences removed from authz.go docs and docs/architecture.md. api build/test/lint pass; local Postgres used (Docker unavailable).'
           git:
-            branch: null
-            commit: []
+            branch: plan/type-scoped-grants-09-001
+            commit:
+                - 2e110f1
             merge: null
         - number: 2
           slug: user-account-list-authorize-type
           title: UserAccountService.List on AuthorizeType
           path: phase-09-type-grant-list-symmetry-and-list-migration/002-user-account-list-authorize-type.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: UserAccountService.List now goes through authorizeType("list", natural_person) before any query (nil-target fallback unchanged and fail-closed); List doc comment, handler comment, architecture doc (warning blockquote after D12) and spec carry the email-exposure warning; unit tests with a recording stub querier and a 9-subtest integration matrix (allow cases assert other users' emails appear) pass; api build/test/lint pass. Local Postgres used (Docker unavailable).
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/type-scoped-grants-09-002
+            commit:
+                - 445cacf
+            merge: 4fc7bf2cd7d6fe54aa7d8f60cebedb72b2b70760
     - number: 10
       slug: remediation-01
       title: Remediation Round 1
