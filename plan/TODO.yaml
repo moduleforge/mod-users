@@ -18,7 +18,7 @@ phases:
             branch: plan/type-scoped-grants-06-001
             commit:
                 - 8791b2c
-            merge: null
+            merge: 221660150ac7446e58850802f0d155ce4ee5bf44
         - number: 2
           slug: type-grant-integration-matrix
           title: Type-Grant Integration Matrix
