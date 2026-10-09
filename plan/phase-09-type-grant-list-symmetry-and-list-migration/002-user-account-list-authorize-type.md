@@ -93,3 +93,9 @@ architectural_impact: true
 - After the code change and unit tests, with `make -C api test` green.
 - After the integration tests pass.
 - After the docs.
+
+## Status
+
+Outcome: succeeded (2026-10-09). `UserAccountService.List` now calls `authorizeType(ctx, s.az, "list", natural_person id)` before any query; the doc comments, `docs/architecture.md` (D12 warning) and `docs/mod-users-spec.md` carry the exposure warning. Validation: unit tests, `-tags=integration ./internal/authz/...` (-count=1, throwaway local Postgres), `make -C api build|test|lint` all pass; sibling precondition greps matched.
+
+Files: `api/internal/service/user_accounts.go`, `api/internal/service/user_accounts_list_authz_test.go`, `api/internal/authz/user_account_list_integration_test.go`, `api/internal/handlers/user_accounts.go` (comment only), `docs/architecture.md`, `docs/mod-users-spec.md`.
