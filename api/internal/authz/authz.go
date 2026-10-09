@@ -20,14 +20,20 @@
 // the nil-target denial.
 //
 // Type-level checks (create or list of a resource type, where the caller holds
-// a types.id) are a different question and use AuthorizeType. Passing a types.id
-// to Authorize is a caller bug that Authorize cannot detect (both are int64):
-// it would be matched against entities.owner_id and grants.target_id as if it
-// were an entity id. Callers that hold only a coreAuthz.Authorizer must assert
-// the TypeAuthorizer capability and otherwise fall back to
-// Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID). No grant can
-// target a type (grants.target_id references entities), so type-level
-// authority is wildcard-only today.
+// a types.id) are a different question and use AuthorizeType. They are
+// authorized by a wildcard grant, or by a grant on the exact type's entity
+// (types.entity_id of the type), held directly or through target groups, by the
+// actor or one of its actor groups. There is no ownership arm, no subtype or
+// parent-type inheritance, and the types.id is never treated as an entities.id.
+//
+// Passing a types.id to Authorize is a caller bug that Authorize cannot detect
+// (both are int64): it would be matched against entities.owner_id and
+// grants.target_id as if it were an entity id. Callers that hold only a
+// coreAuthz.Authorizer must assert the TypeAuthorizer capability and otherwise
+// fall back to Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID).
+// A type's own entity (types.entity_id) is a legitimate Authorize target for
+// entity-level operations on the type entity itself (for example read or
+// grant), but it is never a stand-in for the type id in a type-level check.
 //
 // The Authorizer's single-row check issues one recursive-CTE SQL query
 // (checkGrantOrOwn) that walks UP from the actor through actor groups, checks
@@ -37,6 +43,37 @@
 // effective actor's entity id. A NULL owner_id matches no actor, so entities
 // that keep a NULL owner by design (corporation, authz_actor_group,
 // authz_target_group) stay inaccessible via this predicate.
+//
+// Instance semantics: the target chain is also seeded with the entity of the
+// target's exact type, so a grant on a type's entity (directly or through a
+// type-only target group) confers the same operation over EVERY existing and
+// future instance of exactly that type, for every operation in its SatisfiedBy
+// closure. manage on a type entity is therefore full control of every instance
+// (read, update, delete, assume, grant, revoke, ...); for natural_person that
+// includes assume of every user account and installing SSH keys through the
+// operator routes. list implies read, so a type-level list grant reads every
+// instance. manage or grant on a type-only target group confers this for every
+// type in the group. It does not extend to subtypes or parent types and never
+// applies to type entities themselves (a grant on the sentinel "type" entity
+// confers nothing over type entities).
+// Escalation paths: manage, grant or update on the type entity of
+// authz_actor_group or authz_target_group confers that operation over every
+// group of that kind. Adding a member needs grant on the member (and, for actor
+// groups, update and grant on the group); a bare type-level update only permits
+// removing members, and manage confers all of it. That is a path to groups that
+// hold wildcard grants and so to privilege escalation. The same applies to every
+// other type that has instances (app, system_actor and the anonymous system
+// actor, an instance of system_actor, where they exist). The assume of every
+// user account that manage on the natural_person type entity confers includes
+// accounts that themselves hold wildcard or admin grants, so that grant is
+// effectively full admin.
+// Grant on type entities only to principals trusted with every instance: a
+// holder of grant on a type entity can hand out instance-wide authority over
+// that type. Single-row Authorize and the list-side
+// accessible_*_ids_for_actor functions agree for type-grant holders, because
+// mod-core's GrantTableGenerator carries the matching arm.
+// AuthorizeType is unchanged: an instance grant never satisfies a type-level
+// check.
 package authz
 
 import (
@@ -88,6 +125,12 @@ type Authorizer struct {
 	// own check without requiring a live database. If nil, checkGrantOrOwn is
 	// used instead. Only set this field in tests.
 	grantOrOwnFn func(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error)
+
+	// typeGrantFn is used internally by tests to stub the type-grant check
+	// (AuthorizeType's grant-on-the-type's-entity arm) without requiring a live
+	// database. If nil, checkTypeGrant is used instead. Only set this field in
+	// tests.
+	typeGrantFn func(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error)
 }
 
 // New constructs an Authorizer.
@@ -128,8 +171,41 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 //     against; only a wildcard grant, already checked in step 3, can satisfy
 //     a nil-target operation).
 //  5. If target != nil: run checkGrantOrOwn — a single recursive-CTE query
-//     that resolves a grant via the actor/target group chains, OR-ed with an
-//     entities.owner_id ownership check against the target.
+//     that resolves a grant via the actor/target group chains (the target
+//     chain is seeded with the target and, unless the target is itself a type
+//     entity, the entity of its exact type), OR-ed with an entities.owner_id
+//     ownership check against the target.
+//
+// WARNING, instance semantics: the target chain is also seeded with the entity of the
+// target's exact type, so a grant on a type's entity (directly or through a
+// type-only target group) confers the same operation over EVERY existing and
+// future instance of exactly that type, for every operation in its SatisfiedBy
+// closure. manage on a type entity is therefore full control of every instance
+// (read, update, delete, assume, grant, revoke, ...); for natural_person that
+// includes assume of every user account and installing SSH keys through the
+// operator routes. list implies read, so a type-level list grant reads every
+// instance. manage or grant on a type-only target group confers this for every
+// type in the group. It does not extend to subtypes or parent types and never
+// applies to type entities themselves (a grant on the sentinel "type" entity
+// confers nothing over type entities).
+// Escalation paths: manage, grant or update on the type entity of
+// authz_actor_group or authz_target_group confers that operation over every
+// group of that kind. Adding a member needs grant on the member (and, for actor
+// groups, update and grant on the group); a bare type-level update only permits
+// removing members, and manage confers all of it. That is a path to groups that
+// hold wildcard grants and so to privilege escalation. The same applies to every
+// other type that has instances (app, system_actor and the anonymous system
+// actor, an instance of system_actor, where they exist). The assume of every
+// user account that manage on the natural_person type entity confers includes
+// accounts that themselves hold wildcard or admin grants, so that grant is
+// effectively full admin.
+// Grant on type entities only to principals trusted with every instance: a
+// holder of grant on a type entity can hand out instance-wide authority over
+// that type. Single-row Authorize and the list-side
+// accessible_*_ids_for_actor functions agree for type-grant holders, because
+// mod-core's GrantTableGenerator carries the matching arm.
+// AuthorizeType is unchanged: an instance grant never satisfies a type-level
+// check.
 //
 // Steps 1-3 are shared with AuthorizeType via authorizePrelude so the two
 // entry points cannot drift.
@@ -179,22 +255,31 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 // for create and list of a resource type. typeID is a types.id, never an
 // entities.id.
 //
-// No grant can target a type (grants.target_id references entities), so
-// type-level authority is wildcard-only today: the call is allowed exactly when
-// the effective actor (sudo first) holds a wildcard grant (target_id IS NULL,
-// actor chain) whose operation is in the SatisfiedBy closure of operation, for
-// example manage, which implies create. Anything else returns ErrForbidden, as
-// does typeID <= 0 (fail closed, even for a wildcard holder).
+// The call is allowed when either holds:
+//   - the effective actor (sudo first), or an actor group in its chain, holds a
+//     wildcard grant (target_id IS NULL) whose operation is in the SatisfiedBy
+//     closure of operation, for example manage, which implies create; or
+//   - the actor chain holds a grant, with an operation in that closure, on the
+//     exact type's entity (types.entity_id of typeID), directly or on a target
+//     group that reaches it walking up through authz_target_group_members
+//     (checkTypeGrant).
 //
-// AuthorizeType deliberately never consults entity-level authority: it does
-// not call checkGrantOrOwn and never compares typeID with entities.id,
-// entities.owner_id, or grants.target_id. Doing so would let any actor who owns
-// or holds a grant over the unrelated entity whose id equals typeID pass the
-// type-level check. A genuine DB error propagates rather than being swallowed
-// into a denial.
+// Anything else returns ErrForbidden, as does typeID <= 0 (fail closed, even
+// for a wildcard holder) and a typeID with no types row.
 //
-// If type-scoped grants are ever introduced they slot in here as an extra arm
-// keyed on types.id; callers do not change.
+// The type-grant arm is exact-type only: there is no subtype or parent-type
+// inheritance, so a grant on the entity (or legal_entity) type's entity does
+// not cover natural_person. There is no ownership arm either. AuthorizeType
+// deliberately never consults entity-level authority: it does not call
+// checkGrantOrOwn and never compares typeID with entities.id,
+// entities.owner_id, or grants.target_id; typeID is compared only with
+// types.id. Doing otherwise would let any actor who owns or holds a grant over
+// the unrelated entity whose id equals typeID pass the type-level check.
+//
+// types.deprecated_at is not consulted, for wildcard or type-grant holders:
+// creating an entity of a deprecated type is rejected by the data layer, and a
+// deprecated type must stay listable. A genuine DB error propagates rather than
+// being swallowed into a denial.
 func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID int64) error {
 	// Report a missing actor as 401-class even for a malformed typeID, then
 	// fail closed on a non-positive type id before any DB work: never "no
@@ -206,12 +291,21 @@ func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID
 		return ErrForbidden
 	}
 
-	_, _, done, err := a.authorizePrelude(ctx, operation)
+	actorEntityID, opIDs, done, err := a.authorizePrelude(ctx, operation)
 	if done {
 		return err // nil: wildcard grant allows; non-nil: denial or DB error
 	}
 
-	// No wildcard grant. There is no entity-level fallback for a type, so deny.
+	// No wildcard grant. Look for a grant on the exact type's entity. A DB
+	// error propagates unchanged and is never turned into a denial.
+	granted, err := a.checkTypeGrantDispatch(ctx, actorEntityID, typeID, opIDs)
+	if err != nil {
+		return err
+	}
+	if granted {
+		return nil
+	}
+
 	return ErrForbidden
 }
 
@@ -302,6 +396,15 @@ func (a *Authorizer) checkGrantOrOwnDispatch(ctx context.Context, actorEntityID,
 	return a.checkGrantOrOwn(ctx, actorEntityID, targetEntityID, opIDs)
 }
 
+// checkTypeGrantDispatch calls typeGrantFn if set (test stub), otherwise
+// delegates to checkTypeGrant.
+func (a *Authorizer) checkTypeGrantDispatch(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error) {
+	if a.typeGrantFn != nil {
+		return a.typeGrantFn(ctx, actorEntityID, typeID, opIDs)
+	}
+	return a.checkTypeGrant(ctx, actorEntityID, typeID, opIDs)
+}
+
 // checkWildcardGrant queries the grants table for a wildcard grant:
 // a row where actor_id is in the actor's transitive group chain and
 // target_id IS NULL and operation_id is in the opIDs closure.
@@ -349,6 +452,14 @@ SELECT EXISTS(
 //	    TargetChain AS (
 //	        SELECT targetEntityID AS tid
 //	        UNION
+//	        -- instance semantics: the entity of the target's exact type, unless
+//	        -- the target is itself a type entity
+//	        SELECT t.entity_id
+//	        FROM entities e JOIN types t ON t.id = e.fundamental_type_id
+//	        WHERE e.id = targetEntityID
+//	          AND t.entity_id IS NOT NULL
+//	          AND NOT EXISTS (SELECT 1 FROM types tt WHERE tt.entity_id = targetEntityID)
+//	        UNION
 //	        SELECT atgm.group_id FROM authz_target_group_members atgm JOIN TargetChain tc ON atgm.member_id = tc.tid
 //	    )
 //	SELECT
@@ -363,6 +474,44 @@ SELECT EXISTS(
 //	        WHERE e.id = targetEntityID
 //	          AND e.owner_id = actorEntityID
 //	    )
+//
+// Instance semantics: TargetChain is seeded with the target AND the entity of
+// the target's exact fundamental type (types.entity_id of
+// entities.fundamental_type_id), so a grant on a type's entity, directly or
+// through a type-only target group (the group walk starts from the seeded type
+// entity), also confers the operation over every instance of exactly that
+// type. The type-entity seed is skipped when the target is itself a type
+// entity: its fundamental type is the sentinel "type", so without the guard a
+// grant on the sentinel's own entity would confer the operation over every type
+// entity, and grant or manage there would let its holder grant authority over
+// every type. A target id with no entities row seeds nothing and fails closed.
+// There is no parent or child type walk, and AuthorizeType is unaffected.
+//
+// WARNING: this makes a type grant instance-wide. It confers the operation
+// over every existing and future instance of exactly that type, for every
+// operation in the SatisfiedBy closure: manage on a type entity is full control
+// of every instance (read, update, delete, assume, grant, revoke, ...), which
+// for natural_person includes assume of every user account and installing SSH
+// keys through the operator routes. list implies read, so a type-level list
+// grant also reads every instance. manage or grant on a type-only target group
+// confers all of this for every type in the group. It does not extend to
+// subtypes or parent types, and never applies to type entities themselves.
+// Escalation paths: manage, grant or update on the type entity of
+// authz_actor_group or authz_target_group confers that operation over every
+// group of that kind. Adding a member needs grant on the member (and, for actor
+// groups, update and grant on the group); a bare type-level update only permits
+// removing members, and manage confers all of it. That is a path to groups that
+// hold wildcard grants and so to privilege escalation. The same applies to every
+// other type that has instances (app, system_actor and the anonymous system
+// actor, an instance of system_actor, where they exist). The assume of every
+// user account that manage on the natural_person type entity confers includes
+// accounts that themselves hold wildcard or admin grants, so that grant is
+// effectively full admin.
+// A holder of grant on a type entity can hand out instance-wide authority over
+// that type, so grant on type entities only to principals trusted with every
+// instance. This single-row check and the list-side
+// accessible_*_ids_for_actor functions agree for type-grant holders, because
+// mod-core's GrantTableGenerator carries the matching arm.
 //
 // The ownership arm is a single, resource-agnostic predicate — it is not
 // scoped per resource type, and it is not gated on the operation or on
@@ -393,6 +542,13 @@ WITH RECURSIVE
     TargetChain AS (
         SELECT $2::bigint AS tid
         UNION
+        SELECT t.entity_id
+        FROM entities e
+        JOIN types t ON t.id = e.fundamental_type_id
+        WHERE e.id = $2::bigint
+          AND t.entity_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM types tt WHERE tt.entity_id = $2::bigint)
+        UNION
         SELECT atgm.group_id
         FROM authz_target_group_members atgm
         JOIN TargetChain tc ON atgm.member_id = tc.tid
@@ -412,6 +568,76 @@ SELECT
 
 	var exists bool
 	err := a.pool.QueryRow(ctx, grantOrOwnCheckSQL, actorEntityID, targetEntityID, opIDs).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+// checkTypeGrant reports whether the actor chain holds a grant, with an
+// operation in the opIDs closure, on the entity of the exact type typeID,
+// directly or on a target group reached by walking UP from that entity:
+//
+//	WITH RECURSIVE
+//	    ActorChain AS (
+//	        SELECT actorEntityID AS aid
+//	        UNION
+//	        SELECT agm.group_id FROM authz_actor_group_members agm JOIN ActorChain ac ON agm.member_id = ac.aid
+//	    ),
+//	    TargetChain AS (
+//	        SELECT t.entity_id AS tid FROM types t WHERE t.id = typeID AND t.entity_id IS NOT NULL
+//	        UNION
+//	        SELECT atgm.group_id FROM authz_target_group_members atgm JOIN TargetChain tc ON atgm.member_id = tc.tid
+//	    )
+//	SELECT EXISTS (
+//	    SELECT 1 FROM grants g
+//	    JOIN ActorChain ac ON g.actor_id = ac.aid
+//	    JOIN TargetChain tc ON g.target_id = tc.tid
+//	    WHERE g.operation_id = ANY(opIDs)
+//	)
+//
+// Properties:
+//   - typeID is compared only with types.id. It never reaches grants.target_id,
+//     entities.id or entities.owner_id, so a grant on an unrelated entity whose
+//     id equals typeID cannot satisfy the check.
+//   - The chain is seeded from the exact type only: there is no walk to parent types,
+//     so a grant on a supertype's entity does not cover a subtype.
+//   - There is no ownership arm; the query never reads entities.owner_id.
+//   - An unknown typeID gives an empty TargetChain and therefore false (fail
+//     closed). The entity_id IS NOT NULL guard is defensive.
+//   - types.deprecated_at is deliberately not consulted.
+//
+// The wildcard grant is checked before this arm (authorizePrelude), so this
+// query does not repeat it.
+func (a *Authorizer) checkTypeGrant(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error) {
+	const typeGrantCheckSQL = `
+WITH RECURSIVE
+    ActorChain AS (
+        SELECT $1::bigint AS aid
+        UNION
+        SELECT agm.group_id
+        FROM authz_actor_group_members agm
+        JOIN ActorChain ac ON agm.member_id = ac.aid
+    ),
+    TargetChain AS (
+        SELECT t.entity_id AS tid
+        FROM types t
+        WHERE t.id = $2::bigint
+          AND t.entity_id IS NOT NULL
+        UNION
+        SELECT atgm.group_id
+        FROM authz_target_group_members atgm
+        JOIN TargetChain tc ON atgm.member_id = tc.tid
+    )
+SELECT EXISTS (
+    SELECT 1 FROM grants g
+    JOIN ActorChain ac ON g.actor_id = ac.aid
+    JOIN TargetChain tc ON g.target_id = tc.tid
+    WHERE g.operation_id = ANY($3::int[])
+)`
+
+	var exists bool
+	err := a.pool.QueryRow(ctx, typeGrantCheckSQL, actorEntityID, typeID, opIDs).Scan(&exists)
 	if err != nil {
 		return false, err
 	}

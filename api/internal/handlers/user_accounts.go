@@ -89,7 +89,13 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	server.JSON(w, http.StatusCreated, userAccountResponse(ua))
 }
 
-// List handles GET /v1/user-accounts (admin).
+// List handles GET /v1/user-accounts. It requires the list operation on
+// natural_person at the type level (a wildcard grant or a grant on
+// natural_person's type entity); a holder sees every account and its email,
+// including accounts held by corporations. The grant is exact-type (it must be
+// on natural_person's type entity, not a related type), so grant list or manage
+// on that type entity only to principals trusted with every account's email
+// address. See the UserAccountService.List doc comment for the details.
 func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	search := q.Get("q")
