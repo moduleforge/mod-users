@@ -64,7 +64,7 @@ phases:
             branch: plan/type-scoped-grants-08-001
             commit:
                 - 88735da
-            merge: null
+            merge: bfe8ed127b21fc00aabb3f5e0b284a8613ae864d
         - number: 2
           slug: instance-semantics-warning-docs
           title: Instance Semantics Warning Docs
