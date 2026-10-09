@@ -34,16 +34,19 @@ phases:
     - number: 7
       slug: doc-updates
       title: Documentation Updates
+      diff_base: 972e64c3fa6288adaa11ddc46764008cb45f75d1
       tasks:
         - number: 1
           slug: update-architecture-docs
           title: Update Architecture Docs
           path: phase-07-doc-updates/001-update-architecture-docs.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Restated D12, the API-layer paragraph and the spec Authorization bullet for the shipped type-grant arm, worded to match mod-core's contract, with a rollout sentence (manage vs create-only authority) added. No instance-semantics claims; qjI3 verified accurate, no finding needed.
           git:
-            branch: null
-            commit: []
+            branch: plan/type-scoped-grants-07-001
+            commit:
+                - 13240f3
             merge: null
     - number: 8
       slug: type-grant-instance-semantics
