@@ -47,7 +47,7 @@ phases:
             branch: plan/type-scoped-grants-07-001
             commit:
                 - 13240f3
-            merge: null
+            merge: 241c8e724adfa8e13aa52b4041a42a3d3005b5ee
     - number: 8
       slug: type-grant-instance-semantics
       title: Type-Grant Instance Semantics, Optional Q1
