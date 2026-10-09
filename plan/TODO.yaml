@@ -99,7 +99,7 @@ phases:
           slug: user-account-list-authorize-type
           title: UserAccountService.List on AuthorizeType
           path: phase-09-type-grant-list-symmetry-and-list-migration/002-user-account-list-authorize-type.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: UserAccountService.List now goes through authorizeType("list", natural_person) before any query (nil-target fallback unchanged and fail-closed); List doc comment, handler comment, architecture doc (warning blockquote after D12) and spec carry the email-exposure warning; unit tests with a recording stub querier and a 9-subtest integration matrix (allow cases assert other users' emails appear) pass; api build/test/lint pass. Local Postgres used (Docker unavailable).
           git:
