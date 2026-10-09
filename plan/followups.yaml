@@ -349,7 +349,7 @@ items:
         - plan/slug:ssh-public-keys
         - priority:low
         - effort:medium
-      text: '[phase-01 gate, arch-003, minor] Operator Register/Revoke on SSH keys authorize via the generic ''update'' op (api/internal/service/ssh_keys.go:131,226), which now also grants credential-install/impersonation-grade capability (SSH git access) to any principal holding only ''update'' on a user, not just the impersonation-grade ''assume''/''login'' ops. Practical escalation is already limited since ''update'' can also change email today (see the separate followup on that). Consider authorizing operator SSH-key register/revoke against ''assume'' instead, or record this as an accepted trade-off in docs/architecture.md''s key decisions once that section exists.'
+      text: 'Operator Register/Revoke on SSH keys authorize via the generic ''update'' operation on the account holder (api/internal/service/ssh_keys.go, loadAuthorizedAccount calls at lines 133 and 228), which also grants credential-install, impersonation-grade capability (SSH git access) to any principal holding only ''update'' on a user, not just the ''assume''/''login'' operations. Type-scoped grants widen the reach: ''update'' or ''manage'' on the natural_person type entity confers ''update'' over every natural_person instance (docs/architecture.md D13), so such a holder can install an SSH key on every user''s account. Practical escalation is otherwise limited since ''update'' can also change email. Consider authorizing operator SSH-key register/revoke against ''assume'' instead, or record this as an accepted trade-off in docs/architecture.md''s key decisions, stating that ''update'' on a natural_person type entity is credential-install authority over every user.'
     - title: SSH-key routes mask 403, sibling routes 404
       id: tbmN
       date: "2026-09-28"
@@ -439,7 +439,7 @@ items:
         - plan/slug:ssh-public-keys
         - priority:medium
         - effort:small
-      text: '[phase-01 gate, security lens flagged_for_manager, needs a decision] The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git — an existing authorization pattern that now reaches a new, persistent impersonation capability. Confirm whether such non-self ownership relationships occur in practice for natural_person entities, and whether this is intended for SSH-key registration specifically.'
+      text: 'The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git. Type grants add a second route to the same capability: ''update'' or ''manage'' on the natural_person type entity reaches every natural_person instance (docs/architecture.md D13) and so the operator SSH-key routes, which authorize ''update'' on the account holder (api/internal/service/ssh_keys.go). Confirm whether non-self ownership relationships occur in practice for natural_person entities, and whether either route is intended for SSH-key registration specifically.'
     - title: Integration suite (ssh_keys_integration_test.
       id: trmJ
       date: "2026-09-28"
@@ -750,3 +750,78 @@ items:
         - priority:low
         - effort:small
       text: handlers/oidc_config.go:304 (Confirm) and oidc_providers.go:162,:188 (provider Update/Create) return 400 before 401 because setup_token is read from the body, though the admin session / X-Setup-Token header need no body. Authorize first, then report malformed body. Update TestConfirm_BadJSON (oidc_config_test.go:585) to expect 401 unauthenticated and add an authorized-caller 400 case.
+    - title: mod-users first-user hook should be opt-in
+      id: sxjM
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: moduleforge.module.yaml declares hooks.firstUserGrant (users.NewFirstUserHook, registered on userResolver.SetFirstUserHook and authHandler.SetFirstUserHook), which grants wildcard manage to the first account created on an empty database, from the unauthenticated POST /v1/auth/register (api/internal/handlers/auth/register.go) and from the OIDC resolver (api/internal/auth/resolver.go). A composing app cannot remove a module hook, because mfgen reads hooks only from module manifests; flow-accounts clears it with two startup hooks that call SetFirstUserHook(nil). Make the hook opt-in (an app manifest switch, or no default registration) so an app that wants an explicit operator bootstrap does not have to undo the module's default, and document the first-registrant-becomes-admin behavior where it is declared.
+    - title: mod-users logs the registrant email address
+      id: ezyt
+      date: "2026-10-08"
+      tags:
+        - type:bug
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: api/internal/handlers/auth/register.go logs "user registered" with the new account's email address (email=...) through the global slog default, so every registration writes an address to the application log. The platform rule is that logs carry the account uuid and never an address; log user_account_uuid only. The line is visible in the composed server's output during any registration.
+    - title: register.go logs registrant email at INFO
+      id: DGW8
+      date: "2026-10-08"
+      tags:
+        - type:bug
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: api/internal/handlers/auth/register.go (Register, near the "user registered" slog.InfoContext call, about line 264) logs the registrant's email as an attribute at INFO. An email address is personal data and should not reach the application log; log the user_account_uuid only, as login.go does.
+    - title: Account lockout and send caps in mod-users
+      id: rMRg
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:medium
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: api/internal/handlers/auth (login.go, emailcode.go, reset.go) has no per-account lockout or backoff on wrong passwords or codes, and no per-email cap on email-code request and password-reset request mail. The composer's app-level throttle (per source network, plus a keyed hash of the email at the HTTP layer) is the only bound, and it can lock a victim's email for its window, so the module should own an account-keyed lockout/backoff and per-recipient send caps. Also export a limiter seam on the auth Handler (a small interface like the SetUserSvc/SetFirstUserHook setters) so a composer can supply the limiter instead of wrapping the server handler.
+    - title: Option to leave anonymous route unregistered
+      id: 5cJ8
+      date: "2026-10-08"
+      tags:
+        - type:enhancement
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: 'api/internal/handlers/auth/routes.go RegisterRoutes always mounts POST /anonymous, and a composer''s app manifest cannot unmount a module route. An app with no anonymous use case can only answer 404 in a wrapper in front of the router. Add an option (a RegisterRoutes parameter or a module manifest toggle) that leaves the anonymous route unregistered. Related defect: in a generated composition Handler.SetUserSvc is never called (only mod-users'' own api/cmd/server/main.go calls it), so Anonymous dereferences a nil userSvc; with that wired, CreateAnonymousUser then fails with "audit: no actor on context" because the route is unauthenticated. The route cannot succeed when composed by mfgen.'
+    - title: Docker was unreachable in the sandbox; the in
+      id: adeO
+      date: "2026-10-09"
+      tags:
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:authorize-type-grant-arm
+        - plan/slug:type-scoped-grants
+      text: Docker was unreachable in the sandbox; the integration suite ran against a throwaway local Postgres 14.23 instead of postgres:16 (nothing version-specific); re-run the postgres:16 recipe at merge for exact parity.
+    - title: Stand-in ignores sudo, unauth, unknown-op
+      id: UbXY
+      date: "2026-10-09"
+      tags:
+        - type:conflict
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:authorize-type-grant-arm
+        - plan/slug:type-scoped-grants
+      text: typeAwareIntegrationAuthorizer.AuthorizeType in mod-authz api/service/type_level_authz_integration_test.go diverges from (*Authorizer).AuthorizeType in mod-users api/internal/authz/authz.go on three behaviors outside the type-grant query itself (the grant query matches on all nine contract rules). (1) The stand-in resolves the actor with opctx.ActorEntityID, so a sudo actor is ignored; the real arm uses the effective (sudo-first) actor. (2) With no actor on the context the stand-in returns ErrForbidden; the real arm returns ErrUnauthenticated. (3) For an unregistered operation slug the stand-in returns ErrForbidden; the real prelude falls back to a wildcard-manage check. Low impact while the stand-in is only exercised with real actors and registered slugs; mod-authz is not editable from mod-users.
+    - title: link-siblings.sh repointed the shared mod-use
+      id: EJEa
+      date: "2026-10-09"
+      tags:
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:authorize-type-grant-arm
+        - plan/slug:type-scoped-grants
+      text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
