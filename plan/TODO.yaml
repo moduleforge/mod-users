@@ -76,7 +76,7 @@ phases:
             branch: plan/type-scoped-grants-08-002
             commit:
                 - e429826
-            merge: null
+            merge: 4e3d170869bbcb35e72ce2850f15dd6d6418ffe9
     - number: 9
       slug: type-grant-list-symmetry-and-list-migration
       title: Type-Grant List Symmetry and UserAccountService.List Migration
