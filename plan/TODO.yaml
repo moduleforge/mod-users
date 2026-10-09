@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 6
       slug: authorize-type-grant-arm
@@ -108,4 +108,18 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
-      tasks: []
+      security_review: required
+      tasks:
+        - number: 1
+          slug: complete-instance-warning-and-tests
+          title: Complete Instance Warning and Strengthen Instance Tests
+          path: phase-10-remediation-01/001-complete-instance-warning-and-tests.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - n4t2
+            - 16do
+          git:
+            branch: null
+            commit: []
+            merge: null
