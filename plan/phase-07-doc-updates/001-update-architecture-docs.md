@@ -46,3 +46,10 @@ Also confirm that docs-mf-standards followup `qjI3` (the upstream `authorization
 - [Users type grant design note](../notes/users-type-grant-design.md): the contract the docs describe.
 - mod-core's phase 2 contract-wording task: `/Users/zane/playground/moduleforge/mod-core/worktrees/plan/type-scoped-grants/plan/phase-02-type-entity-api-and-contract/002-type-authorizer-contract-wording.md`.
 - mod-authz's [authz type entity design note](../../../../../../mod-authz/worktrees/plan/type-scoped-grants/plan/notes/authz-type-entity-design.md#q3-target-group-kind-separation): the kind rule.
+
+## Status
+
+- Outcome: succeeded (2026-10-09).
+- Validation: all six checks passed. Remaining `wildcard-only` hits in `docs/architecture.md` concern the nil-target fallback and `UserAccountService.List`; `no grant can target a type` is gone; D12 names `types.entity_id`.
+- Files: `docs/architecture.md` (API-layer paragraph and D12), `docs/mod-users-spec.md` (Authorization bullet). `AGENTS.md` and `README.md` hold no statement of the old rule and were left unchanged.
+- docs-mf-standards `qjI3` describes mod-users' arm accurately (wildcard or exact type entity, direct or through target groups, no ownership, no subtype inheritance, nil fallback fails closed); no finding filed.
