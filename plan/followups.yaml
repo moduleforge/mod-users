@@ -759,3 +759,12 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: moduleforge.module.yaml declares hooks.firstUserGrant (users.NewFirstUserHook, registered on userResolver.SetFirstUserHook and authHandler.SetFirstUserHook), which grants wildcard manage to the first account created on an empty database, from the unauthenticated POST /v1/auth/register (api/internal/handlers/auth/register.go) and from the OIDC resolver (api/internal/auth/resolver.go). A composing app cannot remove a module hook, because mfgen reads hooks only from module manifests; flow-accounts clears it with two startup hooks that call SetFirstUserHook(nil). Make the hook opt-in (an app manifest switch, or no default registration) so an app that wants an explicit operator bootstrap does not have to undo the module's default, and document the first-registrant-becomes-admin behavior where it is declared.
+    - title: mod-users logs the registrant email address
+      id: ezyt
+      date: "2026-10-08"
+      tags:
+        - type:bug
+        - priority:low
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: api/internal/handlers/auth/register.go logs "user registered" with the new account's email address (email=...) through the global slog default, so every registration writes an address to the application log. The platform rule is that logs carry the account uuid and never an address; log user_account_uuid only. The line is visible in the composed server's output during any registration.
