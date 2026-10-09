@@ -213,6 +213,9 @@ A **bun workspace** resolves the `@moduleforge/core-gui` peer dependency: the ro
   >
   > - A grant on a type entity confers the operation over **every existing and future instance** of exactly that type, for every operation in its closure. `manage` on a type entity is full control (read, update, delete, `assume`, `grant`, `revoke`, ...) of every instance.
   > - For the `natural_person` type entity, `manage` therefore confers `assume` of every user account and installing SSH keys through the operator routes, which authorize `update` on the account holder (see D9).
+  > - The `assume` of every user account that `manage` on the `natural_person` type entity confers includes accounts that themselves hold wildcard or admin grants, so that grant is effectively full admin.
+  > - `manage`, `grant` or `update` on the type entity of `authz_actor_group` or `authz_target_group` confers that operation over every group of that kind. mod-authz gates group membership edits on `update` on the group (target group edits also need `grant` on the member; actor group edits need `grant` on the group and on the member, which `manage` confers), so such a holder can edit groups that hold wildcard grants, a path to privilege escalation.
+  > - The same applies to every other type that has instances (`app`, `system_actor` and the anonymous actor type, where they exist).
   > - `list` implies `read`, so a type-level `list` grant also reads every instance of the type.
   > - `manage` or `grant` on a type-only target group confers all of the above for every type in the group.
   > - It does not extend to subtypes or parent types, and it never applies to type entities themselves.

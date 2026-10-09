@@ -5,7 +5,7 @@ package authz_test
 // type_grant_integration_test.go proves the AuthorizeType type-grant arm against
 // the real composed schema (mod-core type entities, mod-authz's target-group
 // kind trigger, mod-users). It holds the helpers, the kind-separation guard,
-// the full matrix, and the ilu6 regression in its test-only-type form.
+// the full matrix, and the type-id-never-read-as-an-entity-id regression in its test-only-type form.
 //
 // Every fixture target group holds only type entities or only instance
 // entities, counting nested groups (mod-authz's trg_target_group_members_kind
@@ -93,12 +93,21 @@ WHERE actor_id = $1 AND target_id = $2
 	}
 }
 
-// registerTestType registers a concrete test-only type under 'entity' with a
+// registerTestType registers a concrete test-only type under 'entity' (or, via
+// registerTestTypeUnder, under a named parent) with a
 // unique slug derived from slugHint, after advancing the types id sequence well
 // past max(entities.id) (never backwards). The new type's types.id therefore
 // cannot be the id of any existing entity, and differs from its type entity's
 // id; both are asserted. It returns types.id and types.entity_id.
 func registerTestType(t *testing.T, slugHint string) (typeID, typeEntityID int64) {
+	t.Helper()
+	return registerTestTypeUnder(t, slugHint, "entity")
+}
+
+// registerTestTypeUnder is registerTestType with an explicit parent type,
+// named by slug. The parent may itself be concrete (for example another test
+// type), which lets a test build a concrete parent and a concrete child.
+func registerTestTypeUnder(t *testing.T, slugHint, parentSlug string) (typeID, typeEntityID int64) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -117,14 +126,14 @@ func registerTestType(t *testing.T, slugHint string) (typeID, typeEntityID int64
 	slug := fmt.Sprintf("itest_%s_%d", slugHint, testTypeCounter.Add(1))
 	const insertSQL = `
 INSERT INTO types (slug, parent_id, concrete, name, description)
-SELECT $1, id, true, $1, 'test-only type' FROM types WHERE slug = 'entity'
+SELECT $1, id, true, $1, 'test-only type' FROM types WHERE slug = $2
 RETURNING id`
-	if err := integPool.QueryRow(ctx, insertSQL, slug).Scan(&typeID); err != nil {
+	if err := integPool.QueryRow(ctx, insertSQL, slug, parentSlug).Scan(&typeID); err != nil {
 		t.Fatalf("registerTestType(%q): insert type: %v", slug, err)
 	}
 	typeEntityID = typeEntityIDForSlug(t, slug)
 	if typeID == typeEntityID {
-		t.Fatalf("registerTestType(%q): types.id and types.entity_id are both %d; the ilu6 fixtures need them to differ", slug, typeID)
+		t.Fatalf("registerTestType(%q): types.id and types.entity_id are both %d; the type-id-as-entity-id fixtures need them to differ", slug, typeID)
 	}
 	return typeID, typeEntityID
 }
@@ -264,20 +273,20 @@ func TestInteg_TypeGrant_Matrix(t *testing.T) {
 		requireTypeAllowed(t, actorCtx(u), "create", npID, "control: the group does hold natural_person's entity")
 	})
 
-	t.Run("Q2 no parent walk", func(t *testing.T) {
+	t.Run("no parent type walk", func(t *testing.T) {
 		legalEnt := typeEntityIDForSlug(t, "legal_entity")
 		entEnt := typeEntityIDForSlug(t, "entity")
 
-		u := seedGrantHolder(t, "q2-legal")
+		u := seedGrantHolder(t, "noparent-legal")
 		targetedGrant(t, u, legalEnt, "create")
 		requireTypeForbidden(t, actorCtx(u), "create", npID, "create on legal_entity, checking natural_person")
 		requireTypeForbidden(t, actorCtx(u), "create", corpID, "create on legal_entity, checking corporation")
 
-		v := seedGrantHolder(t, "q2-entity")
+		v := seedGrantHolder(t, "noparent-entity")
 		targetedGrant(t, v, entEnt, "create")
 		requireTypeForbidden(t, actorCtx(v), "create", corpID, "create on entity, checking corporation")
 
-		w := seedGrantHolder(t, "q2-reverse")
+		w := seedGrantHolder(t, "noparent-reverse")
 		targetedGrant(t, w, npEnt, "create")
 		requireTypeForbidden(t, actorCtx(w), "create", typeIDForSlug(t, "legal_entity"), "create on natural_person, checking legal_entity")
 		requireTypeAllowed(t, actorCtx(w), "create", npID, "control: the exact type")
@@ -356,17 +365,17 @@ func TestInteg_TypeGrant_Matrix(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ilu6 regression, test-only-type form
+// Type id never read as an entity id, test-only-type form
 // ---------------------------------------------------------------------------
 
-// TestInteg_TypeGrant_Ilu6_TestOnlyType places a corporation instance at
+// TestInteg_TypeGrant_TypeIDNeverReadAsEntityID_TestOnlyType places a corporation instance at
 // id == testType.types.id and shows that grants and ownership on that
 // instance never answer AuthorizeType, while grants on the test type's own
 // type entity do.
-func TestInteg_TypeGrant_Ilu6_TestOnlyType(t *testing.T) {
-	testTypeID, testTypeEntity := registerTestType(t, "ilu6")
+func TestInteg_TypeGrant_TypeIDNeverReadAsEntityID_TestOnlyType(t *testing.T) {
+	testTypeID, testTypeEntity := registerTestType(t, "typeid")
 
-	owner := seedGrantHolder(t, "ilu6-owner")
+	owner := seedGrantHolder(t, "typeid-owner")
 	// Instance at id == types.id of the test type, owned by owner from insert.
 	seedEntityWithExplicitID(t, testTypeID, &owner)
 	if entityOwnerIsNull(t, testTypeID) {
@@ -376,15 +385,15 @@ func TestInteg_TypeGrant_Ilu6_TestOnlyType(t *testing.T) {
 		t.Fatalf("precondition: type entity must differ from types.id")
 	}
 
-	direct := seedGrantHolder(t, "ilu6-direct")
-	viaGroup := seedGrantHolder(t, "ilu6-group")
-	typeHolder := seedGrantHolder(t, "ilu6-typeholder")
+	direct := seedGrantHolder(t, "typeid-direct")
+	viaGroup := seedGrantHolder(t, "typeid-group")
+	typeHolder := seedGrantHolder(t, "typeid-typeholder")
 
 	for _, op := range []string{"create", "list"} {
 		targetedGrant(t, direct, testTypeID, op)
 		targetedGrant(t, typeHolder, testTypeEntity, op)
 	}
-	instGroup := seedTargetGroup(t, "ilu6-instance-only")
+	instGroup := seedTargetGroup(t, "typeid-instance-only")
 	addTargetGroupMember(t, instGroup, testTypeID)
 	for _, op := range []string{"create", "list"} {
 		targetedGrant(t, viaGroup, instGroup, op)

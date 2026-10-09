@@ -38,3 +38,9 @@ Scope is limited to the two findings: make the mandatory instance-semantics warn
 - Finding `16do` in this plan's `plan/findings.yaml` (vacuous child-walk case, shorthand names).
 - `plan/notes/users-type-grant-design.md` (the Q1 section and required warning).
 - `plan/phase-08-type-grant-instance-semantics/001-instance-semantics-arm.md` and `002-instance-semantics-warning-docs.md` (the work being refined).
+
+## Status
+
+- Outcome: succeeded (2026-10-09).
+- Validation: shorthand grep clean across `api/internal/authz/*.go`; mutation (parent-type entity added to the `checkGrantOrOwn` seed) failed the no parent type walk and no subtype walk subtests and was restored (no non-comment production diff); full integration suite and `make -C api build test lint` passed against the composed plan-branch schema (throwaway local Postgres, Docker unreachable); `authz.go` and `localAuthz/authz.go` diffs are comment-only; no plan identifiers in the warned files.
+- Files: `api/internal/authz/authz.go`, `api/localAuthz/authz.go`, `docs/architecture.md`, `api/internal/authz/instance_semantics_integration_test.go`, `api/internal/authz/type_grant_integration_test.go`, `api/internal/authz/type_target_integration_test.go`, `api/internal/authz/user_account_create_integration_test.go`.

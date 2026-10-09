@@ -114,16 +114,16 @@ func TestInteg_UserAccountService_Create_WildcardManageAllowed(t *testing.T) {
 	}
 }
 
-// TestInteg_UserAccountService_Create_Ilu6_TestOnlyType is the end-to-end form
-// of the ilu6 regression. The resolver maps natural_person to a test-only
+// TestInteg_UserAccountService_Create_TypeIDNeverReadAsEntityID_TestOnlyType is the end-to-end form
+// of the type-id-never-read-as-an-entity-id regression. The resolver maps natural_person to a test-only
 // type's id, and an instance entity sits at exactly that id. A create grant on
 // the instance is entity-level authority and is denied before BeginTx; a create
 // grant on the test type's own type entity reaches the transaction stub.
-func TestInteg_UserAccountService_Create_Ilu6_TestOnlyType(t *testing.T) {
-	testTypeID, testTypeEntity := registerTestType(t, "svc-ilu6")
+func TestInteg_UserAccountService_Create_TypeIDNeverReadAsEntityID_TestOnlyType(t *testing.T) {
+	testTypeID, testTypeEntity := registerTestType(t, "svc-typeid")
 	seedEntityWithExplicitID(t, testTypeID, nil)
 
-	instanceHolder := seedUser(t, "typegrant-svc-ilu6-instance@example.com", false)
+	instanceHolder := seedUser(t, "typegrant-svc-typeid-instance@example.com", false)
 	targetedGrant(t, instanceHolder, testTypeID, "create")
 	// Characterization: the grant is real entity-level authority.
 	if err := integAZ.Authorize(actorCtx(instanceHolder), "create", &testTypeID); err != nil {
@@ -139,7 +139,7 @@ func TestInteg_UserAccountService_Create_Ilu6_TestOnlyType(t *testing.T) {
 		t.Error("transaction was started despite the authorization denial")
 	}
 
-	typeHolder := seedUser(t, "typegrant-svc-ilu6-type@example.com", false)
+	typeHolder := seedUser(t, "typegrant-svc-typeid-type@example.com", false)
 	targetedGrant(t, typeHolder, testTypeEntity, "create")
 	d = &integBeginTxDB{}
 	_, err = newIntegCreateServiceFor(d, testTypeID).Create(actorCtx(typeHolder), integCreateInput())

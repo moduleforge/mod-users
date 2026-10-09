@@ -2,13 +2,13 @@
 
 package authz_test
 
-// instance_semantics_integration_test.go proves the Q1 instance-semantics arm
+// instance_semantics_integration_test.go proves the instance-semantics arm
 // of entity-level Authorize (checkGrantOrOwn): a grant over a type's entity also
 // confers the operation over every instance of exactly that type, and never
 // over type entities themselves.
 //
 // This is security-sensitive: manage on natural_person's type entity confers
-// assume of every user account. The tests pin that, the exact-type (Q2)
+// assume of every user account. The tests pin that, the exact-type (no parent type walk)
 // boundary, and the type-entity exclusion (a grant on the sentinel "type"
 // entity must not reach any type entity).
 //
@@ -94,20 +94,36 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 		requireAllowed(t, actorCtx(u), "read", corp, "read on the outer group")
 	})
 
-	t.Run("Q2 no parent walk", func(t *testing.T) {
-		u := seedGrantHolder(t, "is-q2")
+	t.Run("no parent type walk", func(t *testing.T) {
+		u := seedGrantHolder(t, "is-noparent")
 		targetedGrant(t, u, legalEnt, "read")
 		ctx := actorCtx(u)
 		requireForbidden(t, ctx, "read", corp, "read on legal_entity, instance of corporation")
 		requireForbidden(t, ctx, "read", otherUser, "read on legal_entity, instance of natural_person")
 	})
 
-	t.Run("no child walk", func(t *testing.T) {
-		u := seedGrantHolder(t, "is-nochild")
-		targetedGrant(t, u, corpEnt, "read")
-		// The grant on the subtype does not confer anything over the parent
-		// type's type entity or instances of the parent type.
-		requireForbidden(t, actorCtx(u), "read", legalEnt, "corporation grant, legal_entity's type entity")
+	t.Run("no subtype walk", func(t *testing.T) {
+		// A concrete parent type with a concrete child type, an instance of each.
+		// Neither grant crosses the parent/child edge, in either direction.
+		parentID, parentEnt := registerTestType(t, "instsem-parent")
+		parentSlug := typeSlugForID(t, parentID)
+		childID, childEnt := registerTestTypeUnder(t, "instsem-child", parentSlug)
+		parentInstance := seedInstanceOfType(t, parentID)
+		childInstance := seedInstanceOfType(t, childID)
+
+		onParent := seedGrantHolder(t, "is-nosub-parent")
+		targetedGrant(t, onParent, parentEnt, "read")
+		ctx := actorCtx(onParent)
+		requireAllowed(t, ctx, "read", parentInstance, "control: grant on the parent type's entity, instance of the parent")
+		requireForbidden(t, ctx, "read", childInstance, "grant on the parent type's entity, instance of the child")
+		requireForbidden(t, ctx, "read", childEnt, "grant on the parent type's entity, the child's type entity")
+
+		onChild := seedGrantHolder(t, "is-nosub-child")
+		targetedGrant(t, onChild, childEnt, "read")
+		ctx = actorCtx(onChild)
+		requireAllowed(t, ctx, "read", childInstance, "control: grant on the child type's entity, instance of the child")
+		requireForbidden(t, ctx, "read", parentInstance, "grant on the child type's entity, instance of the parent")
+		requireForbidden(t, ctx, "read", parentEnt, "grant on the child type's entity, the parent's type entity")
 	})
 
 	t.Run("actor group", func(t *testing.T) {
@@ -201,11 +217,7 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 func TestInteg_InstanceSemantics_TestOnlyType(t *testing.T) {
 	testTypeID, testTypeEntity := registerTestType(t, "instsem")
 
-	var instance int64
-	if err := integPool.QueryRow(context.Background(),
-		`INSERT INTO entities (fundamental_type_id) VALUES ($1) RETURNING id`, testTypeID).Scan(&instance); err != nil {
-		t.Fatalf("insert instance of test type: %v", err)
-	}
+	instance := seedInstanceOfType(t, testTypeID)
 
 	// A corporation instance at id == testType.types.id.
 	seedEntityWithExplicitID(t, testTypeID, nil)
@@ -225,4 +237,52 @@ func TestInteg_InstanceSemantics_TestOnlyType(t *testing.T) {
 	v := seedGrantHolder(t, "is-testtype-inst")
 	targetedGrant(t, v, testTypeID, "create")
 	requireTypeForbidden(t, actorCtx(v), "create", testTypeID, "instance grant at id == types.id")
+}
+
+// TestInteg_InstanceSemantics_TestOnlyType_ViaGroups runs the same test-only
+// type through an actor group and a nested type-only target group: the group
+// walks start from the seeded type entity (types.entity_id), so the instance is
+// allowed and an instance of another type is not.
+func TestInteg_InstanceSemantics_TestOnlyType_ViaGroups(t *testing.T) {
+	testTypeID, testTypeEntity := registerTestType(t, "instsem-groups")
+	instance := seedInstanceOfType(t, testTypeID)
+	otherTypeID, _ := registerTestType(t, "instsem-groups-other")
+	otherInstance := seedInstanceOfType(t, otherTypeID)
+
+	u := seedGrantHolder(t, "is-testtype-groups")
+	actorGroup := seedActorGroup(t, "instsem-tt-agroup")
+	addActorGroupMember(t, actorGroup, u)
+	inner := seedTargetGroup(t, "instsem-tt-inner")
+	outer := seedTargetGroup(t, "instsem-tt-outer")
+	addTargetGroupMember(t, inner, testTypeEntity)
+	addTargetGroupMember(t, outer, inner)
+	targetedGrant(t, actorGroup, outer, "read")
+
+	ctx := actorCtx(u)
+	requireAllowed(t, ctx, "read", instance, "instance of the test type, via actor group and nested type-only target group")
+	requireForbidden(t, ctx, "read", otherInstance, "instance of another type")
+	requireForbidden(t, ctx, "update", instance, "read does not imply update")
+	requireForbidden(t, actorCtx(seedGrantHolder(t, "is-testtype-groups-bystander")), "read", instance, "non-member")
+}
+
+// seedInstanceOfType inserts an entity whose fundamental type is typeID and
+// returns its id.
+func seedInstanceOfType(t *testing.T, typeID int64) int64 {
+	t.Helper()
+	var id int64
+	if err := integPool.QueryRow(context.Background(),
+		`INSERT INTO entities (fundamental_type_id) VALUES ($1) RETURNING id`, typeID).Scan(&id); err != nil {
+		t.Fatalf("seedInstanceOfType(%d): %v", typeID, err)
+	}
+	return id
+}
+
+// typeSlugForID returns the slug of the type with the given types.id.
+func typeSlugForID(t *testing.T, typeID int64) string {
+	t.Helper()
+	var slug string
+	if err := integPool.QueryRow(context.Background(), `SELECT slug FROM types WHERE id = $1`, typeID).Scan(&slug); err != nil {
+		t.Fatalf("typeSlugForID(%d): %v", typeID, err)
+	}
+	return slug
 }
