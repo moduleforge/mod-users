@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 2
-    tasks_added: 1
+    tasks_added: 2
 phases:
     - number: 6
       slug: authorize-type-grant-arm
@@ -130,4 +130,17 @@ phases:
       slug: remediation-02
       title: Remediation Round 2
       kind: remediation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fix-warning-sentence-integrity
+          title: Fix Warning Sentence Integrity and Wording Precision
+          path: phase-11-remediation-02/001-fix-warning-sentence-integrity.md
+          done: false
+          tier: haiku-med
+          findings:
+            - oDuA
+            - HIBp
+          git:
+            branch: null
+            commit: []
+            merge: null
