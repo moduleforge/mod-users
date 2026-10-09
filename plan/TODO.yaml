@@ -6,3 +6,7 @@ phases:
       slug: eddsa-verify-only-key
       title: Verify-only EdDSA key for NewVerifier - 4eZf
       tasks: []
+    - number: 2
+      slug: cors-safe-default
+      title: CORS safe default - 5K4Q
+      tasks: []
