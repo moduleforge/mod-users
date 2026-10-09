@@ -117,6 +117,7 @@ phases:
           path: phase-10-remediation-01/001-complete-instance-warning-and-tests.md
           done: false
           tier: sonnet-med
+          digest: Warning completed in all five locations (group types, other instance-bearing types, assume of admin accounts) after verifying mod-authz group-edit gating; replaced the vacuous child-walk subtest with a real no-subtype-walk test (mutation-verified), added a via-groups guard on the test-only type, renamed plan shorthand to descriptive names; comment-only production diff; integration suite and api build/test/lint pass.
           findings:
             - n4t2
             - 16do
