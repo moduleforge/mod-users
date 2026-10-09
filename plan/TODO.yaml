@@ -129,6 +129,7 @@ phases:
     - number: 11
       slug: remediation-02
       title: Remediation Round 2
+      diff_base: 08296179d7dccb11698fc58b2dc9225d51d366ba
       kind: remediation
       tasks:
         - number: 1
