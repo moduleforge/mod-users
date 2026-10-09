@@ -439,7 +439,7 @@ items:
         - plan/slug:ssh-public-keys
         - priority:medium
         - effort:small
-      text: '[phase-01 gate, security lens flagged_for_manager, needs a decision] The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git — an existing authorization pattern that now reaches a new, persistent impersonation capability. Confirm whether such non-self ownership relationships occur in practice for natural_person entities, and whether this is intended for SSH-key registration specifically.'
+      text: 'The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git. Type grants add a second route to the same capability: ''update'' or ''manage'' on the natural_person type entity reaches every natural_person instance (docs/architecture.md D13) and so the operator SSH-key routes, which authorize ''update'' on the account holder (api/internal/service/ssh_keys.go). Confirm whether non-self ownership relationships occur in practice for natural_person entities, and whether either route is intended for SSH-key registration specifically.'
     - title: Integration suite (ssh_keys_integration_test.
       id: trmJ
       date: "2026-09-28"
