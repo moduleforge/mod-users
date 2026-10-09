@@ -64,6 +64,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: oidc-test-redirect-prefix
+          title: OIDC Test Redirect Keeps Mount Prefix
+          path: phase-03-cookie-base-path/002-oidc-test-redirect-prefix.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: users-gui-improvements
       title: users-gui improvements - 5F38, dnL0, lJE0
