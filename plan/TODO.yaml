@@ -123,5 +123,6 @@ phases:
             - 16do
           git:
             branch: plan/type-scoped-grants-10-001
-            commit: []
+            commit:
+                - d508731
             merge: null
