@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 2
+    tasks_added: 3
 phases:
     - number: 6
       slug: authorize-type-grant-arm
@@ -156,4 +156,16 @@ phases:
       slug: remediation-03
       title: Remediation Round 3
       kind: remediation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fix-list-comments-and-test-gaps
+          title: Fix List Migration Comments and Test Gaps
+          path: phase-12-remediation-03/001-fix-list-comments-and-test-gaps.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - QpDq
+          git:
+            branch: null
+            commit: []
+            merge: null
