@@ -94,7 +94,8 @@ phases:
           digest: 'Production symmetry test added: the real GrantTableGenerator list functions (corporation, natural_person, legal_entity) agree with the real Authorizer for six type-grant fixtures plus a sentinel-type fixture; instance-seed mutation caught with a ''list side admitted'' message; exclusion mutation invisible to the iff so a direct assertion was added; time-bound ''until the arm lands'' sentences removed from authz.go docs and docs/architecture.md. api build/test/lint pass; local Postgres used (Docker unavailable).'
           git:
             branch: plan/type-scoped-grants-09-001
-            commit: []
+            commit:
+                - 2e110f1
             merge: null
         - number: 2
           slug: user-account-list-authorize-type
