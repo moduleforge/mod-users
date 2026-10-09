@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: link-siblings.sh repointed the shared mod-use
-      id: EJEa
-      date: "2026-10-09"
-      tags:
-        - type:ambiguity
-        - plan/phase:authorize-type-grant-arm
-        - priority:unspecified
-        - effort:unspecified
-      text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
+items: []
 closed:
     - id: adeO
       title: Docker was unreachable in the sandbox; the in
@@ -44,4 +35,9 @@ closed:
       title: 'List migration: stale comments, test gaps'
       disposition: fixed
       ref: phase-12-remediation-03/001-fix-list-comments-and-test-gaps.md
+      date: "2026-10-09"
+    - id: EJEa
+      title: link-siblings.sh repointed the shared mod-use
+      disposition: promoted
+      ref: EJEa
       date: "2026-10-09"
