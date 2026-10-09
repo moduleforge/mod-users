@@ -67,6 +67,10 @@
 // user account that manage on the natural_person type entity confers includes
 // accounts that themselves hold wildcard or admin grants, so that grant is
 // effectively full admin.
+// Likewise update (not only manage) on the natural_person type entity is
+// credential-install authority: the operator SSH-key register and revoke routes
+// authorize update on the account holder, so its holder can install an SSH key
+// (git SSH access) for every user account.
 // Grant on type entities only to principals trusted with every instance: a
 // holder of grant on a type entity can hand out instance-wide authority over
 // that type. Single-row Authorize and the list-side
@@ -199,6 +203,10 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 // user account that manage on the natural_person type entity confers includes
 // accounts that themselves hold wildcard or admin grants, so that grant is
 // effectively full admin.
+// Likewise update (not only manage) on the natural_person type entity is
+// credential-install authority: the operator SSH-key register and revoke routes
+// authorize update on the account holder, so its holder can install an SSH key
+// (git SSH access) for every user account.
 // Grant on type entities only to principals trusted with every instance: a
 // holder of grant on a type entity can hand out instance-wide authority over
 // that type. Single-row Authorize and the list-side
@@ -507,6 +515,10 @@ SELECT EXISTS(
 // user account that manage on the natural_person type entity confers includes
 // accounts that themselves hold wildcard or admin grants, so that grant is
 // effectively full admin.
+// Likewise update (not only manage) on the natural_person type entity is
+// credential-install authority: the operator SSH-key register and revoke routes
+// authorize update on the account holder, so its holder can install an SSH key
+// (git SSH access) for every user account.
 // A holder of grant on a type entity can hand out instance-wide authority over
 // that type, so grant on type entities only to principals trusted with every
 // instance. This single-row check and the list-side
