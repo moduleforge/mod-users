@@ -53,7 +53,17 @@ phases:
     - number: 3
       slug: cookie-base-path
       title: Cookie Path behind a strip-prefix proxy - E75T and hDB7
-      tasks: []
+      tasks:
+        - number: 1
+          slug: configured-cookie-base-path
+          title: Configured Cookie Base Path
+          path: phase-03-cookie-base-path/001-configured-cookie-base-path.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: users-gui-improvements
       title: users-gui improvements - 5F38, dnL0, lJE0
