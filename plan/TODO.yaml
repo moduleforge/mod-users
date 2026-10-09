@@ -162,7 +162,7 @@ phases:
           slug: fix-list-comments-and-test-gaps
           title: Fix List Migration Comments and Test Gaps
           path: phase-12-remediation-03/001-fix-list-comments-and-test-gaps.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Updated the List handler and route comments; added a corporation-held-account assertion and a create-on-type-entity operation-filter fixture to the symmetry test, both mutation-verified; no production code or SQL changed; integration run and api build/test/lint pass; local Postgres used (Docker unavailable).
           findings:
