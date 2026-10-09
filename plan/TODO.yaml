@@ -39,7 +39,17 @@ phases:
     - number: 2
       slug: cors-safe-default
       title: CORS safe default - 5K4Q
-      tasks: []
+      tasks:
+        - number: 1
+          slug: cors-default-deny
+          title: CORS Default Deny And Startup Guard
+          path: phase-02-cors-safe-default/001-cors-default-deny.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 3
       slug: cookie-base-path
       title: Cookie Path behind a strip-prefix proxy - E75T and hDB7
