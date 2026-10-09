@@ -155,17 +155,20 @@ phases:
     - number: 12
       slug: remediation-03
       title: Remediation Round 3
+      diff_base: 8337ee00588c47afd892a100e220b267ffac04b3
       kind: remediation
       tasks:
         - number: 1
           slug: fix-list-comments-and-test-gaps
           title: Fix List Migration Comments and Test Gaps
           path: phase-12-remediation-03/001-fix-list-comments-and-test-gaps.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Updated the List handler and route comments; added a corporation-held-account assertion and a create-on-type-entity operation-filter fixture to the symmetry test, both mutation-verified; no production code or SQL changed; integration run and api build/test/lint pass; local Postgres used (Docker unavailable).
           findings:
             - QpDq
           git:
-            branch: null
-            commit: []
+            branch: plan/type-scoped-grants-12-001
+            commit:
+                - 4781abb
             merge: null
