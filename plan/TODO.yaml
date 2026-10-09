@@ -61,7 +61,7 @@ phases:
           tier: sonnet-med
           digest: Added the Q1 instance-semantics seed to checkGrantOrOwn (target plus its exact type's entity via entities.fundamental_type_id -> types.entity_id) with the type-entity exclusion so a grant on the sentinel type entity confers nothing over other type entities. Warning documented in package, Authorize and checkGrantOrOwn docs; matrix integration tests added; mutation checks confirmed the tests catch a removed exclusion and a mis-joined seed. AuthorizeType and nil-target behaviour unchanged. Local Postgres 14 used (Docker unavailable).
           git:
-            branch: null
+            branch: plan/type-scoped-grants-08-001
             commit: []
             merge: null
         - number: 2
