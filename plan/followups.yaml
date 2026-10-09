@@ -777,3 +777,12 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth/register.go (Register, near the "user registered" slog.InfoContext call, about line 264) logs the registrant's email as an attribute at INFO. An email address is personal data and should not reach the application log; log the user_account_uuid only, as login.go does.
+    - title: Account lockout and send caps in mod-users
+      id: rMRg
+      date: "2026-10-08"
+      tags:
+        - type:security
+        - priority:medium
+        - cross-repo/origin:flow-accounts
+        - effort:unspecified
+      text: api/internal/handlers/auth (login.go, emailcode.go, reset.go) has no per-account lockout or backoff on wrong passwords or codes, and no per-email cap on email-code request and password-reset request mail. The composer's app-level throttle (per source network, plus a keyed hash of the email at the HTTP layer) is the only bound, and it can lock a victim's email for its window, so the module should own an account-keyed lockout/backoff and per-recipient send caps. Also export a limiter seam on the auth Handler (a small interface like the SetUserSvc/SetFirstUserHook setters) so a composer can supply the limiter instead of wrapping the server handler.
