@@ -13,6 +13,16 @@ import (
 )
 
 // Authorizer is the grants-table implementation of coreAuthz.Authorizer.
+//
+// WARNING: entity-level Authorize honours type grants over instances. A grant
+// on a type's entity (directly or through a type-only target group) confers the
+// same operation over every existing and future instance of exactly that type,
+// so manage on a type entity is full control of every instance (for
+// natural_person, including assume of every user account). Grant on type
+// entities only to principals trusted with every instance. See the Type grants
+// confer instance access decision in docs/architecture.md for the full warning.
+// TypeAuthorizer, below, is unchanged: an instance grant never satisfies a
+// type-level check.
 type Authorizer = inner.Authorizer
 
 // TypeAuthorizer is implemented by Authorizers that can answer type-level

@@ -40,3 +40,10 @@ Files in scope:
 - [Users type grant design note, Q1 section](../notes/users-type-grant-design.md#q1-instance-semantics-optional-last-phase): the semantics and the warning list.
 - `docs/architecture.md` D12 and D9 (operator authorization reuses `update`).
 - [`instance-semantics-arm`](./001-instance-semantics-arm.md): the code side.
+
+## Status
+
+- Outcome: succeeded (2026-10-09).
+- Validation: warning block present with all design-note points; stale-phrase grep empty; `make -C api lint` passed; `authz.go` diff is comment lines only; substantive diff limited to the three scoped files.
+- Files: `docs/architecture.md` (new D13, D12 rollout sentence amended), `docs/mod-users-spec.md` (Authorization bullet), `api/localAuthz/authz.go` (Authorizer doc comment).
+- Consistency with the code comment: matches. The code is authoritative; no differences found.
