@@ -26,6 +26,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: eddsa-security-tests-and-docs
+          title: Alg-Confusion Tests And Docs
+          path: phase-01-eddsa-verify-only-key/003-eddsa-security-tests-and-docs.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: cors-safe-default
       title: CORS safe default - 5K4Q
