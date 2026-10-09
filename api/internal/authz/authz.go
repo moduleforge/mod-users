@@ -55,24 +55,25 @@
 // instance. manage or grant on a type-only target group confers this for every
 // type in the group. It does not extend to subtypes or parent types and never
 // applies to type entities themselves (a grant on the sentinel "type" entity
+// confers nothing over type entities).
 // Escalation paths: manage, grant or update on the type entity of
 // authz_actor_group or authz_target_group confers that operation over every
-// group of that kind, and group membership edits are gated by update on the
-// group (target group edits also need grant on the member; actor group edits
-// need grant on the group and on the member), all of which manage confers. That
-// is a path to groups that hold wildcard grants and so to privilege escalation.
-// The same applies to every other type that has instances (app, system_actor
-// and the anonymous actor type, where they exist). The assume of every user
-// account that manage on the natural_person type entity confers includes
+// group of that kind. Adding a member needs grant on the member (and, for actor
+// groups, update and grant on the group); a bare type-level update only permits
+// removing members, and manage confers all of it. That is a path to groups that
+// hold wildcard grants and so to privilege escalation. The same applies to every
+// other type that has instances (app, system_actor and the anonymous system
+// actor, an instance of system_actor, where they exist). The assume of every
+// user account that manage on the natural_person type entity confers includes
 // accounts that themselves hold wildcard or admin grants, so that grant is
 // effectively full admin.
-// confers nothing over type entities). Grant on type entities only to
-// principals trusted with every instance: a holder of grant on a type entity
-// can hand out instance-wide authority over that type. Until mod-core's
-// matching GrantTableGenerator arm lands, single-row Authorize and the
-// list-side accessible_*_ids_for_actor functions disagree for type-grant
-// holders (single-row allows, list omits). AuthorizeType is unchanged: an
-// instance grant never satisfies a type-level check.
+// Grant on type entities only to principals trusted with every instance: a
+// holder of grant on a type entity can hand out instance-wide authority over
+// that type. Until mod-core's matching GrantTableGenerator arm lands,
+// single-row Authorize and the list-side accessible_*_ids_for_actor functions
+// disagree for type-grant holders (single-row allows, list omits).
+// AuthorizeType is unchanged: an instance grant never satisfies a type-level
+// check.
 package authz
 
 import (
@@ -186,24 +187,25 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 // instance. manage or grant on a type-only target group confers this for every
 // type in the group. It does not extend to subtypes or parent types and never
 // applies to type entities themselves (a grant on the sentinel "type" entity
+// confers nothing over type entities).
 // Escalation paths: manage, grant or update on the type entity of
 // authz_actor_group or authz_target_group confers that operation over every
-// group of that kind, and group membership edits are gated by update on the
-// group (target group edits also need grant on the member; actor group edits
-// need grant on the group and on the member), all of which manage confers. That
-// is a path to groups that hold wildcard grants and so to privilege escalation.
-// The same applies to every other type that has instances (app, system_actor
-// and the anonymous actor type, where they exist). The assume of every user
-// account that manage on the natural_person type entity confers includes
+// group of that kind. Adding a member needs grant on the member (and, for actor
+// groups, update and grant on the group); a bare type-level update only permits
+// removing members, and manage confers all of it. That is a path to groups that
+// hold wildcard grants and so to privilege escalation. The same applies to every
+// other type that has instances (app, system_actor and the anonymous system
+// actor, an instance of system_actor, where they exist). The assume of every
+// user account that manage on the natural_person type entity confers includes
 // accounts that themselves hold wildcard or admin grants, so that grant is
 // effectively full admin.
-// confers nothing over type entities). Grant on type entities only to
-// principals trusted with every instance: a holder of grant on a type entity
-// can hand out instance-wide authority over that type. Until mod-core's
-// matching GrantTableGenerator arm lands, single-row Authorize and the
-// list-side accessible_*_ids_for_actor functions disagree for type-grant
-// holders (single-row allows, list omits). AuthorizeType is unchanged: an
-// instance grant never satisfies a type-level check.
+// Grant on type entities only to principals trusted with every instance: a
+// holder of grant on a type entity can hand out instance-wide authority over
+// that type. Until mod-core's matching GrantTableGenerator arm lands,
+// single-row Authorize and the list-side accessible_*_ids_for_actor functions
+// disagree for type-grant holders (single-row allows, list omits).
+// AuthorizeType is unchanged: an instance grant never satisfies a type-level
+// check.
 //
 // Steps 1-3 are shared with AuthorizeType via authorizePrelude so the two
 // entry points cannot drift.
@@ -496,13 +498,13 @@ SELECT EXISTS(
 // subtypes or parent types, and never applies to type entities themselves.
 // Escalation paths: manage, grant or update on the type entity of
 // authz_actor_group or authz_target_group confers that operation over every
-// group of that kind, and group membership edits are gated by update on the
-// group (target group edits also need grant on the member; actor group edits
-// need grant on the group and on the member), all of which manage confers. That
-// is a path to groups that hold wildcard grants and so to privilege escalation.
-// The same applies to every other type that has instances (app, system_actor
-// and the anonymous actor type, where they exist). The assume of every user
-// account that manage on the natural_person type entity confers includes
+// group of that kind. Adding a member needs grant on the member (and, for actor
+// groups, update and grant on the group); a bare type-level update only permits
+// removing members, and manage confers all of it. That is a path to groups that
+// hold wildcard grants and so to privilege escalation. The same applies to every
+// other type that has instances (app, system_actor and the anonymous system
+// actor, an instance of system_actor, where they exist). The assume of every
+// user account that manage on the natural_person type entity confers includes
 // accounts that themselves hold wildcard or admin grants, so that grant is
 // effectively full admin.
 // A holder of grant on a type entity can hand out instance-wide authority over

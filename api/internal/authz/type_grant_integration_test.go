@@ -2,10 +2,11 @@
 
 package authz_test
 
-// type_grant_integration_test.go proves the AuthorizeType type-grant arm against
-// the real composed schema (mod-core type entities, mod-authz's target-group
-// kind trigger, mod-users). It holds the helpers, the kind-separation guard,
-// the full matrix, and the type-id-never-read-as-an-entity-id regression in its test-only-type form.
+// type_grant_integration_test.go proves the AuthorizeType type-grant arm
+// against the real composed schema (mod-core type entities, mod-authz's
+// target-group kind trigger, mod-users). It holds the helpers, the
+// kind-separation guard, the full matrix, and the
+// type-id-never-read-as-an-entity-id regression in its test-only-type form.
 //
 // Every fixture target group holds only type entities or only instance
 // entities, counting nested groups (mod-authz's trg_target_group_members_kind

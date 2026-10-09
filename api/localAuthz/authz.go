@@ -22,13 +22,15 @@ import (
 // accounts holding wildcard or admin grants, so manage on natural_person is
 // effectively full admin; manage, grant or update on the type entity of
 // authz_actor_group or authz_target_group likewise confers authority over every
-// group of that kind, a path to groups holding wildcard grants and so to
-// privilege escalation, and the same holds for every other type with instances
-// (app, system_actor, the anonymous actor type, where they exist). Grant on type
-// entities only to principals trusted with every instance. See the Type grants
-// confer instance access decision in docs/architecture.md for the full warning.
-// TypeAuthorizer, below, is unchanged: an instance grant never satisfies a
-// type-level check.
+// group of that kind (adding a member needs grant on the member and, for actor
+// groups, update and grant on the group; a bare type-level update only permits
+// removing members; manage confers all of it), a path to groups holding
+// wildcard grants and so to privilege escalation, and the same holds for every
+// other type with instances (app, system_actor, the anonymous system actor, an
+// instance of system_actor, where they exist). Grant on type entities only to
+// principals trusted with every instance. See the Type grants confer instance
+// access decision in docs/architecture.md for the full warning. TypeAuthorizer,
+// below, is unchanged: an instance grant never satisfies a type-level check.
 type Authorizer = inner.Authorizer
 
 // TypeAuthorizer is implemented by Authorizers that can answer type-level
