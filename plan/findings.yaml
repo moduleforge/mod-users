@@ -29,6 +29,9 @@ items:
         - priority:low
         - plan/phase:remediation-01
         - effort:unspecified
+        - resolution/task:phase-11-remediation-02/001-fix-warning-sentence-integrity.md
+        - resolution/plan:type-scoped-grants
+        - resolution/commit:6d228fd622f3e133ed2ce066809ec2d5bef75e30
       text: 'Wording precision in the instance-semantics warning (authz.go package, Authorize and checkGrantOrOwn docs, localAuthz Authorizer doc, docs/architecture.md): (1) it describes manage, grant or update on the actor-group and target-group type entities as equivalent escalation paths, but per mod-authz actor-group AddMember needs update and grant on the group plus grant on the member, target-group AddMember needs update on the group plus grant on the member, and RemoveMember needs only update on the group; so a bare type-level update only permits removing members, not adding them. Say that adding members needs grant on the member (and on actor groups, on the group), so update alone only permits removal. (2) "the anonymous actor type" is imprecise: the anonymous actor is a system_actors row with slug anonymous, an instance of the system_actor type; reword to "the anonymous system actor, an instance of system_actor" in all locations. (3) Some renamed test header comments (type_grant_integration_test.go, instance_semantics_integration_test.go) exceed the file''s wrap width; reflow them.'
 closed:
     - id: adeO
