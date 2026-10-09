@@ -17,6 +17,9 @@ items:
         - priority:high
         - plan/phase:remediation-01
         - effort:unspecified
+        - resolution/task:phase-11-remediation-02/001-fix-warning-sentence-integrity.md
+        - resolution/plan:type-scoped-grants
+        - resolution/commit:6d228fd622f3e133ed2ce066809ec2d5bef75e30
       text: 'In api/internal/authz/authz.go the new "Escalation paths" block was pasted into the middle of an existing sentence in two doc comments: the package doc (around lines 56-71) and the Authorize doc (around lines 187-202). The existing sentence reads "(a grant on the sentinel "type" entity ... confers nothing over type entities). Grant on type entities only to ...", and the block now sits between "entity" and "confers nothing over type entities)", so rendered godoc reads "(a grant on the sentinel "type" entity Escalation paths: manage, grant or update ... effectively full admin. confers nothing over type entities)". The mandatory warning is garbled. Move the block after "...confers nothing over type entities)." (or before the parenthetical) in both places, comment-only, and re-read all five warning locations (package doc, Authorize doc, checkGrantOrOwn doc, localAuthz Authorizer doc, docs/architecture.md) for sentence integrity. Note the task-level "comment lines only" check does not catch this; verify by reading go doc output.'
     - title: 'Warning wording: update, anonymous actor'
       id: HIBp
