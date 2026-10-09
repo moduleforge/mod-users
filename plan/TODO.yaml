@@ -108,7 +108,7 @@ phases:
             branch: plan/type-scoped-grants-09-002
             commit:
                 - 445cacf
-            merge: null
+            merge: 4fc7bf2cd7d6fe54aa7d8f60cebedb72b2b70760
     - number: 10
       slug: remediation-01
       title: Remediation Round 1
