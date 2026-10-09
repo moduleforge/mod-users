@@ -143,6 +143,6 @@ phases:
             - oDuA
             - HIBp
           git:
-            branch: null
+            branch: plan/type-scoped-grants-11-001
             commit: []
             merge: null
