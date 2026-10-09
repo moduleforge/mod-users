@@ -51,6 +51,7 @@ phases:
     - number: 8
       slug: type-grant-instance-semantics
       title: Type-Grant Instance Semantics, Optional Q1
+      diff_base: 32c5789a203c750a9e8c5ec5e5d4159198e03862
       tasks:
         - number: 1
           slug: instance-semantics-arm
