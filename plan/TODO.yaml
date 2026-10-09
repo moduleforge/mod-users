@@ -98,6 +98,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: gui-lockfile-and-link
+          title: Commit gui bun.lock And Document core-gui Link
+          path: phase-04-users-gui-improvements/003-gui-lockfile-and-link.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: checkout-deps-token-handling
       title: checkout-deps token handling - gsl4
