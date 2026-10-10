@@ -50,9 +50,11 @@ func New(cfg *config.Config) (*http.Server, *chi.Mux) {
 //   - Empty CORS_ORIGINS in DeployModeLocal: a documented dev convenience,
 //     allow-all ("*") WITHOUT credentials.
 //   - Empty CORS_ORIGINS in any other mode: deny (ok == false).
-//   - "*" in the list outside DeployModeLocal: config.Load rejects this at
-//     startup; if a hand-built Config reaches here anyway, fail closed (deny).
-//     In local mode "*" is honored without credentials.
+//   - Any entry containing "*" outside DeployModeLocal (the bare token or a
+//     pattern such as "https://*.example.com"): go-chi/cors would treat it as
+//     a prefix/suffix pattern, so config.Load rejects it at startup; if a
+//     hand-built Config reaches here anyway, fail closed (deny). In local mode
+//     "*" is honored without credentials.
 //
 // The wildcard is never combined with credentials.
 func corsOptions(cfg *config.Config) (cors.Options, bool) {
@@ -63,6 +65,9 @@ func corsOptions(cfg *config.Config) (cors.Options, bool) {
 	for _, o := range origins {
 		if o == "*" {
 			wildcard = true
+		} else if strings.Contains(o, "*") && !local {
+			// Pattern entry: never reach go-chi/cors pattern matching with credentials.
+			return cors.Options{}, false
 		}
 	}
 	if len(origins) == 0 && !local {

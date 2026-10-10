@@ -22,4 +22,7 @@ data:
   AUTH_FRONTEND_RETURN_URL: https://app.example.com/auth/oidc/return
   # Example provider; add more as needed.
   AUTH_PROVIDER_GOOGLE_DISPLAY_NAME: Google
-  CORS_ORIGINS: ""
+  # Comma-separated exact front-end origins (scheme://host[:port], no trailing
+  # slash or path). Wildcard entries (any "*") are rejected outside local
+  # mode; an empty value denies all cross-origin access. See docs/cors.md.
+  CORS_ORIGINS: https://app.example.com

@@ -451,16 +451,18 @@ func validate(cfg *Config, parseErrors []string) error {
 		problems = append(problems, "missing required environment variables: "+strings.Join(missing, ", "))
 	}
 
-	// CORS_ORIGINS may not contain the "*" wildcard outside DeployModeLocal:
-	// an explicit allow-list is served with credentials, and a wildcard
-	// combined with credentials is never acceptable in a production-like
-	// mode (every mode except local: serverless, k8s, container-host).
+	// CORS_ORIGINS may not contain any "*" outside DeployModeLocal: go-chi/cors
+	// treats every allowed-origin entry containing "*" as a prefix/suffix
+	// wildcard pattern (e.g. "https://*", "http*"), so rejecting only the
+	// exact token "*" would let such patterns be served with credentials.
+	// Every mode except local is production-like (serverless, k8s,
+	// container-host). The error names only the offending entry's shape.
 	if cfg.DeployMode != DeployModeLocal {
 		for _, o := range strings.Split(cfg.Server.CORSOrigins, ",") {
-			if strings.TrimSpace(o) == "*" {
+			if strings.Contains(o, "*") {
 				problems = append(problems,
-					"CORS_ORIGINS must not contain \"*\" when DEPLOY_MODE is "+string(cfg.DeployMode)+
-						"; list explicit origins (the wildcard is only allowed in local mode, without credentials)")
+					"CORS_ORIGINS must not contain wildcard (\"*\") entries when DEPLOY_MODE is "+string(cfg.DeployMode)+
+						"; list exact origins (wildcards are only allowed in local mode, without credentials)")
 				break
 			}
 		}
