@@ -52,6 +52,37 @@ func clearProviderEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_CORSWildcardGuard(t *testing.T) {
+	cases := []struct {
+		mode, origins string
+		wantErr       bool
+	}{
+		{"k8s", "*", true},
+		{"serverless", "https://a.example, *", true},
+		{"container-host", "*", true},
+		{"k8s", "https://a.example", false},
+		{"k8s", "", false},
+		{"local", "*", false},
+		{"local", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.mode+"/"+tc.origins, func(t *testing.T) {
+			clearProviderEnv(t)
+			setEnv(t, requiredEnv)
+			t.Setenv("DEPLOY_MODE", tc.mode)
+			t.Setenv("CORS_ORIGINS", tc.origins)
+			_, err := config.Load()
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "CORS_ORIGINS") {
+					t.Fatalf("want CORS_ORIGINS startup error, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestLoad(t *testing.T) {
 	t.Run("all required fields set succeeds with zero providers", func(t *testing.T) {
 		clearProviderEnv(t)

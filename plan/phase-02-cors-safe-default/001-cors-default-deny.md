@@ -13,3 +13,9 @@ Fix `api/internal/server/server.go`, which sets `AllowCredentials: true` uncondi
 ## Validation
 - Tests: unset → no ACAO; allow-list match → ACAO echoes origin + credentials; mismatch → no ACAO; `*`+credentials in prod mode → startup error.
 - `cd api && go test ./...`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: `cd api && go test ./...` passed; new tests cover unset/allow-list/mismatch/local-wildcard and the config startup guard.
+- Files: `api/internal/server/server.go`, `api/internal/config/config.go`, `api/internal/server/cors_test.go`, `api/internal/config/config_test.go`, `docs/cors.md`, `README.md`, `docs/mod-users-spec.md`, `.env.example`.
+- Decisions: production-like = every DEPLOY_MODE except `local`; local keeps `*` without credentials; guard lives in `config.Load` validation, and `server.New` additionally fails closed on `*` outside local.
