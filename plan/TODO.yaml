@@ -205,6 +205,7 @@ phases:
     - number: 8
       slug: remediation-03
       title: Remediation Round 3
+      diff_base: 882d465e47ba95c41f8e83bb4d094e4369cf170c
       kind: remediation
       security_review: required
       tasks:
@@ -212,12 +213,14 @@ phases:
           slug: reject-cors-wildcard-patterns
           title: Reject CORS Wildcard Patterns And Fix Manifests
           path: phase-08-remediation-03/001-reject-cors-wildcard-patterns.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: config.Load rejects any CORS_ORIGINS entry containing * outside local mode (error names CORS_ORIGINS and mode, no entry echo); corsOptions fails closed (no middleware, no credentials) for pattern entries; local mode unchanged; k8s configmap uses placeholder origin, cloudrun service.yaml gets CORS_ORIGINS entry with comment; docs/cors.md and README updated. Tests added; full Go suite green.
           findings:
             - OO6Y
             - D6o7
           git:
-            branch: null
-            commit: []
+            branch: plan/flow-accounts-upstream-08-001
+            commit:
+                - c4c3261
             merge: null
