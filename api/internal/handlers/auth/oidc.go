@@ -358,8 +358,12 @@ func (h *OIDCHandler) redirectToTestResult(
 		return
 	}
 	// FrontendReturnURL points at /auth/oidc/return; the test banner
-	// lives on /oidc-config (same origin) so swap the path.
-	u.Path = "/oidc-config"
+	// lives on /oidc-config (same origin) so swap the path. When
+	// USERS_COOKIE_PATH names a mount prefix (stripped by a proxy), keep it so
+	// the browser lands on <prefix>/oidc-config. Only the validated configured
+	// value is used; X-Forwarded-Prefix is never trusted.
+	u.Path = h.testResultPath()
+	u.RawPath = ""
 	u.Fragment = ""
 	q := url.Values{}
 	if testErr != "" {
@@ -550,6 +554,16 @@ func (h *OIDCHandler) cookieBasePath() string {
 		return ""
 	}
 	return h.cfg.Auth.CookiePath
+}
+
+// testResultPath returns the /oidc-config path, prefixed with the configured
+// (and validated) base path when one is set.
+func (h *OIDCHandler) testResultPath() string {
+	base := h.cookieBasePath()
+	if base != "" && config.ValidateCookieBasePath(base) == nil {
+		return base + "/oidc-config"
+	}
+	return "/oidc-config"
 }
 
 // clearStateCookie tombstones the state cookie by setting MaxAge<0.
