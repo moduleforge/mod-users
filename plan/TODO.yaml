@@ -39,7 +39,7 @@ phases:
           tier: sonnet-med
           digest: Added api/internal/auth/jwt_alg_confusion_test.go (public key as HMAC secret across encodings, mixed-mode, non-string kid) and docs/jwt-eddsa.md covering config, PEM/\n escape, key generation, rotation, verify-only deployment and NewVerifier empty-secret behavior change; README config table, architecture/spec pointers, .env.example entries for JWT_ALG/JWT_SIGNING_KEY/JWT_SIGNING_KID/JWT_VERIFY_PUBLIC_KEYS. No code behavior change.
           git:
-            branch: null
+            branch: plan/flow-accounts-upstream-01-003
             commit: []
             merge: null
     - number: 2
