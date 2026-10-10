@@ -125,7 +125,11 @@ scripts/
   link-siblings.sh        # plants sibling-repo symlinks for local/worktree builds
                            # (floats against the live checkout); wired into `make preflight`
   checkout-deps.sh        # reads versions.lock.yaml; --verify (default) reports drift,
-                           # --pinned clones each pinned sibling at its exact SHA (CI/fresh clones)
+                           # --pinned clones each pinned sibling at its exact SHA (CI/fresh clones);
+                           # validates lockfile host/owner shape, sends MODULEFORGE_READ_TOKEN only to
+                           # MODULEFORGE_TOKEN_ALLOWED_HOSTS (default github.com), via git env config
+  test-checkout-deps.sh   # tests for checkout-deps.sh's token/lockfile guards (stub git, no network);
+                           # run by `make test.unit.scripts`, part of `make test.unit`
   update-pins.sh          # rewrites versions.lock.yaml's SHAs from each sibling's origin/main;
                            # wrapped by the `pins.check` / `pins.update` / `pins.sync` make targets
 

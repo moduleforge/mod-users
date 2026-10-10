@@ -13,3 +13,9 @@ Flow-accounts gsl4: `scripts/checkout-deps.sh` passes `MODULEFORGE_READ_TOKEN` a
 ## Validation
 - `bash scripts/test-checkout-deps.sh` passes; shellcheck clean if used in repo.
 - Manual: run with a fake token and confirm it is absent from `ps`-visible argv (`bash -x` not used).
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: `bash scripts/test-checkout-deps.sh` passes (58 cases, incl. a process-table argv check with a positive control); `shellcheck` clean on `scripts/checkout-deps.sh` and `scripts/test-checkout-deps.sh`; the test fails 51 cases against the pre-change script (negative control).
+- Changed: `scripts/checkout-deps.sh`, `scripts/test-checkout-deps.sh` (new), `Makefile` (`test.unit.scripts`, part of `test.unit`, so CI's `make test.unit` runs it), `docs/project-structure.md`.
+- Decisions: this repo's `overrides` block means hosts vary per key, so the allowlist is enforced for the top-level host and every override host at read time and again in `git_fetch_auth`, and the header is scoped to the fetch target's host (not just `LF_HOST`). Override host/owner/repo and pin keys got the same strict shape checks (rejecting `.`/`..`, leading `-`, `..` in hosts).
