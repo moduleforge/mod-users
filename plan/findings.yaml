@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Step-up tokens share JWT_SECRET with bearer
-      id: nIyL
-      date: "2026-10-10"
-      tags:
-        - type:security
-        - priority:medium
-        - plan/phase:eddsa-verify-only-key
-        - effort:unspecified
-      text: 'In HS256 mode, IssueStepUpToken/VerifyStepUpToken (api/internal/handlers/identities.go) use the same JWT_SECRET as local bearer tokens verified in api/internal/auth/jwt.go verifyLocal, with no typ or audience separation. A step-up token whose iss and exp match the local verifier''s check could be accepted as a bearer token; the claims were not traced. EdDSA mode removes this for bearer verification since HS256 is rejected there. Suggested: confirm step-up claims cannot satisfy the issuer check, or key step-up tokens with a derived or separate key, or add typ/aud separation.'
     - title: Step-up tokens accept an empty secret
       id: SUyS
       date: "2026-10-10"
@@ -33,4 +24,9 @@ closed:
       title: Document JWT_VERIFY_PUBLIC_KEYS revocation
       disposition: fixed
       ref: phase-06-remediation-01/001-signer-wiring-and-key-revocation-docs.md
+      date: "2026-10-10"
+    - id: nIyL
+      title: Step-up tokens share JWT_SECRET with bearer
+      disposition: fixed
+      ref: phase-06-remediation-01/002-reject-step-up-as-bearer.md
       date: "2026-10-10"
