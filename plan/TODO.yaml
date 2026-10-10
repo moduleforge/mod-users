@@ -215,6 +215,7 @@ phases:
           path: phase-08-remediation-03/001-reject-cors-wildcard-patterns.md
           done: false
           tier: sonnet-med
+          digest: config.Load rejects any CORS_ORIGINS entry containing * outside local mode (error names CORS_ORIGINS and mode, no entry echo); corsOptions fails closed (no middleware, no credentials) for pattern entries; local mode unchanged; k8s configmap uses placeholder origin, cloudrun service.yaml gets CORS_ORIGINS entry with comment; docs/cors.md and README updated. Tests added; full Go suite green.
           findings:
             - OO6Y
             - D6o7
