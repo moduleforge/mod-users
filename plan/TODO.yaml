@@ -147,7 +147,8 @@ phases:
           digest: 'Ported token hardening into scripts/checkout-deps.sh: token via GIT_CONFIG_COUNT/KEY/VALUE env scoped to http.https://<host>/.extraheader with http.followRedirects=false (not in argv), strict host/owner shape validation (also override host/owner/repo and pin keys, rejecting . .. and leading -), MODULEFORGE_TOKEN_ALLOWED_HOSTS allowlist (default github.com) checked at lockfile read time and in git_fetch_auth, token never echoed. New scripts/test-checkout-deps.sh (58 cases, stub git, ps/argv absence check with positive control; negative control vs old script gave 51 FAIL), wired as make test.unit.scripts under test.unit; shellcheck clean. Caveats: header says the script is byte-identical with copies in other repos (now diverged until synced, task 5.002 audits); error ''unrecognized line in overrides block'' still echoes a raw lockfile line to stderr (not a token leak, out of scope).'
           git:
             branch: plan/flow-accounts-upstream-05-001
-            commit: []
+            commit:
+                - e6f9a41
             merge: null
         - number: 2
           slug: audit-sibling-checkout-deps
