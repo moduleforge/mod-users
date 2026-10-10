@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Deploy manifests silently lose CORS
-      id: D6o7
-      date: "2026-10-10"
-      tags:
-        - type:bug
-        - priority:medium
-        - plan/phase:cors-safe-default
-        - effort:unspecified
-      text: 'deploy/k8s/base/configmap.yaml (~line 25) ships DEPLOY_MODE: k8s with CORS_ORIGINS: "" which previously yielded ACAO * plus credentials and now emits no CORS headers; deploy/cloudrun/service.yaml sets no CORS_ORIGINS and hits the same default-deny. Suggested: placeholder origin with a comment in the k8s configmap (consistent with AUTH_FRONTEND_RETURN_URL) and a CORS_ORIGINS comment/entry in the Cloud Run manifest. Also docs/cors.md should state entries are bare scheme://host[:port] with no trailing slash or path, matched case-insensitively; optionally warn in config.Load on entries with a path or trailing slash.'
+items: []
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
@@ -47,6 +38,11 @@ closed:
       date: "2026-10-10"
     - id: OO6Y
       title: CORS wildcard guard misses pattern entries
+      disposition: fixed
+      ref: phase-08-remediation-03/001-reject-cors-wildcard-patterns.md
+      date: "2026-10-10"
+    - id: D6o7
+      title: Deploy manifests silently lose CORS
       disposition: fixed
       ref: phase-08-remediation-03/001-reject-cors-wildcard-patterns.md
       date: "2026-10-10"
