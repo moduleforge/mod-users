@@ -2,7 +2,7 @@ slug: flow-accounts-upstream
 version: 1
 title: ""
 remediation:
-    rounds: 1
+    rounds: 2
     tasks_added: 2
 phases:
     - number: 1
@@ -178,3 +178,8 @@ phases:
             commit:
                 - 24bbc48
             merge: bc988371945c38fa02381ca6a2a6c74c647632d8
+    - number: 7
+      slug: remediation-02
+      title: Remediation Round 2
+      kind: remediation
+      tasks: []
