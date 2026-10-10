@@ -1,5 +1,14 @@
 version: 2
-items: []
+items:
+    - title: CORS wildcard guard misses pattern entries
+      id: OO6Y
+      date: "2026-10-10"
+      tags:
+        - type:security
+        - priority:high
+        - plan/phase:cors-safe-default
+        - effort:unspecified
+      text: 'The wildcard guard in api/internal/config/config.go (~454-467) and corsOptions in api/internal/server/server.go (~59-86) only recognize the exact token *. go-chi/cors v1.2.2 also treats any CORS_ORIGINS entry containing * as a prefix/suffix wildcard pattern (e.g. https://*, http*, https://*.example.com), so outside local mode such an entry is accepted, reflects any matching origin, and sends Access-Control-Allow-Credentials: true. Docs say exact origins. Suggested: outside local mode reject any entry containing * in config.Load and make corsOptions fail closed on any entry containing *; add tests for https://* and https://*.example.com; update docs/cors.md and README to state patterns are rejected.'
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
