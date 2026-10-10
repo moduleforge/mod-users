@@ -27,6 +27,15 @@ items:
         - plan/phase:checkout-deps-token-handling
         - effort:unspecified
       text: 'Repo app-mftodo, scripts/checkout-deps.sh: passes MODULEFORGE_READ_TOKEN via `git -c http.extraheader=...` on the command line, validates only the characters of an overrides host (no top-level host or owner shape check), has no MODULEFORGE_TOKEN_ALLOWED_HOSTS token-host allowlist, and does not set http.followRedirects=false. Port the hardened script (GIT_CONFIG_COUNT env header scoped to the host, host/owner validation, allowlist, redirects off) from the moduleforge mod-users scripts/checkout-deps.sh.'
+    - title: checkout-deps strictness edge cases
+      id: xuSi
+      date: "2026-10-10"
+      tags:
+        - type:bug
+        - priority:low
+        - plan/phase:checkout-deps-token-handling
+        - effort:unspecified
+      text: 'scripts/checkout-deps.sh review notes (none exploitable): (1) top-level host:/owner: are now strictly validated, so a trailing YAML comment or quotes (host: "github.com") that the old parse accepted now exit 3; document the accepted form in --help/lockfile docs or strip one layer of matching quotes like the overrides parser (~175-186, 211-212). (2) `for h in $allowed` expands MODULEFORGE_TOKEN_ALLOWED_HOSTS unquoted with globbing on; use set -f or read -ra (~175-186). (3) GIT_CONFIG_COUNT=2 overrides any caller GIT_CONFIG_COUNT, and git older than 2.31 ignores the variables so no header or redirect hardening applies and private repos fail without a clear message; append after an existing count and/or check git >= 2.31 and mention it in --help (~371-374). (4) clone_pin is called as `if ! clone_pin`, which disables errexit inside, so failures of git init/remote add/checkout --detach are ignored and the run reports cloned; chain steps with || return 1 and assert the exit code in the --pinned test (~400-412, pre-existing). (5) the local --verify path fails with exit 3 on a non-allowlisted host even without network use when a token is set (~311-316); document or defer to first network use. (6) scripts/update-pins.sh (~70-71) still parses top-level host/owner with the old unvalidated awk; reuse valid_host/valid_owner. (7) the header comment still says the other carrier copy lives in mod-users; the make target needs bash 4 so it fails on macOS /bin/bash 3.2 unless a newer bash is first on PATH.'
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
