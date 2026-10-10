@@ -74,6 +74,7 @@ phases:
           path: phase-03-cookie-base-path/001-configured-cookie-base-path.md
           done: false
           tier: sonnet-med
+          digest: 'USERS_COOKIE_PATH (strict allowlist-validated, rejected at startup if invalid) sets the oidc_state cookie Path to base + /v1/auth/oidc/ at every set and clear site (shared newStateCookie); unset keeps request-derived behavior; X-Forwarded-Prefix deliberately not trusted. BREAKING for direct callers: facade handlers.NewIdentitiesHandler gained trailing cookiePath string arg (pass empty string for old behavior); moduleforge.module.yaml passes field:cfg.Auth.CookiePath. docs/cookie-path.md with Caddy strip-prefix example, README, .env.example. Resolves followup E75T; hDB7 (redirectToTestResult path overwrite) NOT addressed, left for task 3.002.'
           git:
             branch: null
             commit: []
