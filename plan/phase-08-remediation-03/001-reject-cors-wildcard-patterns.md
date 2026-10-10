@@ -18,3 +18,8 @@ Remediates plan findings OO6Y and D6o7 in this plan's `plan/findings.yaml`. Work
 ## References
 - Finding OO6Y in this plan's `plan/findings.yaml`.
 - Finding D6o7 in this plan's `plan/findings.yaml`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: `cd api && go build ./... && go vet ./... && go test ./...` passed; new tests added in `api/internal/config/config_test.go` and `api/internal/server/cors_test.go`; `docs/cors.md` still linked from README.
+- Changed: `api/internal/config/config.go`, `api/internal/server/server.go`, `deploy/k8s/base/configmap.yaml`, `deploy/cloudrun/service.yaml`, `docs/cors.md`, `README.md`.

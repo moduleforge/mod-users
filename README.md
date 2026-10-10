@@ -46,7 +46,7 @@ Local-auth JWT settings (see [docs/jwt-eddsa.md](./docs/jwt-eddsa.md); full list
 | `JWT_SIGNING_KID` | unset | `kid` header for issued tokens |
 | `JWT_VERIFY_PUBLIC_KEYS` | unset | Extra accepted public keys: one PKIX PEM, or JSON `kid` to PEM |
 
-CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and `*` is rejected at startup outside local mode. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
+CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and any entry containing `*` is rejected at startup outside local mode. Entries are bare `scheme://host[:port]` origins (no trailing slash or path), matched case-insensitively. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
 
 ## Additional documentation
 

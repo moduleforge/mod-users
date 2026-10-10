@@ -48,6 +48,12 @@ spec:
               value: ":8080"
             - name: LOG_LEVEL
               value: info
+            # Comma-separated exact front-end origins (scheme://host[:port], no
+            # trailing slash or path). If unset, default-deny applies: no CORS
+            # headers are emitted. Wildcard entries (any "*") fail startup in
+            # serverless mode. See docs/cors.md.
+            - name: CORS_ORIGINS
+              value: https://app.example.com
 
             # Secrets — reference Cloud Secret Manager secrets.
             - name: DATABASE_URL

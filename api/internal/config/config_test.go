@@ -60,8 +60,13 @@ func TestLoad_CORSWildcardGuard(t *testing.T) {
 		{"k8s", "*", true},
 		{"serverless", "https://a.example, *", true},
 		{"container-host", "*", true},
+		{"k8s", "https://*", true},
+		{"k8s", "http*", true},
+		{"serverless", "https://*.example.com", true},
+		{"container-host", "https://a.example,https://*.example.com", true},
 		{"k8s", "https://a.example", false},
 		{"k8s", "", false},
+		{"local", "https://*.example.com", false},
 		{"local", "*", false},
 		{"local", "", false},
 	}

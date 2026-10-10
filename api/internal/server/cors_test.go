@@ -162,3 +162,46 @@ func TestNew_WildcardOutsideLocalFailsClosed(t *testing.T) {
 		t.Errorf("ACAO = %q, want none", got)
 	}
 }
+
+// TestNew_WildcardPatternsOutsideLocalFailClosed: go-chi/cors treats any entry
+// containing "*" as a prefix/suffix pattern; corsOptions must deny rather than
+// reach that matching with credentials.
+func TestNew_WildcardPatternsOutsideLocalFailClosed(t *testing.T) {
+	for _, origins := range []string{"https://*", "http*", "https://*.example.com", "https://app.example.com,https://*.example.com"} {
+		cfg := &config.Config{
+			DeployMode: config.DeployModeK8s,
+			Server:     config.ServerConfig{CORSOrigins: origins},
+		}
+		if _, ok := corsOptions(cfg); ok {
+			t.Errorf("corsOptions(%q) ok = true, want fail closed", origins)
+		}
+		r := newTestRouter(config.DeployModeK8s, origins)
+		for _, o := range []string{"https://app.example.com", "https://evil.example.com", "http://x"} {
+			if got := allowOrigin(r, o); got != "" {
+				t.Errorf("origins %q, Origin %q: ACAO = %q, want none", origins, o, got)
+			}
+			if got := credentialsHeader(r, o); got != "" {
+				t.Errorf("origins %q, Origin %q: credentials = %q, want none", origins, o, got)
+			}
+		}
+	}
+}
+
+// TestCorsOptions_ExactOriginAndLocalUnchanged: exact origins keep credentials
+// and local mode keeps its credential-less wildcard.
+func TestCorsOptions_ExactOriginAndLocalUnchanged(t *testing.T) {
+	opts, ok := corsOptions(&config.Config{
+		DeployMode: config.DeployModeK8s,
+		Server:     config.ServerConfig{CORSOrigins: "https://app.example.com"},
+	})
+	if !ok || !opts.AllowCredentials {
+		t.Errorf("exact origin: ok=%v credentials=%v, want true/true", ok, opts.AllowCredentials)
+	}
+	opts, ok = corsOptions(&config.Config{
+		DeployMode: config.DeployModeLocal,
+		Server:     config.ServerConfig{CORSOrigins: "*"},
+	})
+	if !ok || opts.AllowCredentials {
+		t.Errorf("local wildcard: ok=%v credentials=%v, want true/false", ok, opts.AllowCredentials)
+	}
+}
