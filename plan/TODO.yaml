@@ -191,6 +191,7 @@ phases:
           path: phase-07-remediation-02/001-step-up-empty-secret-guard.md
           done: false
           tier: sonnet-med
+          digest: IssueStepUpToken returns new sentinel ErrStepUpEmptySecret on empty secret; VerifyStepUpToken returns existing ErrStepUpRequired on empty secret; header and purpose checks unchanged; tests for empty-secret issuing and empty-key forgery added; full Go suite green.
           findings:
             - SUyS
           git:
