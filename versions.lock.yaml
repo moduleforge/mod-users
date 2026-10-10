@@ -43,6 +43,6 @@ host:  github.com
 owner: moduleforge
 
 pins:
-  mod-core:  02f8ef084f8253fa0ba47e00243bbbaaf1e57425  # 2026-10-08 plan: add followup [ldm9] (cross-repo/origin:flow-accounts)
-  mod-audit: 49498bfec4733df0a51e54a64933498411e71519  # 2026-07-25 update gitignore
-  mod-authz: 35fbcc8ab6519070bab717e25cb73d80a9813d55  # 2026-07-25 removed unecessary package.json
+  mod-core:  bdefcb465314e1ddd3c17f9339a41fe8d0f0852c  # 2026-10-09 plan(type-scoped-grants): close plan worktree
+  mod-audit: e9913faa9938a4dbbc7eb5d98bf27c1723d9e6b1  # 2026-10-04 chore(mf-standards): bump submodule to 362374e (Merge branch 'task/propagate-prune-and-per-consum')
+  mod-authz: 48e0e66b9b05aabcbcd1123540a71cf8b8342425  # 2026-10-10 Merge branch 'task/regen-models-and-hhkb-docs'
