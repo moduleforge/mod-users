@@ -161,7 +161,8 @@ phases:
             - RmRX
           git:
             branch: plan/flow-accounts-upstream-06-001
-            commit: []
+            commit:
+                - cba3f9a
             merge: null
         - number: 2
           slug: reject-step-up-as-bearer
