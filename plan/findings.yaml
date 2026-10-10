@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: emailVerifiedAt reads null after login
-      id: jKvl
-      date: "2026-10-10"
-      tags:
-        - type:bug
-        - priority:high
-        - plan/phase:users-gui-improvements
-        - effort:unspecified
-      text: 'gui/src/lib/auth-context.tsx (~235-239) derives emailVerifiedAt as user?.email_verified_at ?? null, but the user state is also set by setTokenAndUser(response.user) after login(), register() (chains a login) and email-code login (email-code-page.tsx:64). The login and email-code handlers (api/internal/handlers/auth/login.go:88-93, emailcode.go:181-186) return only {uuid, email} (anonymous: {uuid, is_anonymous}), with no email_verified_at, yet LoginResponse.user is typed as UserAccountSelf with a non-optional field. So right after sign-in a verified account reads emailVerifiedAt === null (unverified) until refreshUser() or a reload, which would wrongly trigger a verify-email prompt; the new tests only cover the mount-time /v1/self fetch. Fix options: call api.self.get() / refreshUser() after setTokenAndUser in login, register and email-code paths; or make the field optional and return undefined when absent (unknown vs unverified); or add email_verified_at to the login and email-code user payloads. Add a test that logs in and reads emailVerifiedAt. Also api/openapi.yaml: email_verified_at was added to the shared UserDetail schema (also used by admin endpoints that emit email_verified boolean instead); introduce a self-specific schema or required list for /v1/self.'
+items: []
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
@@ -64,4 +55,9 @@ closed:
       title: Cookie base path has no length cap
       disposition: dismissed
       reason: 'Reviewer rated it a suggestion: the value is operator-set at startup, not attacker-controlled, and not exploitable; an oversized value only makes browsers drop the cookie, which the operator sees immediately. Remediation budget is exhausted and it is not worth a backlog item.'
+      date: "2026-10-10"
+    - id: jKvl
+      title: emailVerifiedAt reads null after login
+      disposition: promoted
+      ref: jKvl
       date: "2026-10-10"
