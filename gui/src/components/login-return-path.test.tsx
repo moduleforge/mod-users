@@ -91,6 +91,11 @@ async function loginAndCapture(
   return { callbackArgs, startUrl: assigned[0] };
 }
 
+// AuthPage additionally passes the mode as a second callback argument.
+function expected(surface: Surface, path: string | null): unknown[] {
+  return surface === 'AuthPage' ? [path, 'login'] : [path];
+}
+
 const SURFACES: Surface[] = ['LoginForm', 'AuthPage'];
 
 describe.each(SURFACES)('%s return-path handling', (surface) => {
@@ -98,7 +103,7 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
     setSearch('?return=/x');
     const { callbackArgs, startUrl } = await loginAndCapture(surface);
     expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2F');
-    expect(callbackArgs[0]).toEqual([null]);
+    expect(callbackArgs[0]).toEqual(expected(surface, null));
   });
 
   test('reads the configured param into the OIDC start URL and callback', async () => {
@@ -106,7 +111,7 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
     setSearch('?return=/open/3');
     const { callbackArgs, startUrl } = await loginAndCapture(surface);
     expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2Fopen%2F3');
-    expect(callbackArgs[0]).toEqual(['/open/3']);
+    expect(callbackArgs[0]).toEqual(expected(surface, '/open/3'));
   });
 
   test.each(['//evil.test', 'https://x', 'javascript:x'])(
@@ -116,7 +121,7 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
       setSearch(`?return=${encodeURIComponent(bad)}`);
       const { callbackArgs, startUrl } = await loginAndCapture(surface);
       expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2F');
-      expect(callbackArgs[0]).toEqual([null]);
+      expect(callbackArgs[0]).toEqual(expected(surface, null));
     },
   );
 
@@ -127,7 +132,7 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
       returnPath: '/explicit',
     });
     expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2Fexplicit');
-    expect(callbackArgs[0]).toEqual(['/explicit']);
+    expect(callbackArgs[0]).toEqual(expected(surface, '/explicit'));
   });
 
   test('works with a custom param name', async () => {
@@ -135,6 +140,37 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
     setSearch('?next=/dash&return=/ignored');
     const { callbackArgs, startUrl } = await loginAndCapture(surface);
     expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2Fdash');
-    expect(callbackArgs[0]).toEqual(['/dash']);
+    expect(callbackArgs[0]).toEqual(expected(surface, '/dash'));
+  });
+});
+
+describe('AuthPage onAuthenticated mode argument', () => {
+  test('passes "login" after login', async () => {
+    const { callbackArgs } = await loginAndCapture('AuthPage');
+    expect(callbackArgs[0]).toEqual([null, 'login']);
+  });
+
+  test('passes "register" after registration', async () => {
+    const callbackArgs: unknown[][] = [];
+    render(
+      <AuthProvider>
+        <AuthPage
+          initialMode="register"
+          onAuthenticated={(...args: unknown[]) => {
+            callbackArgs.push(args);
+          }}
+        />
+      </AuthProvider>,
+    );
+    fireEvent.change(document.getElementById('register-email')!, {
+      target: { value: 'a@b.test' },
+    });
+    fireEvent.change(document.getElementById('register-password')!, {
+      target: { value: 'pw1234567890ab' },
+    });
+    const form = document.getElementById('register-email')!.closest('form')!;
+    fireEvent.submit(form);
+    await waitFor(() => expect(callbackArgs.length).toBe(1));
+    expect(callbackArgs[0]).toEqual([null, 'register']);
   });
 });

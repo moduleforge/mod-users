@@ -9,3 +9,8 @@ Flow-accounts 5F38: `gui/src/components/auth-page.tsx` calls the same `onAuthent
 
 ## Validation
 - `cd gui && bun test && bun run typecheck && bun run build`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: `cd gui && bun test && bun run typecheck && bun run build` passed (225 tests).
+- Files: gui/src/components/auth-page.tsx, gui/src/components/login-return-path.test.tsx, gui/src/stories/AuthPage.stories.tsx, gui/README.md.
