@@ -30,7 +30,7 @@ phases:
             branch: plan/flow-accounts-upstream-01-002
             commit:
                 - 134ea2e
-            merge: null
+            merge: 6392d3e00eda38c7b66d8c461d5ea16223314c5f
         - number: 3
           slug: eddsa-security-tests-and-docs
           title: Alg-Confusion Tests And Docs
