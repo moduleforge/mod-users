@@ -10,3 +10,9 @@ Flow-accounts lJE0: `gui/` commits only `yalc.lock`; consumers cannot `bun insta
 
 ## Validation
 - Clean checkout in a temp dir: `bun install --frozen-lockfile && bun run typecheck && bun run build`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Finding: the premise was stale. The repo already uses the workspace layout (root `package.json` workspaces `["gui", "../mod-core/gui"]`) with a committed root `bun.lock`; `gui/yalc.lock` is gitignored and absent. A separate `gui/bun.lock` would conflict with the workspace, so none was added. `.gitignore` does not exclude `bun.lock`; no `node_modules` committed.
+- Change: documented the lockfile and link model in `gui/README.md`; the build-order and link steps were already in `AGENTS.md` First-time setup.
+- Validation: clean clone (mod-users plus sibling mod-core, mod-core/gui built first): `bun install --frozen-lockfile`, `bun run typecheck`, `bun run build` in `gui/` all passed.

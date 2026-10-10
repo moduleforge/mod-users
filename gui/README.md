@@ -12,6 +12,8 @@ Everything below is exported from the package root (`gui/src/index.ts`).
 
 The package is not published to any registry. An app consumes it as a member of a **bun workspace** it owns: a root `package.json` listing this repo's `gui/` (and the sibling `mod-core/gui`) in `workspaces`, with the app's own `package.json` referring to `@moduleforge/users-gui` as `workspace:*`. `@moduleforge/core-gui` is an optional peer dependency (`react` and `react-dom` `^19` are required peers).
 
+Lockfile: `gui/` has no lockfile of its own. The single committed lockfile is the repo-root `bun.lock`, which covers the whole workspace (`gui/` plus the sibling `mod-core/gui`); `gui/yalc.lock` is gitignored and unused. From a clean clone with `mod-core` checked out beside `mod-users`, `bun install --frozen-lockfile` at the repo root succeeds, after which `bun run typecheck` and `bun run build` in `gui/` pass (once `mod-core/gui` is built, as below). Never commit `node_modules`.
+
 Build order: build `mod-core/gui` first (`bun run build` there, not bare `tsup`, so `dist/index.css` is produced), then build `gui/` here. The exact steps are in [AGENTS.md First-time setup](../AGENTS.md#first-time-setup).
 
 Styling uses Tailwind v4 with the core-gui tokens. In your app's global CSS, import core-gui's `styles.css` and `tokens.css` and add an `@source` for both packages' `dist/` directories so Tailwind sees their class names (adjust the relative paths to your workspace layout):
