@@ -825,3 +825,13 @@ items:
         - plan/phase:eddsa-verify-only-key
         - plan/slug:flow-accounts-upstream
       text: config.Load()/validate() in mod-users still require JWT_SECRET (bootstrapped from DB), so mod-users' own server is not verify-only; the verify-only mode is available to library consumers via auth.NewVerifierWithOptions. Decide whether a later task should make JWT_SECRET optional in Load (affects step-up tokens and other HS256 users).
+    - title: CORS docs still say only bare * errors
+      id: BODx
+      date: "2026-10-10"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:unspecified
+        - plan/phase:remediation-03
+        - plan/slug:flow-accounts-upstream
+      text: .env.example (lines 14-16) says other modes reject '*' in CORS_ORIGINS at boot and docs/mod-users-spec.md:333 says a '*' in CORS_ORIGINS is a startup error; both are narrower than the behavior now, which rejects any entry containing * outside local mode. Change both to 'any entry containing *'. Fix the inaccurate comment at api/internal/server/server.go:59 together with the local-mode pattern finding.
