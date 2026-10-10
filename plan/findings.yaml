@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Step-up tokens accept an empty secret
-      id: SUyS
-      date: "2026-10-10"
-      tags:
-        - type:security
-        - priority:medium
-        - plan/phase:remediation-01
-        - effort:unspecified
-      text: 'IssueStepUpToken and VerifyStepUpToken (api/internal/handlers/identities.go ~618, 659; api/internal/auth/stepup.go) accept an empty jwtSecret with no guard; an IdentitiesHandler or SSHKeysHandler built with an empty secret would let anyone forge valid step-up tokens (HMAC with empty key). Pre-existing; the signer/verifier paths gained empty-secret guards but the step-up path did not. Suggested: return an error when len(secret)==0 in both functions; consider a dedicated step-up key derived from the secret via HKDF with a context label so bearer and step-up keys are separated cryptographically, and optionally allowlist typ (empty or JWT) for bearer tokens in verifyLocal in api/internal/auth/jwt.go.'
+items: []
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
@@ -29,4 +20,9 @@ closed:
       title: Step-up tokens share JWT_SECRET with bearer
       disposition: fixed
       ref: phase-06-remediation-01/002-reject-step-up-as-bearer.md
+      date: "2026-10-10"
+    - id: SUyS
+      title: Step-up tokens accept an empty secret
+      disposition: fixed
+      ref: phase-07-remediation-02/001-step-up-empty-secret-guard.md
       date: "2026-10-10"
