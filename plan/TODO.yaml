@@ -154,11 +154,13 @@ phases:
           slug: audit-sibling-checkout-deps
           title: Audit Sibling checkout-deps Copies
           path: phase-05-checkout-deps-token-handling/002-audit-sibling-checkout-deps.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Audit written to plan/notes/sibling-checkout-deps-audit.md. app-mfmanager, app-mfgit and app-mftodo copies of checkout-deps.sh are unhardened (token on argv via -c http.extraheader for mfmanager; no host/owner validation, allowlist or redirect hardening); mod-users main copy superseded by this plan; flow-accounts already hardened (no overrides support). Findings 5eQ7 (app-mfmanager), dUlk (app-mfgit), ll8e (app-mftodo) filed, type:security priority:high. Static audit only; no token values read.
           git:
-            branch: null
-            commit: []
+            branch: plan/flow-accounts-upstream-05-002
+            commit:
+                - 35c40ff
             merge: null
     - number: 6
       slug: remediation-01
