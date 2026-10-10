@@ -108,7 +108,7 @@ phases:
             branch: plan/flow-accounts-upstream-04-001
             commit:
                 - aab79f4
-            merge: null
+            merge: 007e46e26c5fdd336dbf94e103f5eefa6590b222
         - number: 2
           slug: self-email-verified-at
           title: Expose emailVerifiedAt On Self
