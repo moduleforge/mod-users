@@ -12,3 +12,11 @@
 ## Validation
 - Tests with and without a strip proxy (request path `/auth/oidc/...` with `USERS_COOKIE_PATH=/manage`, and with `X-Forwarded-Prefix`-style header if the design supports it); unset behaviour regression test.
 - `cd api && go test ./...`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Added `USERS_COOKIE_PATH` (`api/internal/config/cookie_path.go`, `config.go` `Auth.CookiePath`), strictly validated at load. `OIDCStateCookiePath(r, basePath)` in `api/internal/auth/oidc_cookie_path.go` returns base + `/v1/auth/oidc/` when set, else the unchanged request-derived path.
+- Applied at all cookie sites: `api/internal/handlers/auth/oidc.go` (set and clear share `newStateCookie`) and `api/internal/handlers/identities.go`. Facade `handlers.NewIdentitiesHandler` gained a trailing `cookiePath string` arg; `moduleforge.module.yaml` passes `field:cfg.Auth.CookiePath`.
+- X-Forwarded-Prefix deliberately not supported (untrusted header; config only).
+- Docs: `docs/cookie-path.md`, README link, `.env.example`.
+- Validation: `go vet ./...` and `go test ./...` pass. Resolves followup E75T; hDB7 (test redirect path) is not addressed.

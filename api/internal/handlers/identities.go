@@ -49,6 +49,9 @@ type IdentitiesHandler struct {
 	// requireStepUp controls whether credential-mutating endpoints require a
 	// valid X-Step-Up-Token header. Reflects cfg.Auth.RequireStepUpForCredentialChange.
 	stepUpRequired bool
+	// cookiePath is the configured USERS_COOKIE_PATH base ("" = derive from
+	// the request); it must match the path the OIDC callback clears.
+	cookiePath string
 }
 
 // emailSender is the minimal interface for sending email. It matches
@@ -70,6 +73,9 @@ type IdentitiesHandlerDeps struct {
 	JWTSecret      string
 	Consumed       *sync.Map
 	StepUpRequired bool
+	// CookiePath is cfg.Auth.CookiePath (USERS_COOKIE_PATH); "" derives the
+	// oidc_state cookie Path from the request.
+	CookiePath string
 }
 
 // NewIdentitiesHandler constructs an IdentitiesHandler.
@@ -99,6 +105,7 @@ func NewIdentitiesHandlerWithDeps(deps IdentitiesHandlerDeps) *IdentitiesHandler
 		jwtSecret:      deps.JWTSecret,
 		consumed:       consumed,
 		stepUpRequired: deps.StepUpRequired,
+		cookiePath:     deps.CookiePath,
 	}
 }
 
@@ -222,7 +229,7 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 
 	// Set the same oidc_state cookie the existing /start uses so the callback
 	// can validate the state parameter.
-	http.SetCookie(w, newOIDCStateCookie(state, 300, r))
+	http.SetCookie(w, newOIDCStateCookie(state, 300, r, h.cookiePath))
 	server.JSON(w, http.StatusOK, startLinkResponse{AuthorizeURL: authURL, State: state})
 }
 
@@ -729,7 +736,7 @@ func normalizeIdentityProviderID(r *http.Request) string {
 // newOIDCStateCookie builds the oidc_state cookie mirroring the pattern in
 // handlers/auth/oidc.go. Keeping a local copy avoids introducing a package
 // dependency between handlers and handlers/auth.
-func newOIDCStateCookie(value string, maxAge int, r *http.Request) *http.Cookie {
+func newOIDCStateCookie(value string, maxAge int, r *http.Request, basePath string) *http.Cookie {
 	secure := r.TLS != nil
 	if r.TLS == nil {
 		if xf := r.Header.Get("X-Forwarded-Proto"); xf == "https" {
@@ -739,7 +746,7 @@ func newOIDCStateCookie(value string, maxAge int, r *http.Request) *http.Cookie 
 	return &http.Cookie{
 		Name:     "oidc_state",
 		Value:    value,
-		Path:     localauth.OIDCStateCookiePath(r),
+		Path:     localauth.OIDCStateCookiePath(r, basePath),
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   secure,

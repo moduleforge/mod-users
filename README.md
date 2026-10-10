@@ -55,6 +55,7 @@ CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact fron
 - [docs/architecture.md](./docs/architecture.md) — system design, sub-project relationships, and key design decisions
 - [docs/jwt-eddsa.md](./docs/jwt-eddsa.md) — EdDSA JWT signing, verify-only deployment, key rotation, and the `JWT_*` configuration
 - [docs/cors.md](./docs/cors.md) — CORS default-deny policy, `CORS_ORIGINS` / `DEPLOY_MODE` behavior, and the upgrade note for deployments that relied on the implicit wildcard
+- [docs/cookie-path.md](./docs/cookie-path.md) — `USERS_COOKIE_PATH`, the `oidc_state` cookie Path, and the strip-prefix proxy example
 - [docs/project-structure.md](./docs/project-structure.md) — directory layout and sub-project conventions
 - [next-steps.md](./next-steps.md) — forward-looking residue: pending manual verification and deferred work
 - [.claude/CLAUDE.md](./.claude/CLAUDE.md) — Claude Code configuration and project-specific AI agent guidance

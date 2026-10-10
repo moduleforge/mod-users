@@ -26,7 +26,7 @@ import (
 // doc comment on the Sender-typing gotcha), jwtSecret is empty, consumed is a
 // fresh *sync.Map, and stepUpRequired is false.
 func TestNewIdentitiesHandler_ConstructsFromManifestShapedArgs(t *testing.T) {
-	h := handlers.NewIdentitiesHandler(nil, nil, nil, nil, nil, "", &sync.Map{}, false)
+	h := handlers.NewIdentitiesHandler(nil, nil, nil, nil, nil, "", &sync.Map{}, false, "")
 	if h == nil {
 		t.Fatal("NewIdentitiesHandler returned nil")
 	}
@@ -36,7 +36,7 @@ func TestNewIdentitiesHandler_ConstructsFromManifestShapedArgs(t *testing.T) {
 // registrar wrapper actually mounts GET /self/identities on the router
 // passed to it, the way generated wiring's register: call will.
 func TestRegisterSelfIdentitiesReadRoute_MountsGetIdentities(t *testing.T) {
-	h := handlers.NewIdentitiesHandler(nil, nil, nil, nil, nil, "", &sync.Map{}, false)
+	h := handlers.NewIdentitiesHandler(nil, nil, nil, nil, nil, "", &sync.Map{}, false, "")
 	r := chi.NewRouter()
 	handlers.RegisterSelfIdentitiesReadRoute(r, h)
 
@@ -49,7 +49,7 @@ func TestRegisterSelfIdentitiesReadRoute_MountsGetIdentities(t *testing.T) {
 // registrar wrapper mounts all six credential-mutating endpoints on the
 // router passed to it, the way generated wiring's register: call will.
 func TestRegisterSelfIdentitiesWriteRoutes_MountsSixEndpoints(t *testing.T) {
-	h := handlers.NewIdentitiesHandler(nil, nil, nil, nil, nil, "", &sync.Map{}, false)
+	h := handlers.NewIdentitiesHandler(nil, nil, nil, nil, nil, "", &sync.Map{}, false, "")
 	r := chi.NewRouter()
 	handlers.RegisterSelfIdentitiesWriteRoutes(r, h)
 
