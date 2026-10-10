@@ -195,6 +195,6 @@ phases:
           findings:
             - SUyS
           git:
-            branch: null
+            branch: plan/flow-accounts-upstream-07-001
             commit: []
             merge: null
