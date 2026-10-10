@@ -120,7 +120,7 @@ phases:
             branch: plan/flow-accounts-upstream-04-002
             commit:
                 - 0a4f032
-            merge: null
+            merge: 0c60257a6afdb2bad9235fb3ef90f784bcbf0057
         - number: 3
           slug: gui-lockfile-and-link
           title: Commit gui bun.lock And Document core-gui Link
