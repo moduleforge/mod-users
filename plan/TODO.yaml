@@ -60,7 +60,8 @@ phases:
           digest: 'CORS default-deny: empty CORS_ORIGINS outside local mode installs no CORS middleware; AllowCredentials only with explicit allow-list; config.Load fails when CORS_ORIGINS contains * and DEPLOY_MODE is not local (serverless, k8s, container-host count as production-like); local mode keeps permissive * without credentials; server.New fails closed on hand-built wildcard config. docs/cors.md added with behavior-change and flow-accounts adoption notes, linked from README; spec and .env.example updated.'
           git:
             branch: plan/flow-accounts-upstream-02-001
-            commit: []
+            commit:
+                - 7afae2a
             merge: null
     - number: 3
       slug: cookie-base-path
