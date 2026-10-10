@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 1
+    tasks_added: 2
 phases:
     - number: 1
       slug: eddsa-verify-only-key
@@ -146,6 +146,7 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
+      security_review: required
       tasks:
         - number: 1
           slug: signer-wiring-and-key-revocation-docs
@@ -156,6 +157,18 @@ phases:
           findings:
             - QI2I
             - RmRX
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: reject-step-up-as-bearer
+          title: Reject Step-Up Tokens As Bearer Tokens
+          path: phase-06-remediation-01/002-reject-step-up-as-bearer.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - nIyL
           git:
             branch: null
             commit: []
