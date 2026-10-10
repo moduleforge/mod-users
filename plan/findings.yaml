@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Cookie base path has no length cap
-      id: rzI8
-      date: "2026-10-10"
-      tags:
-        - type:security
-        - priority:low
-        - plan/phase:cookie-base-path
-        - effort:unspecified
-      text: 'ValidateCookieBasePath (api/internal/config/cookie_path.go) has no maximum length; an oversized operator-set USERS_COOKIE_PATH could produce an oversized Set-Cookie header that browsers silently drop. Operator-set at startup, not attacker-controlled, not exploitable. Optional: cap the length (e.g. 256 bytes) with a test.'
+items: []
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
@@ -59,4 +50,9 @@ closed:
       title: Cookie path docs omit test-redirect effect
       disposition: promoted
       ref: 7ok7
+      date: "2026-10-10"
+    - id: rzI8
+      title: Cookie base path has no length cap
+      disposition: dismissed
+      reason: 'Reviewer rated it a suggestion: the value is operator-set at startup, not attacker-controlled, and not exploitable; an oversized value only makes browsers drop the cookie, which the operator sees immediately. Remediation budget is exhausted and it is not worth a backlog item.'
       date: "2026-10-10"
