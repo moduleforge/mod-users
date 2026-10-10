@@ -198,6 +198,15 @@ components:
           properties:
             default_app:
               $ref: "#/components/schemas/AppSummary"
+            email_verified_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: >-
+                Returned by GET/PUT /v1/self. Time the caller's email was
+                verified, or null when it has not been. Lets clients prompt
+                for verification before a verified-email-gated call is refused
+                with users.email_unverified.
 
     SelfUpdateRequest:
       type: object

@@ -11,3 +11,10 @@ Flow-accounts dnL0 (existing followup QCRD): `UserAccountSelf` from `/v1/self` l
 ## Validation
 - Go handler test for both states; GUI type/test updates.
 - `cd api && go test ./... && cd ../gui && bun test && bun run typecheck`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Backend: `api/internal/handlers/self.go` adds `email_verified_at` (timestamp or null) to the self response; `api/openapi.yaml` UserDetail documents it. JSON key is snake_case to match neighbouring fields (the task text wrote `emailVerifiedAt`).
+- GUI: `UserAccountSelf.email_verified_at: string | null` in `gui/src/lib/api.ts`; `useAuth()` exposes `emailVerifiedAt` in `gui/src/lib/auth-context.tsx`.
+- Tests: `api/internal/handlers/self_routes_test.go`, `gui/src/lib/auth-context.test.tsx`. Docs: `docs/mod-users-spec.md`.
+- Validation: go test ./... pass; bun test 225 pass; typecheck pass.
