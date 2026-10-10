@@ -1,0 +1,12 @@
+version: 2
+items:
+    - title: config.Load()/validate() in mod-users still r
+      id: GlTi
+      date: "2026-10-10"
+      tags:
+        - type:ambiguity
+        - plan/phase:eddsa-verify-only-key
+        - priority:unspecified
+        - effort:unspecified
+      text: config.Load()/validate() in mod-users still require JWT_SECRET (bootstrapped from DB), so mod-users' own server is not verify-only; the verify-only mode is available to library consumers via auth.NewVerifierWithOptions. Decide whether a later task should make JWT_SECRET optional in Load (affects step-up tokens and other HS256 users).
+closed: []
