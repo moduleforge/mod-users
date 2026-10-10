@@ -75,7 +75,7 @@ build: preflight build.model build.api build.gui ## Build all sub-projects (defa
 test: test.unit ## Alias for test.unit
 
 .PHONY: test.unit
-test.unit: preflight test.unit.model test.unit.api test.unit.gui ## Run unit tests across all sub-projects
+test.unit: preflight test.unit.scripts test.unit.model test.unit.api test.unit.gui ## Run unit tests across all sub-projects
 
 .PHONY: test.integration
 test.integration: preflight test.integration.model test.integration.api test.integration.gui ## Run integration tests across all sub-projects
@@ -202,7 +202,10 @@ test.model:   ; @$(MAKE) -C model   test
 test.api:     ; @$(MAKE) -C api     test
 test.gui:     ; @$(MAKE) -C gui     test
 
-.PHONY: test.unit.model test.unit.api test.unit.gui
+.PHONY: test.unit.scripts test.unit.model test.unit.api test.unit.gui
+# test.unit.scripts exercises scripts/checkout-deps.sh's lockfile and
+# token-handling guards with a stub git (no network, no real credential).
+test.unit.scripts: ; @bash scripts/test-checkout-deps.sh
 test.unit.model:   ; @$(MAKE) -C model   test.unit
 test.unit.api:     ; @$(MAKE) -C api     test.unit
 test.unit.gui:     ; @$(MAKE) -C gui     test.unit
