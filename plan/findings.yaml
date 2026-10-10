@@ -27,6 +27,15 @@ items:
         - plan/phase:remediation-03
         - effort:unspecified
       text: .env.example (lines 14-16) says other modes reject '*' in CORS_ORIGINS at boot and docs/mod-users-spec.md:333 says a '*' in CORS_ORIGINS is a startup error; both are narrower than the behavior now, which rejects any entry containing * outside local mode. Change both to 'any entry containing *'. Fix the inaccurate comment at api/internal/server/server.go:59 together with the local-mode pattern finding.
+    - title: Local CORS patterns reflect with credentials
+      id: dnKQ
+      date: "2026-10-10"
+      tags:
+        - type:security
+        - priority:medium
+        - plan/phase:remediation-03
+        - effort:unspecified
+      text: 'In DeployModeLocal, api/internal/server/server.go corsOptions (~64-90) passes pattern entries such as https://*.example.com, http* or https://* with wildcard=false, so AllowCredentials is true and go-chi/cors v1.2.2 reflects any matching Origin with Access-Control-Allow-Credentials: true. Reachable only in local mode when the operator sets the pattern explicitly; a test case blesses it and the comment ''The wildcard is never combined with credentials'' is inaccurate for it. Suggested: in local mode treat any entry containing * like the bare wildcard (collapse to ["*"], no credentials) or reject patterns in local mode; update the test and docs/cors.md. Optional: share one CORS_ORIGINS parser between config.Load and corsOptions to remove drift risk.'
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
