@@ -49,6 +49,7 @@ phases:
     - number: 2
       slug: cors-safe-default
       title: CORS safe default - 5K4Q
+      diff_base: e3b8f25c5f317c9067354542cd3cf3c9a9b7992b
       tasks:
         - number: 1
           slug: cors-default-deny
