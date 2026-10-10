@@ -86,6 +86,7 @@ phases:
           path: phase-03-cookie-base-path/002-oidc-test-redirect-prefix.md
           done: false
           tier: sonnet-med
+          digest: redirectToTestResult now prepends the validated configured cookie base path (OIDCHandler.testResultPath) to /oidc-config, clearing RawPath; unchanged when unset; X-Forwarded-Prefix ignored; other redirect builders audited, no change needed. Resolves followup hDB7. Table test added.
           git:
             branch: null
             commit: []
