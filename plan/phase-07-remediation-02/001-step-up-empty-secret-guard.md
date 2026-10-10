@@ -14,3 +14,9 @@ Remediates plan finding SUyS in this plan's `plan/findings.yaml`. Work targets t
 
 ## References
 - Finding SUyS in this plan's `plan/findings.yaml`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- `IssueStepUpToken` returns new `ErrStepUpEmptySecret` for an empty secret; `VerifyStepUpToken` returns `ErrStepUpRequired` for an empty secret. Header and purpose checks untouched. The `stepup_verify` handler already wraps issue errors.
+- Validation: `go build`, `go vet`, `go test ./...` in `api` pass; new tests in `api/internal/auth/stepup_test.go`.
+- Files: `api/internal/auth/stepup.go`, `api/internal/auth/stepup_test.go`.

@@ -46,6 +46,9 @@ type stepUpPayload struct {
 // with secret (JWT_SECRET). It returns the encoded token, the jti (for
 // replay tracking), and the expiry time.
 func IssueStepUpToken(secret []byte, userAccountID int64, ttl time.Duration) (token, jti string, exp time.Time, err error) {
+	if len(secret) == 0 {
+		return "", "", time.Time{}, ErrStepUpEmptySecret
+	}
 	raw := make([]byte, 16)
 	if _, err = rand.Read(raw); err != nil {
 		return "", "", time.Time{}, fmt.Errorf("stepup: generate jti: %w", err)
@@ -74,6 +77,11 @@ func IssueStepUpToken(secret []byte, userAccountID int64, ttl time.Duration) (to
 	return token, jti, exp, nil
 }
 
+// ErrStepUpEmptySecret is returned when IssueStepUpToken is called with an
+// empty signing secret. An empty HMAC key is publicly known, so tokens signed
+// with it would be forgeable by anyone.
+var ErrStepUpEmptySecret = errors.New("stepup: signing secret must not be empty")
+
 // ErrStepUpRequired is the sentinel returned by VerifyStepUpToken (and by
 // requireStepUp on the handler) when the step-up check fails for any reason.
 // Callers map this to a 409 step_up_required response.
@@ -92,6 +100,11 @@ var ErrStepUpRequired = errors.New("stepup: step-up token required or invalid")
 // browser session. A restart clears the cache, leaving a small replay window
 // for tokens issued immediately before the restart — tolerable.
 func VerifyStepUpToken(secret []byte, token string, userAccountID int64, consumed *sync.Map) error {
+	// An empty secret is a publicly known HMAC key; never accept anything
+	// signed with it.
+	if len(secret) == 0 {
+		return ErrStepUpRequired
+	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return ErrStepUpRequired
