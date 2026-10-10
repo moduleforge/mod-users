@@ -155,6 +155,7 @@ phases:
           path: phase-06-remediation-01/001-signer-wiring-and-key-revocation-docs.md
           done: false
           tier: sonnet-med
+          digest: 'Added signer-requiring handler constructors (authhandlers.NewWithSigner, handlers.NewAssumeHandlerWithSigner; public constructors keep signatures), NewHS256Signer now returns error and rejects empty secret, no-signer fallback fails closed on empty secret, OIDC signer built once with startup check (SignerErr) in main. docs/jwt-eddsa.md gained signer-wiring and revocation sections. Residual: legacy-constructed handler with non-empty secret and no SetSigner still falls back to HS256 (handlers do not see JWT_ALG); documented.'
           findings:
             - QI2I
             - RmRX
