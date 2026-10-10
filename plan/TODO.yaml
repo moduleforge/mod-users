@@ -66,6 +66,7 @@ phases:
     - number: 3
       slug: cookie-base-path
       title: Cookie Path behind a strip-prefix proxy - E75T and hDB7
+      diff_base: f3031e1233bbdf5d8e11d43964a1568a6860d485
       tasks:
         - number: 1
           slug: configured-cookie-base-path
