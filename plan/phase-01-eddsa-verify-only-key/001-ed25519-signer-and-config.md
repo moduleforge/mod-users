@@ -12,3 +12,10 @@ Let the login signer sign local tokens with an Ed25519 private key (alg `EdDSA`)
 ## Validation
 - Unit tests: EdDSA-signed token has `alg=EdDSA` and `kid`; HS256 default unchanged; bad/missing key fails config load.
 - `cd api && go test ./...` and `make lint` (note known pre-existing lint.model failure).
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Config: `JWT_ALG` (HS256 default | EdDSA), `JWT_SIGNING_KEY` (PKCS#8 PEM Ed25519 private key; literal `\n` accepted), `JWT_SIGNING_KID` (optional, printable ASCII, max 128). Validated in `Load()`; errors never echo key input. `JWT_SECRET` stays required/bootstrapped under EdDSA (still keys OAuth state and step-up tokens).
+- Signer: `api/internal/auth/signer.go` (`Signer`, `NewHS256Signer`, `NewEdDSASigner`, `NewSigner(config.LocalAuthConfig)`); `local_jwt.go` has `Issue*JWTWithSigner` plus unchanged-signature `Issue*JWT` wrappers (HS256, no kid). Handlers gained `SetSigner`; wired in `api/cmd/server/main.go`; OIDC callback builds its signer from cfg.
+- Validation: `go test ./...` passed; `make lint.api` passed; `make lint` fails only at pre-existing `lint.model` (goose baseline, `legal_entities` missing). Logs in `.flow/validation-logs/`.
+- Note: the server's verifier does not yet accept EdDSA tokens (task 002); do not set `JWT_ALG=EdDSA` in a deployment until it lands.

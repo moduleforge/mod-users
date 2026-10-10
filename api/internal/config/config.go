@@ -6,6 +6,7 @@ package config
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -177,7 +178,19 @@ type LocalAuthConfig struct {
 	// bootstrapJWTSecretFromDB / fetchOrGeneratePersistedJWTSecret in
 	// jwtsecret_bootstrap.go). A persisted secret that fails the
 	// length check is a fail-loudly error, never silently regenerated.
-	JWTSecret        string
+	JWTSecret string
+	// JWTAlg selects the algorithm used to sign locally-issued JWTs: "HS256"
+	// (default, keyed by JWTSecret) or "EdDSA" (keyed by JWTSigningKey).
+	// Populated from JWT_ALG. JWTSecret is still required and bootstrapped
+	// under EdDSA: it keys the OAuth state signer and step-up tokens.
+	JWTAlg string
+	// JWTSigningKey is the parsed Ed25519 private key from JWT_SIGNING_KEY
+	// (PKCS#8 PEM). Non-nil only when JWTAlg is "EdDSA". The raw env value is
+	// never retained, and the key is never logged.
+	JWTSigningKey ed25519.PrivateKey
+	// JWTSigningKID is the optional JWT_SIGNING_KID, set as the "kid" header
+	// on locally-issued JWTs when non-empty (any algorithm).
+	JWTSigningKID    string
 	EmailCodeTTL     time.Duration
 	PasswordResetTTL time.Duration
 	LocalIssuer      string
@@ -229,6 +242,11 @@ type Config struct {
 // fetchOrGeneratePersistedJWTSecret in jwtsecret_bootstrap.go). A
 // persisted secret that fails validation (too short — corrupt or
 // truncated) fails loudly rather than being silently regenerated.
+//
+// JWT_ALG (HS256 default | EdDSA), JWT_SIGNING_KEY (PKCS#8 PEM Ed25519
+// private key; required for EdDSA), and JWT_SIGNING_KID (optional "kid"
+// header) are validated here too (see jwt_signing.go). JWT_SECRET stays
+// required under EdDSA.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
 	// them alongside missing-field errors in one shot.
@@ -310,6 +328,9 @@ func Load() (*Config, error) {
 		tokenDisplay = TokenDisplayBoth
 	}
 
+	jwtAlg, jwtSigningKey, jwtSigningKID, jwtSigningProblems := loadJWTSigning()
+	parseErrors = append(parseErrors, jwtSigningProblems...)
+
 	cfg := &Config{
 		DeployMode: mode,
 		DB: DBConfig{
@@ -333,6 +354,9 @@ func Load() (*Config, error) {
 		},
 		LocalAuth: LocalAuthConfig{
 			JWTSecret:        os.Getenv("JWT_SECRET"),
+			JWTAlg:           jwtAlg,
+			JWTSigningKey:    jwtSigningKey,
+			JWTSigningKID:    jwtSigningKID,
 			EmailCodeTTL:     emailCodeTTL,
 			PasswordResetTTL: passwordResetTTL,
 			LocalIssuer:      getEnv("LOCAL_ISSUER", "users-module-local"),

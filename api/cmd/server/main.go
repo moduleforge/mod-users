@@ -405,6 +405,16 @@ func main() {
 		cfg.Server.GUIBaseURL,
 	)
 
+	// Select the JWT signer (HS256 default, or EdDSA when JWT_ALG=EdDSA) and
+	// hand it to every handler that mints local tokens. OIDC callback builds
+	// its own from cfg.
+	jwtSigner, err := auth.NewSigner(cfg.LocalAuth)
+	if err != nil {
+		slog.ErrorContext(ctx, "jwt signer init failed", "error", err)
+		os.Exit(1)
+	}
+	authHandler.SetSigner(jwtSigner)
+
 	// Wire the first-user wildcard-grant bootstrap hook into both account-creation
 	// paths (local register and OIDC auto-create). When the very first user account
 	// is created, this hook issues a wildcard manage grant for that entity, making
@@ -505,6 +515,7 @@ func main() {
 	usersHandler := handlers.NewUserAccountsHandler(uaSvc, grantAdminFn, revokeAdminFn)
 	_ = usersHandler // wired via RegisterAccountRoutes in generated main.go
 	assumeHandler := handlers.NewAssumeHandler(uaSvc, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	assumeHandler.SetSigner(jwtSigner)
 	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup, entityResolver, coreQueries)
 	_ = appsHandler // wired via RegisterAccountRoutes in generated main.go
 

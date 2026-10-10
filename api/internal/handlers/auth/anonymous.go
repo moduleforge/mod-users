@@ -55,7 +55,7 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	// from the service result UUID — no additional DB round-trip is required.
 	dbUA := db.UserAccount{Uuid: uuid.UUID(result.UserAccount.UUID)}
 
-	token, err := localauth.IssueAnonymousJWT(dbUA, h.jwtSecret, h.issuer)
+	token, err := localauth.IssueAnonymousJWTWithSigner(dbUA, h.jwtSigner(), h.issuer)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "anonymous: issue jwt", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")

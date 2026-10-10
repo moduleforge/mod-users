@@ -28,6 +28,15 @@ type OAuth = inner.OAuth
 type Principal = inner.Principal
 type UserContext = inner.UserContext
 
+// Signer signs locally-issued JWTs (HS256 or EdDSA); see NewSigner.
+type Signer = inner.Signer
+
+// NewSigner builds the Signer selected by the local-auth configuration
+// (JWT_ALG, JWT_SECRET, JWT_SIGNING_KEY, JWT_SIGNING_KID).
+func NewSigner(lc config.LocalAuthConfig) (*Signer, error) {
+	return inner.NewSigner(lc)
+}
+
 // NewVerifier constructs a JWT verifier that handles both OIDC and local tokens.
 func NewVerifier(ctx context.Context, issuerURL, clientID, jwtSecret, localIssuer string) (*Verifier, error) {
 	return inner.NewVerifier(ctx, issuerURL, clientID, jwtSecret, localIssuer)

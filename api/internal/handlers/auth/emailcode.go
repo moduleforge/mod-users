@@ -171,7 +171,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Purpose == "login" {
-		token, err := localauth.IssueLocalJWT(ua, h.jwtSecret, h.issuer)
+		token, err := localauth.IssueLocalJWTWithSigner(ua, h.jwtSigner(), h.issuer)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "email_code_verify: issue jwt", "error", err)
 			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
