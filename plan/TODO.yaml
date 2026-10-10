@@ -89,7 +89,8 @@ phases:
           digest: redirectToTestResult now prepends the validated configured cookie base path (OIDCHandler.testResultPath) to /oidc-config, clearing RawPath; unchanged when unset; X-Forwarded-Prefix ignored; other redirect builders audited, no change needed. Resolves followup hDB7. Table test added.
           git:
             branch: plan/flow-accounts-upstream-03-002
-            commit: []
+            commit:
+                - ee8360b
             merge: null
     - number: 4
       slug: users-gui-improvements
