@@ -10,3 +10,8 @@ Read-only audit: list which other ModuleForge repos' copies of `checkout-deps.sh
 
 ## Validation
 - Notes file exists and covers every found copy; followups added.
+
+## Status
+
+- Outcome: succeeded (2026-10-10).
+- Audit table written to `plan/notes/sibling-checkout-deps-audit.md`. app-mfmanager, app-mfgit and app-mftodo need the full hardening (3 findings filed); flow-accounts is already hardened; mod-users main checkout is superseded by this plan's script.
