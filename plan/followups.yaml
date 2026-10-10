@@ -895,3 +895,13 @@ items:
         - plan/phase:checkout-deps-token-handling
         - plan/slug:flow-accounts-upstream
       text: 'Repo app-mfgit, scripts/checkout-deps.sh: passes MODULEFORGE_READ_TOKEN via `git -c http.extraheader=...` on the command line, validates only the characters of an overrides host (no top-level host or owner shape check), has no MODULEFORGE_TOKEN_ALLOWED_HOSTS token-host allowlist, and does not set http.followRedirects=false. Port the hardened script (GIT_CONFIG_COUNT env header scoped to the host, host/owner validation, allowlist, redirects off) from the moduleforge mod-users scripts/checkout-deps.sh.'
+    - title: app-mftodo checkout-deps.sh unhardened
+      id: ll8e
+      date: "2026-10-10"
+      tags:
+        - type:security
+        - priority:high
+        - effort:unspecified
+        - plan/phase:checkout-deps-token-handling
+        - plan/slug:flow-accounts-upstream
+      text: 'Repo app-mftodo, scripts/checkout-deps.sh: passes MODULEFORGE_READ_TOKEN via `git -c http.extraheader=...` on the command line, validates only the characters of an overrides host (no top-level host or owner shape check), has no MODULEFORGE_TOKEN_ALLOWED_HOSTS token-host allowlist, and does not set http.followRedirects=false. Port the hardened script (GIT_CONFIG_COUNT env header scoped to the host, host/owner validation, allowlist, redirects off) from the moduleforge mod-users scripts/checkout-deps.sh.'
