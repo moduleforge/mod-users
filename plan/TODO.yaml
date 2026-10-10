@@ -113,7 +113,7 @@ phases:
           slug: self-email-verified-at
           title: Expose emailVerifiedAt On Self
           path: phase-04-users-gui-improvements/002-self-email-verified-at.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Added nullable email_verified_at (snake_case wire name, matching neighbouring /v1/self fields; always emitted, explicit null when unverified) to the /v1/self response (api/internal/handlers/self.go, OpenAPI UserDetail), to GUI UserAccountSelf as email_verified_at: string | null, and exposed via useAuth() as camelCase emailVerifiedAt (null when signed out). Go and GUI tests for verified/unverified; go test, bun test (225 pass) and typecheck passed. Resolves followup QCRD. Wire name differs from the requested camelCase emailVerifiedAt; adoption note needed. Observations outside scope: buildSelfResponse does not emit is_admin though the GUI type declares it; OpenAPI UserSummary has a stale email_verified boolean.'
           git:
