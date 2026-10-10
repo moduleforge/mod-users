@@ -27,4 +27,13 @@ items:
         - plan/phase:eddsa-verify-only-key
         - effort:unspecified
       text: 'In HS256 mode, IssueStepUpToken/VerifyStepUpToken (api/internal/handlers/identities.go) use the same JWT_SECRET as local bearer tokens verified in api/internal/auth/jwt.go verifyLocal, with no typ or audience separation. A step-up token whose iss and exp match the local verifier''s check could be accepted as a bearer token; the claims were not traced. EdDSA mode removes this for bearer verification since HS256 is rejected there. Suggested: confirm step-up claims cannot satisfy the issuer check, or key step-up tokens with a derived or separate key, or add typ/aud separation.'
+    - title: Document JWT_VERIFY_PUBLIC_KEYS revocation
+      id: RmRX
+      date: "2026-10-10"
+      tags:
+        - type:documentation
+        - priority:low
+        - plan/phase:eddsa-verify-only-key
+        - effort:unspecified
+      text: Under JWT_ALG=HS256, NewLocalVerifier in api/internal/auth/jwt.go still accepts EdDSA tokens for every key left in JWT_VERIFY_PUBLIC_KEYS, so a retired key stays authorized until removed. docs/jwt-eddsa.md should state that removing a key from JWT_VERIFY_PUBLIC_KEYS is what revokes it, including after reverting to HS256.
 closed: []
