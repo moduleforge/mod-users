@@ -27,6 +27,9 @@ const (
 	algEdDSA = "EdDSA"
 )
 
+// stepUpTyp is the JWS "typ" header of step-up tokens (see stepup.go).
+const stepUpTyp = "step-up"
+
 // maxVerifyKeys bounds the number of concurrently valid public keys.
 const maxVerifyKeys = 32
 
@@ -187,8 +190,13 @@ func NewLocalVerifier(ctx context.Context, lc config.LocalAuthConfig) (*Verifier
 // NewVerifier creates a JWT verifier. It discovers JWKS from the OIDC issuer
 // and also accepts local HS256 tokens signed with jwtSecret. It is the
 // backward-compatible form of NewVerifierWithOptions; an empty jwtSecret
-// yields a verifier that accepts no local tokens.
+// yields a verifier that accepts no local tokens. A non-empty jwtSecret with
+// an empty localIssuer is refused: it would accept any HS256 token carrying
+// no "iss" claim.
 func NewVerifier(ctx context.Context, issuerURL, clientID, jwtSecret, localIssuer string) (*Verifier, error) {
+	if jwtSecret != "" && localIssuer == "" {
+		return nil, errors.New("auth: local issuer is required when an HS256 secret is set")
+	}
 	return newVerifier(ctx, verifierConfig{
 		issuerURL:   issuerURL,
 		clientID:    clientID,
@@ -268,10 +276,17 @@ func (v *Verifier) verifyLocal(rawToken string) (map[string]any, error) {
 	}
 	var header struct {
 		Alg string          `json:"alg"`
+		Typ string          `json:"typ"`
 		Kid json.RawMessage `json:"kid"`
 	}
 	if err := json.Unmarshal(headerJSON, &header); err != nil {
 		return nil, errors.New("invalid jwt header")
+	}
+
+	// Step-up tokens share the HS256 secret and carry no "iss" claim; they are
+	// never bearer tokens, whatever the issuer configuration.
+	if strings.EqualFold(header.Typ, stepUpTyp) {
+		return nil, errors.New("step-up token is not a bearer token")
 	}
 
 	signingInput := parts[0] + "." + parts[1]

@@ -145,6 +145,7 @@ phases:
     - number: 6
       slug: remediation-01
       title: Remediation Round 1
+      diff_base: c81c6953b80c7a101e24d1ad03576093a7db913c
       kind: remediation
       security_review: required
       tasks:
@@ -152,24 +153,28 @@ phases:
           slug: signer-wiring-and-key-revocation-docs
           title: Signer Wiring Guard And Key Revocation Docs
           path: phase-06-remediation-01/001-signer-wiring-and-key-revocation-docs.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Added signer-requiring handler constructors (authhandlers.NewWithSigner, handlers.NewAssumeHandlerWithSigner; public constructors keep signatures), NewHS256Signer now returns error and rejects empty secret, no-signer fallback fails closed on empty secret, OIDC signer built once with startup check (SignerErr) in main. docs/jwt-eddsa.md gained signer-wiring and revocation sections. Residual: legacy-constructed handler with non-empty secret and no SetSigner still falls back to HS256 (handlers do not see JWT_ALG); documented.'
           findings:
             - QI2I
             - RmRX
           git:
-            branch: null
-            commit: []
+            branch: plan/flow-accounts-upstream-06-001
+            commit:
+                - cba3f9a
             merge: null
         - number: 2
           slug: reject-step-up-as-bearer
           title: Reject Step-Up Tokens As Bearer Tokens
           path: phase-06-remediation-01/002-reject-step-up-as-bearer.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: verifyLocal rejects tokens with header typ step-up (case-insensitive) before signature check; internal NewVerifier now errors when jwtSecret non-empty and localIssuer empty (signature unchanged; no in-repo caller affected); VerifyStepUpToken still requires exact typ and credential_change purpose. Tests added; full Go suite green.
           findings:
             - nIyL
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/flow-accounts-upstream-06-002
+            commit:
+                - 24bbc48
+            merge: bc988371945c38fa02381ca6a2a6c74c647632d8

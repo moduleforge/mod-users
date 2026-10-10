@@ -14,3 +14,9 @@ Remediates plan finding nIyL in this plan's `plan/findings.yaml`. Work targets t
 
 ## References
 - Finding nIyL in this plan's `plan/findings.yaml`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- `verifyLocal` (`api/internal/auth/jwt.go`) now rejects any token whose header `typ` is `step-up` (case-insensitive) before signature checks. Legacy `NewVerifier` returns an error when `jwtSecret` is set and `localIssuer` is empty (signature unchanged; `api/auth/auth.go` wrapper needed no change; no in-repo caller passes an empty issuer).
+- `VerifyStepUpToken` confirmed unchanged: it still requires the exact header (`alg=HS256`, `typ=step-up`) and payload purpose `credential_change`.
+- Tests: `api/internal/auth/jwt_stepup_bearer_test.go`. Validation: `go build/vet/test ./...` passes.
