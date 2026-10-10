@@ -95,17 +95,20 @@ phases:
     - number: 4
       slug: users-gui-improvements
       title: users-gui improvements - 5F38, dnL0, lJE0
+      diff_base: da12dfb66c133144d1b5e9cdcec02c6d08554169
       tasks:
         - number: 1
           slug: authpage-mode-callback
           title: AuthPage Passes Mode To Callback
           path: phase-04-users-gui-improvements/001-authpage-mode-callback.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: 'AuthPage onAuthenticated is now (returnPath: string | null, mode: AuthMode) with mode ''login'' or ''register''; one-arg callbacks still type-check; tests, Ladle story and gui/README updated; gui bun test (225 pass), typecheck and build passed with core-gui resolved.'
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/flow-accounts-upstream-04-001
+            commit:
+                - aab79f4
+            merge: 007e46e26c5fdd336dbf94e103f5eefa6590b222
         - number: 2
           slug: self-email-verified-at
           title: Expose emailVerifiedAt On Self
@@ -120,11 +123,13 @@ phases:
           slug: gui-lockfile-and-link
           title: Commit gui bun.lock And Document core-gui Link
           path: phase-04-users-gui-improvements/003-gui-lockfile-and-link.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Task premise was stale: root package.json is already a bun workspace (gui, ../mod-core/gui) with a committed root bun.lock containing workspace:../mod-core/gui; gui/yalc.lock is gitignored and absent; .gitignore does not exclude bun.lock. No gui/bun.lock added (would conflict with workspace root lockfile). Added a Lockfile paragraph to gui/README.md; link documented in AGENTS.md and gui/README.md. Verified in a clean clone with sibling mod-core laid out side by side: bun install --frozen-lockfile, typecheck and build pass. Caveat: the workspace path ../mod-core/gui requires mod-core as a sibling of mod-users, so it does not resolve inside nested Flow task worktrees.'
           git:
-            branch: null
-            commit: []
+            branch: plan/flow-accounts-upstream-04-003
+            commit:
+                - 2ebfb12
             merge: null
     - number: 5
       slug: checkout-deps-token-handling
