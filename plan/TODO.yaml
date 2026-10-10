@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 1
       slug: eddsa-verify-only-key
@@ -146,4 +146,17 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
-      tasks: []
+      tasks:
+        - number: 1
+          slug: signer-wiring-and-key-revocation-docs
+          title: Signer Wiring Guard And Key Revocation Docs
+          path: phase-06-remediation-01/001-signer-wiring-and-key-revocation-docs.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - QI2I
+            - RmRX
+          git:
+            branch: null
+            commit: []
+            merge: null
