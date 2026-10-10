@@ -11,3 +11,9 @@ Followup hDB7: `api/internal/handlers/auth/oidc.go` (~line 334) sets `u.Path = "
 ## Validation
 - Tests: redirect with and without base path; fragment/query still correct.
 - `cd api && go test ./...`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: new `TestRedirectToTestResultBasePath` (unset, configured, nested, invalid ignored; fragment/query checked; X-Forwarded-Prefix ignored) passes; `cd api && go test ./...` passes.
+- Files: `api/internal/handlers/auth/oidc.go` (`testResultPath`), `api/internal/handlers/auth/oidc_cookie_path_test.go`.
+- Audit: `buildSuccessRedirect`, `redirectToFrontendError`, `redirectToLinkSuccess` use the configured `FrontendReturnURL` verbatim (no path overwrite), so no change needed.
