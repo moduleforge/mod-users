@@ -74,7 +74,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := localauth.IssueLocalJWTWithSigner(ua, h.jwtSigner(), h.issuer)
+	token, err := h.issueLocalJWT(ua)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "login: issue jwt", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")

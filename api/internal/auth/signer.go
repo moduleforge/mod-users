@@ -22,9 +22,13 @@ type Signer struct {
 
 // NewHS256Signer returns a Signer that HMAC-SHA256-signs with secret. kid is
 // optional; when empty no "kid" header is set, so the output is identical to
-// the historical HS256 tokens.
-func NewHS256Signer(secret, kid string) *Signer {
-	return &Signer{method: jwt.SigningMethodHS256, key: []byte(secret), kid: kid}
+// the historical HS256 tokens. An empty secret is rejected: HMAC with an empty
+// key produces tokens anyone can forge.
+func NewHS256Signer(secret, kid string) (*Signer, error) {
+	if secret == "" {
+		return nil, errors.New("local_jwt: HS256 secret must not be empty")
+	}
+	return &Signer{method: jwt.SigningMethodHS256, key: []byte(secret), kid: kid}, nil
 }
 
 // NewEdDSASigner returns a Signer that signs with the Ed25519 private key.
@@ -42,7 +46,7 @@ func NewEdDSASigner(key ed25519.PrivateKey, kid string) (*Signer, error) {
 func NewSigner(lc config.LocalAuthConfig) (*Signer, error) {
 	switch lc.JWTAlg {
 	case "", config.JWTAlgHS256:
-		return NewHS256Signer(lc.JWTSecret, lc.JWTSigningKID), nil
+		return NewHS256Signer(lc.JWTSecret, lc.JWTSigningKID)
 	case config.JWTAlgEdDSA:
 		return NewEdDSASigner(lc.JWTSigningKey, lc.JWTSigningKID)
 	default:

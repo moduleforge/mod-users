@@ -40,6 +40,21 @@ func New(
 	return inner.New(pool, queries, coreQ, jwtSecret, issuer, sender, guiBase)
 }
 
+// NewWithSigner constructs a Handler that always signs local tokens with
+// signer (see auth.NewSigner). Prefer it over New for any app that may run with
+// JWT_ALG=EdDSA; a nil signer is an error.
+func NewWithSigner(
+	pool *pgxpool.Pool,
+	queries *usersdb.Queries,
+	coreQ *coredb.Queries,
+	signer *auth.Signer,
+	issuer string,
+	sender email.Sender,
+	guiBase string,
+) (*Handler, error) {
+	return inner.NewWithSigner(pool, queries, coreQ, signer, issuer, sender, guiBase)
+}
+
 // RegisterRoutes mounts /v1/auth/* routes on r. oidc may be nil when OIDC
 // is not configured (routes that need an OIDCHandler are skipped).
 func RegisterRoutes(r chi.Router, h *Handler, oidc *OIDCHandler) {

@@ -80,6 +80,29 @@ Go API (package `github.com/moduleforge/mod-users/api/auth`):
 `WithHS256Secret`, `WithLocalIssuer`, `WithEd25519PublicKey`,
 `WithEd25519PublicKeys`.
 
+## Signer wiring for composing apps
+
+An app that composes mod-users handlers itself (rather than running
+`cmd/server`) must hand every token-minting handler the signer selected by its
+config. A handler built without a signer falls back to HS256 keyed by the
+`jwtSecret` it was constructed with, which is wrong under `JWT_ALG=EdDSA`:
+
+```go
+signer, err := auth.NewSigner(cfg.LocalAuth) // HS256 or EdDSA per JWT_ALG
+if err != nil { /* fail startup */ }
+
+// Preferred: constructor variants that require a signer (nil is an error).
+authHandler, err := authhandlers.NewWithSigner(pool, queries, coreQ, signer, cfg.LocalAuth.LocalIssuer, sender, guiBase)
+assumeHandler, err := handlers.NewAssumeHandlerWithSigner(uaSvc, signer, cfg.LocalAuth.LocalIssuer)
+
+// Equivalent for the existing constructors:
+//   authHandler.SetSigner(signer); assumeHandler.SetSigner(signer)
+```
+
+`NewHS256Signer` (and so the no-signer fallback) rejects an empty secret. The
+OIDC handler builds its signer once from `cfg` at construction; call
+`oidcHandler.SignerErr()` after construction to fail startup on a bad config.
+
 ## Rotation procedure
 
 1. Generate a new key pair and choose a new `kid`.
@@ -91,7 +114,9 @@ Go API (package `github.com/moduleforge/mod-users/api/auth`):
    `JWT_VERIFY_PUBLIC_KEYS` under its old `kid` so in-flight tokens stay valid
    (the signing key's own public half is added automatically).
 4. After the longest token lifetime has elapsed, remove the old public key
-   from `JWT_VERIFY_PUBLIC_KEYS`. Its tokens are then rejected.
+   from `JWT_VERIFY_PUBLIC_KEYS`. Its tokens are then rejected. (Removing it
+   earlier also works, but immediately invalidates every still-unexpired token
+   it signed; see "Revocation" below.)
 
 Startup fails if a `JWT_VERIFY_PUBLIC_KEYS` entry reuses `JWT_SIGNING_KID` with
 a different key.
@@ -121,8 +146,24 @@ Notes for adopters:
   `config.Load()` still needs `JWT_SECRET` (OAuth state and step-up), so a
   verify-only service should build its verifier directly with the library
   options above rather than run the full mod-users config.
-- Tokens are not revocable by key removal alone before their `exp`; keep
-  lifetimes short.
+- Keep token lifetimes short; see "Revocation" below.
+
+## Revocation
+
+Removing a key from `JWT_VERIFY_PUBLIC_KEYS` is what revokes it: once removed
+from every verifier, every token signed by that key is rejected immediately,
+even if its `exp` has not passed. This holds equally after reverting to HS256:
+under `JWT_ALG=HS256` the verifier still accepts EdDSA tokens for every key in
+`JWT_VERIFY_PUBLIC_KEYS`, so reverting `JWT_ALG` does not revoke the old keys -
+remove them from `JWT_VERIFY_PUBLIC_KEYS` explicitly (on verify-only services
+too). Under `EdDSA`, the signing key's own public half is accepted
+automatically for as long as it is the configured `JWT_SIGNING_KEY`.
+
+What key removal cannot do is revoke an individual token while its key stays
+trusted: there is no per-token revocation list, so a single leaked token stays
+valid until `exp`. Rotation step 4 therefore waits for the longest token
+lifetime only to avoid invalidating live sessions, not because removal would
+fail to take effect earlier.
 
 See also: [architecture](./architecture.md#configuration-and-secrets-bootstrap),
 [spec security requirements](./mod-users-spec.md#security-requirements).

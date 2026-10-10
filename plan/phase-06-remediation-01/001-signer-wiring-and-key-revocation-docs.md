@@ -18,3 +18,9 @@ Remediates plan findings QI2I and RmRX in this plan's `plan/findings.yaml`. Work
 ## References
 - Finding QI2I in this plan's `plan/findings.yaml`.
 - Finding RmRX in this plan's `plan/findings.yaml`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: `cd api && go build ./... && go vet ./... && go test ./...` passed; new tests added; docs/jwt-eddsa.md linked from README.
+- Changes: `NewHS256Signer` now returns `(*Signer, error)` and rejects an empty secret (internal API; `IssueLocalJWT`/`IssueAnonymousJWT`/`IssueAssumeJWT` propagate the error); new `NewWithSigner` / `NewAssumeHandlerWithSigner` constructors (internal and public facades) reject a nil signer, existing constructors unchanged; no-signer fallback fails on empty secret; `OIDCHandler` builds its signer once at construction (`SignerErr()`); `cmd/server/main.go` uses the new constructors; docs/jwt-eddsa.md gained "Signer wiring" and "Revocation" sections.
+- Residual: a legacy-constructed handler with a non-empty secret and no `SetSigner` still falls back to HS256 (handlers do not see `JWT_ALG`); docs direct composing apps to the signer-requiring constructors.
