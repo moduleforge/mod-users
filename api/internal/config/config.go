@@ -190,10 +190,15 @@ type LocalAuthConfig struct {
 	JWTSigningKey ed25519.PrivateKey
 	// JWTSigningKID is the optional JWT_SIGNING_KID, set as the "kid" header
 	// on locally-issued JWTs when non-empty (any algorithm).
-	JWTSigningKID    string
-	EmailCodeTTL     time.Duration
-	PasswordResetTTL time.Duration
-	LocalIssuer      string
+	JWTSigningKID string
+	// JWTVerifyPublicKeys holds the Ed25519 public keys from
+	// JWT_VERIFY_PUBLIC_KEYS (kid -> key; the empty kid is used for tokens
+	// without a "kid" header). Nil when unset. Used for verify-only services
+	// and for keeping retired signing keys valid during rotation.
+	JWTVerifyPublicKeys map[string]ed25519.PublicKey
+	EmailCodeTTL        time.Duration
+	PasswordResetTTL    time.Duration
+	LocalIssuer         string
 }
 
 // SMTPConfig holds outbound email settings.
@@ -245,7 +250,8 @@ type Config struct {
 //
 // JWT_ALG (HS256 default | EdDSA), JWT_SIGNING_KEY (PKCS#8 PEM Ed25519
 // private key; required for EdDSA), and JWT_SIGNING_KID (optional "kid"
-// header) are validated here too (see jwt_signing.go). JWT_SECRET stays
+// header) and JWT_VERIFY_PUBLIC_KEYS (PEM public key or JSON kid-to-PEM map)
+// are validated here too (see jwt_signing.go). JWT_SECRET stays
 // required under EdDSA.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
@@ -330,6 +336,8 @@ func Load() (*Config, error) {
 
 	jwtAlg, jwtSigningKey, jwtSigningKID, jwtSigningProblems := loadJWTSigning()
 	parseErrors = append(parseErrors, jwtSigningProblems...)
+	jwtVerifyKeys, jwtVerifyProblems := loadJWTVerifyPublicKeys()
+	parseErrors = append(parseErrors, jwtVerifyProblems...)
 
 	cfg := &Config{
 		DeployMode: mode,
@@ -353,13 +361,15 @@ func Load() (*Config, error) {
 			GUIBaseURL:      getEnv("GUI_BASE_URL", "http://localhost:3000"),
 		},
 		LocalAuth: LocalAuthConfig{
-			JWTSecret:        os.Getenv("JWT_SECRET"),
-			JWTAlg:           jwtAlg,
-			JWTSigningKey:    jwtSigningKey,
-			JWTSigningKID:    jwtSigningKID,
-			EmailCodeTTL:     emailCodeTTL,
-			PasswordResetTTL: passwordResetTTL,
-			LocalIssuer:      getEnv("LOCAL_ISSUER", "users-module-local"),
+			JWTSecret:     os.Getenv("JWT_SECRET"),
+			JWTAlg:        jwtAlg,
+			JWTSigningKey: jwtSigningKey,
+			JWTSigningKID: jwtSigningKID,
+
+			JWTVerifyPublicKeys: jwtVerifyKeys,
+			EmailCodeTTL:        emailCodeTTL,
+			PasswordResetTTL:    passwordResetTTL,
+			LocalIssuer:         getEnv("LOCAL_ISSUER", "users-module-local"),
 		},
 		SMTP: SMTPConfig{
 			Host: os.Getenv("SMTP_HOST"),

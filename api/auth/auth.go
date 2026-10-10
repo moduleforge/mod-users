@@ -6,6 +6,7 @@ package auth
 
 import (
 	"context"
+	"crypto/ed25519"
 	"net/http"
 	"sync"
 
@@ -40,6 +41,45 @@ func NewSigner(lc config.LocalAuthConfig) (*Signer, error) {
 // NewVerifier constructs a JWT verifier that handles both OIDC and local tokens.
 func NewVerifier(ctx context.Context, issuerURL, clientID, jwtSecret, localIssuer string) (*Verifier, error) {
 	return inner.NewVerifier(ctx, issuerURL, clientID, jwtSecret, localIssuer)
+}
+
+// VerifierOption configures NewVerifierWithOptions.
+type VerifierOption = inner.VerifierOption
+
+// NewVerifierWithOptions constructs a JWT verifier from options. A
+// public-key-only verifier (WithEd25519PublicKeys, no secret) accepts only
+// EdDSA tokens; the accepted algorithms are pinned by the configured keys.
+func NewVerifierWithOptions(ctx context.Context, opts ...VerifierOption) (*Verifier, error) {
+	return inner.NewVerifierWithOptions(ctx, opts...)
+}
+
+// WithOIDC enables verification of OIDC provider tokens from issuerURL.
+func WithOIDC(issuerURL, clientID string) VerifierOption { return inner.WithOIDC(issuerURL, clientID) }
+
+// WithHS256Secret enables local HS256 tokens signed with secret.
+func WithHS256Secret(secret string) VerifierOption { return inner.WithHS256Secret(secret) }
+
+// WithLocalIssuer sets the "iss" value local tokens must carry.
+func WithLocalIssuer(issuer string) VerifierOption { return inner.WithLocalIssuer(issuer) }
+
+// WithEd25519PublicKeys enables local EdDSA tokens verified against keys
+// selected by the token "kid" header (empty kid = tokens without a kid).
+// All keys are valid concurrently, enabling rotation.
+func WithEd25519PublicKeys(keys map[string]ed25519.PublicKey) VerifierOption {
+	return inner.WithEd25519PublicKeys(keys)
+}
+
+// WithEd25519PublicKey enables local EdDSA tokens verified against a single
+// key, used for tokens without a "kid" header.
+func WithEd25519PublicKey(key ed25519.PublicKey) VerifierOption {
+	return inner.WithEd25519PublicKey(key)
+}
+
+// NewLocalVerifier builds the local-only Verifier matching the local-auth
+// configuration (JWT_ALG, JWT_SECRET, JWT_SIGNING_KEY, JWT_SIGNING_KID,
+// JWT_VERIFY_PUBLIC_KEYS).
+func NewLocalVerifier(ctx context.Context, lc config.LocalAuthConfig) (*Verifier, error) {
+	return inner.NewLocalVerifier(ctx, lc)
 }
 
 // NewClaimMapper returns a ClaimMapper for the named OIDC claim style.
