@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: app-mfmanager checkout-deps.sh unhardened
-      id: 5eQ7
-      date: "2026-10-10"
-      tags:
-        - type:security
-        - priority:high
-        - plan/phase:checkout-deps-token-handling
-        - effort:unspecified
-      text: 'Repo app-mfmanager, scripts/checkout-deps.sh: passes MODULEFORGE_READ_TOKEN via `git -c http.extraheader=...` on the command line (visible in process listings), does not validate lockfile host/owner shape, has no MODULEFORGE_TOKEN_ALLOWED_HOSTS token-host allowlist, and does not set http.followRedirects=false. Port the hardened script (GIT_CONFIG_COUNT env header scoped to the host, host/owner validation, allowlist, redirects off) from the moduleforge mod-users scripts/checkout-deps.sh.'
     - title: app-mfgit checkout-deps.sh unhardened
       id: dUlk
       date: "2026-10-10"
@@ -101,4 +92,9 @@ closed:
       title: checkout-deps strictness edge cases
       disposition: promoted
       ref: xuSi
+      date: "2026-10-10"
+    - id: 5eQ7
+      title: app-mfmanager checkout-deps.sh unhardened
+      disposition: promoted
+      ref: 5eQ7
       date: "2026-10-10"
