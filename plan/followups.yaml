@@ -905,3 +905,13 @@ items:
         - plan/phase:checkout-deps-token-handling
         - plan/slug:flow-accounts-upstream
       text: 'Repo app-mftodo, scripts/checkout-deps.sh: passes MODULEFORGE_READ_TOKEN via `git -c http.extraheader=...` on the command line, validates only the characters of an overrides host (no top-level host or owner shape check), has no MODULEFORGE_TOKEN_ALLOWED_HOSTS token-host allowlist, and does not set http.followRedirects=false. Port the hardened script (GIT_CONFIG_COUNT env header scoped to the host, host/owner validation, allowlist, redirects off) from the moduleforge mod-users scripts/checkout-deps.sh.'
+    - title: checkout-deps tests miss xtrace/host cases
+      id: nJel
+      date: "2026-10-10"
+      tags:
+        - type:security
+        - priority:high
+        - effort:small
+        - plan/phase:checkout-deps-token-handling
+        - plan/slug:flow-accounts-upstream
+      text: 'scripts/test-checkout-deps.sh (58 cases) does not test the set +x xtrace protection around token dereferences: a regression removing a set +x would pass all cases. Add a case running the script under bash -x (or SHELLOPTS=xtrace) asserting no_leak over combined stdout and stderr for the token and its base64. Also add cases for the in-git_fetch_auth allowlist re-check, a trailing-dot host (github.com.), a host-suffix lookalike (github.com.evil.example), a CRLF lockfile, and positive case-insensitivity (GitHub.com with a token). The ps/argv check itself is sound (positive control, token and base64); optionally note its single-snapshot limitation.'
