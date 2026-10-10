@@ -1,5 +1,14 @@
 version: 2
-items: []
+items:
+    - title: Cookie path docs omit test-redirect effect
+      id: 7ok7
+      date: "2026-10-10"
+      tags:
+        - type:documentation
+        - priority:low
+        - plan/phase:cookie-base-path
+        - effort:unspecified
+      text: 'docs/cookie-path.md and .env.example describe only the oidc_state cookie Path; when USERS_COOKIE_PATH is set, redirectToTestResult (api/internal/handlers/auth/oidc.go ~361-366) also redirects to <base>/oidc-config, which assumes the base is the frontend''s public prefix too. docs/mod-users-spec.md:341 and api/openapi.yaml:965 describe the cookie as scoped to /v1/auth/oidc/ with no mention of the mount prefix. Suggested: add a sentence to docs/cookie-path.md (and optionally .env.example) about the test redirect, and reword the spec/openapi lines to say ''/v1/auth/oidc/ under the mount prefix'' or link docs/cookie-path.md.'
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
