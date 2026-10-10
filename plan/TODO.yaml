@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: eddsa-verify-only-key
       title: Verify-only EdDSA key for NewVerifier - 4eZf
+      diff_base: 10b8af61c6d8472deda084e0b51d4d367f74919e
       tasks:
         - number: 1
           slug: ed25519-signer-and-config
