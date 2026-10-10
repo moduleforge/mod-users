@@ -166,7 +166,7 @@ phases:
           slug: reject-step-up-as-bearer
           title: Reject Step-Up Tokens As Bearer Tokens
           path: phase-06-remediation-01/002-reject-step-up-as-bearer.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: verifyLocal rejects tokens with header typ step-up (case-insensitive) before signature check; internal NewVerifier now errors when jwtSecret non-empty and localIssuer empty (signature unchanged; no in-repo caller affected); VerifyStepUpToken still requires exact typ and credential_change purpose. Tests added; full Go suite green.
           findings:
