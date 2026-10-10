@@ -160,7 +160,7 @@ phases:
             - QI2I
             - RmRX
           git:
-            branch: null
+            branch: plan/flow-accounts-upstream-06-001
             commit: []
             merge: null
         - number: 2
