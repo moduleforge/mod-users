@@ -57,6 +57,7 @@ phases:
           path: phase-02-cors-safe-default/001-cors-default-deny.md
           done: false
           tier: sonnet-med
+          digest: 'CORS default-deny: empty CORS_ORIGINS outside local mode installs no CORS middleware; AllowCredentials only with explicit allow-list; config.Load fails when CORS_ORIGINS contains * and DEPLOY_MODE is not local (serverless, k8s, container-host count as production-like); local mode keeps permissive * without credentials; server.New fails closed on hand-built wildcard config. docs/cors.md added with behavior-change and flow-accounts adoption notes, linked from README; spec and .env.example updated.'
           git:
             branch: null
             commit: []
