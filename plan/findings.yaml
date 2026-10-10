@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Handler signer injection is opt-in only
-      id: QI2I
-      date: "2026-10-10"
-      tags:
-        - type:bug
-        - priority:medium
-        - plan/phase:eddsa-verify-only-key
-        - effort:unspecified
-      text: 'Handler.jwtSigner() in api/internal/handlers/auth/register.go and AssumeHandler in api/internal/handlers/assume.go fall back to an HS256 signer keyed by jwtSecret when SetSigner was never called, so a composing app that builds these handlers itself under JWT_ALG=EdDSA mints HS256 tokens that the EdDSA-pinned verifier rejects (login 401, nothing flagged at startup). Fails closed, no forgery. The OIDC callback (oidc.go) builds its own Signer via NewSigner(cfg.LocalAuth) per request, a different wiring path. Suggested: document the required SetSigner(auth.NewSigner(cfg.LocalAuth)) wiring in docs/jwt-eddsa.md, or add constructor variants taking a Signer; consider failing when no signer is set and JWT_ALG is not HS256; consider rejecting an empty secret in NewHS256Signer; consider building the OIDC Signer once at construction.'
     - title: Step-up tokens share JWT_SECRET with bearer
       id: nIyL
       date: "2026-10-10"
@@ -41,4 +32,9 @@ closed:
       title: config.Load()/validate() in mod-users still r
       disposition: promoted
       ref: GlTi
+      date: "2026-10-10"
+    - id: QI2I
+      title: Handler signer injection is opt-in only
+      disposition: fixed
+      ref: phase-06-remediation-01/001-signer-wiring-and-key-revocation-docs.md
       date: "2026-10-10"
