@@ -13,6 +13,7 @@ phases:
           path: phase-01-eddsa-verify-only-key/001-ed25519-signer-and-config.md
           done: false
           tier: sonnet-high
+          digest: Added JWT_ALG, JWT_SIGNING_KEY (PKCS#8 PEM Ed25519, literal \n accepted) and JWT_SIGNING_KID config validated in Load(); local JWT issuance via single Signer (HS256/EdDSA, kid when configured); default HS256 header unchanged, old Issue*JWT signatures kept as wrappers; handlers/main.go wired via SetSigner; public auth.Signer alias + NewSigner added in api/auth/auth.go. JWT_SECRET stays required under EdDSA (OAuth state/step-up).
           git:
             branch: null
             commit: []
