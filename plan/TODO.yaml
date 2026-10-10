@@ -181,6 +181,7 @@ phases:
     - number: 7
       slug: remediation-02
       title: Remediation Round 2
+      diff_base: d5ba2d2e6b2ce9ad4d0ba433d07f5fa26ff8f918
       kind: remediation
       security_review: required
       tasks:
@@ -188,11 +189,13 @@ phases:
           slug: step-up-empty-secret-guard
           title: Step-Up Tokens Refuse An Empty Secret
           path: phase-07-remediation-02/001-step-up-empty-secret-guard.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: IssueStepUpToken returns new sentinel ErrStepUpEmptySecret on empty secret; VerifyStepUpToken returns existing ErrStepUpRequired on empty secret; header and purpose checks unchanged; tests for empty-secret issuing and empty-key forgery added; full Go suite green.
           findings:
             - SUyS
           git:
-            branch: null
-            commit: []
+            branch: plan/flow-accounts-upstream-07-001
+            commit:
+                - 515df63
             merge: null
