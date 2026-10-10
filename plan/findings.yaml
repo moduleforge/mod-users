@@ -9,6 +9,15 @@ items:
         - plan/phase:cors-safe-default
         - effort:unspecified
       text: 'The wildcard guard in api/internal/config/config.go (~454-467) and corsOptions in api/internal/server/server.go (~59-86) only recognize the exact token *. go-chi/cors v1.2.2 also treats any CORS_ORIGINS entry containing * as a prefix/suffix wildcard pattern (e.g. https://*, http*, https://*.example.com), so outside local mode such an entry is accepted, reflects any matching origin, and sends Access-Control-Allow-Credentials: true. Docs say exact origins. Suggested: outside local mode reject any entry containing * in config.Load and make corsOptions fail closed on any entry containing *; add tests for https://* and https://*.example.com; update docs/cors.md and README to state patterns are rejected.'
+    - title: Deploy manifests silently lose CORS
+      id: D6o7
+      date: "2026-10-10"
+      tags:
+        - type:bug
+        - priority:medium
+        - plan/phase:cors-safe-default
+        - effort:unspecified
+      text: 'deploy/k8s/base/configmap.yaml (~line 25) ships DEPLOY_MODE: k8s with CORS_ORIGINS: "" which previously yielded ACAO * plus credentials and now emits no CORS headers; deploy/cloudrun/service.yaml sets no CORS_ORIGINS and hits the same default-deny. Suggested: placeholder origin with a comment in the k8s configmap (consistent with AUTH_FRONTEND_RETURN_URL) and a CORS_ORIGINS comment/entry in the Cloud Run manifest. Also docs/cors.md should state entries are bare scheme://host[:port] with no trailing slash or path, matched case-insensitively; optionally warn in config.Load on entries with a path or trailing slash.'
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
