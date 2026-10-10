@@ -105,7 +105,7 @@ phases:
           tier: sonnet-low
           digest: 'AuthPage onAuthenticated is now (returnPath: string | null, mode: AuthMode) with mode ''login'' or ''register''; one-arg callbacks still type-check; tests, Ladle story and gui/README updated; gui bun test (225 pass), typecheck and build passed with core-gui resolved.'
           git:
-            branch: null
+            branch: plan/flow-accounts-upstream-04-001
             commit: []
             merge: null
         - number: 2
