@@ -189,7 +189,7 @@ phases:
           slug: step-up-empty-secret-guard
           title: Step-Up Tokens Refuse An Empty Secret
           path: phase-07-remediation-02/001-step-up-empty-secret-guard.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: IssueStepUpToken returns new sentinel ErrStepUpEmptySecret on empty secret; VerifyStepUpToken returns existing ErrStepUpRequired on empty secret; header and purpose checks unchanged; tests for empty-secret issuing and empty-key forgery added; full Go suite green.
           findings:
