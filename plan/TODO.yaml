@@ -23,11 +23,13 @@ phases:
           slug: public-key-verifier-mode
           title: Public-Key Verifier Mode And Rotation
           path: phase-01-eddsa-verify-only-key/002-public-key-verifier-mode.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: 'Verifier supports public-key-only mode with per-kid rotation and per-key alg pinning via NewVerifierWithOptions (WithOIDC, WithHS256Secret, WithLocalIssuer, WithEd25519PublicKey(s)) re-exported from api/auth; NewVerifier signature unchanged. JWT_VERIFY_PUBLIC_KEYS (PKIX PEM or JSON kid->PEM) validated in config. main.go uses auth.NewLocalVerifier and accepts EdDSA tokens under JWT_ALG=EdDSA. Behavior change: legacy NewVerifier with empty jwtSecret now accepts no HS256 tokens (previously forgeable). Docs for JWT_ALG/JWT_SIGNING_*/JWT_VERIFY_PUBLIC_KEYS still pending (task 003).'
           git:
-            branch: null
-            commit: []
+            branch: plan/flow-accounts-upstream-01-002
+            commit:
+                - 134ea2e
             merge: null
         - number: 3
           slug: eddsa-security-tests-and-docs
