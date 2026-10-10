@@ -11,3 +11,10 @@ Lock in the security properties of tasks 001-002 and document the config.
 ## Validation
 - `cd api && go test ./...` passes including new negative tests.
 - Docs link-check: every new doc is reachable from README link chain.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: `cd api && go build/vet/test ./...` passed (log: .flow/validation-logs/01-go-test.log). New doc `docs/jwt-eddsa.md` is linked from README.md (and from architecture.md and mod-users-spec.md).
+- Tests added (extending task 002's alg-confusion coverage): `api/internal/auth/jwt_alg_confusion_test.go` (public key as HMAC secret in raw/DER/PEM/base64/hex forms, mixed-mode wrong key/expiry/issuer, non-string kid).
+- Docs: `docs/jwt-eddsa.md` (new), `README.md` config table, `docs/architecture.md`, `docs/mod-users-spec.md`, `.env.example` (four new vars).
+- Nothing deferred.
