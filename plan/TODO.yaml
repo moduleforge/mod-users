@@ -136,6 +136,7 @@ phases:
     - number: 5
       slug: checkout-deps-token-handling
       title: checkout-deps token handling - gsl4
+      diff_base: f82ca47d2000b7464a1fedc7f788d3b3960849e5
       tasks:
         - number: 1
           slug: port-checkout-deps-hardening
