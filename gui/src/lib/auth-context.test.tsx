@@ -57,6 +57,7 @@ function Probe({
     <div>
       <div data-testid="loading">{String(auth.isLoading)}</div>
       <div data-testid="token">{auth.token ?? 'null'}</div>
+      <div data-testid="email-verified-at">{auth.emailVerifiedAt ?? 'null'}</div>
       <div data-testid="complete-settled">{String(completeSettled)}</div>
       <div data-testid="complete-error">{completeError ?? 'none'}</div>
       {trigger === 'refresh' && (
@@ -482,5 +483,46 @@ describe('action-required navigation is skipped when already on the target path'
     expect(navigateCalls).toEqual([]);
     expect(screen.getByTestId('complete-error').textContent).toBe('none');
     expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token');
+  });
+});
+
+describe('emailVerifiedAt exposure', () => {
+  const SELF_BASE = {
+    uuid: 'u1',
+    entity_uuid: 'e1',
+    email: 'a@example.com',
+    given_name: 'A',
+    family_name: 'B',
+    is_admin: false,
+    created_at: '',
+    updated_at: '',
+  };
+
+  test('exposes the verified timestamp from /v1/self', async () => {
+    localStorage.setItem(TOKEN_KEY, 'stored-token');
+    stubFetch({ ...SELF_BASE, email_verified_at: '2026-01-02T03:04:05Z' }, 200);
+
+    render(
+      <AuthProvider onNavigate={() => {}}>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+    expect(screen.getByTestId('email-verified-at').textContent).toBe('2026-01-02T03:04:05Z');
+  });
+
+  test('is null for an unverified account', async () => {
+    localStorage.setItem(TOKEN_KEY, 'stored-token');
+    stubFetch({ ...SELF_BASE, email_verified_at: null }, 200);
+
+    render(
+      <AuthProvider onNavigate={() => {}}>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+    expect(screen.getByTestId('email-verified-at').textContent).toBe('null');
   });
 });

@@ -238,6 +238,8 @@ export interface UserAccountSelf {
   uuid: string;
   entity_uuid: string;
   email: string;
+  /** ISO timestamp the account's email was verified, or null if unverified. */
+  email_verified_at: string | null;
   given_name: string;
   family_name: string;
   is_admin: boolean;

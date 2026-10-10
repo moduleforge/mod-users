@@ -18,9 +18,12 @@ package handlers
 // the handler" that is distinct from "middleware short-circuited first".
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -173,4 +176,44 @@ func TestBuildSelfResponse_EntityUUID(t *testing.T) {
 	if gotUUID == gotEntityUUID {
 		t.Errorf("uuid and entity_uuid unexpectedly equal (%q); they must be distinct fields", gotUUID)
 	}
+}
+
+// TestBuildSelfResponse_EmailVerifiedAt asserts GET /v1/self exposes
+// email_verified_at as the caller's own timestamp when verified and as an
+// explicit JSON null when unverified.
+func TestBuildSelfResponse_EmailVerifiedAt(t *testing.T) {
+	profile := coreservice.Profile{
+		Kind:   "natural_person",
+		Entity: coredb.GetEntityByUUIDRow{Uuid: uuid.New()},
+	}
+
+	t.Run("verified", func(t *testing.T) {
+		at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+		resp := buildSelfResponse(db.UserAccount{Uuid: uuid.New(), EmailVerifiedAt: &at}, profile)
+		got, ok := resp["email_verified_at"].(time.Time)
+		if !ok {
+			t.Fatalf("email_verified_at = %#v, want time.Time", resp["email_verified_at"])
+		}
+		if !got.Equal(at) {
+			t.Errorf("email_verified_at = %v, want %v", got, at)
+		}
+	})
+
+	t.Run("unverified", func(t *testing.T) {
+		resp := buildSelfResponse(db.UserAccount{Uuid: uuid.New()}, profile)
+		v, present := resp["email_verified_at"]
+		if !present {
+			t.Fatal("email_verified_at key missing; want explicit null")
+		}
+		if v != nil {
+			t.Errorf("email_verified_at = %#v, want nil", v)
+		}
+		b, err := json.Marshal(resp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), `"email_verified_at":null`) {
+			t.Errorf("JSON %s lacks email_verified_at:null", b)
+		}
+	})
 }

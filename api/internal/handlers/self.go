@@ -105,12 +105,21 @@ func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[strin
 	if ua.Email.Valid {
 		emailVal = ua.Email.String
 	}
+	// email_verified_at is the caller's own verification timestamp, or JSON
+	// null when the email has not been verified. It lets clients prompt for
+	// verification before a verified-scope call is refused with
+	// users.email_unverified. Only the caller's own account state is exposed.
+	var emailVerifiedAt any
+	if ua.EmailVerifiedAt != nil {
+		emailVerifiedAt = *ua.EmailVerifiedAt
+	}
 	resp := map[string]any{
-		"uuid":        ua.Uuid.String(),
-		"entity_uuid": profile.Entity.Uuid.String(),
-		"email":       emailVal,
-		"created_at":  ua.CreatedAt.Time,
-		"updated_at":  ua.UpdatedAt.Time,
+		"uuid":              ua.Uuid.String(),
+		"entity_uuid":       profile.Entity.Uuid.String(),
+		"email":             emailVal,
+		"email_verified_at": emailVerifiedAt,
+		"created_at":        ua.CreatedAt.Time,
+		"updated_at":        ua.UpdatedAt.Time,
 	}
 
 	switch profile.Kind {
