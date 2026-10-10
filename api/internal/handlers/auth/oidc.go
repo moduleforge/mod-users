@@ -535,12 +535,21 @@ func (h *OIDCHandler) newStateCookie(value string, maxAge int, r *http.Request) 
 	return &http.Cookie{
 		Name:     stateCookieName,
 		Value:    value,
-		Path:     localauth.OIDCStateCookiePath(r),
+		Path:     localauth.OIDCStateCookiePath(r, h.cookieBasePath()),
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   requestIsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	}
+}
+
+// cookieBasePath returns the configured USERS_COOKIE_PATH, or "" when unset
+// (or when the handler carries no config), selecting request-derived Path.
+func (h *OIDCHandler) cookieBasePath() string {
+	if h == nil || h.cfg == nil {
+		return ""
+	}
+	return h.cfg.Auth.CookiePath
 }
 
 // clearStateCookie tombstones the state cookie by setting MaxAge<0.

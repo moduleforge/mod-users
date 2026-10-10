@@ -3,6 +3,8 @@ package auth
 import (
 	"net/http/httptest"
 	"testing"
+
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 func TestStateCookiePathSetAndClear(t *testing.T) {
@@ -24,5 +26,23 @@ func TestStateCookiePathSetAndClear(t *testing.T) {
 				t.Fatalf("clear cookie = %+v want Path %q MaxAge<0", cs, tc.want)
 			}
 		})
+	}
+}
+
+func TestStateCookiePathConfiguredSetAndClear(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Auth.CookiePath = "/manage"
+	h := &OIDCHandler{cfg: cfg}
+	// Proxy stripped the /manage prefix: request carries only /v1/auth/oidc/...
+	r := httptest.NewRequest("GET", "/v1/auth/oidc/google/callback", nil)
+	const want = "/manage/v1/auth/oidc/"
+	if got := h.newStateCookie("v", 300, r).Path; got != want {
+		t.Fatalf("set Path = %q want %q", got, want)
+	}
+	w := httptest.NewRecorder()
+	h.clearStateCookie(w, r)
+	cs := w.Result().Cookies()
+	if len(cs) != 1 || cs[0].Path != want || cs[0].MaxAge >= 0 {
+		t.Fatalf("clear cookie = %+v want Path %q MaxAge<0", cs, want)
 	}
 }

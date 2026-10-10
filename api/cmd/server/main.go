@@ -511,6 +511,7 @@ func main() {
 		JWTSecret:      cfg.LocalAuth.JWTSecret,
 		Consumed:       stepUpConsumed,
 		StepUpRequired: cfg.Auth.RequireStepUpForCredentialChange,
+		CookiePath:     cfg.Auth.CookiePath,
 	})
 
 	// SSH public-key handler — self-service and operator register/list/

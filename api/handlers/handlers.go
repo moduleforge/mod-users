@@ -173,6 +173,7 @@ func NewIdentitiesHandler(
 	jwtSecret string,
 	consumed *sync.Map,
 	stepUpRequired bool,
+	cookiePath string,
 ) *IdentitiesHandler {
 	return inner.NewIdentitiesHandlerWithDeps(inner.IdentitiesHandlerDeps{
 		Pool:           pool,
@@ -183,6 +184,7 @@ func NewIdentitiesHandler(
 		JWTSecret:      jwtSecret,
 		Consumed:       consumed,
 		StepUpRequired: stepUpRequired,
+		CookiePath:     cookiePath,
 	})
 }
 

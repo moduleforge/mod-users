@@ -153,6 +153,14 @@ type AuthConfig struct {
 	// Required when any provider is enabled.
 	OAuthRedirectBaseURL string
 
+	// CookiePath is the public base path (e.g. "/manage") under which this
+	// API is reachable when a proxy strips the mount prefix. When set, the
+	// oidc_state cookie Path is CookiePath + "/v1/auth/oidc/" instead of being
+	// derived from the request URL. Empty (the default) keeps the
+	// request-derived behaviour. Env var USERS_COOKIE_PATH; validated by
+	// ValidateCookieBasePath at load time.
+	CookiePath string
+
 	// RequireStepUpForCredentialChange gates every credential-mutating endpoint
 	// (POST/DELETE password, DELETE OIDC identity, POST link-mode start) behind
 	// a short-lived step-up token obtained via POST /v1/self/credential/step-up
@@ -339,6 +347,12 @@ func Load() (*Config, error) {
 	jwtVerifyKeys, jwtVerifyProblems := loadJWTVerifyPublicKeys()
 	parseErrors = append(parseErrors, jwtVerifyProblems...)
 
+	cookiePath := os.Getenv("USERS_COOKIE_PATH")
+	if err := ValidateCookieBasePath(cookiePath); err != nil {
+		parseErrors = append(parseErrors, "USERS_COOKIE_PATH: "+err.Error())
+		cookiePath = ""
+	}
+
 	cfg := &Config{
 		DeployMode: mode,
 		DB: DBConfig{
@@ -351,6 +365,7 @@ func Load() (*Config, error) {
 			AdminRole:                        getEnv("AUTH_ADMIN_ROLE", "admin"),
 			FrontendReturnURL:                os.Getenv("AUTH_FRONTEND_RETURN_URL"),
 			OAuthRedirectBaseURL:             os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
+			CookiePath:                       cookiePath,
 			RequireStepUpForCredentialChange: parseBoolEnv(os.Getenv("AUTH_REQUIRE_STEP_UP")),
 		},
 		Providers: registry,
