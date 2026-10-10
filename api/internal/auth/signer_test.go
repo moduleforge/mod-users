@@ -131,3 +131,15 @@ func TestNewSigner_Errors(t *testing.T) {
 		t.Error("nil signer must fail, not panic")
 	}
 }
+
+func TestNewHS256Signer_RejectsEmptySecret(t *testing.T) {
+	if s, err := NewHS256Signer("", "kid"); err == nil || s != nil {
+		t.Fatalf("want error and nil signer for empty secret, got %v, %v", s, err)
+	}
+	if _, err := NewSigner(config.LocalAuthConfig{}); err == nil {
+		t.Fatal("NewSigner with empty default HS256 secret must fail")
+	}
+	if _, err := IssueLocalJWT(db.UserAccount{}, "", "iss"); err == nil {
+		t.Fatal("IssueLocalJWT with empty secret must fail")
+	}
+}

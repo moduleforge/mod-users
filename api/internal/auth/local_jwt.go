@@ -86,15 +86,27 @@ func IssueAssumeJWTWithSigner(sudoUA db.UserAccount, actorUA db.UserAccount, sig
 // point; byte-for-byte equivalent to IssueLocalJWTWithSigner with
 // NewHS256Signer(secret, "").
 func IssueLocalJWT(ua db.UserAccount, secret, issuer string) (string, error) {
-	return IssueLocalJWTWithSigner(ua, NewHS256Signer(secret, ""), issuer)
+	signer, err := NewHS256Signer(secret, "")
+	if err != nil {
+		return "", err
+	}
+	return IssueLocalJWTWithSigner(ua, signer, issuer)
 }
 
 // IssueAnonymousJWT is the HS256/secret form of IssueAnonymousJWTWithSigner.
 func IssueAnonymousJWT(ua db.UserAccount, secret, issuer string) (string, error) {
-	return IssueAnonymousJWTWithSigner(ua, NewHS256Signer(secret, ""), issuer)
+	signer, err := NewHS256Signer(secret, "")
+	if err != nil {
+		return "", err
+	}
+	return IssueAnonymousJWTWithSigner(ua, signer, issuer)
 }
 
 // IssueAssumeJWT is the HS256/secret form of IssueAssumeJWTWithSigner.
 func IssueAssumeJWT(sudoUA db.UserAccount, actorUA db.UserAccount, secret, issuer string) (string, error) {
-	return IssueAssumeJWTWithSigner(sudoUA, actorUA, NewHS256Signer(secret, ""), issuer)
+	signer, err := NewHS256Signer(secret, "")
+	if err != nil {
+		return "", err
+	}
+	return IssueAssumeJWTWithSigner(sudoUA, actorUA, signer, issuer)
 }

@@ -37,6 +37,17 @@ func NewAssumeHandler(svc assumeServicer, jwtSecret, issuer string) *AssumeHandl
 	return &AssumeHandler{svc: svc, jwtSecret: jwtSecret, issuer: issuer}
 }
 
+// NewAssumeHandlerWithSigner creates an AssumeHandler that always signs with
+// signer. Prefer it over NewAssumeHandler in any deployment that may run with
+// JWT_ALG=EdDSA: a nil signer is rejected here instead of silently falling back
+// to HS256.
+func NewAssumeHandlerWithSigner(svc assumeServicer, signer *auth.Signer, issuer string) (*AssumeHandler, error) {
+	if signer == nil {
+		return nil, errors.New("assume: signer must not be nil")
+	}
+	return &AssumeHandler{svc: svc, signer: signer, issuer: issuer}, nil
+}
+
 // SetSigner overrides the JWT signer. A nil signer restores the default
 // (HS256 keyed by the secret passed to NewAssumeHandler).
 func (h *AssumeHandler) SetSigner(s *auth.Signer) {
@@ -65,7 +76,13 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.IssueAssumeJWTWithSigner(sudoUA, actorUA, h.jwtSigner(), h.issuer)
+	signer, err := h.jwtSigner()
+	if err != nil {
+		slog.ErrorContext(r.Context(), "assume: jwt signer unavailable", "error", err)
+		apiresp.WriteError(w, r, fmt.Errorf("assume.Assume: %w", err))
+		return
+	}
+	token, err := auth.IssueAssumeJWTWithSigner(sudoUA, actorUA, signer, h.issuer)
 	if err != nil {
 		apiresp.WriteError(w, r, fmt.Errorf("assume.Assume: %w", err))
 		return
@@ -92,10 +109,13 @@ func (h *AssumeHandler) EndAssume(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// jwtSigner returns the configured signer, defaulting to HS256 keyed by jwtSecret.
-func (h *AssumeHandler) jwtSigner() *auth.Signer {
+// jwtSigner returns the configured signer. With no signer set it falls back to
+// HS256 keyed by jwtSecret, and fails (rather than minting weakly-keyed
+// tokens) when that secret is empty. Apps running JWT_ALG=EdDSA must inject a
+// signer (NewAssumeHandlerWithSigner or SetSigner).
+func (h *AssumeHandler) jwtSigner() (*auth.Signer, error) {
 	if h.signer != nil {
-		return h.signer
+		return h.signer, nil
 	}
 	return auth.NewHS256Signer(h.jwtSecret, "")
 }

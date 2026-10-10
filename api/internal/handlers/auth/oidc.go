@@ -55,32 +55,49 @@ type loginRecorder interface {
 // code start/callback round trip. It holds its own copies of the resolver
 // and the OAuth orchestrator so the main router wiring stays simple.
 type OIDCHandler struct {
-	pool     *pgxpool.Pool
-	queries  *db.Queries
-	oauth    *localauth.OAuth
-	resolver userResolver
-	userSvc  loginRecorder
-	cfg      *config.Config
-	obs      *observer.ObserverGroup // nil-safe; may be nil in tests
+	pool      *pgxpool.Pool
+	queries   *db.Queries
+	oauth     *localauth.OAuth
+	resolver  userResolver
+	userSvc   loginRecorder
+	cfg       *config.Config
+	obs       *observer.ObserverGroup // nil-safe; may be nil in tests
+	signer    *localauth.Signer       // built once at construction; nil when cfg yields no valid signer
+	signerErr error                   // construction-time signer error, surfaced on first token issuance
 }
 
 // NewOIDCHandler wires up the handler with everything it needs. All fields
 // must be non-nil (except oauth, which may be a shell with zero providers).
 func NewOIDCHandler(queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, userSvc loginRecorder, cfg *config.Config) *OIDCHandler {
-	return &OIDCHandler{
+	h := &OIDCHandler{
 		queries:  queries,
 		oauth:    oauth,
 		resolver: resolver,
 		userSvc:  userSvc,
 		cfg:      cfg,
 	}
+	h.signer, h.signerErr = buildOIDCSigner(cfg)
+	return h
+}
+
+// SignerErr reports why the callback's JWT signer could not be built from the
+// configuration (nil when it was). Call it right after construction to fail
+// startup on a bad config rather than on the first login.
+func (h *OIDCHandler) SignerErr() error { return h.signerErr }
+
+// buildOIDCSigner builds the callback's Signer from cfg once, at construction.
+func buildOIDCSigner(cfg *config.Config) (*localauth.Signer, error) {
+	if cfg == nil {
+		return nil, errors.New("oidc: nil config")
+	}
+	return localauth.NewSigner(cfg.LocalAuth)
 }
 
 // NewOIDCHandlerWithPool constructs an OIDCHandler with a pool and observer
 // group for the link-mode callback path. Use this in production; the pool-less
 // NewOIDCHandler is retained for tests that cover paths before link-mode.
 func NewOIDCHandlerWithPool(pool *pgxpool.Pool, queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, userSvc loginRecorder, cfg *config.Config, obs *observer.ObserverGroup) *OIDCHandler {
-	return &OIDCHandler{
+	h := &OIDCHandler{
 		pool:     pool,
 		queries:  queries,
 		oauth:    oauth,
@@ -89,6 +106,8 @@ func NewOIDCHandlerWithPool(pool *pgxpool.Pool, queries *db.Queries, oauth *loca
 		cfg:      cfg,
 		obs:      obs,
 	}
+	h.signer, h.signerErr = buildOIDCSigner(cfg)
+	return h
 }
 
 // providerEntry is the browser-safe view of a Provider — only public fields.
@@ -270,9 +289,12 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signer, err := localauth.NewSigner(h.cfg.LocalAuth)
+	signer, err := h.signer, h.signerErr
+	if err == nil && signer == nil {
+		err = errors.New("oidc: no signer configured")
+	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc callback: build jwt signer", "error", err)
+		slog.ErrorContext(r.Context(), "oidc callback: jwt signer unavailable", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "token issuance failed")
 		return
 	}

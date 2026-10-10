@@ -44,7 +44,10 @@ func signEdDSA(t *testing.T, priv ed25519.PrivateKey, kid string, claims jwt.Map
 
 func signHS256(t *testing.T, secret, kid string, claims jwt.MapClaims) string {
 	t.Helper()
-	raw, err := NewHS256Signer(secret, kid).Sign(claims)
+	// Built directly (not via NewHS256Signer, which rejects an empty secret) so
+	// tests can forge tokens keyed with an empty secret.
+	hs := &Signer{method: jwt.SigningMethodHS256, key: []byte(secret), kid: kid}
+	raw, err := hs.Sign(claims)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}

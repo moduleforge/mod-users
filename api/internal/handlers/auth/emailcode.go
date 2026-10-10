@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
-	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	db "github.com/moduleforge/mod-users/model/db"
 )
@@ -171,7 +170,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Purpose == "login" {
-		token, err := localauth.IssueLocalJWTWithSigner(ua, h.jwtSigner(), h.issuer)
+		token, err := h.issueLocalJWT(ua)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "email_code_verify: issue jwt", "error", err)
 			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
