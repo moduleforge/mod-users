@@ -106,7 +106,8 @@ phases:
           digest: 'AuthPage onAuthenticated is now (returnPath: string | null, mode: AuthMode) with mode ''login'' or ''register''; one-arg callbacks still type-check; tests, Ladle story and gui/README updated; gui bun test (225 pass), typecheck and build passed with core-gui resolved.'
           git:
             branch: plan/flow-accounts-upstream-04-001
-            commit: []
+            commit:
+                - aab79f4
             merge: null
         - number: 2
           slug: self-email-verified-at
