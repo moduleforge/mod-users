@@ -95,6 +95,7 @@ phases:
     - number: 4
       slug: users-gui-improvements
       title: users-gui improvements - 5F38, dnL0, lJE0
+      diff_base: da12dfb66c133144d1b5e9cdcec02c6d08554169
       tasks:
         - number: 1
           slug: authpage-mode-callback
