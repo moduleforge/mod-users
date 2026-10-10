@@ -62,6 +62,7 @@ type Handler struct {
 	queries       authQuerier
 	coreQ         *coredb.Queries
 	jwtSecret     string
+	signer        *localauth.Signer // nil => HS256 keyed by jwtSecret
 	issuer        string
 	sender        Sender
 	guiBase       string
@@ -80,6 +81,21 @@ func New(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, jwtSecr
 		sender:    sender,
 		guiBase:   guiBase,
 	}
+}
+
+// SetSigner overrides the JWT signer used by login, email-code verification,
+// and anonymous sign-in. A nil signer restores the default (HS256 keyed by the
+// secret passed to New).
+func (h *Handler) SetSigner(s *localauth.Signer) {
+	h.signer = s
+}
+
+// jwtSigner returns the configured signer, defaulting to HS256 keyed by jwtSecret.
+func (h *Handler) jwtSigner() *localauth.Signer {
+	if h.signer != nil {
+		return h.signer
+	}
+	return localauth.NewHS256Signer(h.jwtSecret, "")
 }
 
 // SetUserSvc wires in the UserAccountService after construction.

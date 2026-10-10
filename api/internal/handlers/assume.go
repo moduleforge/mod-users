@@ -28,12 +28,19 @@ type assumeServicer interface {
 type AssumeHandler struct {
 	svc       assumeServicer
 	jwtSecret string
+	signer    *auth.Signer // nil => HS256 keyed by jwtSecret
 	issuer    string
 }
 
 // NewAssumeHandler creates an AssumeHandler.
 func NewAssumeHandler(svc assumeServicer, jwtSecret, issuer string) *AssumeHandler {
 	return &AssumeHandler{svc: svc, jwtSecret: jwtSecret, issuer: issuer}
+}
+
+// SetSigner overrides the JWT signer. A nil signer restores the default
+// (HS256 keyed by the secret passed to NewAssumeHandler).
+func (h *AssumeHandler) SetSigner(s *auth.Signer) {
+	h.signer = s
 }
 
 // Assume handles POST /v1/user-accounts/{uuid}/assume (admin).
@@ -58,7 +65,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.IssueAssumeJWT(sudoUA, actorUA, h.jwtSecret, h.issuer)
+	token, err := auth.IssueAssumeJWTWithSigner(sudoUA, actorUA, h.jwtSigner(), h.issuer)
 	if err != nil {
 		apiresp.WriteError(w, r, fmt.Errorf("assume.Assume: %w", err))
 		return
@@ -83,4 +90,12 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 // so this endpoint returns 204 as an explicit "clear" signal.
 func (h *AssumeHandler) EndAssume(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// jwtSigner returns the configured signer, defaulting to HS256 keyed by jwtSecret.
+func (h *AssumeHandler) jwtSigner() *auth.Signer {
+	if h.signer != nil {
+		return h.signer
+	}
+	return auth.NewHS256Signer(h.jwtSecret, "")
 }

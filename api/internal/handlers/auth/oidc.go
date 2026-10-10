@@ -270,7 +270,13 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := localauth.IssueLocalJWT(ua, h.cfg.LocalAuth.JWTSecret, h.cfg.LocalAuth.LocalIssuer)
+	signer, err := localauth.NewSigner(h.cfg.LocalAuth)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "oidc callback: build jwt signer", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "token issuance failed")
+		return
+	}
+	token, err := localauth.IssueLocalJWTWithSigner(ua, signer, h.cfg.LocalAuth.LocalIssuer)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: issue jwt", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "token issuance failed")
