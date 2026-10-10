@@ -123,7 +123,7 @@ phases:
           slug: gui-lockfile-and-link
           title: Commit gui bun.lock And Document core-gui Link
           path: phase-04-users-gui-improvements/003-gui-lockfile-and-link.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Task premise was stale: root package.json is already a bun workspace (gui, ../mod-core/gui) with a committed root bun.lock containing workspace:../mod-core/gui; gui/yalc.lock is gitignored and absent; .gitignore does not exclude bun.lock. No gui/bun.lock added (would conflict with workspace root lockfile). Added a Lockfile paragraph to gui/README.md; link documented in AGENTS.md and gui/README.md. Verified in a clean clone with sibling mod-core laid out side by side: bun install --frozen-lockfile, typecheck and build pass. Caveat: the workspace path ../mod-core/gui requires mod-core as a sibling of mod-users, so it does not resolve inside nested Flow task worktrees.'
           git:
