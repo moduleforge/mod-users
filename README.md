@@ -46,12 +46,15 @@ Local-auth JWT settings (see [docs/jwt-eddsa.md](./docs/jwt-eddsa.md); full list
 | `JWT_SIGNING_KID` | unset | `kid` header for issued tokens |
 | `JWT_VERIFY_PUBLIC_KEYS` | unset | Extra accepted public keys: one PKIX PEM, or JSON `kid` to PEM |
 
+CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and `*` is rejected at startup outside local mode. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
+
 ## Additional documentation
 
 - [AGENTS.md](./AGENTS.md) — build, test, and development commands for contributors and AI agents
 - [docs/mod-users-spec.md](./docs/mod-users-spec.md) — feature specification and behavioral contracts
 - [docs/architecture.md](./docs/architecture.md) — system design, sub-project relationships, and key design decisions
 - [docs/jwt-eddsa.md](./docs/jwt-eddsa.md) — EdDSA JWT signing, verify-only deployment, key rotation, and the `JWT_*` configuration
+- [docs/cors.md](./docs/cors.md) — CORS default-deny policy, `CORS_ORIGINS` / `DEPLOY_MODE` behavior, and the upgrade note for deployments that relied on the implicit wildcard
 - [docs/project-structure.md](./docs/project-structure.md) — directory layout and sub-project conventions
 - [next-steps.md](./next-steps.md) — forward-looking residue: pending manual verification and deferred work
 - [.claude/CLAUDE.md](./.claude/CLAUDE.md) — Claude Code configuration and project-specific AI agent guidance

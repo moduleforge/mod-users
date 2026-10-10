@@ -28,19 +28,10 @@ func New(cfg *config.Config) (*http.Server, *chi.Mux) {
 	r.Use(Recoverer)
 	r.Use(AccessLog)
 
-	// CORS — allow configured origins or all in local mode.
-	origins := parseOrigins(cfg.Server.CORSOrigins)
-	if len(origins) == 0 && cfg.DeployMode == config.DeployModeLocal {
-		origins = []string{"*"}
+	// CORS — default deny. See corsOptions for the policy.
+	if opts, ok := corsOptions(cfg); ok {
+		r.Use(cors.Handler(opts))
 	}
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   origins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-App", "X-Request-ID", "X-Step-Up-Token"},
-		ExposedHeaders:   []string{"X-Request-ID"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
 
 	srv := &http.Server{
 		Addr:    cfg.Server.Addr,
@@ -48,6 +39,50 @@ func New(cfg *config.Config) (*http.Server, *chi.Mux) {
 	}
 
 	return srv, r
+}
+
+// corsOptions derives the CORS policy from cfg. ok is false when no CORS
+// middleware should be installed at all, so cross-origin requests receive no
+// CORS headers and browsers block them.
+//
+//   - Explicit allow-list (no "*"): the listed origins are echoed back and
+//     credentials are allowed.
+//   - Empty CORS_ORIGINS in DeployModeLocal: a documented dev convenience,
+//     allow-all ("*") WITHOUT credentials.
+//   - Empty CORS_ORIGINS in any other mode: deny (ok == false).
+//   - "*" in the list outside DeployModeLocal: config.Load rejects this at
+//     startup; if a hand-built Config reaches here anyway, fail closed (deny).
+//     In local mode "*" is honored without credentials.
+//
+// The wildcard is never combined with credentials.
+func corsOptions(cfg *config.Config) (cors.Options, bool) {
+	origins := parseOrigins(cfg.Server.CORSOrigins)
+	local := cfg.DeployMode == config.DeployModeLocal
+
+	wildcard := len(origins) == 0 && local
+	for _, o := range origins {
+		if o == "*" {
+			wildcard = true
+		}
+	}
+	if len(origins) == 0 && !local {
+		return cors.Options{}, false
+	}
+	if wildcard && !local {
+		return cors.Options{}, false
+	}
+	if wildcard {
+		origins = []string{"*"}
+	}
+
+	return cors.Options{
+		AllowedOrigins:   origins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-App", "X-Request-ID", "X-Step-Up-Token"},
+		ExposedHeaders:   []string{"X-Request-ID"},
+		AllowCredentials: !wildcard,
+		MaxAge:           300,
+	}, true
 }
 
 func parseOrigins(raw string) []string {

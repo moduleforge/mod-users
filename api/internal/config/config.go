@@ -22,7 +22,7 @@ type DeployMode string
 const (
 	// DeployModeLocal is a developer machine or CI checkout. It is the
 	// only mode that relaxes defaults for convenience — notably the
-	// allow-all CORS origin list in api/internal/server.
+	// credential-less allow-all CORS origin list in api/internal/server.
 	DeployModeLocal DeployMode = "local"
 
 	// DeployModeServerless is a scale-to-zero runtime (Cloud Run, Lambda
@@ -449,6 +449,21 @@ func validate(cfg *Config, parseErrors []string) error {
 	}
 	if len(missing) > 0 {
 		problems = append(problems, "missing required environment variables: "+strings.Join(missing, ", "))
+	}
+
+	// CORS_ORIGINS may not contain the "*" wildcard outside DeployModeLocal:
+	// an explicit allow-list is served with credentials, and a wildcard
+	// combined with credentials is never acceptable in a production-like
+	// mode (every mode except local: serverless, k8s, container-host).
+	if cfg.DeployMode != DeployModeLocal {
+		for _, o := range strings.Split(cfg.Server.CORSOrigins, ",") {
+			if strings.TrimSpace(o) == "*" {
+				problems = append(problems,
+					"CORS_ORIGINS must not contain \"*\" when DEPLOY_MODE is "+string(cfg.DeployMode)+
+						"; list explicit origins (the wildcard is only allowed in local mode, without credentials)")
+				break
+			}
+		}
 	}
 
 	// SMTP is never required on its own: a deployment that never sends

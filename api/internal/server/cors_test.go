@@ -87,37 +87,78 @@ func TestNew_CORSAllowAllIsLocalOnly(t *testing.T) {
 	}
 }
 
-// TestNew_EmptyCORSOriginsIsAllowAllInEveryMode is a characterization test,
-// not an endorsement. github.com/go-chi/cors treats an empty AllowedOrigins
-// list as allow-all (cors.go: allowedOriginsAll is set when the list is empty
-// and no AllowOriginFunc is supplied), so an unset CORS_ORIGINS yields
-// "Access-Control-Allow-Origin: *" in *every* deploy mode — not just local.
-//
-// The local-only branch in New is therefore about intent, not effect: local
-// asks for allow-all deliberately, while a non-local mode falls into it by
-// omission. Deployments are expected to set CORS_ORIGINS explicitly and to
-// enforce that boot-side; this test exists so that any future change to the
-// shared default fails here loudly rather than silently altering the policy
-// every consuming application inherits.
-func TestNew_EmptyCORSOriginsIsAllowAllInEveryMode(t *testing.T) {
+// credentialsHeader returns Access-Control-Allow-Credentials for a cross-origin GET.
+func credentialsHeader(r *chi.Mux, origin string) string {
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+	req.Header.Set("Origin", origin)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	return rec.Header().Get("Access-Control-Allow-Credentials")
+}
+
+// TestNew_EmptyCORSOriginsDeniesOutsideLocal pins the safe default: an unset
+// CORS_ORIGINS yields no CORS headers at all in every non-local mode.
+func TestNew_EmptyCORSOriginsDeniesOutsideLocal(t *testing.T) {
 	modes := []config.DeployMode{
-		config.DeployModeLocal,
 		config.DeployModeServerless,
 		config.DeployModeK8s,
 		config.DeployModeContainerHost,
 	}
-
 	for _, mode := range modes {
 		mode := mode
 		t.Run(string(mode), func(t *testing.T) {
 			t.Parallel()
-
 			r := newTestRouter(mode, "")
-
-			if got := allowOrigin(r, "https://evil.example"); got != "*" {
-				t.Errorf("empty CORS_ORIGINS: Access-Control-Allow-Origin = %q, want %q "+
-					"(if this now fails, the shared CORS default changed — update the operator docs with it)", got, "*")
+			if got := allowOrigin(r, "https://evil.example"); got != "" {
+				t.Errorf("Access-Control-Allow-Origin = %q, want no header", got)
+			}
+			if got := preflightAllowOrigin(r, "https://evil.example"); got != "" {
+				t.Errorf("preflight Access-Control-Allow-Origin = %q, want no header", got)
+			}
+			if got := credentialsHeader(r, "https://evil.example"); got != "" {
+				t.Errorf("Access-Control-Allow-Credentials = %q, want no header", got)
 			}
 		})
+	}
+}
+
+// TestNew_AllowListEchoesOriginWithCredentials covers the explicit allow-list:
+// match echoes the origin and allows credentials; mismatch gets nothing.
+func TestNew_AllowListEchoesOriginWithCredentials(t *testing.T) {
+	const ok = "https://app.example.com"
+	for _, mode := range []config.DeployMode{config.DeployModeLocal, config.DeployModeK8s} {
+		r := newTestRouter(mode, ok+", https://other.example.com")
+		if got := allowOrigin(r, ok); got != ok {
+			t.Errorf("%s: ACAO = %q, want %q", mode, got, ok)
+		}
+		if got := credentialsHeader(r, ok); got != "true" {
+			t.Errorf("%s: ACAC = %q, want true", mode, got)
+		}
+		if got := allowOrigin(r, "https://evil.example"); got != "" {
+			t.Errorf("%s: mismatched origin ACAO = %q, want none", mode, got)
+		}
+	}
+}
+
+// TestNew_LocalConvenienceNeverCombinesWildcardWithCredentials covers the
+// documented local-mode permissive default (empty or explicit "*").
+func TestNew_LocalConvenienceNeverCombinesWildcardWithCredentials(t *testing.T) {
+	for _, raw := range []string{"", "*"} {
+		r := newTestRouter(config.DeployModeLocal, raw)
+		if got := allowOrigin(r, "https://any.example"); got != "*" {
+			t.Errorf("CORS_ORIGINS=%q: ACAO = %q, want *", raw, got)
+		}
+		if got := credentialsHeader(r, "https://any.example"); got != "" {
+			t.Errorf("CORS_ORIGINS=%q: ACAC = %q, want none (wildcard must not carry credentials)", raw, got)
+		}
+	}
+}
+
+// TestNew_WildcardOutsideLocalFailsClosed: config.Load rejects this; if a
+// hand-built Config gets through, the router still denies.
+func TestNew_WildcardOutsideLocalFailsClosed(t *testing.T) {
+	r := newTestRouter(config.DeployModeK8s, "*")
+	if got := allowOrigin(r, "https://any.example"); got != "" {
+		t.Errorf("ACAO = %q, want none", got)
 	}
 }
