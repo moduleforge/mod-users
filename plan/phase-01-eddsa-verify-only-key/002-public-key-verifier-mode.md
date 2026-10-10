@@ -12,3 +12,11 @@ Let `NewVerifier` be built with only an Ed25519 public key (no signing secret), 
 ## Validation
 - Unit tests: verify with public key only; unknown kid rejected; rotation with two kids; HS256 path unchanged.
 - `cd api && go test ./...`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Added `NewVerifierWithOptions` with `WithOIDC`, `WithHS256Secret`, `WithLocalIssuer`, `WithEd25519PublicKeys`, `WithEd25519PublicKey`, and `NewLocalVerifier(LocalAuthConfig)`; re-exported from `api/auth/auth.go`. `NewVerifier` signature unchanged in both copies.
+- `verifyLocal` pins alg by configured key material (HS256 needs a non-empty secret, EdDSA needs public keys; `none`/other algs rejected), selects EdDSA key by `kid`, rejects unknown kid.
+- `JWT_VERIFY_PUBLIC_KEYS` (single PKIX PEM, or JSON kid-to-PEM map) parsed in `api/internal/config/jwt_signing.go` into `LocalAuthConfig.JWTVerifyPublicKeys`.
+- `api/cmd/server/main.go` now uses `NewLocalVerifier`: under `JWT_ALG=EdDSA` it accepts only EdDSA (signing key's public half plus verify keys); HS256 otherwise.
+- Validation: `cd api && go vet ./... && go test ./...` passed (log: `.flow/validation-logs/02-go-test.log`).

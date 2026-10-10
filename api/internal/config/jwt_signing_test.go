@@ -30,7 +30,7 @@ func loadWith(t *testing.T, extra map[string]string) (*config.Config, error) {
 	t.Helper()
 	clearProviderEnv(t)
 	setEnv(t, requiredEnv)
-	for _, k := range []string{"JWT_ALG", "JWT_SIGNING_KEY", "JWT_SIGNING_KID"} {
+	for _, k := range []string{"JWT_ALG", "JWT_SIGNING_KEY", "JWT_SIGNING_KID", "JWT_VERIFY_PUBLIC_KEYS"} {
 		t.Setenv(k, "")
 	}
 	setEnv(t, extra)

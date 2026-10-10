@@ -82,8 +82,11 @@ func main() {
 	// Build auth components. The Verifier is used by RequireAuth to validate
 	// incoming Bearer tokens — post-Phase 9 those are always the local JWTs
 	// minted by /v1/auth/login or the OIDC callback, never a raw provider
-	// id_token. So the verifier is local-only.
-	verifier, err := auth.NewVerifier(ctx, "", "", cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	// id_token. So the verifier is local-only. NewLocalVerifier pins the
+	// accepted algorithm to JWT_ALG: EdDSA-signed local tokens (verified
+	// against the public half of JWT_SIGNING_KEY plus any
+	// JWT_VERIFY_PUBLIC_KEYS) when JWT_ALG=EdDSA, HS256 otherwise.
+	verifier, err := auth.NewLocalVerifier(ctx, cfg.LocalAuth)
 	if err != nil {
 		slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
 		os.Exit(1)
