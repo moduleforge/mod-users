@@ -1,6 +1,9 @@
 slug: flow-accounts-upstream
 version: 1
 title: ""
+remediation:
+    rounds: 1
+    tasks_added: 0
 phases:
     - number: 1
       slug: eddsa-verify-only-key
@@ -139,3 +142,8 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 6
+      slug: remediation-01
+      title: Remediation Round 1
+      kind: remediation
+      tasks: []
