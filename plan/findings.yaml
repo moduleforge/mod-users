@@ -18,6 +18,15 @@ items:
         - plan/phase:cors-safe-default
         - effort:unspecified
       text: 'deploy/k8s/base/configmap.yaml (~line 25) ships DEPLOY_MODE: k8s with CORS_ORIGINS: "" which previously yielded ACAO * plus credentials and now emits no CORS headers; deploy/cloudrun/service.yaml sets no CORS_ORIGINS and hits the same default-deny. Suggested: placeholder origin with a comment in the k8s configmap (consistent with AUTH_FRONTEND_RETURN_URL) and a CORS_ORIGINS comment/entry in the Cloud Run manifest. Also docs/cors.md should state entries are bare scheme://host[:port] with no trailing slash or path, matched case-insensitively; optionally warn in config.Load on entries with a path or trailing slash.'
+    - title: CORS docs still say only bare * errors
+      id: BODx
+      date: "2026-10-10"
+      tags:
+        - type:documentation
+        - priority:low
+        - plan/phase:remediation-03
+        - effort:unspecified
+      text: .env.example (lines 14-16) says other modes reject '*' in CORS_ORIGINS at boot and docs/mod-users-spec.md:333 says a '*' in CORS_ORIGINS is a startup error; both are narrower than the behavior now, which rejects any entry containing * outside local mode. Change both to 'any entry containing *'. Fix the inaccurate comment at api/internal/server/server.go:59 together with the local-mode pattern finding.
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
