@@ -5,6 +5,7 @@ phases:
     - number: 3
       slug: derived-hmac-keys
       title: Derived HMAC Keys Under EdDSA
+      diff_base: b83b379736b3f5d569fbbddd6bcb08df71333e61
       tasks:
         - number: 1
           slug: hkdf-key-derivation
