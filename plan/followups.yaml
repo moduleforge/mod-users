@@ -873,3 +873,11 @@ items:
         - priority:low
         - effort:unspecified
       text: mod-users/gui/src/lib/api.ts (~332-335, 615-624) types the apps create/update body as {name, description?} with no slug. mod-core's strict DecodeJSON (plan core-handler-conformance) now rejects the unknown member 'description' and core requires 'slug'. No caller of apps.create/update exists in the mod-users GUI today, so nothing breaks now, but the wrapper is wrong; align it with the core apps contract.
+    - title: App member list leaks internal ids
+      id: ZJ5N
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:small
+      text: 'GET /v1/apps/{uuid}/user-accounts (api/internal/handlers/apps.go ListAppUsers, ~line 160) returns each member as {user_account_id: <internal BIGINT>, roles}, violating the AGENTS.md convention that internal IDs are never exposed in HTTP responses (only uuid fields). The GUI type gui/src/lib/api.ts AppMembersResponse/AppMember ({members: [{user_uuid, email, given_name, family_name, role, added_at}]}) does not match the server shape ({user_accounts: [{user_account_id, roles}]}) either. Fix: return the member''s user account uuid (join user_accounts in model/queries/apps_user_accounts.sql ListAppUserAccounts) and align the GUI response type; record the wire change for consumers.'
