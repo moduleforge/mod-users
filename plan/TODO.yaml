@@ -54,5 +54,6 @@ phases:
             - ccun
           git:
             branch: plan/catalog-ent-and-derived-keys-04-001
-            commit: []
+            commit:
+                - b4236fe
             merge: null
