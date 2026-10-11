@@ -15,3 +15,12 @@ Implements backlog item jKvl (project followup). `emailVerifiedAt` exposed by `u
 
 ## References
 - Backlog item jKvl in the project's `plan/followups.yaml`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Approach: server-side. Login and email-code verify `user` payloads now carry `email_verified_at` via a shared `sessionUser` helper (`api/internal/handlers/auth/login.go`, `emailcode.go`); anonymous sign-in emits explicit null (`anonymous.go`); the admin assume-identity payload (also typed `LoginResponse`) carries it too (`api/internal/handlers/assume.go`, shared `emailVerifiedAtValue` in `self.go`). Chosen over the `refreshUser()` fallback because it is a few lines, avoids an extra round trip, and keeps every sign-in path truthful by construction (register chains login, so it is covered).
+- OpenAPI (`api/openapi.yaml`): `email_verified_at` removed from `UserDetail` (admin endpoints); new `UserSelf` (UserDetail plus required nullable `email_verified_at`) used for GET/PUT `/v1/self`; new `LoginResponse` used by login, email-code verify and assume; `AnonAuthToken.user` documents null.
+- GUI: `LoginResponse.user` typing kept as `UserAccountSelf` (changing it would cascade through the auth state); documented the guarantee in `gui/src/lib/api.ts`.
+- Tests: `api/internal/handlers/auth/session_user_test.go` (login and email-code, verified/unverified), anonymous assertion in `anonymous_test.go`, GUI `login()`/`register()` tests in `gui/src/lib/auth-context.test.tsx`.
+- Docs: `docs/mod-users-spec.md`, `gui/README.md`.
+- Validation: `go build`/`go vet`/`go test ./...` passed; `bun test` (230 pass) and `bun run typecheck` passed (mod-core/gui dist already built, no build needed).

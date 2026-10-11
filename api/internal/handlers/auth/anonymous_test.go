@@ -175,6 +175,10 @@ func TestAnonymous(t *testing.T) {
 				if userObj["is_anonymous"] != true {
 					t.Errorf("user.is_anonymous = %v, want true", userObj["is_anonymous"])
 				}
+				// guests are never verified: key present with explicit null
+				if v, present := userObj["email_verified_at"]; !present || v != nil {
+					t.Errorf("user.email_verified_at = %v (present=%v), want explicit null", v, present)
+				}
 
 				if tc.checkJWT {
 					claims := decodeJWTPayload(t, token)
