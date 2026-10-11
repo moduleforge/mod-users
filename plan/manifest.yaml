@@ -1,2 +1,4 @@
 version: 1
-plans: []
+plans:
+    - slug: catalog-ent-and-derived-keys
+      status: working
