@@ -16,7 +16,8 @@ phases:
           digest: 'Read-only audit: 45-route five-axis table, D1-D15 verification, 76-literal-site disposition table (convert 56, keep 20), findings F1-F18, 12 preliminary-table corrections. Open decisions F1 (GUI reset sends new_password), F3, F4 (Assume must use effective actor), F5 resolved by manager.'
           git:
             branch: plan/users-conformance-01-001
-            commit: []
+            commit:
+                - 3f44b9d
             merge: null
         - number: 2
           slug: mount-require-auth
