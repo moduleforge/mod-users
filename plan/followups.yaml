@@ -845,6 +845,9 @@ items:
         - priority:low
         - effort:small
         - cross-repo/origin:core
+        - resolution/task:phase-03-decode-and-shape/001-remove-pass-through-wrappers.md
+        - resolution/plan:users-conformance
+        - resolution/commit:48b87236d324b1608e29189baf5658b07b37faa8
       text: 'Origin: wave program http-error-precedence-conformance, core-handler-conformance analysis. The wave manifest assigns deletion of writeCoreServiceErr pass-throughs to the mod-core share, but the function lives in mod-users api/internal/handlers/self.go (line ~150, called ~86), not in mod-core (no pass-through writers exist in mod-core httpapi). Fold into the users-conformance plan: delete writeCoreServiceErr and route its callers straight to apiresp.WriteError once core service errors are already apiresp sentinels, alongside the writeAuthzError/writeServiceError wrapper removal.'
     - title: OIDC verifier skips TLS check for https
       id: 8chg
