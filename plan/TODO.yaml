@@ -128,6 +128,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: order-tests-account-routes
+          title: Order Tests for Account and Apps Membership Routes
+          path: phase-04-conflicts-and-order-tests/002-order-tests-account-routes.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: gui-wire-docs-and-validation
       title: GUI Alignment, Wire Risk Docs and Validation
