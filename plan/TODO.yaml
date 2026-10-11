@@ -42,6 +42,7 @@ phases:
           path: phase-02-existence-leaks/001-user-account-masked-miss.md
           done: false
           tier: sonnet-med
+          digest: authorizeUserAccount masked-miss helper used by Get/Update/Delete/Assume and ssh-key account check; miss and forbidden both ErrForbidden with one target-0 Authorize; Assume uses effective actor after authorization (F4); handler 404 branches removed; unit and handler tests; integration suite 132 pass, 0 skip; wire-risk entries.
           git:
             branch: null
             commit: []
