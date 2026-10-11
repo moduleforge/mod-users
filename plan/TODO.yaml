@@ -156,7 +156,7 @@ phases:
             branch: plan/users-conformance-04-001
             commit:
                 - cb5e2b2
-            merge: null
+            merge: cbad77ba7d2e
         - number: 2
           slug: order-tests-account-routes
           title: Order Tests for Account and Apps Membership Routes
