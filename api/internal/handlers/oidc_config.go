@@ -301,8 +301,7 @@ type confirmRequest struct {
 // admin (post-confirmation reconfig).
 func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	var req confirmRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 

@@ -34,8 +34,7 @@ type passwordResetConfirmBody struct {
 // Always returns 204 to prevent email enumeration.
 func (h *Handler) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
 	var req passwordResetRequestBody
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -92,8 +91,7 @@ func (h *Handler) PasswordResetRequest(w http.ResponseWriter, r *http.Request) {
 // PasswordResetConfirm handles POST /v1/auth/password-reset/confirm.
 func (h *Handler) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 	var req passwordResetConfirmBody
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 

@@ -34,8 +34,7 @@ type emailCodeVerifyBody struct {
 // Always returns 204 within ~200ms to avoid email enumeration.
 func (h *Handler) EmailCodeRequest(w http.ResponseWriter, r *http.Request) {
 	var req emailCodeRequestBody
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -120,8 +119,7 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 // EmailCodeVerify handles POST /v1/auth/email-code/verify.
 func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	var req emailCodeVerifyBody
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
