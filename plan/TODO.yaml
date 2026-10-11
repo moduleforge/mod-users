@@ -57,7 +57,7 @@ phases:
           slug: remove-pass-through-wrappers
           title: Remove Pass-Through Error Wrappers
           path: phase-03-decode-and-shape/001-remove-pass-through-wrappers.md
-          done: false
+          done: true
           tier: haiku-med
           digest: Removed writeAuthzError, writeServiceError and writeCoreServiceErr wrappers; all call sites use apiresp.WriteError; two wrapper-named tests renamed; ZVum comments reworded; no behavior change; make lint passes.
           git:
