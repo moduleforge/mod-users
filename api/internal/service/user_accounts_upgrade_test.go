@@ -380,7 +380,7 @@ func TestUpdateUserAccount_UpgradeDeletesAnonTokens(t *testing.T) {
 	}}
 	svc := newUpgradeTestService(q, ftx)
 
-	_, err := svc.Update(context.Background(), anonUUID, UpdateUserAccountInput{
+	_, err := svc.Update(authedCtx(), anonUUID, UpdateUserAccountInput{
 		Email: ptr("user@example.com"),
 	})
 	if err != nil {
@@ -419,7 +419,7 @@ func TestUpdateUserAccount_NamedEmailDoesNotDeleteTokens(t *testing.T) {
 	}}
 	svc := newUpgradeTestService(q, ftx)
 
-	_, err := svc.Update(context.Background(), namedUUID, UpdateUserAccountInput{
+	_, err := svc.Update(authedCtx(), namedUUID, UpdateUserAccountInput{
 		Email: ptr("new@example.com"),
 	})
 	if err != nil {

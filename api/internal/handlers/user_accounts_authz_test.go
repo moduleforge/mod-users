@@ -427,10 +427,10 @@ func TestShim_Get_ServiceNotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/user-accounts/"+id.String(), nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 
-	// The shim's Get calls writeServiceError for non-pgx errors; pgx.ErrNoRows
-	// maps to 500 via writeServiceError since it's not a known service error.
-	// This is acceptable — the real handler maps pgx.ErrNoRows to 404.
-	// The test documents the shim behavior; the real handler test is in TestHandler_Get_OK.
+	// The shim has no pgx.ErrNoRows mapping (the real handler no longer has
+	// one either: a service miss is a masked 403, covered end to end by
+	// TestMaskedMiss_HTTP in user_accounts_masked_miss_test.go). Here we only
+	// assert a non-200 for an arbitrary service error.
 	h.Get(rr, req)
 	// Just assert we got a non-200 response; exact code depends on shim internals.
 	if rr.Code == http.StatusOK {
