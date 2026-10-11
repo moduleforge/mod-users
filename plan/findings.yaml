@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: make lint fails at api/scripts/check-server-e
-      id: 0NVf
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - priority:medium
-        - effort:small
-        - plan/phase:derived-hmac-keys
-      text: make lint fails at api/scripts/check-server-error-literals.sh on api/internal/handlers/identities.go:318 (literal server.Error call outside allowlist); not touched by this task, confirm whether pre-existing and tracked.
     - title: Weak explicit JWT_SECRET beats derived key
       id: WutU
       date: "2026-10-11"
@@ -27,4 +18,9 @@ items:
         - plan/phase:derived-hmac-keys
         - effort:unspecified
       text: In api/cmd/server/main.go around lines 500-511 the new step-up key resolution comment block sits inside the existing comment that ends with the consumed-JTI cache and janitor goroutine note, so the comment reads out of order. Move the stepUpKey resolution above that comment or give it its own paragraph. Also consider noting in docs/jwt-eddsa.md that an explicit JWT_SECRET collapses OAuth-state/step-up label separation (tokens stay distinguishable by structure and purpose claim).
-closed: []
+closed:
+    - id: 0NVf
+      title: make lint fails at api/scripts/check-server-e
+      disposition: promoted
+      ref: 0NVf
+      date: "2026-10-11"
