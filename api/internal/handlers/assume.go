@@ -98,6 +98,8 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]any{
 			"uuid":  actorUA.Uuid.String(),
 			"email": actorUA.Email.String,
+			// Same semantics as GET /v1/self: always present, null when unverified.
+			"email_verified_at": emailVerifiedAtValue(actorUA),
 		},
 	})
 }

@@ -72,6 +72,9 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]any{
 			"uuid":         result.UserAccount.UUID.String(),
 			"is_anonymous": true,
+			// Guests have no email, so they are never verified: explicit null,
+			// matching GET /v1/self.
+			"email_verified_at": nil,
 		},
 	})
 }

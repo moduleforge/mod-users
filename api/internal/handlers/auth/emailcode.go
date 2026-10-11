@@ -178,10 +178,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		}
 		server.JSON(w, http.StatusOK, map[string]any{
 			"token": token,
-			"user": map[string]any{
-				"uuid":  ua.Uuid.String(),
-				"email": ua.Email.String,
-			},
+			"user":  sessionUser(ua),
 		})
 		return
 	}
