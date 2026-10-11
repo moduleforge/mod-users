@@ -148,6 +148,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: order-tests-credential-and-public-routes
+          title: Order Tests for Credential and Public Routes
+          path: phase-04-conflicts-and-order-tests/004-order-tests-credential-and-public-routes.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: gui-wire-docs-and-validation
       title: GUI Alignment, Wire Risk Docs and Validation
