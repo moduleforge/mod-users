@@ -101,7 +101,7 @@ type CreateAnonymousUserResult struct {
 // succeeds and carries the users.email_taken field-level detail directly on
 // the sentinel — apiresp.WriteError(w, r, err) alone classifies it as 409
 // conflict and surfaces the detail, with no local mapping-point special
-// case needed (see writeServiceError in handlers/user_accounts.go). Per the
+// case needed (see the apiresp.WriteError mapping in handlers/user_accounts.go). Per the
 // design doc (docs/mf-standards/architecture/api-response-design.md,
 // "Module-specific extension codes") this is a deliberate plain 409
 // (create-time uniqueness), not a masked 403 — no masking logic applies to

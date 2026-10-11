@@ -83,7 +83,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 			coreservice.UpdateNaturalPersonInput{GivenName: req.GivenName, FamilyName: req.FamilyName},
 		)
 		if err != nil {
-			writeCoreServiceErr(w, r, err)
+			apiresp.WriteError(w, r, err)
 			return
 		}
 	}
@@ -145,13 +145,4 @@ func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[strin
 	}
 
 	return resp
-}
-
-// writeCoreServiceErr maps core service sentinels to HTTP responses by
-// delegating to apiresp.WriteError. coreservice.ErrNotFound/ErrForbidden/
-// ErrInvalidInput are already aliases of apiresp's canonical sentinels (see
-// mod-core/api/service/errors.go), so apiresp.WriteError classifies them
-// correctly with no local switch.
-func writeCoreServiceErr(w http.ResponseWriter, r *http.Request, err error) {
-	apiresp.WriteError(w, r, err)
 }

@@ -313,7 +313,7 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 			// detail-carrying constructor for not_found (only InvalidInput), so
 			// the users.identity_not_found field detail cannot be attached via
 			// apiresp.WriteError. Kept as the literal call below, mirroring the
-			// writeServiceError/svc.ErrEmailTaken precedent (user_accounts.go);
+			// svc.ErrEmailTaken precedent (service-error mapping in user_accounts.go);
 			// collapse once mod-core adds a detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusNotFound, "not_found", "identity not found", []apiresp.FieldError{
 				{Code: "users.identity_not_found", Message: "identity not found"},
@@ -391,8 +391,8 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 			// detail-carrying constructor for unauthenticated (only
 			// InvalidInput), so the users.bad_credentials field detail cannot
 			// be attached via apiresp.WriteError. Kept as the literal call
-			// below, mirroring the writeServiceError/svc.ErrEmailTaken
-			// precedent (user_accounts.go); collapse once mod-core adds a
+			// below, mirroring the svc.ErrEmailTaken
+			// precedent (service-error mapping in user_accounts.go); collapse once mod-core adds a
 			// detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
 				{Field: "current_password", Code: "users.bad_credentials", Message: "current_password is required to change an existing password"},
@@ -409,8 +409,8 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 			// detail-carrying constructor for unauthenticated (only
 			// InvalidInput), so the users.bad_credentials field detail cannot
 			// be attached via apiresp.WriteError. Kept as the literal call
-			// below, mirroring the writeServiceError/svc.ErrEmailTaken
-			// precedent (user_accounts.go); collapse once mod-core adds a
+			// below, mirroring the svc.ErrEmailTaken
+			// precedent (service-error mapping in user_accounts.go); collapse once mod-core adds a
 			// detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
 				{Field: "current_password", Code: "users.bad_credentials", Message: "current password is incorrect"},

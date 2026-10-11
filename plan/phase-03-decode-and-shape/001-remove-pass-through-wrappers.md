@@ -37,3 +37,11 @@ architectural_impact: false
 ## Assumptions
 
 - Phase 2 has landed. Its handler edits in `user_accounts.go` and `assume.go` may have already removed some calls.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Validation: gofmt clean; `go vet ./...` and `go vet -tags=integration ./...` pass; `go test ./...` passes (no FAIL lines); `make lint` passes with `check-server-error-literals` reporting 4/4 carve-outs; no `writeAuthzError`/`writeServiceError`/`writeCoreServiceErr` references remain in `*.go`; `api/internal/handlers/errors.go` removed. Logs under `.flow/validation-logs/`.
+- Integration suite not run: the change is behavior-neutral and the task does not change service behavior.
+- Files affected: `api/internal/handlers/errors.go` (deleted), `api/internal/handlers/user_accounts.go`, `api/internal/handlers/self.go`, `api/internal/handlers/apps.go`, `api/internal/handlers/assume.go`, `api/internal/handlers/identities.go`, `api/internal/handlers/oidc_providers.go`, `api/internal/handlers/user_accounts_authz_test.go`, `api/internal/service/user_accounts.go`.
+- Decisions: test functions renamed `TestWriteServiceError_Mapping` to `TestWriteError_ServiceErrorMapping` and `TestWriteAuthzError_Mapping` to `TestWriteError_AuthzUnclassifiedMapsTo500`, since the names referenced deleted wrappers; assertions unchanged. ZVum comments reworded to cite the `svc.ErrEmailTaken` precedent without the deleted name; the `followup ZVum` marker text is unchanged.

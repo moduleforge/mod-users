@@ -130,7 +130,7 @@ func (h *shim) List(w http.ResponseWriter, r *http.Request) {
 
 	accounts, err := h.svc.List(r.Context(), svc.ListUserAccountsInput{Search: search, Limit: 20})
 	if err != nil {
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *shim) Create(w http.ResponseWriter, r *http.Request) {
 		FamilyName: req.FamilyName,
 	})
 	if err != nil {
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 	server_JSON(w, http.StatusCreated, userAccountResponse(ua))
@@ -169,7 +169,7 @@ func (h *shim) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	ua, err := h.svc.Get(r.Context(), id)
 	if err != nil {
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 	server_JSON(w, http.StatusOK, userAccountResponse(ua))
@@ -183,7 +183,7 @@ func (h *shim) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -198,7 +198,7 @@ func (h *shim) GrantAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.grantAdmin != nil {
 		if err := h.grantAdmin(r.Context(), id); err != nil {
-			writeServiceError(w, r, err)
+			apiresp.WriteError(w, r, err)
 			return
 		}
 	}
@@ -214,7 +214,7 @@ func (h *shim) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.revokeAdmin != nil {
 		if err := h.revokeAdmin(r.Context(), id); err != nil {
-			writeServiceError(w, r, err)
+			apiresp.WriteError(w, r, err)
 			return
 		}
 	}
@@ -543,10 +543,10 @@ func TestShim_RevokeAdmin_Forbidden(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: writeServiceError mapping table
+// Test: apiresp.WriteError service-error mapping table
 // ---------------------------------------------------------------------------
 
-func TestWriteServiceError_Mapping(t *testing.T) {
+func TestWriteError_ServiceErrorMapping(t *testing.T) {
 	tests := []struct {
 		name        string
 		err         error
@@ -578,9 +578,9 @@ func TestWriteServiceError_Mapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/v1/user-accounts", nil)
 			rr := httptest.NewRecorder()
-			writeServiceError(rr, req, tt.err)
+			apiresp.WriteError(rr, req, tt.err)
 			if rr.Code != tt.wantStatus {
-				t.Errorf("writeServiceError(%v): status got %d, want %d", tt.err, rr.Code, tt.wantStatus)
+				t.Errorf("apiresp.WriteError(%v): status got %d, want %d", tt.err, rr.Code, tt.wantStatus)
 			}
 
 			var body struct {
@@ -591,23 +591,23 @@ func TestWriteServiceError_Mapping(t *testing.T) {
 				} `json:"error"`
 			}
 			if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
-				t.Fatalf("writeServiceError(%v): body not valid JSON: %v, body=%s", tt.err, err, rr.Body.String())
+				t.Fatalf("apiresp.WriteError(%v): body not valid JSON: %v, body=%s", tt.err, err, rr.Body.String())
 			}
 			if body.Error.Code != tt.wantCode {
-				t.Errorf("writeServiceError(%v): error.code got %q, want %q", tt.err, body.Error.Code, tt.wantCode)
+				t.Errorf("apiresp.WriteError(%v): error.code got %q, want %q", tt.err, body.Error.Code, tt.wantCode)
 			}
 			if tt.wantDetails == nil {
 				if len(body.Error.Details) != 0 {
-					t.Errorf("writeServiceError(%v): expected no details, got %+v", tt.err, body.Error.Details)
+					t.Errorf("apiresp.WriteError(%v): expected no details, got %+v", tt.err, body.Error.Details)
 				}
 				return
 			}
 			if len(body.Error.Details) != len(tt.wantDetails) {
-				t.Fatalf("writeServiceError(%v): details got %+v, want %+v", tt.err, body.Error.Details, tt.wantDetails)
+				t.Fatalf("apiresp.WriteError(%v): details got %+v, want %+v", tt.err, body.Error.Details, tt.wantDetails)
 			}
 			for i, want := range tt.wantDetails {
 				if body.Error.Details[i] != want {
-					t.Errorf("writeServiceError(%v): details[%d] got %+v, want %+v", tt.err, i, body.Error.Details[i], want)
+					t.Errorf("apiresp.WriteError(%v): details[%d] got %+v, want %+v", tt.err, i, body.Error.Details[i], want)
 				}
 			}
 		})
@@ -615,22 +615,22 @@ func TestWriteServiceError_Mapping(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: writeAuthzError — unclassified error → 500 internal_error
+// Test: apiresp.WriteError — unclassified error → 500 internal_error
 // ---------------------------------------------------------------------------
 
-// TestWriteAuthzError_Mapping asserts that writeAuthzError, like its sibling
-// writeServiceError, maps an error that is not a recognized apiresp sentinel
+// TestWriteError_AuthzUnclassifiedMapsTo500 asserts that apiresp.WriteError,
+// like the service-error mapping, maps an error that is not a recognized apiresp sentinel
 // (apiresp.ErrUnauthenticated / apiresp.ErrForbidden) to a 500 with the
 // "internal_error" code, per apiresp.WriteError's default classification.
-func TestWriteAuthzError_Mapping(t *testing.T) {
+func TestWriteError_AuthzUnclassifiedMapsTo500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/user-accounts", nil)
 	rr := httptest.NewRecorder()
 
 	err := errors.New("db down")
-	writeAuthzError(rr, req, err)
+	apiresp.WriteError(rr, req, err)
 
 	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("writeAuthzError(%v): status got %d, want %d", err, rr.Code, http.StatusInternalServerError)
+		t.Errorf("apiresp.WriteError(%v): status got %d, want %d", err, rr.Code, http.StatusInternalServerError)
 	}
 
 	var body struct {
@@ -639,9 +639,9 @@ func TestWriteAuthzError_Mapping(t *testing.T) {
 		} `json:"error"`
 	}
 	if decErr := json.Unmarshal(rr.Body.Bytes(), &body); decErr != nil {
-		t.Fatalf("writeAuthzError(%v): body not valid JSON: %v, body=%s", err, decErr, rr.Body.String())
+		t.Fatalf("apiresp.WriteError(%v): body not valid JSON: %v, body=%s", err, decErr, rr.Body.String())
 	}
 	if body.Error.Code != "internal_error" {
-		t.Errorf("writeAuthzError(%v): error.code got %q, want %q", err, body.Error.Code, "internal_error")
+		t.Errorf("apiresp.WriteError(%v): error.code got %q, want %q", err, body.Error.Code, "internal_error")
 	}
 }

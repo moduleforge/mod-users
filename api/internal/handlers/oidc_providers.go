@@ -217,7 +217,7 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		// Documented exception (followup ZVum): apiresp exposes no public
 		// detail/message-carrying constructor for ErrConflict, so this actionable
 		// 409 message cannot be routed through apiresp.WriteError without losing it.
-		// Mirrors the writeServiceError/svc.ErrEmailTaken precedent. Collapse this
+		// Mirrors the svc.ErrEmailTaken precedent in the service-error mapping of user_accounts.go. Collapse this
 		// once mod-core adds apiresp.Conflict(...).
 		server.Error(w, http.StatusConflict, "conflict", "provider id already exists; use PUT to update")
 		return

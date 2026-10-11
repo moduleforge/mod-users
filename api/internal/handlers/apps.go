@@ -79,7 +79,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	// entity resolution occurs, so an arbitrary uuid can't be used as a
 	// cross-entity existence probe against the shared entities table.
 	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -142,7 +142,7 @@ func (h *AppsHandler) ListAppUsers(w http.ResponseWriter, r *http.Request) {
 	// Authorize before resolving the {uuid} path param — see AssignUser's
 	// comment above for why this ordering matters.
 	if err := h.az.Authorize(r.Context(), "read", nil); err != nil {
-		writeAuthzError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *AppsHandler) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	// Authorize before resolving the {uuid} path param — see AssignUser's
 	// comment above for why this ordering matters.
 	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -218,7 +218,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	// Authorize before resolving the {uuid} path param — see AssignUser's
 	// comment above for why this ordering matters.
 	if err := h.az.Authorize(r.Context(), "update", nil); err != nil {
-		writeAuthzError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
