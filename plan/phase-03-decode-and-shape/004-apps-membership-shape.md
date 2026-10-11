@@ -47,3 +47,11 @@ architectural_impact: false
 ## Assumptions
 
 - Tasks 3.1-3.3 have landed.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Changed: `api/internal/handlers/apps.go` (stateless checks and `assignUserRequest.Validate` before the nil-target `Authorize`; `loadAppByUUIDParam` replaced by `loadApp` using `coreQ.GetAppByUUID`; `AllowNotFound("app")` removed), `api/internal/handlers/apps_authz_test.go` (rewritten for 400/403/404 precedence and the no-side-effect resolver check), `plan/notes/wire-risk.md` (entry appended).
+- Archived apps: `Resolve` (`GetEntityByUUID`) and `GetAppByUUID` both lack an `archived_at` filter, so behavior is unchanged; no difference to report.
+- Left as is per requirement 4: the user-account `ErrNoRows` to 404 mappings in `AssignUser`, `RemoveUser` and `UpdateUserRoles` now run after the nil-target `Authorize`, so they are post-authorization 404s; task 4.1 classifies them.
+- Validation: gofmt, vet, `go test ./...`, `make lint` and both greps passed. The `-tags=integration` authz suite ran against a throwaway Postgres container (142 passes, 0 skips, 0 failures).
