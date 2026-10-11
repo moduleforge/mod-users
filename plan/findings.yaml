@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Assume test gap; LoginResponse typing
-      id: 66qf
-      date: "2026-10-10"
-      tags:
-        - type:bug
-        - priority:low
-        - plan/phase:backlog-fixes
-        - effort:unspecified
-      text: '(1) The admin assume-identity payload now carries email_verified_at (api/internal/handlers/assume.go ~91-103, shared emailVerifiedAtValue in self.go) and the spec/OpenAPI promise it, but no Assume handler test asserts the user object; add a small test with a stub service returning verified and unverified accounts asserting the key is present with a timestamp or explicit null. (2) gui/src/lib/api.ts (~183-189, 249): LoginResponse.user is still typed UserAccountSelf although sign-in and assume payloads carry only uuid, email and email_verified_at, so TypeScript will not flag consumers reading user.entity_uuid and similar; narrow it to Pick<UserAccountSelf, ''uuid'' | ''email'' | ''email_verified_at''> plus optional extras. The anonymous payload is not a LoginResponse and carries uuid and is_anonymous.'
+items: []
 closed:
     - id: GlTi
       title: config.Load()/validate() in mod-users still r
@@ -99,4 +90,9 @@ closed:
       title: LoginResponse.user type is wider than payload
       disposition: promoted
       ref: mJdk
+      date: "2026-10-11"
+    - id: 66qf
+      title: Assume test gap; LoginResponse typing
+      disposition: promoted
+      ref: 66qf
       date: "2026-10-11"
