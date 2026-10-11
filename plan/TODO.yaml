@@ -249,6 +249,7 @@ phases:
     - number: 8
       slug: remediation-01
       title: Remediation Round 1
+      diff_base: ad125177723a87d74240010c21d624b2ae78a760
       kind: remediation
       tasks_added: 1
       tasks:
@@ -256,13 +257,15 @@ phases:
           slug: step-up-ordering-gaps
           title: Close Step-Up Ordering Gaps for SSH Keys and StartLink
           path: phase-08-remediation-01/001-step-up-ordering-gaps.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: SSH key/label shape validated in registerSSHKeyRequest.Validate before step-up (ValidateSSHKeyShape); StartLink validates return query before step-up (ValidateReturnPath, ErrInvalidReturnPath), internal link failures now 500; AuthorizeCreate comment fixed; stepord tests; integration 250 pass 0 skip. Fixes jAXe, P2k6, gKQO.
           findings:
             - jAXe
             - P2k6
             - gKQO
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-08-001
+            commit:
+                - 9a366ad
             merge: null
