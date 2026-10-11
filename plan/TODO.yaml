@@ -51,16 +51,19 @@ phases:
     - number: 3
       slug: decode-and-shape
       title: Decode and Shape Before Authorization
+      diff_base: 119da4dab93a0a5870165564a8e77829df685d1b
       tasks:
         - number: 1
           slug: remove-pass-through-wrappers
           title: Remove Pass-Through Error Wrappers
           path: phase-03-decode-and-shape/001-remove-pass-through-wrappers.md
-          done: false
+          done: true
           tier: haiku-med
+          digest: Removed writeAuthzError, writeServiceError and writeCoreServiceErr wrappers; all call sites use apiresp.WriteError; two wrapper-named tests renamed; ZVum comments reworded; no behavior change; make lint passes.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-03-001
+            commit:
+                - 48b8723
             merge: null
         - number: 2
           slug: decode-wrapper-and-callers
