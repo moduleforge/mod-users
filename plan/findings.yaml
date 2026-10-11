@@ -1,0 +1,12 @@
+version: 2
+items:
+    - title: make lint fails at api/scripts/check-server-e
+      id: 0NVf
+      date: "2026-10-11"
+      tags:
+        - type:ambiguity
+        - plan/phase:derived-hmac-keys
+        - priority:unspecified
+        - effort:unspecified
+      text: make lint fails at api/scripts/check-server-error-literals.sh on api/internal/handlers/identities.go:318 (literal server.Error call outside allowlist); not touched by this task, confirm whether pre-existing and tracked.
+closed: []
