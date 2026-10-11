@@ -28,5 +28,6 @@ phases:
           digest: 'JWT_SECRET optional under EdDSA: config skips DB bootstrap and drops the required check under EdDSA (HS256 unchanged); NewOAuth and main.go use the OAuthStateKey/StepUpKey resolvers (explicit secret wins, else HKDF-derived); additive auth facade wrappers; tests for config, oauth, cross-rejection, step-up; docs D19 + D17 amendment, jwt-eddsa.md, consumer-upgrade-notes, README, .env.example. make test.unit.api and build pass; make lint.api fails only on pre-existing identities.go literal-error check.'
           git:
             branch: plan/catalog-ent-and-derived-keys-03-002
-            commit: []
+            commit:
+                - a119270
             merge: null
