@@ -177,7 +177,7 @@ phases:
           tier: sonnet-med
           digest: 'Order tests for 15 self/identities/ssh-keys routes plus D11 gate tests; red check via moving requireStepUp above Decode; no production change. Limit: IdentitiesHandler concrete pool, DELETE identity/password past step-up not driven.'
           git:
-            branch: null
+            branch: plan/users-conformance-04-003
             commit: []
             merge: null
         - number: 4
