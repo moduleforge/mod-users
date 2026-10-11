@@ -5,4 +5,14 @@ phases:
     - number: 3
       slug: derived-hmac-keys
       title: Derived HMAC Keys Under EdDSA
-      tasks: []
+      tasks:
+        - number: 1
+          slug: hkdf-key-derivation
+          title: Add HKDF Derivation And Key Resolution For State And Step-Up
+          path: phase-03-derived-hmac-keys/001-hkdf-key-derivation.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
