@@ -1,30 +1,21 @@
 package handlers
 
-// Regression tests for two phase-gate review findings against AppsHandler's
-// membership methods (AssignUser, ListAppUsers, RemoveUser, UpdateUserRoles):
+// Tests for AppsHandler's membership methods (AssignUser, ListAppUsers,
+// RemoveUser, UpdateUserRoles) covering the error-precedence order:
+// stateless checks (path UUIDs, body decode and validation) give 400 before
+// the nil-target Authorize gives 403, and the app lookup (GetAppByUUID, 404
+// on a miss) runs only after Authorize passes.
 //
-//  1. Authz-ordering: h.az.Authorize must run BEFORE loadAppByUUIDParam, so a
-//     caller lacking the required grant is rejected with 403 before any
-//     cross-module entity resolution occurs (see apps.go's method-level
-//     comments). Each ordering test below uses a canary: coreQ is left nil,
-//     which panics if entity resolution is ever attempted (a nil *coredb.
-//     Queries dereferences a nil field on first query). If Authorize denies
-//     first, as required, that code path is never reached and no panic
-//     occurs.
+// The nil coreQ is a canary: a nil *coredb.Queries panics on first query, so a
+// clean 400 or 403 proves the app lookup was never reached.
 //
-//  2. Type-scoping: entityResolver.Resolve only confirms a uuid exists
-//     somewhere in the shared, cross-module entities table — it has no
-//     notion of "app". loadAppByUUIDParam must supplement that with a check
-//     against mod-core's apps table (coreQ.GetAppByUUID) so a uuid naming a
-//     real but differently-typed entity (natural_person, corporation, etc.)
-//     still surfaces as ErrNotFound rather than resolving to a wrong-type id.
-//
-// Both scenarios are exercised without a live database: fakeCoreDBTX
-// implements coredb.DBTX directly (pgx.Row is documented by pgx itself as an
-// interface specifically to allow this kind of test double).
+// Scenarios are exercised without a live database: fakeCoreDBTX implements
+// coredb.DBTX directly (pgx.Row is documented by pgx itself as an interface
+// specifically to allow this kind of test double).
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -70,7 +61,7 @@ func (s *stubAppsAuthorizer) Authorize(_ context.Context, _ string, target *int6
 // (the apps query is the only one of the two that reads "FROM apps").
 type fakeCoreDBTX struct {
 	entityErr error // error GetEntityByUUID's row.Scan should return (nil = success)
-	entityID  int64 // id GetEntityByUUID's row should report on success
+	entityID  int64 // id the entity and app rows report on success
 	appErr    error // error GetAppByUUID's row.Scan should return (nil = success)
 }
 
@@ -84,7 +75,7 @@ func (f *fakeCoreDBTX) Query(context.Context, string, ...any) (pgx.Rows, error) 
 
 func (f *fakeCoreDBTX) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
 	if strings.Contains(sql, "FROM apps") {
-		return fakeCoreRow{err: f.appErr}
+		return fakeCoreRow{err: f.appErr, id: f.entityID}
 	}
 	return fakeCoreRow{err: f.entityErr, id: f.entityID}
 }
@@ -141,6 +132,14 @@ func requestWithUUIDParam(method, path, uuidParam, userAccountUUID string) *http
 	return httptest.NewRequest(method, path, nil).WithContext(ctx)
 }
 
+// appsRequest is requestWithUUIDParam with a JSON body.
+func appsRequest(method, path, uuidParam, userAccountUUID, body string) *http.Request {
+	r := requestWithUUIDParam(method, path, uuidParam, userAccountUUID)
+	r2 := httptest.NewRequest(method, path, strings.NewReader(body)).WithContext(r.Context())
+	r2.Header.Set("Content-Type", "application/json")
+	return r2
+}
+
 // callGuardingPanic invokes fn and turns any panic into a t.Fatal, so an
 // authz-ordering regression (Authorize running after entity resolution,
 // which panics against the nil-coreQ canary) fails with a clear message
@@ -156,151 +155,184 @@ func callGuardingPanic(t *testing.T, name string, fn func()) {
 }
 
 // ---------------------------------------------------------------------------
-// Finding 1: authz-ordering — Authorize must run before loadAppByUUIDParam
+// Error precedence: 400 (stateless) before 403 (authorize) before 404 (lookup)
 // ---------------------------------------------------------------------------
 
-func TestAppsHandler_AuthzRunsBeforeEntityResolution_Forbidden(t *testing.T) {
-	methods := []struct {
-		name   string
-		method string
-		path   string
-		invoke func(h *AppsHandler, w http.ResponseWriter, r *http.Request)
-	}{
-		{"AssignUser", http.MethodPost, "/v1/apps/%s/user-accounts", func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.AssignUser(w, r) }},
-		{"ListAppUsers", http.MethodGet, "/v1/apps/%s/user-accounts", func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.ListAppUsers(w, r) }},
-		{"RemoveUser", http.MethodDelete, "/v1/apps/%s/user-accounts/%s", func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.RemoveUser(w, r) }},
-		{"UpdateUserRoles", http.MethodPut, "/v1/apps/%s/user-accounts/%s/roles", func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.UpdateUserRoles(w, r) }},
+type appsCase struct {
+	name   string
+	invoke func(h *AppsHandler, w http.ResponseWriter, r *http.Request)
+	// build returns a request; appUUID and userUUID are the path values,
+	// body the JSON body (ignored by routes without one).
+	build func(appUUID, userUUID, body string) *http.Request
+}
+
+func appsCases() []appsCase {
+	return []appsCase{
+		{"AssignUser",
+			func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.AssignUser(w, r) },
+			func(a, u, b string) *http.Request {
+				return appsRequest(http.MethodPost, "/v1/apps/"+a+"/user-accounts", a, "", b)
+			}},
+		{"ListAppUsers",
+			func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.ListAppUsers(w, r) },
+			func(a, u, b string) *http.Request {
+				return requestWithUUIDParam(http.MethodGet, "/v1/apps/"+a+"/user-accounts", a, "")
+			}},
+		{"RemoveUser",
+			func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.RemoveUser(w, r) },
+			func(a, u, b string) *http.Request {
+				return requestWithUUIDParam(http.MethodDelete, "/v1/apps/"+a+"/user-accounts/"+u, a, u)
+			}},
+		{"UpdateUserRoles",
+			func(h *AppsHandler, w http.ResponseWriter, r *http.Request) { h.UpdateUserRoles(w, r) },
+			func(a, u, b string) *http.Request {
+				return appsRequest(http.MethodPut, "/v1/apps/"+a+"/user-accounts/"+u+"/roles", a, u, b)
+			}},
 	}
+}
 
-	for _, m := range methods {
-		t.Run(m.name, func(t *testing.T) {
-			az := &stubAppsAuthorizer{err: apiresp.ErrForbidden}
-			// coreQ is deliberately nil: reaching entity resolution before
-			// Authorize denies would panic (nil *coredb.Queries), so a
-			// clean 403 here proves Authorize ran first.
-			h := &AppsHandler{
-				az:             az,
-				entityResolver: entity.NewResolver().AllowNotFound("app"),
-				coreQ:          nil,
-			}
+// appsValidBody returns a valid body for the named handler.
+func appsValidBody(name string) string {
+	if name == "AssignUser" {
+		return `{"user_uuid":"` + uuid.NewString() + `","roles":["member"]}`
+	}
+	return `{"roles":["member"]}`
+}
 
-			appUUID := uuid.New().String()
-			userUUID := uuid.New().String()
-			path := m.path
-			if strings.Contains(path, "%s/user-accounts/%s") {
-				path = fmt.Sprintf(path, appUUID, userUUID)
-			} else {
-				path = fmt.Sprintf(path, appUUID)
-			}
-			req := requestWithUUIDParam(m.method, path, appUUID, userUUID)
+func appsForbiddenHandler() (*AppsHandler, *stubAppsAuthorizer) {
+	az := &stubAppsAuthorizer{err: apiresp.ErrForbidden}
+	// coreQ is deliberately nil (canary, see file comment).
+	return &AppsHandler{az: az, entityResolver: entity.NewResolver()}, az
+}
+
+func TestAppsHandler_Forbidden_ValidRequest_403(t *testing.T) {
+	for _, c := range appsCases() {
+		t.Run(c.name, func(t *testing.T) {
+			h, az := appsForbiddenHandler()
+			req := c.build(uuid.NewString(), uuid.NewString(), appsValidBody(c.name))
 			rr := httptest.NewRecorder()
 
-			callGuardingPanic(t, m.name, func() { m.invoke(h, rr, req) })
+			callGuardingPanic(t, c.name, func() { c.invoke(h, rr, req) })
 
 			if az.calls != 1 {
-				t.Errorf("%s: Authorize called %d times, want 1", m.name, az.calls)
+				t.Errorf("Authorize called %d times, want 1", az.calls)
 			}
 			if az.target != nil {
-				t.Errorf("%s: Authorize target = %v, want nil", m.name, az.target)
+				t.Errorf("Authorize target = %v, want nil", az.target)
 			}
 			if rr.Code != http.StatusForbidden {
-				t.Errorf("%s: status = %d, want %d, body=%s", m.name, rr.Code, http.StatusForbidden, rr.Body.String())
+				t.Errorf("status = %d, want 403, body=%s", rr.Code, rr.Body.String())
 			}
 		})
 	}
 }
 
-// TestAppsHandler_AuthzOK_ProceedsToEntityResolution confirms that once
-// Authorize allows the request, the handler does continue on to
-// loadAppByUUIDParam (an unresolvable uuid still yields 404, preserving the
-// pre-existing not-found behavior end-to-end through the reordered code).
-func TestAppsHandler_AuthzOK_ProceedsToEntityResolution(t *testing.T) {
-	az := &stubAppsAuthorizer{err: nil}
-	fakeDB := &fakeCoreDBTX{entityErr: pgx.ErrNoRows}
-	h := &AppsHandler{
-		az:             az,
-		entityResolver: entity.NewResolver().AllowNotFound("app"),
-		coreQ:          coredb.New(fakeDB),
-	}
+func TestAppsHandler_Forbidden_StatelessFailure_400(t *testing.T) {
+	for _, c := range appsCases() {
+		valid := appsValidBody(c.name)
+		failures := []struct {
+			name, app, user, body string
+		}{
+			{"bad app uuid", "not-a-uuid", uuid.NewString(), valid},
+		}
+		if c.name == "RemoveUser" || c.name == "UpdateUserRoles" {
+			failures = append(failures, struct{ name, app, user, body string }{"bad user_account_uuid", uuid.NewString(), "nope", valid})
+		}
+		switch c.name {
+		case "AssignUser":
+			failures = append(failures,
+				struct{ name, app, user, body string }{"malformed body", uuid.NewString(), "", `{`},
+				struct{ name, app, user, body string }{"missing user_uuid", uuid.NewString(), "", `{"roles":[]}`},
+				struct{ name, app, user, body string }{"invalid user_uuid", uuid.NewString(), "", `{"user_uuid":"zzz"}`},
+			)
+		case "UpdateUserRoles":
+			failures = append(failures,
+				struct{ name, app, user, body string }{"malformed body", uuid.NewString(), uuid.NewString(), `{`},
+			)
+		}
+		for _, f := range failures {
+			t.Run(c.name+"/"+f.name, func(t *testing.T) {
+				h, az := appsForbiddenHandler()
+				req := c.build(f.app, f.user, f.body)
+				rr := httptest.NewRecorder()
 
-	appUUID := uuid.New().String()
-	req := requestWithUUIDParam(http.MethodGet, "/v1/apps/"+appUUID+"/user-accounts", appUUID, "")
-	rr := httptest.NewRecorder()
+				callGuardingPanic(t, c.name, func() { c.invoke(h, rr, req) })
 
-	h.ListAppUsers(rr, req)
-
-	if az.calls != 1 {
-		t.Fatalf("Authorize called %d times, want 1", az.calls)
-	}
-	if rr.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want %d (unknown app uuid should still 404), body=%s", rr.Code, http.StatusNotFound, rr.Body.String())
+				if rr.Code != http.StatusBadRequest {
+					t.Errorf("status = %d, want 400, body=%s", rr.Code, rr.Body.String())
+				}
+				if az.calls != 0 {
+					t.Errorf("Authorize called %d times, want 0 (400 precedes authorization)", az.calls)
+				}
+			})
+		}
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Finding 2: loadAppByUUIDParam must type-scope through mod-core's apps table
-// ---------------------------------------------------------------------------
-
-func TestLoadAppByUUIDParam_TypeScoping(t *testing.T) {
-	const resolvedID int64 = 99
-
-	tests := []struct {
-		name      string
-		entityErr error
-		appErr    error
-		wantOK    bool
-		wantCode  int
-	}{
-		{
-			name:      "uuid unknown to entities table -> not found",
-			entityErr: pgx.ErrNoRows,
-			wantOK:    false,
-			wantCode:  http.StatusNotFound,
-		},
-		{
-			name:      "uuid resolves but is not an app (e.g. natural_person) -> not found",
-			entityErr: nil,
-			appErr:    pgx.ErrNoRows,
-			wantOK:    false,
-			wantCode:  http.StatusNotFound,
-		},
-		{
-			name:      "uuid resolves and is an app -> ok",
-			entityErr: nil,
-			appErr:    nil,
-			wantOK:    true,
-		},
+func TestAppsHandler_MissingUserUUID_KeepsDetailCode(t *testing.T) {
+	h, _ := appsForbiddenHandler()
+	a := uuid.NewString()
+	req := appsRequest(http.MethodPost, "/v1/apps/"+a+"/user-accounts", a, "", `{}`)
+	rr := httptest.NewRecorder()
+	h.AssignUser(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "users.user_uuid_required") {
+		t.Errorf("status=%d body=%s, want 400 with users.user_uuid_required", rr.Code, rr.Body.String())
 	}
+	req = appsRequest(http.MethodPost, "/v1/apps/"+a+"/user-accounts", a, "", `{"user_uuid":"zzz"}`)
+	rr = httptest.NewRecorder()
+	h.AssignUser(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid_uuid") {
+		t.Errorf("status=%d body=%s, want 400 with invalid_uuid", rr.Code, rr.Body.String())
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fakeDB := &fakeCoreDBTX{entityErr: tt.entityErr, entityID: resolvedID, appErr: tt.appErr}
+// An authorized admin gets 404 for an unknown app (or a non-app entity uuid):
+// GetAppByUUID joins apps to entities, so both are a miss.
+func TestAppsHandler_AdminUnknownApp_404(t *testing.T) {
+	for _, c := range appsCases() {
+		t.Run(c.name, func(t *testing.T) {
+			az := &stubAppsAuthorizer{}
 			h := &AppsHandler{
-				entityResolver: entity.NewResolver().AllowNotFound("app"),
-				coreQ:          coredb.New(fakeDB),
+				az:             az,
+				entityResolver: entity.NewResolver(),
+				coreQ:          coredb.New(&fakeCoreDBTX{appErr: pgx.ErrNoRows}),
 			}
-
-			appUUID := uuid.New()
-			req := requestWithUUIDParam(http.MethodGet, "/v1/apps/"+appUUID.String()+"/user-accounts", appUUID.String(), "")
+			req := c.build(uuid.NewString(), uuid.NewString(), appsValidBody(c.name))
 			rr := httptest.NewRecorder()
 
-			gotID, gotUUID, ok := h.loadAppByUUIDParam(rr, req)
+			c.invoke(h, rr, req)
 
-			if ok != tt.wantOK {
-				t.Fatalf("ok = %v, want %v, body=%s", ok, tt.wantOK, rr.Body.String())
+			if az.calls != 1 {
+				t.Errorf("Authorize called %d times, want 1", az.calls)
 			}
-			if tt.wantOK {
-				if gotID != resolvedID {
-					t.Errorf("appID = %d, want %d", gotID, resolvedID)
-				}
-				if gotUUID != appUUID {
-					t.Errorf("appUUID = %v, want %v", gotUUID, appUUID)
-				}
-				return
-			}
-			if rr.Code != tt.wantCode {
-				t.Errorf("status = %d, want %d, body=%s", rr.Code, tt.wantCode, rr.Body.String())
+			if rr.Code != http.StatusNotFound {
+				t.Errorf("status = %d, want 404, body=%s", rr.Code, rr.Body.String())
 			}
 		})
+	}
+}
+
+func TestAppsHandler_LoadApp(t *testing.T) {
+	const appID int64 = 99
+	h := &AppsHandler{coreQ: coredb.New(&fakeCoreDBTX{entityID: appID})}
+	a := uuid.New()
+	req := requestWithUUIDParam(http.MethodGet, "/v1/apps/"+a.String()+"/user-accounts", a.String(), "")
+	rr := httptest.NewRecorder()
+	got, ok := h.loadApp(rr, req, a)
+	if !ok || got != appID {
+		t.Fatalf("loadApp = (%d, %v), want (%d, true), body=%s", got, ok, appID, rr.Body.String())
+	}
+}
+
+// NewAppsHandler must not mutate the shared entity resolver: a plain Resolve
+// miss for slug "app" keeps the default masked ErrForbidden.
+func TestNewAppsHandler_NoAllowNotFoundSideEffect(t *testing.T) {
+	resolver := entity.NewResolver()
+	_ = NewAppsHandler(nil, nil, &stubAppsAuthorizer{}, nil, resolver, nil)
+
+	q := coredb.New(&fakeCoreDBTX{entityErr: pgx.ErrNoRows})
+	_, err := resolver.Resolve(context.Background(), q, uuid.New(), "app")
+	if !errors.Is(err, apiresp.ErrForbidden) {
+		t.Fatalf("Resolve err = %v, want ErrForbidden", err)
 	}
 }
