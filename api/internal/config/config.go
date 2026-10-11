@@ -411,6 +411,13 @@ func Load() (*Config, error) {
 		},
 	}
 
+	// Under EdDSA a blank or whitespace-only JWT_SECRET means "derive":
+	// normalize it to "" so LocalAuth.JWTSecret consistently signals that.
+	// Under HS256 it is left as-is so validate still reports it missing.
+	if cfg.LocalAuth.JWTAlg == JWTAlgEdDSA && strings.TrimSpace(cfg.LocalAuth.JWTSecret) == "" {
+		cfg.LocalAuth.JWTSecret = ""
+	}
+
 	// The DB bootstrap is HS256-only: under EdDSA an empty JWT_SECRET means
 	// "derive", so no secret is fetched or persisted.
 	if cfg.LocalAuth.JWTSecret == "" && cfg.DB.URL != "" && cfg.LocalAuth.JWTAlg != JWTAlgEdDSA {

@@ -151,6 +151,26 @@ func TestLoadJWTSecretOptionalUnderEdDSA(t *testing.T) {
 		}
 	})
 
+	t.Run("whitespace-only secret is normalized to empty without bootstrap", func(t *testing.T) {
+		cfg, err := loadWith(t, map[string]string{
+			"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": pemStr, "JWT_SECRET": "   ",
+			"MFAPP_DATABASE_URL": "", "DB_URL": "postgres://u:p@127.0.0.1:1/none?connect_timeout=2",
+		})
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.LocalAuth.JWTSecret != "" {
+			t.Errorf("JWTSecret = %q, want empty (derive)", cfg.LocalAuth.JWTSecret)
+		}
+	})
+
+	t.Run("HS256 whitespace-only secret still reports JWT_SECRET", func(t *testing.T) {
+		_, err := loadWith(t, map[string]string{"JWT_SECRET": "   ", "DB_URL": "", "MFAPP_DATABASE_URL": ""})
+		if err == nil || !strings.Contains(err.Error(), "JWT_SECRET") {
+			t.Fatalf("expected JWT_SECRET error, got %v", err)
+		}
+	})
+
 	t.Run("explicit secret is kept unchanged", func(t *testing.T) {
 		cfg, err := loadWith(t, map[string]string{
 			"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": pemStr, "JWT_SECRET": "short",
