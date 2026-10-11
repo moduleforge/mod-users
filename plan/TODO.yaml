@@ -37,6 +37,7 @@ phases:
     - number: 4
       slug: remediation-01
       title: Remediation Round 1
+      diff_base: a23010a3f815a87f1e73cce7444203e8c19e963d
       kind: remediation
       security_review: required
       tasks_added: 1
@@ -45,12 +46,14 @@ phases:
           slug: blank-jwt-secret-as-unset
           title: Treat Blank JWT_SECRET As Unset Under EdDSA And Tidy Step-Up Key Comment
           path: phase-04-remediation-01/001-blank-jwt-secret-as-unset.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Blank/whitespace-only JWT_SECRET treated as unset under EdDSA in resolveKey and config.Load (non-blank explicit secret unchanged, untrimmed); main.go comment reordered; docs/jwt-eddsa.md precedence note; tests added. Tests, vet, build pass; lint fails only on pre-existing 0NVf.
           findings:
             - WutU
             - ccun
           git:
-            branch: null
-            commit: []
+            branch: plan/catalog-ent-and-derived-keys-04-001
+            commit:
+                - b4236fe
             merge: null
