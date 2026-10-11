@@ -151,6 +151,7 @@ phases:
           path: phase-04-conflicts-and-order-tests/001-state-conflict-audit.md
           done: false
           tier: sonnet-med
+          digest: Duplicate email on PUT/POST user-accounts now 409 users.email_taken (isEmailTakenViolation, closes 4Olf); apps add-member unknown user_uuid now 422; rest classified and left; findings v2BM, 8VhV filed.
           git:
             branch: null
             commit: []
