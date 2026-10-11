@@ -81,4 +81,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: On the self ssh-key register routes (api/internal/handlers/ssh_keys.go RegisterSelf and the service Register), sshkey.Parse and NormalizeLabel still run service-side after checkStepUp, so a malformed key or label presented with a single-use step-up token consumes the token and then returns 400, and without a token returns 409 step_up_required instead of 400. Add sshkey.Parse and NormalizeLabel checks (stateless, no DB) to registerSSHKeyRequest.Validate so they run before checkStepUp, keeping the service copies for in-process callers, with tests that a malformed key or label does not consume a presented step-up token and returns 400 even with no token, and update the wire-risk entry (it records 409-first but not the token consumption).
+    - title: StartLink return check runs after step-up
+      id: P2k6
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:decode-and-shape
+        - priority:unspecified
+        - effort:unspecified
+      text: api/internal/handlers/identities.go StartLink runs checkStepUp first; a malformed return query (validated inside oauth.LinkAuthorizeURL) is a 400 after the step-up token was consumed, or 409 with no token (audit finding F7). Export the return-path validator (or split LinkAuthorizeURL) so StartLink validates the return query before step-up, keep the registry 404 after step-up, and map LinkAuthorizeURL's internal Sign/rand failures to 500 rather than a bare ErrInvalidInput 400. Add tests (malformed return does not consume a presented token) and a wire-risk entry.
 closed: []
