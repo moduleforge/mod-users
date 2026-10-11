@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -242,18 +241,19 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 
+	// Stateless shape checks run before the step-up gate so a malformed
+	// request is a 400 and never consumes a step-up token.
+	identUUID, err := apiresp.ParseUUIDParam("identity_uuid", chi.URLParam(r, "identity_uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
+		return
+	}
+
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
 		writeStepUpRequired(w, r)
 		return
 	}
 	stepUpUsed := h.stepUpRequired
-
-	rawUUID := chi.URLParam(r, "identity_uuid")
-	identUUID, err := uuid.Parse(rawUUID)
-	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
 
 	entityID := uc.EntityID
 
@@ -342,6 +342,22 @@ type setPasswordRequest struct {
 	NewPassword     string  `json:"new_password"`
 }
 
+// Validate implements apiresp.Validator: new_password is required and must be
+// at least 12 characters. Stateless only.
+func (r *setPasswordRequest) Validate() []apiresp.FieldError {
+	if r.NewPassword == "" {
+		return []apiresp.FieldError{{
+			Field: "new_password", Code: "users.new_password_required", Message: "new_password is required",
+		}}
+	}
+	if len(r.NewPassword) < 12 {
+		return []apiresp.FieldError{{
+			Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
+		}}
+	}
+	return nil
+}
+
 // SetPassword sets or changes the caller's local password.
 // If the account already has an auth_local row, current_password is required
 // and verified before proceeding. If no row exists, this is a first-time attach
@@ -349,27 +365,18 @@ type setPasswordRequest struct {
 func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 
-	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
-		writeStepUpRequired(w, r)
-		return
-	}
-	stepUpUsed := h.stepUpRequired
-
+	// Decode and Validate (stateless) run before the step-up gate so a
+	// malformed request is a 400 and never consumes a step-up token.
 	var req setPasswordRequest
 	if !server.Decode(w, r, &req) {
 		return
 	}
 
-	if req.NewPassword == "" {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
+		writeStepUpRequired(w, r)
 		return
 	}
-	if len(req.NewPassword) < 12 {
-		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
-			Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
-		}))
-		return
-	}
+	stepUpUsed := h.stepUpRequired
 
 	entityID := uc.EntityID
 

@@ -1,7 +1,7 @@
 package handlers
 
 // Table test for the server.Decode wrapper driven through real handlers:
-// UserAccountsHandler.Create (default 1 MiB cap) and SSHKeysHandler.register
+// UserAccountsHandler.Create (default 1 MiB cap) and SSHKeysHandler.decodeRegister
 // (32 KiB cap). Every decode failure must give 400 invalid_input with the
 // apiresp detail code, before the handler touches its service.
 
@@ -10,8 +10,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/google/uuid"
 )
 
 func TestDecodeWrapper_RealHandlers(t *testing.T) {
@@ -25,7 +23,7 @@ func TestDecodeWrapper_RealHandlers(t *testing.T) {
 		(&UserAccountsHandler{}).Create(w, r)
 	}
 	register := func(w http.ResponseWriter, r *http.Request) {
-		(&SSHKeysHandler{}).register(w, r, uuid.New(), false)
+		(&SSHKeysHandler{}).decodeRegister(w, r)
 	}
 
 	tests := []struct {

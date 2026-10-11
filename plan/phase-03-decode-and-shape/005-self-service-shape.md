@@ -56,3 +56,14 @@ architectural_impact: false
 
 - After the identities reorder, with its tests green.
 - After the SSH-key handler and service changes.
+
+## Status
+
+succeeded, 2026-10-11.
+
+- Identities (`api/internal/handlers/identities.go`): `Unlink` parses `identity_uuid` via `apiresp.ParseUUIDParam`, and `SetPassword` decodes with a new `setPasswordRequest.Validate` (`users.new_password_required`, `users.password_too_short`), both before `requireStepUp`. `StartLink` has no stateless check: the provider registry lookup (`oauth.LinkAuthorizeURL`, 404 on an unknown or unavailable provider) is configuration state and stays after step-up. `current_password` 401 stays after step-up.
+- SSH keys (`api/internal/handlers/ssh_keys.go`): all four routes parse path UUIDs, decode and require `public_key` (`registerSSHKeyRequest.Validate`, `users.public_key_required`) before `checkStepUp`; `parseUUIDPathParam` deleted; `register` now takes the decoded request (new `decodeRegister`).
+- Service (`api/internal/service/ssh_keys.go`): `Register` runs `sshkey.Parse` and `NormalizeLabel` before `loadAuthorizedAccount`. Transaction and observer order unchanged (both stay after the insert path).
+- Tests: `api/internal/handlers/self_service_shape_test.go` (new, `selfsvc` prefix), `api/internal/service/ssh_keys_test.go` (new test), `decode_wrapper_test.go` (uses `decodeRegister`). No existing assertion expected step-up or 403 ahead of a malformed body, so none needed flipping (the existing step-up tests used well-formed bodies).
+- Wire changes appended to `plan/notes/wire-risk.md`.
+- Validation: gofmt, vet, vet -tags=integration, go test, make lint (4/4) and the grep all green; Postgres integration suite for `./internal/authz/...` ran (134 passes, 0 skips) against a throwaway container.

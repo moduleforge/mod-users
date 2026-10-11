@@ -673,3 +673,48 @@ func TestSSHKeyService_List_Success(t *testing.T) {
 		t.Fatalf("keys: got %d, want 2", len(keys))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Register: stateless key/label validation precedes authorization
+// ---------------------------------------------------------------------------
+
+func TestSSHKeyService_Register_selfsvcMalformedInputIs400BeforeAuthorization(t *testing.T) {
+	t.Parallel()
+
+	nulLabel := "a\x00b"
+	tests := []struct {
+		name      string
+		line      string
+		label     *string
+		wantField string
+		wantCode  string
+	}{
+		{name: "garbage key", line: "not an ssh key", wantField: "public_key", wantCode: "users.ssh_key_invalid"},
+		{name: "unsupported key type", line: dsaFixtureLine, wantField: "public_key", wantCode: "users.ssh_key_type_unsupported"},
+		{name: "invalid label", line: genEd25519Line(t, ""), label: &nulLabel, wantField: "label", wantCode: "users.ssh_key_label_invalid"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			accountUUID := uuid.New()
+			ua := db.UserAccount{ID: 1, Uuid: accountUUID, AccountHolder: 100}
+			q := newStubSSHQuerier(ua)
+			coreQ := &stubCoreQuerier{entity: activeEntity(ua.AccountHolder)}
+			// The caller may not update the account: a well-formed request
+			// would be 403, a malformed one must be 400 without Authorize.
+			az := &recordingAuthorizer{decision: apiresp.ErrForbidden}
+			svc := newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{}}, q, coreQ, az)
+
+			_, err := svc.Register(authedCtx(), accountUUID, tc.line, tc.label, false)
+
+			assertFieldError(t, err, http.StatusBadRequest, tc.wantField, tc.wantCode)
+			if az.called {
+				t.Error("Authorize was called before stateless key validation")
+			}
+			if q.writeCalled {
+				t.Error("InsertSSHPublicKey was called for a malformed key")
+			}
+		})
+	}
+}
