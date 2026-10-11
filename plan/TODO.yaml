@@ -273,4 +273,14 @@ phases:
     - number: 10
       slug: preserve-context
       title: Preserve Durable Context
-      tasks: []
+      tasks:
+        - number: 1
+          slug: preserve-durable-context
+          title: Preserve Durable Plan Context In Docs
+          path: phase-10-preserve-context/001-preserve-durable-context.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
