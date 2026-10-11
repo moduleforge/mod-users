@@ -42,3 +42,5 @@ In-process callers:
 ## Recorded by tasks
 
 Tasks append dated entries here: route, old behavior, new behavior, and the client that may notice.
+
+- 2026-10-11, mount-require-auth (1.2): the 8 authenticated registrars (`RegisterAccountRoutes`, `RegisterSelfGetRoute`, `RegisterSelfPutRoute`, `RegisterSelfIdentitiesReadRoute`, `RegisterSelfIdentitiesWriteRoutes`, `RegisterSelfSSHKeysReadRoute`, `RegisterSelfSSHKeysWriteRoutes`, `RegisterUserAccountSSHKeyRoutes`) now mount mod-core `authz.RequireAuth` inside an `r.Group`. Old: 401 depended on the composer mounting a token-verifying `requireAuth`; a direct mount with no actor reached the handler (and a malformed body or UUID got 400). New: a request with no effective actor gets 401 code `unauthenticated` before any handler code. Production is unchanged (the module's `requireAuth` runs first and answers 401 code `unauthorized`); only direct mounts and tests, such as `app-mfmanager` `svcconfine_integration_test.go`, can notice. A sudo-only identity passes the gate.

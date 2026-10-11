@@ -72,6 +72,7 @@ func TestSelfIdentitiesRoutes_ReadWriteSplit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var fired bool
 			r := chi.NewRouter()
+			r.Use(requireAuthStandIn)
 
 			// Read group: mirrors the manifest's GET /v1/self/identities
 			// entry — requireOIDCConfirmed + requireAuth only, no

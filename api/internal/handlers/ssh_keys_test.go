@@ -73,6 +73,7 @@ func (s *stubSSHKeyService) Revoke(ctx context.Context, accountUUID, keyUUID uui
 // the same Register* functions the module manifest references.
 func newSSHKeysTestRouter(h *SSHKeysHandler) chi.Router {
 	r := chi.NewRouter()
+	r.Use(requireAuthStandIn)
 	RegisterSelfSSHKeysReadRoute(r, h)
 	RegisterSelfSSHKeysWriteRoutes(r, h)
 	RegisterUserAccountSSHKeyRoutes(r, h)
