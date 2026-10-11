@@ -16,3 +16,11 @@ Implements backlog item nJel (project followup). `scripts/test-checkout-deps.sh`
 
 ## References
 - Backlog item nJel in the project's `plan/followups.yaml`.
+
+## Status
+- Outcome: succeeded (2026-10-10).
+- Validation: `bash scripts/test-checkout-deps.sh` passes (69 cases, 11 new); `shellcheck` clean on both scripts; `make test.unit.scripts` passes. Negative control (scratch copy with the `set +x` in `git_fetch_auth` replaced by `:`) fails the `bash -x (--pinned)` and `SHELLOPTS=xtrace (--pinned)` cases; nothing from the scratch copy was committed.
+- Allowlist re-check in `git_fetch_auth` is unreachable from the CLI (`read_lockfile` already refuses any non-allowlisted effective host, and `clone_host` returns that same value). Closest reachable path tested: the function definitions are extracted verbatim from the script and `git_fetch_auth` is called directly with a non-allowlisted host (refused, exit 3, no fetch), with an allowlisted-host positive control.
+- Robustness fix applied (exposed by a new test): `token_host_allowed` splits `MODULEFORGE_TOKEN_ALLOWED_HOSTS` under a local `set -f`, restoring the caller's setting.
+- Limit: the `--verify --remote` xtrace cases pass but cannot observe a leak in `check_remote_reachable`, because the script itself discards that function's output (`>/dev/null 2>&1`); the `--pinned` cases are the ones that detect a removed guard.
+- Files: `scripts/checkout-deps.sh`, `scripts/test-checkout-deps.sh`.

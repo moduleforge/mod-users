@@ -4,7 +4,13 @@
 # `overrides` entry) in the git-tracked versions.lock.yaml must never receive
 # the read token, the auth header must be scoped to the fetch target's host,
 # redirects must be off, and the token must never appear on a command line
-# (checked against the live process table at fetch time, not via `bash -x`).
+# (checked against the live process table at fetch time), and must never appear
+# in the output of a run traced with `bash -x` or SHELLOPTS=xtrace.
+#
+# Known limit: the ps/argv check is a single snapshot of the process table
+# taken once, inside the stub, at fetch time. It cannot see a token that is on a
+# command line only before or after that instant, or in a process that has
+# already exited.
 #
 # A stub `git` first on PATH records every `fetch` (its argv, the GIT_CONFIG_*
 # environment, and a snapshot of every process's command line) and answers it
@@ -29,6 +35,10 @@ TOKEN_B64="$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')"
 mkdir -p "$WORK/bin" "$WORK/repo" "$WORK/siblings"
 cat >"$WORK/bin/git" <<'STUB'
 #!/usr/bin/env bash
+# The stub compares the auth header, so it must not trace itself even when a
+# test exports SHELLOPTS=xtrace (the trace is the subject under test only for
+# the script under test, not for this harness).
+set +x
 is_fetch=0
 for a in "$@"; do [ "$a" = fetch ] && is_fetch=1; done
 if [ "$is_fetch" -eq 1 ]; then
@@ -63,6 +73,7 @@ mklock() {
 # fetch log) and PSLOG (process table snapshots at fetch time). TOKEN_MODE is
 # `token` or `notoken`. Extra environment comes from EXTRA_ENV (NAME=value).
 EXTRA_ENV=()
+SUT_FLAGS=() # extra bash flags for the script under test (e.g. -x)
 run_sut() {
 	local mode="$1" lock="$2"
 	shift 2
@@ -73,7 +84,7 @@ run_sut() {
 	[ "${#EXTRA_ENV[@]}" -gt 0 ] && envs+=("${EXTRA_ENV[@]}")
 	RC=0
 	OUT="$(cd "$WORK/repo" && env -u MODULEFORGE_READ_TOKEN -u MODULEFORGE_TOKEN_ALLOWED_HOSTS "${envs[@]}" \
-		bash "$SUT" --lockfile "$lock" --into "$WORK/siblings" "$@" 2>&1)" || RC=$?
+		bash ${SUT_FLAGS[@]+"${SUT_FLAGS[@]}"} "$SUT" --lockfile "$lock" --into "$WORK/siblings" "$@" 2>&1)" || RC=$?
 	LOG="$(cat "$WORK/stub.log")"
 	PSLOG="$(cat "$WORK/stub.ps")"
 	# LOGP is the only form of the log that failure messages print: the fake
@@ -233,6 +244,112 @@ else
 	fail "override host scoping: rc=$RC log='$LOGP'"
 fi
 EXTRA_ENV=()
+
+# --- the token never reaches a traced run -----------------------------------
+# Under `bash -x` and under SHELLOPTS=xtrace (which also traces every bash child
+# and any function the script defines), the `set +x` guards around each token
+# dereference must keep the token and its base64 form out of stdout+stderr.
+# Each case first proves the trace is live (otherwise absence proves nothing)
+# and that the authenticated fetch actually ran (hdr_ok=1), so the guarded
+# lines were exercised.
+for trace in "bash -x" "SHELLOPTS=xtrace"; do
+	for mode in "--verify --remote" "--pinned"; do
+		SUT_FLAGS=()
+		EXTRA_ENV=()
+		if [ "$trace" = "bash -x" ]; then SUT_FLAGS=(-x); else EXTRA_ENV=(SHELLOPTS=xtrace); fi
+		# shellcheck disable=SC2086 # the mode is a word list
+		run_sut token "$(mklock github.com moduleforge)" $mode
+		SUT_FLAGS=()
+		EXTRA_ENV=()
+		if ! grep -q '^+ ' <<<"$OUT"; then
+			fail "$trace ($mode): no xtrace output was produced, so the leak check is vacuous"
+		elif [ "$RC" -eq 0 ] && grep -q 'hdr_ok=1' <<<"$LOG" && no_leak; then
+			pass "$trace ($mode): authenticated fetch ran, token and base64 absent from traced output"
+		else
+			fail "$trace ($mode): rc=$RC log='$LOGP'"
+		fi
+		rm -rf "${WORK:?}/siblings" && mkdir -p "$WORK/siblings"
+	done
+done
+
+# --- host edge cases --------------------------------------------------------
+# A trailing-dot host (an FQDN spelling) fails the host shape check.
+run_sut token "$(mklock 'github.com.' moduleforge)" --verify --remote
+if [ "$RC" -eq 3 ] && no_fetch && no_leak; then pass "token + trailing-dot host 'github.com.': exit 3, no fetch"; else fail "trailing-dot host: rc=$RC log='$LOGP'"; fi
+
+# A well-formed lookalike that merely starts with an allowlisted name is not on the allowlist.
+run_sut token "$(mklock 'github.com.evil.example' moduleforge)" --verify --remote
+if [ "$RC" -eq 3 ] && no_fetch && no_leak; then pass "token + lookalike host 'github.com.evil.example': exit 3, no fetch"; else fail "lookalike host: rc=$RC log='$LOGP'"; fi
+
+# A CRLF-terminated lockfile (e.g. checked out with autocrlf) must still parse
+# and scope the header to the clean host.
+CRLF="$WORK/crlf.yaml"
+printf 'lockfileVersion: 1\r\nhost:  github.com\r\nowner: moduleforge\r\n\r\npins:\r\n  mod-core:  0123456789abcdef0123456789abcdef01234567\r\n' >"$CRLF"
+run_sut token "$CRLF" --verify --remote
+if [ "$RC" -eq 0 ] && grep -q 'key0=http.https://github.com/.extraheader' <<<"$LOG" && grep -q 'hdr_ok=1' <<<"$LOG" && no_leak; then
+	pass "a CRLF-terminated lockfile parses; header scoped to github.com"
+else
+	fail "CRLF lockfile: rc=$RC log='$LOGP'"
+fi
+
+# Hostnames compare case-insensitively: positive case with the default allowlist.
+run_sut token "$(mklock 'GitHub.com' moduleforge)" --verify --remote
+if [ "$RC" -eq 0 ] && grep -qi 'key0=http.https://github.com/.extraheader' <<<"$LOG" && grep -q 'hdr_ok=1' <<<"$LOG" && no_leak; then
+	pass "token + lockfile host 'GitHub.com' is admitted by the default allowlist"
+else
+	fail "mixed-case host: rc=$RC log='$LOGP'"
+fi
+
+# --- the allowlist list is split without globbing ---------------------------
+# A file named github.com in the cwd would make an unquoted `github.c*` expand
+# to an allowlisted-looking name. With globbing off the entry is simply
+# malformed (exit 3); with globbing on it would silently admit github.com.
+: >"$WORK/repo/github.com"
+EXTRA_ENV=(MODULEFORGE_TOKEN_ALLOWED_HOSTS="github.c*")
+run_sut token "$(mklock github.com moduleforge)" --verify --remote
+if [ "$RC" -eq 3 ] && no_fetch && no_leak; then pass "a glob in MODULEFORGE_TOKEN_ALLOWED_HOSTS is not expanded against the cwd"; else fail "allowlist glob: rc=$RC log='$LOGP'"; fi
+EXTRA_ENV=()
+rm -f "$WORK/repo/github.com"
+
+# --- the allowlist re-check inside git_fetch_auth ---------------------------
+# Unreachable from the CLI: read_lockfile already refuses any effective host
+# that is not allowlisted, and clone_host returns that same value, so no
+# lockfile can reach git_fetch_auth with a vetted-then-different host. The
+# closest reachable path is to source the script's own function definitions
+# (extracted verbatim, so this tests the shipped code, not a copy) and call
+# git_fetch_auth directly with a non-allowlisted host.
+FN_FILE="$WORK/fns.sh"
+for fn in err valid_host token_host_allowed require_token_host_allowed git_fetch_auth; do
+	awk -v fn="$fn" '
+		!on && $0 ~ "^" fn "\\(\\) \\{" { on = 1; print; if ($0 ~ /\}[[:space:]]*$/ && $0 !~ /\{[[:space:]]*$/) on = 0; next }
+		on { print; if ($0 ~ /^\}/) on = 0 }
+	' "$SUT"
+done >"$FN_FILE"
+# direct_fetch HOST -> sets RC, OUT, LOG, PSLOG for git_fetch_auth with a token.
+direct_fetch() {
+	: >"$WORK/stub.log"
+	: >"$WORK/stub.ps"
+	RC=0
+	# shellcheck disable=SC2016 # the bash -c body is single-quoted on purpose
+	OUT="$(cd "$WORK/repo" && env -u MODULEFORGE_TOKEN_ALLOWED_HOSTS PATH="$WORK/bin:$PATH" REAL_GIT="$REAL_GIT" \
+		STUB_LOG="$WORK/stub.log" STUB_PS="$WORK/stub.ps" EXPECT_B64="$TOKEN_B64" MODULEFORGE_READ_TOKEN="$TOKEN" FN_FILE="$FN_FILE" \
+		bash -c 'set -euo pipefail; . "$FN_FILE"; TOKEN_SET=1; DEPTH_ARGS=(); git_fetch_auth "$1" origin deadbeef "$2"' _ "$WORK/repo" "$1" 2>&1)" || RC=$?
+	LOG="$(cat "$WORK/stub.log")"
+	PSLOG="$(cat "$WORK/stub.ps")"
+}
+# Positive control: an allowlisted host reaches the stub fetch via the same harness.
+direct_fetch github.com
+if [ "$RC" -eq 0 ] && grep -q 'hdr_ok=1' <<<"$LOG" && no_leak; then
+	pass "git_fetch_auth (direct): an allowlisted host reaches the fetch (harness control)"
+else
+	fail "git_fetch_auth direct control: rc=$RC"
+fi
+direct_fetch evil.example
+if [ "$RC" -eq 3 ] && no_fetch && no_leak; then
+	pass "git_fetch_auth (direct): a non-allowlisted host is refused by the re-check, no fetch"
+else
+	fail "git_fetch_auth re-check: rc=$RC log='$LOGP'"
+fi
 
 # --- the repository's own lockfile still passes -----------------------------
 ROOT_LOCK="$SCRIPT_DIR/../versions.lock.yaml"

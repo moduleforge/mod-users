@@ -175,6 +175,11 @@ valid_repo() { [[ "$1" =~ ^[A-Za-z0-9_.-]+$ ]] && [[ "$1" != . && "$1" != .. && 
 token_host_allowed() {
 	local allowed="${MODULEFORGE_TOKEN_ALLOWED_HOSTS:-github.com}" h host_lc="${1,,}" found=1
 	allowed="${allowed//,/ }"
+	# Split on whitespace without pathname expansion: an entry such as `github.c*`
+	# must stay a (malformed) literal, not expand against the cwd.
+	local had_noglob=0
+	case "$-" in *f*) had_noglob=1 ;; esac
+	set -f
 	for h in $allowed; do
 		if ! valid_host "$h"; then
 			err "MODULEFORGE_TOKEN_ALLOWED_HOSTS has an entry that is not a plain hostname"
@@ -182,6 +187,7 @@ token_host_allowed() {
 		fi
 		[ "${h,,}" = "$host_lc" ] && found=0
 	done
+	[ "$had_noglob" -eq 1 ] || set +f
 	return "$found"
 }
 
