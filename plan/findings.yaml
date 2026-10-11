@@ -72,15 +72,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: POST /v1/oidc-config/confirm (api/internal/handlers/oidc_config.go, OIDCConfigHandler.Confirm) passes enabled_providers through normalizeEnabledSet, which lowercases, dedupes and silently DROPS ids that are not in the env registry; the request still succeeds with 200 and the response gives no hint that an id was ignored. The HTTP error-precedence rule would classify a referenced value outside a registry as 422 after authorization, but that would be a new behavior for the config page and its status semantics, so no status was chosen and the current behavior is kept (pinned by TestNormalizeEnabledSet_DropsUnknown). Decide whether unknown ids should become 422 (with a details entry per id), stay silently ignored (document it), or be echoed back in the response.
-    - title: StartLink return check runs after step-up
-      id: P2k6
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - plan/phase:decode-and-shape
-        - priority:unspecified
-        - effort:unspecified
-      text: api/internal/handlers/identities.go StartLink runs checkStepUp first; a malformed return query (validated inside oauth.LinkAuthorizeURL) is a 400 after the step-up token was consumed, or 409 with no token (audit finding F7). Export the return-path validator (or split LinkAuthorizeURL) so StartLink validates the return query before step-up, keep the registry 404 after step-up, and map LinkAuthorizeURL's internal Sign/rand failures to 500 rather than a bare ErrInvalidInput 400. Add tests (malformed return does not consume a presented token) and a wire-risk entry.
     - title: AuthorizeCreate comment is stale
       id: gKQO
       date: "2026-10-11"
@@ -93,6 +84,11 @@ items:
 closed:
     - id: jAXe
       title: ssh key parse runs after step-up
+      disposition: fixed
+      ref: phase-08-remediation-01/001-step-up-ordering-gaps.md
+      date: "2026-10-11"
+    - id: P2k6
+      title: StartLink return check runs after step-up
       disposition: fixed
       ref: phase-08-remediation-01/001-step-up-ordering-gaps.md
       date: "2026-10-11"
