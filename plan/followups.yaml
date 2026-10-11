@@ -867,3 +867,12 @@ items:
         - plan/phase:backlog-fixes
         - plan/slug:flow-accounts-upstream
       text: '(1) The admin assume-identity payload now carries email_verified_at (api/internal/handlers/assume.go ~91-103, shared emailVerifiedAtValue in self.go) and the spec/OpenAPI promise it, but no Assume handler test asserts the user object; add a small test with a stub service returning verified and unverified accounts asserting the key is present with a timestamp or explicit null. (2) gui/src/lib/api.ts (~183-189, 249): LoginResponse.user is still typed UserAccountSelf although sign-in and assume payloads carry only uuid, email and email_verified_at, so TypeScript will not flag consumers reading user.entity_uuid and similar; narrow it to Pick<UserAccountSelf, ''uuid'' | ''email'' | ''email_verified_at''> plus optional extras. The anonymous payload is not a LoginResponse and carries uuid and is_anonymous.'
+    - title: writeCoreServiceErr pass-through in self.go
+      id: 6ZEz
+      date: "2026-10-11"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:small
+        - cross-repo/origin:core
+      text: 'Origin: wave program http-error-precedence-conformance, core-handler-conformance analysis. The wave manifest assigns deletion of writeCoreServiceErr pass-throughs to the mod-core share, but the function lives in mod-users api/internal/handlers/self.go (line ~150, called ~86), not in mod-core (no pass-through writers exist in mod-core httpapi). Fold into the users-conformance plan: delete writeCoreServiceErr and route its callers straight to apiresp.WriteError once core service errors are already apiresp sentinels, alongside the writeAuthzError/writeServiceError wrapper removal.'
