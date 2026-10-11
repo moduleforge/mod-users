@@ -1,4 +1,2 @@
 version: 1
-plans:
-    - slug: flow-accounts-upstream
-      status: working
+plans: []
