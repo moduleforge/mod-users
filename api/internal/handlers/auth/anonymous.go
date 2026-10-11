@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -27,8 +28,7 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.DeviceID == "" {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "device_id is required",
-			[]apiresp.FieldError{{Field: "device_id", Code: "users.device_id_required", Message: "device_id is required"}})
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "device_id", Code: "users.device_id_required", Message: "device_id is required"}))
 		return
 	}
 
@@ -37,7 +37,7 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "anonymous: create anonymous user", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create anonymous account")
+		apiresp.WriteError(w, r, fmt.Errorf("anonymous: create anonymous user: %w", err))
 		return
 	}
 
@@ -56,7 +56,7 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	token, err := h.issueAnonymousJWT(dbUA)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "anonymous: issue jwt", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
+		apiresp.WriteError(w, r, fmt.Errorf("anonymous: issue jwt: %w", err))
 		return
 	}
 

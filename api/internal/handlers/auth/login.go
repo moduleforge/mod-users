@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/moduleforge/core-api/apiresp"
 
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -32,14 +34,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	if req.Email == "" || req.Password == "" {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "email and password are required")
+		var details []apiresp.FieldError
+		if req.Email == "" {
+			details = append(details, apiresp.FieldError{Field: "email", Code: "users.email_required", Message: "email is required"})
+		}
+		if req.Password == "" {
+			details = append(details, apiresp.FieldError{Field: "password", Code: "users.password_required", Message: "password is required"})
+		}
+		apiresp.WriteError(w, r, apiresp.InvalidInput(details...))
 		return
 	}
 
 	ua, err := h.queries.GetUserAccountByEmail(r.Context(), req.Email)
 	if err != nil && err != pgx.ErrNoRows {
 		slog.ErrorContext(r.Context(), "login: get user account by email", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to look up user account")
+		apiresp.WriteError(w, r, fmt.Errorf("login: get user account by email: %w", err))
 		return
 	}
 
@@ -59,6 +68,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if notFound {
 		// Run a dummy verify to consume constant time even when user is absent.
 		_, _ = localauth.VerifyPassword(req.Password, dummyHash)
+		// literal-keep: credential-failure 401 whose message the GUI documents as wrong credentials.
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid email or password")
 		return
 	}
@@ -66,10 +76,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	ok, err := localauth.VerifyPassword(req.Password, storedHash)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "login: verify password", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to verify credentials")
+		apiresp.WriteError(w, r, fmt.Errorf("login: verify password: %w", err))
 		return
 	}
 	if !ok {
+		// literal-keep: credential-failure 401 whose message the GUI documents as wrong credentials.
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid email or password")
 		return
 	}
@@ -77,7 +88,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	token, err := h.issueLocalJWT(ua)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "login: issue jwt", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
+		apiresp.WriteError(w, r, fmt.Errorf("login: issue jwt: %w", err))
 		return
 	}
 

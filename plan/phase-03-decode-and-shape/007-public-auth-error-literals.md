@@ -51,3 +51,12 @@ architectural_impact: false
 - After `register.go` and `login.go`.
 - After `emailcode.go`, `reset.go` and `anonymous.go`.
 - After `oidc.go`.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Converted 48 remaining literal sites (decode literals were removed by 3.2) in `api/internal/handlers/auth` to `apiresp`; kept 11 as marked `literal-keep:` literals (6 credential-failure 401s, 5 register literals per manager decision on F3).
+- New detail codes: `users.password_required`, `users.code_required`, `users.token_required`, `users.oidc_start_invalid`, `users.oidc_code_or_state_required`, `users.oidc_state_cookie_required`, `users.oidc_state_invalid`. Recorded in `plan/notes/wire-risk.md`.
+- `api/scripts/check-server-error-literals.sh` now also scans `handlers/auth` (marker `literal-keep:`, expected 11); the top-level count stays 3.
+- Validation: gofmt, vet, `go test ./...`, `make lint`, grep checks passed; Postgres integration suites (`internal/authz`, `internal/config`) ran with 250 passes and 0 skips. `oidc.go:227` still has `err.Error()`, passed to a redirect query parameter in test mode only, not a response body.
+- Files: `api/internal/handlers/auth/*.go`, `api/internal/handlers/auth/public_error_shape_test.go`, `api/scripts/check-server-error-literals.sh`, `docs/cookie-path.md`.
