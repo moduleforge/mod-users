@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: mount-require-auth
+          title: Mount RequireAuth in Authenticated Registrars
+          path: phase-01-authenticate-routes/002-mount-require-auth.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
