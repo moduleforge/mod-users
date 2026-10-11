@@ -61,7 +61,7 @@ phases:
           tier: haiku-med
           digest: Removed writeAuthzError, writeServiceError and writeCoreServiceErr wrappers; all call sites use apiresp.WriteError; two wrapper-named tests renamed; ZVum comments reworded; no behavior change; make lint passes.
           git:
-            branch: null
+            branch: plan/users-conformance-03-001
             commit: []
             merge: null
         - number: 2
