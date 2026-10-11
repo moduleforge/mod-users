@@ -22,8 +22,7 @@ type anonymousRequest struct {
 // The endpoint is unauthenticated.
 func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	var req anonymousRequest
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 

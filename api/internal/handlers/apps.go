@@ -89,8 +89,7 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req assignUserRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 	if req.UserUUID == "" {
@@ -245,8 +244,7 @@ func (h *AppsHandler) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req updateRolesRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 	if req.Roles == nil {

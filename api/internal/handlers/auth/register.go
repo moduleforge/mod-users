@@ -156,8 +156,7 @@ type registerRequest struct {
 // Register handles POST /v1/auth/register.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 

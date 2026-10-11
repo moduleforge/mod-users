@@ -58,8 +58,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 	uc := auth.MustFromContext(r.Context())
 
 	var req selfUpdateRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 

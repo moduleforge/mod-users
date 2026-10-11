@@ -48,14 +48,7 @@ type createUserAccountRequest struct {
 // Create handles POST /v1/user-accounts (admin).
 func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
-	if err := server.Decode(r, &req); err != nil {
-		// Authorize before reporting a malformed body so an unauthorized
-		// caller gets 403, not a 400 request-shape oracle.
-		if aerr := h.svc.AuthorizeCreate(r.Context()); aerr != nil {
-			apiresp.WriteError(w, r, aerr)
-			return
-		}
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -167,8 +160,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req updateUserAccountRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 

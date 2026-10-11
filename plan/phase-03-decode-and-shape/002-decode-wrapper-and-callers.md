@@ -53,3 +53,11 @@ architectural_impact: false
 
 - After `respond.go` and the `api/internal/handlers` callers compile and pass.
 - After the `api/internal/handlers/auth` callers and the new decode tests.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Validation: gofmt clean, `go vet ./...`, `go test ./...`, `make lint` and the three grep checks all pass. The Postgres integration suites (`internal/authz`, `internal/config`, tag `integration`, throwaway container) also pass: 48 `TestInteg*` tests ran, 0 skipped.
+- Changed: `api/internal/server/respond.go` (wrapper), the 16 callers under `api/internal/handlers/` and `api/internal/handlers/auth/`, `api/internal/handlers/ssh_keys.go` (`WithMaxBytes`, `MaxBytesReader` removed), `api/internal/handlers/user_accounts.go` (403-before-400 special case deleted), new `api/internal/handlers/decode_wrapper_test.go` and `api/internal/handlers/auth/decode_wrapper_test.go`, `plan/notes/wire-risk.md`.
+- Decisions: `UserAccountService.AuthorizeCreate` kept (still called by `Create` and a service test). No existing test needed changing; the `user_accounts_authz_test.go` shim keeps its own local decoder and does not exercise `server.Decode`.
+- Client audit: only mismatches are `auth.resetPassword` `new_password` (F1, fixed by 5.1; server not changed) and the known `apps.*` ones (5.1).

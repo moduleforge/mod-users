@@ -261,11 +261,8 @@ func (h *SSHKeysHandler) list(w http.ResponseWriter, r *http.Request, accountUUI
 // docs/mod-users-spec.md's Security requirements) -- this only checks for
 // well-formed JSON and a non-empty public_key.
 func (h *SSHKeysHandler) register(w http.ResponseWriter, r *http.Request, accountUUID uuid.UUID, stepUpUsed bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, sshKeyRegisterBodyMaxBytes)
-
 	var req registerSSHKeyRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req, apiresp.WithMaxBytes(sshKeyRegisterBodyMaxBytes)) {
 		return
 	}
 	if req.PublicKey == "" {

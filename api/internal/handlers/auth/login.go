@@ -26,8 +26,7 @@ type loginRequest struct {
 // Login handles POST /v1/auth/login.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 

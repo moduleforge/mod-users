@@ -356,8 +356,7 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 	stepUpUsed := h.stepUpRequired
 
 	var req setPasswordRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -590,8 +589,7 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 	uc := localauth.MustFromContext(r.Context())
 
 	var req stepUpVerifyRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 	if req.Code == "" {
