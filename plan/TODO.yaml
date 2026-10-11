@@ -5,4 +5,14 @@ phases:
     - number: 1
       slug: authenticate-routes
       title: Audit and Authenticate Routes
-      tasks: []
+      tasks:
+        - number: 1
+          slug: audit-handlers
+          title: Audit Handlers Against the Precedence Rule
+          path: phase-01-authenticate-routes/001-audit-handlers.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
