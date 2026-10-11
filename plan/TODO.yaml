@@ -124,7 +124,7 @@ phases:
             branch: plan/users-conformance-03-006
             commit:
                 - f56122a
-            merge: null
+            merge: ec2f72ca4bc9d6c0be5f3e8ad00823457f51cfd0
         - number: 7
           slug: public-auth-error-literals
           title: Convert Public Auth Error Literals to Sentinels
