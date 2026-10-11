@@ -117,7 +117,17 @@ phases:
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
-      tasks: []
+      tasks:
+        - number: 1
+          slug: state-conflict-audit
+          title: State-Conflict Audit for 409 vs 422
+          path: phase-04-conflicts-and-order-tests/001-state-conflict-audit.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: gui-wire-docs-and-validation
       title: GUI Alignment, Wire Risk Docs and Validation
