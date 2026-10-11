@@ -915,3 +915,12 @@ items:
         - plan/phase:checkout-deps-token-handling
         - plan/slug:flow-accounts-upstream
       text: 'scripts/test-checkout-deps.sh (58 cases) does not test the set +x xtrace protection around token dereferences: a regression removing a set +x would pass all cases. Add a case running the script under bash -x (or SHELLOPTS=xtrace) asserting no_leak over combined stdout and stderr for the token and its base64. Also add cases for the in-git_fetch_auth allowlist re-check, a trailing-dot host (github.com.), a host-suffix lookalike (github.com.evil.example), a CRLF lockfile, and positive case-insensitivity (GitHub.com with a token). The ps/argv check itself is sound (positive control, token and base64); optionally note its single-snapshot limitation.'
+    - title: Migrate off ../mod-core/gui workspace member
+      id: njXo
+      date: "2026-10-11"
+      tags:
+        - type:optimization
+        - priority:medium
+        - effort:medium
+        - cross-repo/origin:docs-mf-standards
+      text: 'mod-users/package.json roots a bun workspace with a `../mod-core/gui` member ("workspaces": ["gui", "../mod-core/gui"]). The ModuleForge standards (building-applications.md, building-common.md) now say worktree workspaces over `../` sibling members share node_modules in the sibling checkout and are not the supported pattern for apps (private `.gui-siblings` copies are the standard). mod-users is a module repo, so the standard text is app-scoped, but it carries the same shared-checkout hazard (concurrent worktrees clobbering links, duplicate React). Decide whether to migrate mod-users'' GUI workspace off the `../` member (e.g. a private materialized copy or a peer-only setup) or keep it as a documented, tracked exception. The standards docs will describe it as a known deviation in the meantime.'
