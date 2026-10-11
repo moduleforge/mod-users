@@ -24,9 +24,11 @@ export interface AuthPageProps {
    * `?<unauthenticatedReturnParam>=` value, else `null`). Only the
    * query-param fallback (`readReturnPath`) is validated by `isSafeReturnPath`;
    * an explicit `returnPath` prop is passed through as supplied, so the app
-   * owns its validation. Zero-argument callbacks keep working unchanged.
+   * owns its validation. Also receives the mode the user authenticated in
+   * (`'login'` or `'register'`) as a second argument. Callbacks declaring
+   * fewer parameters keep working unchanged.
    */
-  onAuthenticated?: (returnPath: string | null) => void;
+  onAuthenticated?: (returnPath: string | null, mode: AuthMode) => void;
   /**
    * Initial error message forwarded into `LoginForm` — e.g. surfaced from an
    * OIDC callback's `?error=` query param by the consuming app. Only applies
@@ -90,7 +92,7 @@ export function AuthPage({
           <CardContent>
             <LoginForm
               idPrefix="login"
-              onSuccess={onAuthenticated}
+              onSuccess={(path) => onAuthenticated?.(path, 'login')}
               initialError={initialError}
               returnPath={returnPath}
               onForgotPassword={onForgotPassword}
@@ -120,7 +122,7 @@ export function AuthPage({
             <CardContent>
               <RegisterForm
                 idPrefix="register"
-                onSuccess={() => onAuthenticated?.(returnPath ?? readReturnPath())}
+                onSuccess={() => onAuthenticated?.(returnPath ?? readReturnPath(), 'register')}
               />
             </CardContent>
             <CardFooter className="text-sm text-center">

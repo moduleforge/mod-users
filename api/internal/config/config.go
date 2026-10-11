@@ -6,6 +6,7 @@ package config
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,7 +22,7 @@ type DeployMode string
 const (
 	// DeployModeLocal is a developer machine or CI checkout. It is the
 	// only mode that relaxes defaults for convenience — notably the
-	// allow-all CORS origin list in api/internal/server.
+	// credential-less allow-all CORS origin list in api/internal/server.
 	DeployModeLocal DeployMode = "local"
 
 	// DeployModeServerless is a scale-to-zero runtime (Cloud Run, Lambda
@@ -152,6 +153,14 @@ type AuthConfig struct {
 	// Required when any provider is enabled.
 	OAuthRedirectBaseURL string
 
+	// CookiePath is the public base path (e.g. "/manage") under which this
+	// API is reachable when a proxy strips the mount prefix. When set, the
+	// oidc_state cookie Path is CookiePath + "/v1/auth/oidc/" instead of being
+	// derived from the request URL. Empty (the default) keeps the
+	// request-derived behaviour. Env var USERS_COOKIE_PATH; validated by
+	// ValidateCookieBasePath at load time.
+	CookiePath string
+
 	// RequireStepUpForCredentialChange gates every credential-mutating endpoint
 	// (POST/DELETE password, DELETE OIDC identity, POST link-mode start) behind
 	// a short-lived step-up token obtained via POST /v1/self/credential/step-up
@@ -177,10 +186,27 @@ type LocalAuthConfig struct {
 	// bootstrapJWTSecretFromDB / fetchOrGeneratePersistedJWTSecret in
 	// jwtsecret_bootstrap.go). A persisted secret that fails the
 	// length check is a fail-loudly error, never silently regenerated.
-	JWTSecret        string
-	EmailCodeTTL     time.Duration
-	PasswordResetTTL time.Duration
-	LocalIssuer      string
+	JWTSecret string
+	// JWTAlg selects the algorithm used to sign locally-issued JWTs: "HS256"
+	// (default, keyed by JWTSecret) or "EdDSA" (keyed by JWTSigningKey).
+	// Populated from JWT_ALG. JWTSecret is still required and bootstrapped
+	// under EdDSA: it keys the OAuth state signer and step-up tokens.
+	JWTAlg string
+	// JWTSigningKey is the parsed Ed25519 private key from JWT_SIGNING_KEY
+	// (PKCS#8 PEM). Non-nil only when JWTAlg is "EdDSA". The raw env value is
+	// never retained, and the key is never logged.
+	JWTSigningKey ed25519.PrivateKey
+	// JWTSigningKID is the optional JWT_SIGNING_KID, set as the "kid" header
+	// on locally-issued JWTs when non-empty (any algorithm).
+	JWTSigningKID string
+	// JWTVerifyPublicKeys holds the Ed25519 public keys from
+	// JWT_VERIFY_PUBLIC_KEYS (kid -> key; the empty kid is used for tokens
+	// without a "kid" header). Nil when unset. Used for verify-only services
+	// and for keeping retired signing keys valid during rotation.
+	JWTVerifyPublicKeys map[string]ed25519.PublicKey
+	EmailCodeTTL        time.Duration
+	PasswordResetTTL    time.Duration
+	LocalIssuer         string
 }
 
 // SMTPConfig holds outbound email settings.
@@ -229,6 +255,12 @@ type Config struct {
 // fetchOrGeneratePersistedJWTSecret in jwtsecret_bootstrap.go). A
 // persisted secret that fails validation (too short — corrupt or
 // truncated) fails loudly rather than being silently regenerated.
+//
+// JWT_ALG (HS256 default | EdDSA), JWT_SIGNING_KEY (PKCS#8 PEM Ed25519
+// private key; required for EdDSA), and JWT_SIGNING_KID (optional "kid"
+// header) and JWT_VERIFY_PUBLIC_KEYS (PEM public key or JSON kid-to-PEM map)
+// are validated here too (see jwt_signing.go). JWT_SECRET stays
+// required under EdDSA.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
 	// them alongside missing-field errors in one shot.
@@ -310,6 +342,17 @@ func Load() (*Config, error) {
 		tokenDisplay = TokenDisplayBoth
 	}
 
+	jwtAlg, jwtSigningKey, jwtSigningKID, jwtSigningProblems := loadJWTSigning()
+	parseErrors = append(parseErrors, jwtSigningProblems...)
+	jwtVerifyKeys, jwtVerifyProblems := loadJWTVerifyPublicKeys()
+	parseErrors = append(parseErrors, jwtVerifyProblems...)
+
+	cookiePath := os.Getenv("USERS_COOKIE_PATH")
+	if err := ValidateCookieBasePath(cookiePath); err != nil {
+		parseErrors = append(parseErrors, "USERS_COOKIE_PATH: "+err.Error())
+		cookiePath = ""
+	}
+
 	cfg := &Config{
 		DeployMode: mode,
 		DB: DBConfig{
@@ -322,6 +365,7 @@ func Load() (*Config, error) {
 			AdminRole:                        getEnv("AUTH_ADMIN_ROLE", "admin"),
 			FrontendReturnURL:                os.Getenv("AUTH_FRONTEND_RETURN_URL"),
 			OAuthRedirectBaseURL:             os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
+			CookiePath:                       cookiePath,
 			RequireStepUpForCredentialChange: parseBoolEnv(os.Getenv("AUTH_REQUIRE_STEP_UP")),
 		},
 		Providers: registry,
@@ -332,10 +376,15 @@ func Load() (*Config, error) {
 			GUIBaseURL:      getEnv("GUI_BASE_URL", "http://localhost:3000"),
 		},
 		LocalAuth: LocalAuthConfig{
-			JWTSecret:        os.Getenv("JWT_SECRET"),
-			EmailCodeTTL:     emailCodeTTL,
-			PasswordResetTTL: passwordResetTTL,
-			LocalIssuer:      getEnv("LOCAL_ISSUER", "users-module-local"),
+			JWTSecret:     os.Getenv("JWT_SECRET"),
+			JWTAlg:        jwtAlg,
+			JWTSigningKey: jwtSigningKey,
+			JWTSigningKID: jwtSigningKID,
+
+			JWTVerifyPublicKeys: jwtVerifyKeys,
+			EmailCodeTTL:        emailCodeTTL,
+			PasswordResetTTL:    passwordResetTTL,
+			LocalIssuer:         getEnv("LOCAL_ISSUER", "users-module-local"),
 		},
 		SMTP: SMTPConfig{
 			Host: os.Getenv("SMTP_HOST"),
@@ -415,6 +464,23 @@ func validate(cfg *Config, parseErrors []string) error {
 	}
 	if len(missing) > 0 {
 		problems = append(problems, "missing required environment variables: "+strings.Join(missing, ", "))
+	}
+
+	// CORS_ORIGINS may not contain any "*" outside DeployModeLocal: go-chi/cors
+	// treats every allowed-origin entry containing "*" as a prefix/suffix
+	// wildcard pattern (e.g. "https://*", "http*"), so rejecting only the
+	// exact token "*" would let such patterns be served with credentials.
+	// Every mode except local is production-like (serverless, k8s,
+	// container-host). The error names only the offending entry's shape.
+	if cfg.DeployMode != DeployModeLocal {
+		for _, o := range strings.Split(cfg.Server.CORSOrigins, ",") {
+			if strings.Contains(o, "*") {
+				problems = append(problems,
+					"CORS_ORIGINS must not contain wildcard (\"*\") entries when DEPLOY_MODE is "+string(cfg.DeployMode)+
+						"; list exact origins (wildcards are only allowed in local mode, without credentials)")
+				break
+			}
+		}
 	}
 
 	// SMTP is never required on its own: a deployment that never sends

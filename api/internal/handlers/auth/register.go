@@ -3,6 +3,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -62,6 +63,7 @@ type Handler struct {
 	queries       authQuerier
 	coreQ         *coredb.Queries
 	jwtSecret     string
+	signer        *localauth.Signer // nil => HS256 keyed by jwtSecret
 	issuer        string
 	sender        Sender
 	guiBase       string
@@ -80,6 +82,54 @@ func New(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, jwtSecr
 		sender:    sender,
 		guiBase:   guiBase,
 	}
+}
+
+// NewWithSigner constructs a Handler that always signs with signer. Prefer it
+// over New in any deployment that may run with JWT_ALG=EdDSA: a nil signer is
+// rejected here instead of silently falling back to HS256.
+func NewWithSigner(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, signer *localauth.Signer, issuer string, sender Sender, guiBase string) (*Handler, error) {
+	if signer == nil {
+		return nil, errors.New("auth: signer must not be nil")
+	}
+	h := New(pool, queries, coreQ, "", issuer, sender, guiBase)
+	h.signer = signer
+	return h, nil
+}
+
+// SetSigner overrides the JWT signer used by login, email-code verification,
+// and anonymous sign-in. A nil signer restores the default (HS256 keyed by the
+// secret passed to New).
+func (h *Handler) SetSigner(s *localauth.Signer) {
+	h.signer = s
+}
+
+// jwtSigner returns the configured signer. With no signer set it falls back to
+// HS256 keyed by jwtSecret, and fails (rather than minting weakly-keyed
+// tokens) when that secret is empty. Apps running JWT_ALG=EdDSA must inject a
+// signer (NewWithSigner or SetSigner).
+func (h *Handler) jwtSigner() (*localauth.Signer, error) {
+	if h.signer != nil {
+		return h.signer, nil
+	}
+	return localauth.NewHS256Signer(h.jwtSecret, "")
+}
+
+// issueLocalJWT mints a login token for ua with the handler's signer.
+func (h *Handler) issueLocalJWT(ua db.UserAccount) (string, error) {
+	signer, err := h.jwtSigner()
+	if err != nil {
+		return "", err
+	}
+	return localauth.IssueLocalJWTWithSigner(ua, signer, h.issuer)
+}
+
+// issueAnonymousJWT mints an anonymous-session token for ua with the handler's signer.
+func (h *Handler) issueAnonymousJWT(ua db.UserAccount) (string, error) {
+	signer, err := h.jwtSigner()
+	if err != nil {
+		return "", err
+	}
+	return localauth.IssueAnonymousJWTWithSigner(ua, signer, h.issuer)
 }
 
 // SetUserSvc wires in the UserAccountService after construction.

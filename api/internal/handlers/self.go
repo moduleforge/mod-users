@@ -98,6 +98,15 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 	server.JSON(w, http.StatusOK, buildSelfResponse(ua, profile))
 }
 
+// emailVerifiedAtValue returns the account's verification timestamp, or nil
+// (JSON null) when the email has not been verified.
+func emailVerifiedAtValue(ua db.UserAccount) any {
+	if ua.EmailVerifiedAt != nil {
+		return *ua.EmailVerifiedAt
+	}
+	return nil
+}
+
 // buildSelfResponse composes the flat response shape the frontend
 // (UserSelf interface) expects.
 func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[string]any {
@@ -105,12 +114,18 @@ func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[strin
 	if ua.Email.Valid {
 		emailVal = ua.Email.String
 	}
+	// email_verified_at is the caller's own verification timestamp, or JSON
+	// null when the email has not been verified. It lets clients prompt for
+	// verification before a verified-scope call is refused with
+	// users.email_unverified. Only the caller's own account state is exposed.
+	emailVerifiedAt := emailVerifiedAtValue(ua)
 	resp := map[string]any{
-		"uuid":        ua.Uuid.String(),
-		"entity_uuid": profile.Entity.Uuid.String(),
-		"email":       emailVal,
-		"created_at":  ua.CreatedAt.Time,
-		"updated_at":  ua.UpdatedAt.Time,
+		"uuid":              ua.Uuid.String(),
+		"entity_uuid":       profile.Entity.Uuid.String(),
+		"email":             emailVal,
+		"email_verified_at": emailVerifiedAt,
+		"created_at":        ua.CreatedAt.Time,
+		"updated_at":        ua.UpdatedAt.Time,
 	}
 
 	switch profile.Kind {

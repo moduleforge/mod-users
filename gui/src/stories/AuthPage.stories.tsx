@@ -30,3 +30,13 @@ export const WithForgotPassword: Story = () => (
     <AuthPage onForgotPassword={() => console.log('forgot password')} />
   </AuthProvider>
 );
+
+export const LogsModeOnAuthenticated: Story = () => (
+  <AuthProvider>
+    <AuthPage
+      onAuthenticated={(returnPath, mode) =>
+        console.log('authenticated', { returnPath, mode })
+      }
+    />
+  </AuthProvider>
+);

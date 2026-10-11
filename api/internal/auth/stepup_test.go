@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -143,5 +147,52 @@ func TestStepUpJanitor_PrunesExpired(t *testing.T) {
 	}
 	if _, ok := consumed.Load("valid-jti"); !ok {
 		t.Error("valid jti should NOT have been pruned")
+	}
+}
+
+// TestIssueStepUpToken_EmptySecret verifies issuing with an empty secret fails.
+func TestIssueStepUpToken_EmptySecret(t *testing.T) {
+	for _, secret := range [][]byte{nil, {}} {
+		token, jti, _, err := IssueStepUpToken(secret, 42, StepUpTTL)
+		if err == nil {
+			t.Fatal("IssueStepUpToken with empty secret: expected error, got nil")
+		}
+		if token != "" || jti != "" {
+			t.Fatalf("expected no token/jti on error, got %q / %q", token, jti)
+		}
+	}
+}
+
+// TestVerifyStepUpToken_EmptyKeyForgery verifies a token forged with an
+// empty-key HMAC is rejected under both an empty and a non-empty secret.
+func TestVerifyStepUpToken_EmptyKeyForgery(t *testing.T) {
+	payload := stepUpPayload{
+		UserAccountID: 42,
+		Purpose:       stepUpPurpose,
+		JTI:           "forged-jti",
+		Exp:           time.Now().Add(time.Minute).Unix(),
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signingInput := stepUpHeader + "." + base64.RawURLEncoding.EncodeToString(payloadJSON)
+	mac := hmac.New(sha256.New, []byte{})
+	mac.Write([]byte(signingInput))
+	forged := signingInput + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	for name, secret := range map[string][]byte{"empty": {}, "nil": nil, "non-empty": testSecret} {
+		if err := VerifyStepUpToken(secret, forged, 42, &sync.Map{}); err == nil {
+			t.Errorf("forged token accepted with %s secret", name)
+		}
+	}
+
+	// Normal issue/verify with a non-empty secret still works.
+	token, _, _, err := IssueStepUpToken(testSecret, 42, StepUpTTL)
+	if err != nil {
+		t.Fatalf("IssueStepUpToken: %v", err)
+	}
+	if err := VerifyStepUpToken(testSecret, token, 42, &sync.Map{}); err != nil {
+		t.Fatalf("VerifyStepUpToken: %v", err)
 	}
 }

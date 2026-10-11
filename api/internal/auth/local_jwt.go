@@ -16,9 +16,9 @@ type localClaims struct {
 	IsAnonymous  bool     `json:"is_anonymous,omitempty"`
 }
 
-// IssueLocalJWT mints an HS256-signed JWT for a locally-authenticated user account.
+// IssueLocalJWTWithSigner mints a JWT, signed by signer, for a locally-authenticated user account.
 // The token is valid for 24 hours.
-func IssueLocalJWT(ua db.UserAccount, secret, issuer string) (string, error) {
+func IssueLocalJWTWithSigner(ua db.UserAccount, signer *Signer, issuer string) (string, error) {
 	now := time.Now()
 	claims := localClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -30,18 +30,17 @@ func IssueLocalJWT(ua db.UserAccount, secret, issuer string) (string, error) {
 		Roles: []string{},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte(secret))
+	signed, err := signer.Sign(claims)
 	if err != nil {
 		return "", fmt.Errorf("local_jwt: sign: %w", err)
 	}
 	return signed, nil
 }
 
-// IssueAnonymousJWT mints an HS256-signed JWT for an anonymous user account.
+// IssueAnonymousJWTWithSigner mints a JWT, signed by signer, for an anonymous user account.
 // The token carries is_anonymous=true and no email claim. The token is valid
 // for 24 hours.
-func IssueAnonymousJWT(ua db.UserAccount, secret, issuer string) (string, error) {
+func IssueAnonymousJWTWithSigner(ua db.UserAccount, signer *Signer, issuer string) (string, error) {
 	now := time.Now()
 	claims := localClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -54,16 +53,15 @@ func IssueAnonymousJWT(ua db.UserAccount, secret, issuer string) (string, error)
 		IsAnonymous: true,
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte(secret))
+	signed, err := signer.Sign(claims)
 	if err != nil {
 		return "", fmt.Errorf("local_jwt: sign anonymous: %w", err)
 	}
 	return signed, nil
 }
 
-// IssueAssumeJWT mints a JWT that carries sudo-user context for an admin.
-func IssueAssumeJWT(sudoUA db.UserAccount, actorUA db.UserAccount, secret, issuer string) (string, error) {
+// IssueAssumeJWTWithSigner mints a signer-signed JWT that carries sudo-user context for an admin.
+func IssueAssumeJWTWithSigner(sudoUA db.UserAccount, actorUA db.UserAccount, signer *Signer, issuer string) (string, error) {
 	now := time.Now()
 	claims := localClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -76,10 +74,39 @@ func IssueAssumeJWT(sudoUA db.UserAccount, actorUA db.UserAccount, secret, issue
 		SudoUserUUID: actorUA.Uuid.String(),
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte(secret))
+	signed, err := signer.Sign(claims)
 	if err != nil {
 		return "", fmt.Errorf("local_jwt: sign assume: %w", err)
 	}
 	return signed, nil
+}
+
+// IssueLocalJWT mints an HS256-signed JWT for a locally-authenticated user
+// account, keyed by secret, with no "kid" header. It is the historical entry
+// point; byte-for-byte equivalent to IssueLocalJWTWithSigner with
+// NewHS256Signer(secret, "").
+func IssueLocalJWT(ua db.UserAccount, secret, issuer string) (string, error) {
+	signer, err := NewHS256Signer(secret, "")
+	if err != nil {
+		return "", err
+	}
+	return IssueLocalJWTWithSigner(ua, signer, issuer)
+}
+
+// IssueAnonymousJWT is the HS256/secret form of IssueAnonymousJWTWithSigner.
+func IssueAnonymousJWT(ua db.UserAccount, secret, issuer string) (string, error) {
+	signer, err := NewHS256Signer(secret, "")
+	if err != nil {
+		return "", err
+	}
+	return IssueAnonymousJWTWithSigner(ua, signer, issuer)
+}
+
+// IssueAssumeJWT is the HS256/secret form of IssueAssumeJWTWithSigner.
+func IssueAssumeJWT(sudoUA db.UserAccount, actorUA db.UserAccount, secret, issuer string) (string, error) {
+	signer, err := NewHS256Signer(secret, "")
+	if err != nil {
+		return "", err
+	}
+	return IssueAssumeJWTWithSigner(sudoUA, actorUA, signer, issuer)
 }

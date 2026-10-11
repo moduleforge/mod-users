@@ -24,9 +24,22 @@
 # updating both.
 #
 # Security: MODULEFORGE_READ_TOKEN, when set, authenticates over HTTPS via a
-# per-invocation `-c http.extraheader=` rather than the remote URL or
+# per-invocation GIT_CONFIG_* environment entry (never argv, where ps and
+# /proc/<pid>/cmdline would show it) rather than the remote URL or
 # .git/config, and every line that touches it runs with `set +x` so it can
 # never be echoed even if the caller has xtrace on.
+#
+# The lockfile is git-tracked and so untrusted input: every `host:` and
+# `owner:` (top-level and in `overrides`), and every pin key and override
+# `repo:`, is shape-validated when read (exit 3 on a mismatch, with a fixed
+# message that never echoes the value). The token is only ever used for a
+# host on an allowlist, default `github.com`: set
+# MODULEFORGE_TOKEN_ALLOWED_HOSTS to a space- or comma-separated list of
+# hostnames to replace the default (for example a self-hosted forge). A token
+# with any other effective host (top-level or override) is refused before any
+# network call. The SSH path (no token) is not subject to the allowlist. The
+# header is scoped to the fetch target's host (`http.https://<host>/.extraheader`)
+# and redirects are not followed, so the token cannot be sent to any other host.
 
 set -euo pipefail
 
@@ -95,17 +108,28 @@ SIBLING ROOT RESOLUTION (both modes, in precedence order)
 ENVIRONMENT
   MODULEFORGE_SIBLINGS_DIR  Sibling root (precedence 2 above).
   MODULEFORGE_READ_TOKEN    If set, clone over HTTPS authenticated with this
-                            token via a per-invocation `-c http.extraheader`.
+                            token via a per-invocation http.extraheader set
+                            through git's environment (never argv, so it is
+                            not visible to ps). The header is scoped to the
+                            fetch target's host and redirects are not followed.
                             Never written to .git/config, never echoed.
                             If unset, clone over SSH (git@<host>:<owner>/<repo>.git).
+  MODULEFORGE_TOKEN_ALLOWED_HOSTS
+                            Space- or comma-separated hostnames that may
+                            receive MODULEFORGE_READ_TOKEN. Default: github.com.
+                            A lockfile host (top-level or override) outside the
+                            list is refused (exit 3) before any network call
+                            when a token is set. Not consulted without a token.
 
 EXIT CODES
   0  Success. --verify produced a report (even if drift/missing was found);
      --pinned materialized every requested sibling.
   1  --strict only: at least one sibling is not `ok`.
   2  Usage error: unknown flag, conflicting modes, unknown --repos key.
-  3  Precondition failure: lockfile missing or malformed (including an
-     `overrides` entry with no matching pin or an unknown override field); not inside a git
+  3  Precondition failure: lockfile missing or malformed (including a host,
+     owner, pin key or repo of the wrong shape, an `overrides` entry with no
+     matching pin or an unknown override field, or a token with a host that is
+     not allowed); not inside a git
      repo; --pinned invoked from inside a Flow worktree (pins govern CI and
      fresh clones only -- use `make preflight` there); a pinned SHA cannot be
      fetched from its remote (almost always an unpushed local commit).
@@ -134,6 +158,49 @@ EOF
 # depends on the same one-key-per-line shape for exact-line rewrites).
 # ---------------------------------------------------------------------------
 
+# Shape checks for values read from the git-tracked lockfile. Each is the
+# only gate between untrusted text and a clone URL / auth-header scope, so
+# they are strict allowlist regexes (no '/', '@', ':', '?', '#', whitespace,
+# or '..'), and callers report a fixed message that never echoes the value.
+valid_host() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] && [[ "$1" != *..* ]]; }
+valid_owner() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]]; }
+# Repo names and pin keys may contain '.', '_' and '-', but never be '.' or
+# '..' (path traversal in the URL and the checkout directory) or lead with '-'.
+valid_repo() { [[ "$1" =~ ^[A-Za-z0-9_.-]+$ ]] && [[ "$1" != . && "$1" != .. && "$1" != -* ]]; }
+
+# token_host_allowed HOST -- is HOST on the token allowlist
+# (MODULEFORGE_TOKEN_ALLOWED_HOSTS, default github.com)? Hostnames compare
+# case-insensitively. A malformed allowlist entry is a hard refusal (exit 3).
+# Every entry is validated, not just the ones scanned before a match.
+token_host_allowed() {
+	local allowed="${MODULEFORGE_TOKEN_ALLOWED_HOSTS:-github.com}" h host_lc="${1,,}" found=1
+	allowed="${allowed//,/ }"
+	# Split on whitespace without pathname expansion: an entry such as `github.c*`
+	# must stay a (malformed) literal, not expand against the cwd.
+	local had_noglob=0
+	case "$-" in *f*) had_noglob=1 ;; esac
+	set -f
+	for h in $allowed; do
+		if ! valid_host "$h"; then
+			err "MODULEFORGE_TOKEN_ALLOWED_HOSTS has an entry that is not a plain hostname"
+			exit 3
+		fi
+		[ "${h,,}" = "$host_lc" ] && found=0
+	done
+	[ "$had_noglob" -eq 1 ] || set +f
+	return "$found"
+}
+
+# require_token_host_allowed HOST -- with a token set, HOST must be on the
+# allowlist, checked before any network call. Without a token there is
+# nothing to protect and the SSH path is not restricted.
+require_token_host_allowed() {
+	[ "$TOKEN_SET" -eq 1 ] || return 0
+	token_host_allowed "$1" && return 0
+	err "refusing to send MODULEFORGE_READ_TOKEN: a lockfile host is not in the token host allowlist (default github.com; set MODULEFORGE_TOKEN_ALLOWED_HOSTS for a self-hosted forge)"
+	exit 3
+}
+
 # Populates globals: LF_HOST, LF_OWNER, LF_KEYS (ordered array), LF_SHA (map),
 # and the per-key overrides maps LF_OV_HOST / LF_OV_OWNER / LF_OV_REPO.
 read_lockfile() {
@@ -143,10 +210,25 @@ read_lockfile() {
 		exit 3
 	fi
 
-	LF_HOST="$(awk -F': *' '/^host:/{print $2; exit}' "$file" | tr -d '[:space:]')"
-	LF_OWNER="$(awk -F': *' '/^owner:/{print $2; exit}' "$file" | tr -d '[:space:]')"
+	# Everything after the key, not the second ': '-separated field: a value
+	# such as `evil:80` must reach the shape check whole, not be truncated into
+	# something that passes it. Only the ends are trimmed: whitespace inside a
+	# value is a shape failure.
+	LF_HOST="$(awk '/^host:/{sub(/^host:[ \t]*/, ""); sub(/[ \t\r]+$/, ""); print; exit}' "$file")"
+	LF_OWNER="$(awk '/^owner:/{sub(/^owner:[ \t]*/, ""); sub(/[ \t\r]+$/, ""); print; exit}' "$file")"
 	if [ -z "$LF_HOST" ] || [ -z "$LF_OWNER" ]; then
 		err "malformed lockfile: missing host/owner: $file"
+		exit 3
+	fi
+	# The lockfile is git-tracked, so host and owner are untrusted: they become
+	# a clone URL and, with a token, the scope of an auth header. Refuse a wrong
+	# shape with a fixed message that names the key and never echoes the value.
+	if ! valid_host "$LF_HOST"; then
+		err "malformed lockfile: host: is not a plain hostname"
+		exit 3
+	fi
+	if ! valid_owner "$LF_OWNER"; then
+		err "malformed lockfile: owner: is not a plain account name"
 		exit 3
 	fi
 
@@ -174,6 +256,7 @@ read_lockfile() {
 		if [ "$in_overrides" -eq 0 ]; then
 			if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+([0-9a-fA-F]{40}) ]]; then
 				local key="${BASH_REMATCH[1]}" sha="${BASH_REMATCH[2]}"
+				valid_repo "$key" || { err "malformed lockfile: a pin key is not a plain repository name"; exit 3; }
 				LF_KEYS+=("$key")
 				LF_SHA["$key"]="$sha"
 			fi
@@ -184,6 +267,7 @@ read_lockfile() {
 		[[ "$stripped" =~ ^[[:space:]]*$ ]] && continue
 		if [[ "$stripped" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]*$ ]]; then
 			cur_ov="${BASH_REMATCH[1]}"
+			valid_repo "$cur_ov" || { err "malformed lockfile: an overrides entry key is not a plain repository name"; exit 3; }
 			if [ -n "${LF_OV_SEEN[$cur_ov]+x}" ]; then
 				err "malformed lockfile: duplicate overrides entry '$cur_ov': $file"
 				exit 3
@@ -200,11 +284,15 @@ read_lockfile() {
 			fi
 			case "$fname" in
 			host)
-				[[ "$fval" =~ ^[A-Za-z0-9.-]+$ ]] || { err "malformed lockfile: overrides.$cur_ov.host is empty or has invalid characters: $file"; exit 3; }
+				valid_host "$fval" || { err "malformed lockfile: overrides.$cur_ov.host is not a plain hostname: $file"; exit 3; }
 				LF_OV_HOST["$cur_ov"]="$fval"
 				;;
 			owner | repo)
-				[[ "$fval" =~ ^[A-Za-z0-9._-]+$ ]] || { err "malformed lockfile: overrides.$cur_ov.$fname is empty or has invalid characters: $file"; exit 3; }
+				if [ "$fname" = owner ]; then
+					valid_owner "$fval" || { err "malformed lockfile: overrides.$cur_ov.owner is not a plain account name: $file"; exit 3; }
+				else
+					valid_repo "$fval" || { err "malformed lockfile: overrides.$cur_ov.repo is not a plain repository name: $file"; exit 3; }
+				fi
 				if [ "$fname" = owner ]; then LF_OV_OWNER["$cur_ov"]="$fval"; else LF_OV_REPO["$cur_ov"]="$fval"; fi
 				;;
 			*)
@@ -226,6 +314,13 @@ read_lockfile() {
 		fi
 	done
 
+	# With a token, every host that can receive it must be allowlisted, checked
+	# here before any network call: the top-level host and each override host.
+	local k
+	for k in "${LF_KEYS[@]}"; do
+		require_token_host_allowed "${LF_OV_HOST[$k]:-$LF_HOST}"
+	done
+
 	if [ "${#LF_KEYS[@]}" -eq 0 ]; then
 		err "malformed lockfile: no pins found: $file"
 		exit 3
@@ -236,13 +331,16 @@ read_lockfile() {
 # Remote / auth
 # ---------------------------------------------------------------------------
 
+# clone_host KEY -- the effective host for KEY (override, else top-level).
+clone_host() { printf '%s' "${LF_OV_HOST[$1]:-$LF_HOST}"; }
+
 # Clone URL per versions-lockfile.md: host/owner/repo each resolve
 # independently -- overrides.<key>.<field> if present, else the top-level
 # host/owner, else (for repo) the pin key itself. The on-disk checkout dir
 # stays the pin key; only the URL uses the resolved repo.
 clone_url() {
 	local key="$1" host owner repo
-	host="${LF_OV_HOST[$key]:-$LF_HOST}"
+	host="$(clone_host "$key")"
 	owner="${LF_OV_OWNER[$key]:-$LF_OWNER}"
 	repo="${LF_OV_REPO[$key]:-$key}"
 	if [ "$TOKEN_SET" -eq 1 ]; then
@@ -252,24 +350,34 @@ clone_url() {
 	fi
 }
 
-# git_fetch_auth DIR REMOTE REF -- fetch REF from REMOTE (a remote name or a
-# raw URL) into the repo at DIR, authenticating via a per-invocation header
-# when MODULEFORGE_READ_TOKEN is set. The token never touches the URL or
-# .git/config. Every line that dereferences $MODULEFORGE_READ_TOKEN itself
+# git_fetch_auth DIR REMOTE REF HOST -- fetch REF from REMOTE (a remote name or
+# a raw URL on HOST) into the repo at DIR, authenticating via a per-invocation
+# header when MODULEFORGE_READ_TOKEN is set. The token never touches the URL,
+# .git/config or argv. HOST is the host of REMOTE's URL: the header is scoped
+# to it and it must be on the token allowlist (re-checked here, so the token
+# is never handed to git for a host that was not vetted). Every line that dereferences $MODULEFORGE_READ_TOKEN itself
 # runs under `set +x` regardless of the caller's tracing state -- checking
 # only the pre-computed $TOKEN_SET flag (never the raw variable) is what
 # keeps this function's own `if` safe to trace.
 git_fetch_auth() {
-	local dir="$1" remote="$2" ref="$3"
+	local dir="$1" remote="$2" ref="$3" host="$4"
 	local was_xtrace=0
 	case "$-" in *x*) was_xtrace=1 ;; esac
 
 	if [ "$TOKEN_SET" -eq 1 ]; then
+		require_token_host_allowed "$host"
 		set +x
 		local auth_header
 		auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$MODULEFORGE_READ_TOKEN" | base64 | tr -d '\n')"
 		local rc=0
-		git -C "$dir" -c "http.extraheader=$auth_header" fetch --quiet "${DEPTH_ARGS[@]}" "$remote" "$ref" || rc=$?
+		# The header travels in git's environment config (git >= 2.31), never in
+		# argv, where ps and /proc/<pid>/cmdline would show the token. The key is
+		# scoped to HOST, so git sends the header to no other host, and redirects
+		# are not followed at all.
+		GIT_CONFIG_COUNT=2 \
+			GIT_CONFIG_KEY_0="http.https://${host}/.extraheader" GIT_CONFIG_VALUE_0="$auth_header" \
+			GIT_CONFIG_KEY_1=http.followRedirects GIT_CONFIG_VALUE_1=false \
+			git -C "$dir" fetch --quiet "${DEPTH_ARGS[@]}" "$remote" "$ref" || rc=$?
 		unset auth_header
 		[ "$was_xtrace" -eq 1 ] && set -x
 		return "$rc"
@@ -286,7 +394,7 @@ check_remote_reachable() {
 	url="$(clone_url "$key")"
 	tmp="$(mktemp -d)"
 	git init --quiet --bare "$tmp" >/dev/null
-	git_fetch_auth "$tmp" "$url" "$sha" >/dev/null 2>&1 || rc=1
+	git_fetch_auth "$tmp" "$url" "$sha" "$(clone_host "$key")" >/dev/null 2>&1 || rc=1
 	rm -rf "$tmp"
 	return "$rc"
 }
@@ -300,7 +408,7 @@ clone_pin() {
 	url="$(clone_url "$key")"
 	git init --quiet "$dest"
 	git -C "$dest" remote add origin "$url"
-	if ! git_fetch_auth "$dest" origin "$pin"; then
+	if ! git_fetch_auth "$dest" origin "$pin" "$(clone_host "$key")"; then
 		return 1
 	fi
 	git -C "$dest" checkout --quiet --detach FETCH_HEAD

@@ -243,6 +243,7 @@ provides:
         - field:cfg.LocalAuth.JWTSecret
         - service:stepUpConsumed
         - field:cfg.Auth.RequireStepUpForCredentialChange
+        - field:cfg.Auth.CookiePath                         # USERS_COOKIE_PATH
 
     # sshKeyService — SSH public-key registration, listing, and revocation
     # for a user account (docs/architecture/ssh-keys.md). args order matches

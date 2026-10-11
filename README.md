@@ -34,11 +34,29 @@ npm install @moduleforge/users-gui
 
 For embedding the components in an app (configuration, routes, Next.js and React Router examples), see the [users-gui consumer integration guide](./gui/README.md).
 
+## Configuration
+
+Local-auth JWT settings (see [docs/jwt-eddsa.md](./docs/jwt-eddsa.md); full list in `.env.example`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `JWT_SECRET` | required | HS256 secret; also signs OAuth state and step-up tokens |
+| `JWT_ALG` | `HS256` | `HS256` or `EdDSA` signing for locally-issued tokens |
+| `JWT_SIGNING_KEY` | unset | Ed25519 private key (PKCS#8 PEM; literal `\n` accepted); required for `EdDSA` |
+| `JWT_SIGNING_KID` | unset | `kid` header for issued tokens |
+| `JWT_VERIFY_PUBLIC_KEYS` | unset | Extra accepted public keys: one PKIX PEM, or JSON `kid` to PEM |
+
+CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and any entry containing `*` is rejected at startup outside local mode. Entries are bare `scheme://host[:port]` origins (no trailing slash or path), matched case-insensitively. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
+
 ## Additional documentation
 
 - [AGENTS.md](./AGENTS.md) — build, test, and development commands for contributors and AI agents
 - [docs/mod-users-spec.md](./docs/mod-users-spec.md) — feature specification and behavioral contracts
 - [docs/architecture.md](./docs/architecture.md) — system design, sub-project relationships, and key design decisions
+- [docs/jwt-eddsa.md](./docs/jwt-eddsa.md) — EdDSA JWT signing, verify-only deployment, key rotation, and the `JWT_*` configuration
+- [docs/cors.md](./docs/cors.md) — CORS default-deny policy, `CORS_ORIGINS` / `DEPLOY_MODE` behavior, and the upgrade note for deployments that relied on the implicit wildcard
+- [docs/cookie-path.md](./docs/cookie-path.md) — `USERS_COOKIE_PATH`, the `oidc_state` cookie Path, and the strip-prefix proxy example
+- [docs/consumer-upgrade-notes.md](./docs/consumer-upgrade-notes.md) — API, configuration and behaviour changes for consumers that compose, embed or verify tokens from this module, plus known limits
 - [docs/project-structure.md](./docs/project-structure.md) — directory layout and sub-project conventions
 - [next-steps.md](./next-steps.md) — forward-looking residue: pending manual verification and deferred work
 - [.claude/CLAUDE.md](./.claude/CLAUDE.md) — Claude Code configuration and project-specific AI agent guidance

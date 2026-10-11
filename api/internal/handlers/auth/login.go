@@ -9,6 +9,7 @@ import (
 
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
+	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // dummyHash is a valid argon2id PHC string used for constant-time rejection
@@ -74,7 +75,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := localauth.IssueLocalJWT(ua, h.jwtSecret, h.issuer)
+	token, err := h.issueLocalJWT(ua)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "login: issue jwt", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
@@ -85,9 +86,23 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	server.JSON(w, http.StatusOK, map[string]any{
 		"token": token,
-		"user": map[string]any{
-			"uuid":  ua.Uuid.String(),
-			"email": ua.Email.String,
-		},
+		"user":  sessionUser(ua),
 	})
+}
+
+// sessionUser builds the "user" object returned alongside a freshly issued
+// token (login and email-code sign-in). It carries email_verified_at with the
+// same semantics as GET /v1/self: always present, an RFC 3339 timestamp when
+// the email is verified and an explicit JSON null otherwise, so clients read
+// the correct verification state without a follow-up /v1/self call.
+func sessionUser(ua db.UserAccount) map[string]any {
+	var emailVerifiedAt any
+	if ua.EmailVerifiedAt != nil {
+		emailVerifiedAt = *ua.EmailVerifiedAt
+	}
+	return map[string]any{
+		"uuid":              ua.Uuid.String(),
+		"email":             ua.Email.String,
+		"email_verified_at": emailVerifiedAt,
+	}
 }

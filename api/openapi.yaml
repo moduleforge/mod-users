@@ -199,6 +199,27 @@ components:
             default_app:
               $ref: "#/components/schemas/AppSummary"
 
+    UserSelf:
+      description: >-
+        The caller's own profile, returned by GET/PUT /v1/self. Extends
+        UserDetail with email_verified_at, which describes only the caller's
+        own account; the admin user endpoints (which return UserDetail) emit
+        the boolean email_verified instead and never carry this field.
+      allOf:
+        - $ref: "#/components/schemas/UserDetail"
+        - type: object
+          required: [email_verified_at]
+          properties:
+            email_verified_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: >-
+                Time the caller's email was verified, or null when it has not
+                been. Always present (explicit null when unverified). Lets
+                clients prompt for verification before a verified-email-gated
+                call is refused with users.email_unverified.
+
     SelfUpdateRequest:
       type: object
       properties:
@@ -246,6 +267,31 @@ components:
         expires_at:
           type: string
           format: date-time
+
+    LoginResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: JWT access token.
+        user:
+          type: object
+          required: [uuid, email, email_verified_at]
+          properties:
+            uuid:
+              type: string
+              format: uuid
+            email:
+              type: string
+            email_verified_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: >-
+                Time the account's email was verified, or null when it has
+                not been. Always present; same semantics as the
+                email_verified_at field of GET /v1/self.
 
     EmailCodeRequest:
       type: object
@@ -350,6 +396,11 @@ components:
               format: uuid
             is_anonymous:
               type: boolean
+            email_verified_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: Always null; anonymous accounts have no email to verify.
 
     # -- App schemas --
 
@@ -833,7 +884,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthToken"
+                $ref: "#/components/schemas/LoginResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -875,7 +926,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthToken"
+                $ref: "#/components/schemas/LoginResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -1070,7 +1121,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserDetail"
+                $ref: "#/components/schemas/UserSelf"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -1091,7 +1142,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserDetail"
+                $ref: "#/components/schemas/UserSelf"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1271,7 +1322,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthToken"
+                $ref: "#/components/schemas/LoginResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/moduleforge/core-api/apiresp"
-	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	svc "github.com/moduleforge/mod-users/api/internal/service"
 	db "github.com/moduleforge/mod-users/model/db"
@@ -55,7 +54,7 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	// from the service result UUID — no additional DB round-trip is required.
 	dbUA := db.UserAccount{Uuid: uuid.UUID(result.UserAccount.UUID)}
 
-	token, err := localauth.IssueAnonymousJWT(dbUA, h.jwtSecret, h.issuer)
+	token, err := h.issueAnonymousJWT(dbUA)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "anonymous: issue jwt", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
@@ -73,6 +72,9 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]any{
 			"uuid":         result.UserAccount.UUID.String(),
 			"is_anonymous": true,
+			// Guests have no email, so they are never verified: explicit null,
+			// matching GET /v1/self.
+			"email_verified_at": nil,
 		},
 	})
 }

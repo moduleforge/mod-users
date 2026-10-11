@@ -43,6 +43,8 @@ interface AuthContextValue {
   user: UserAccountSelf | null;
   isLoading: boolean;
   isAdmin: boolean;
+  /** ISO timestamp the signed-in account's email was verified; null when unverified or signed out. */
+  emailVerifiedAt: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (
     email: string,
@@ -233,6 +235,7 @@ export function AuthProvider({
     user,
     isLoading,
     isAdmin: user?.is_admin ?? false,
+    emailVerifiedAt: user?.email_verified_at ?? null,
     login,
     register,
     logout,

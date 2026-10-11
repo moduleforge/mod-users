@@ -180,6 +180,13 @@ export interface RequestOptions extends RequestInit {
 
 export interface LoginResponse {
   token: string;
+  /**
+   * The server's login, email-code and assume-identity payloads always carry
+   * `email_verified_at` (timestamp, or explicit null while unverified), same
+   * as `/v1/self`, so `useAuth().emailVerifiedAt` is correct right after
+   * sign-in. Those payloads carry only a subset of the other fields
+   * (`uuid`, `email`); call `refreshUser()` when the full profile is needed.
+   */
   user: UserAccountSelf;
 }
 
@@ -238,6 +245,8 @@ export interface UserAccountSelf {
   uuid: string;
   entity_uuid: string;
   email: string;
+  /** ISO timestamp the account's email was verified, or null if unverified. */
+  email_verified_at: string | null;
   given_name: string;
   family_name: string;
   is_admin: boolean;

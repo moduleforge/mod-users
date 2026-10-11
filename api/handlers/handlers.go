@@ -96,6 +96,17 @@ func NewAssumeHandler(
 	return inner.NewAssumeHandler(svc, jwtSecret, issuer)
 }
 
+// NewAssumeHandlerWithSigner constructs the assume-identity handler with an
+// explicit signer (see auth.NewSigner). Prefer it over NewAssumeHandler for any
+// app that may run with JWT_ALG=EdDSA; a nil signer is an error.
+func NewAssumeHandlerWithSigner(
+	svc *innersvc.UserAccountService,
+	signer *auth.Signer,
+	issuer string,
+) (*AssumeHandler, error) {
+	return inner.NewAssumeHandlerWithSigner(svc, signer, issuer)
+}
+
 // NewAppsHandler constructs the apps handler, which serves the
 // apps/user-accounts membership endpoints (/v1/apps/{uuid}/user-accounts).
 // Top-level /apps CRUD lives in mod-core; entityResolver resolves the
@@ -162,6 +173,7 @@ func NewIdentitiesHandler(
 	jwtSecret string,
 	consumed *sync.Map,
 	stepUpRequired bool,
+	cookiePath string,
 ) *IdentitiesHandler {
 	return inner.NewIdentitiesHandlerWithDeps(inner.IdentitiesHandlerDeps{
 		Pool:           pool,
@@ -172,6 +184,7 @@ func NewIdentitiesHandler(
 		JWTSecret:      jwtSecret,
 		Consumed:       consumed,
 		StepUpRequired: stepUpRequired,
+		CookiePath:     cookiePath,
 	})
 }
 

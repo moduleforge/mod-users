@@ -57,6 +57,7 @@ function Probe({
     <div>
       <div data-testid="loading">{String(auth.isLoading)}</div>
       <div data-testid="token">{auth.token ?? 'null'}</div>
+      <div data-testid="email-verified-at">{auth.emailVerifiedAt ?? 'null'}</div>
       <div data-testid="complete-settled">{String(completeSettled)}</div>
       <div data-testid="complete-error">{completeError ?? 'none'}</div>
       {trigger === 'refresh' && (
@@ -482,5 +483,109 @@ describe('action-required navigation is skipped when already on the target path'
     expect(navigateCalls).toEqual([]);
     expect(screen.getByTestId('complete-error').textContent).toBe('none');
     expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token');
+  });
+});
+
+describe('emailVerifiedAt exposure', () => {
+  const SELF_BASE = {
+    uuid: 'u1',
+    entity_uuid: 'e1',
+    email: 'a@example.com',
+    given_name: 'A',
+    family_name: 'B',
+    is_admin: false,
+    created_at: '',
+    updated_at: '',
+  };
+
+  test('exposes the verified timestamp from /v1/self', async () => {
+    localStorage.setItem(TOKEN_KEY, 'stored-token');
+    stubFetch({ ...SELF_BASE, email_verified_at: '2026-01-02T03:04:05Z' }, 200);
+
+    render(
+      <AuthProvider onNavigate={() => {}}>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+    expect(screen.getByTestId('email-verified-at').textContent).toBe('2026-01-02T03:04:05Z');
+  });
+
+  test('is null for an unverified account', async () => {
+    localStorage.setItem(TOKEN_KEY, 'stored-token');
+    stubFetch({ ...SELF_BASE, email_verified_at: null }, 200);
+
+    render(
+      <AuthProvider onNavigate={() => {}}>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
+    expect(screen.getByTestId('email-verified-at').textContent).toBe('null');
+  });
+});
+
+describe('emailVerifiedAt after sign-in', () => {
+  // The login payload carries `email_verified_at` (same semantics as
+  // /v1/self); `emailVerifiedAt` must be correct immediately after sign-in,
+  // with no `/v1/self` round trip.
+  function SignInProbe() {
+    const auth = useAuth();
+    return (
+      <div>
+        <div data-testid="token">{auth.token ?? 'null'}</div>
+        <div data-testid="email-verified-at">{auth.emailVerifiedAt ?? 'null'}</div>
+        <button onClick={() => void auth.login('a@example.com', 'pw')}>login</button>
+        <button
+          onClick={() => void auth.register('a@example.com', 'pw', 'A', 'B')}
+        >
+          register
+        </button>
+      </div>
+    );
+  }
+
+  async function signIn(
+    action: 'login' | 'register',
+    emailVerifiedAt: string | null,
+  ): Promise<string[]> {
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          token: 'new-token',
+          user: { uuid: 'u1', email: 'a@example.com', email_verified_at: emailVerifiedAt },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as unknown as typeof fetch;
+
+    render(
+      <AuthProvider onNavigate={() => {}}>
+        <SignInProbe />
+      </AuthProvider>,
+    );
+    fireEvent.click(screen.getByText(action));
+    await waitFor(() => expect(screen.getByTestId('token').textContent).toBe('new-token'));
+    return urls;
+  }
+
+  test('login() exposes the verified timestamp', async () => {
+    const urls = await signIn('login', '2026-01-02T03:04:05Z');
+    expect(screen.getByTestId('email-verified-at').textContent).toBe('2026-01-02T03:04:05Z');
+    expect(urls.some((u) => u.endsWith('/v1/self'))).toBe(false);
+  });
+
+  test('login() exposes null for an unverified account', async () => {
+    await signIn('login', null);
+    expect(screen.getByTestId('email-verified-at').textContent).toBe('null');
+  });
+
+  test('register() (chained login) exposes the verified timestamp', async () => {
+    await signIn('register', '2026-01-02T03:04:05Z');
+    expect(screen.getByTestId('email-verified-at').textContent).toBe('2026-01-02T03:04:05Z');
   });
 });

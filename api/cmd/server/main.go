@@ -82,8 +82,11 @@ func main() {
 	// Build auth components. The Verifier is used by RequireAuth to validate
 	// incoming Bearer tokens — post-Phase 9 those are always the local JWTs
 	// minted by /v1/auth/login or the OIDC callback, never a raw provider
-	// id_token. So the verifier is local-only.
-	verifier, err := auth.NewVerifier(ctx, "", "", cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	// id_token. So the verifier is local-only. NewLocalVerifier pins the
+	// accepted algorithm to JWT_ALG: EdDSA-signed local tokens (verified
+	// against the public half of JWT_SIGNING_KEY plus any
+	// JWT_VERIFY_PUBLIC_KEYS) when JWT_ALG=EdDSA, HS256 otherwise.
+	verifier, err := auth.NewLocalVerifier(ctx, cfg.LocalAuth)
 	if err != nil {
 		slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
 		os.Exit(1)
@@ -394,16 +397,29 @@ func main() {
 	r.Get("/healthz", handlers.Live)
 	r.Get("/readyz", handlers.Ready(pool))
 
+	// Select the JWT signer (HS256 default, or EdDSA when JWT_ALG=EdDSA) and
+	// hand it to every handler that mints local tokens. The OIDC handler builds
+	// its own from cfg once at construction.
+	jwtSigner, err := auth.NewSigner(cfg.LocalAuth)
+	if err != nil {
+		slog.ErrorContext(ctx, "jwt signer init failed", "error", err)
+		os.Exit(1)
+	}
+
 	// Local auth handlers (unauthenticated).
-	authHandler := authhandlers.New(
+	authHandler, err := authhandlers.NewWithSigner(
 		pool,
 		queries,
 		coreQueries,
-		cfg.LocalAuth.JWTSecret,
+		jwtSigner,
 		cfg.LocalAuth.LocalIssuer,
 		emailSender,
 		cfg.Server.GUIBaseURL,
 	)
+	if err != nil {
+		slog.ErrorContext(ctx, "auth handler init failed", "error", err)
+		os.Exit(1)
+	}
 
 	// Wire the first-user wildcard-grant bootstrap hook into both account-creation
 	// paths (local register and OIDC auto-create). When the very first user account
@@ -435,6 +451,10 @@ func main() {
 	authHandler.SetUserSvc(uaSvc)
 
 	oidcHandler := authhandlers.NewOIDCHandlerWithPool(pool, queries, oauth, resolver, uaSvc, cfg, observerGroup)
+	if err := oidcHandler.SignerErr(); err != nil {
+		slog.ErrorContext(ctx, "oidc handler jwt signer init failed", "error", err)
+		os.Exit(1)
+	}
 	_ = oidcHandler // referenced by TODO comment above; wired via RegisterRoutes in generated main.go
 
 	// grantAdmin creates a wildcard manage grant for a user account, checked and
@@ -491,6 +511,7 @@ func main() {
 		JWTSecret:      cfg.LocalAuth.JWTSecret,
 		Consumed:       stepUpConsumed,
 		StepUpRequired: cfg.Auth.RequireStepUpForCredentialChange,
+		CookiePath:     cfg.Auth.CookiePath,
 	})
 
 	// SSH public-key handler — self-service and operator register/list/
@@ -504,7 +525,11 @@ func main() {
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
 	usersHandler := handlers.NewUserAccountsHandler(uaSvc, grantAdminFn, revokeAdminFn)
 	_ = usersHandler // wired via RegisterAccountRoutes in generated main.go
-	assumeHandler := handlers.NewAssumeHandler(uaSvc, cfg.LocalAuth.JWTSecret, cfg.LocalAuth.LocalIssuer)
+	assumeHandler, err := handlers.NewAssumeHandlerWithSigner(uaSvc, jwtSigner, cfg.LocalAuth.LocalIssuer)
+	if err != nil {
+		slog.ErrorContext(ctx, "assume handler init failed", "error", err)
+		os.Exit(1)
+	}
 	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup, entityResolver, coreQueries)
 	_ = appsHandler // wired via RegisterAccountRoutes in generated main.go
 
