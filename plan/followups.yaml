@@ -847,16 +847,6 @@ items:
         - effort:medium
         - cross-repo/origin:docs-mf-standards
       text: 'mod-users/package.json roots a bun workspace with a `../mod-core/gui` member ("workspaces": ["gui", "../mod-core/gui"]). The ModuleForge standards (building-applications.md, building-common.md) now say worktree workspaces over `../` sibling members share node_modules in the sibling checkout and are not the supported pattern for apps (private `.gui-siblings` copies are the standard). mod-users is a module repo, so the standard text is app-scoped, but it carries the same shared-checkout hazard (concurrent worktrees clobbering links, duplicate React). Decide whether to migrate mod-users'' GUI workspace off the `../` member (e.g. a private materialized copy or a peer-only setup) or keep it as a documented, tracked exception. The standards docs will describe it as a known deviation in the meantime.'
-    - title: LoginResponse.user type is wider than payload
-      id: mJdk
-      date: "2026-10-10"
-      tags:
-        - type:bug
-        - priority:unspecified
-        - effort:unspecified
-        - plan/phase:backlog-fixes
-        - plan/slug:flow-accounts-upstream
-      text: gui/src/lib/api.ts types LoginResponse.user as UserAccountSelf, but the login, email-code verify and assume handlers (api/internal/handlers/auth/login.go sessionUser, emailcode.go, api/internal/handlers/assume.go) send only uuid, email and email_verified_at. Fields such as given_name, family_name, entity_uuid and is_admin are typed as present on useAuth().user right after sign-in but are undefined until refreshUser() runs. Either narrow the type (Pick) and widen the auth-context user state, or have the server emit the full self shape or the GUI refresh after sign-in.
     - title: writeCoreServiceErr pass-through in self.go
       id: 6ZEz
       date: "2026-10-11"
