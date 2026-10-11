@@ -107,6 +107,7 @@ phases:
           path: phase-03-decode-and-shape/005-self-service-shape.md
           done: false
           tier: sonnet-med
+          digest: Stateless checks (path UUIDs, body decode, required fields, ssh key/label parse) moved ahead of the step-up gate on identities and ssh-key routes; users.new_password_required and users.public_key_required codes; parseUUIDPathParam deleted; selfsvc tests; identities.go has no user-account ErrNoRows 404s; integration 134 pass 0 skip.
           git:
             branch: null
             commit: []
