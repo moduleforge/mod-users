@@ -18,7 +18,7 @@ given just the public key, so a compromise of that service cannot mint tokens.
 | `JWT_SIGNING_KEY` | unset | Ed25519 private key, PKCS#8 PEM. Required when `JWT_ALG=EdDSA`. |
 | `JWT_SIGNING_KID` | unset | Optional key id placed in the JWT `kid` header. Max 128 bytes of printable ASCII, no whitespace. Recommended with EdDSA so rotation works. |
 | `JWT_VERIFY_PUBLIC_KEYS` | unset | Additional public keys accepted for verification: either one PKIX PEM public key (matches tokens with no `kid` header) or a JSON object mapping `kid` to PKIX PEM (at most 32 keys). Used for rotation and for verify-only services. |
-| `JWT_SECRET` | required | Still required in every mode: it signs OAuth state and step-up tokens, and it is the HS256 secret under `JWT_ALG=HS256`. Under `EdDSA` it is never accepted as a session-token verification key. |
+| `JWT_SECRET` | required for HS256; optional under EdDSA | Under `JWT_ALG=HS256` it is the signing secret and is required (bootstrapped from Postgres when unset and a DB URL is present). Under `EdDSA` it is optional: when unset, the OAuth state and step-up keys are derived from `JWT_SIGNING_KEY` (see "Derived state and step-up keys"); when set, the explicit value wins. It is never accepted as a session-token verification key under `EdDSA`. |
 | `LOCAL_ISSUER` | `users-module-local` | The `iss` claim local tokens must carry. |
 
 All config problems are reported together at startup. Error messages never
@@ -103,6 +103,41 @@ assumeHandler, err := handlers.NewAssumeHandlerWithSigner(uaSvc, signer, cfg.Loc
 OIDC handler builds its signer once from `cfg` at construction; call
 `oidcHandler.SignerErr()` after construction to fail startup on a bad config.
 
+## Derived state and step-up keys
+
+OAuth state and step-up tokens are HMAC-signed, not asymmetric. Under
+`JWT_ALG=EdDSA` they need no separate secret:
+
+- **Precedence.** An explicit `JWT_SECRET` wins and is used as-is for both
+  purposes (no length policy change). A blank or whitespace-only `JWT_SECRET` is
+  treated as unset under EdDSA. When it is unset, each key is derived from
+  `JWT_SIGNING_KEY`. An explicit `JWT_SECRET` keys both OAuth state and step-up,
+  so the label separation below does not apply; the token types stay
+  distinguishable by structure and purpose claim (OAuth state) or the `typ`
+  header (step-up). The Postgres secret bootstrap never runs under EdDSA.
+- **Derivation.** HKDF-SHA256 (RFC 5869): input keying material is the Ed25519
+  key's 32-byte seed, no salt, 32-byte output, and the purpose label is the HKDF
+  info input. Labels: `mod-users/v1/oauth-state` (OAuth state signer) and
+  `mod-users/v1/step-up` (step-up tokens). Distinct labels make the keys
+  independent, so a token minted for one purpose never verifies as the other.
+  `v1` versions the scheme; the JWT `kid` is deliberately not an input.
+- **Rotation behavior.** Derived keys follow the signing key. When
+  `JWT_SIGNING_KEY` is swapped, OAuth state and step-up tokens in flight fail
+  verification and the user must retry (restart the OIDC login, or request a new
+  step-up code). The window equals the longest state or step-up lifetime; step-up
+  tokens live 5 minutes. Session tokens are unaffected (see "Rotation
+  procedure"). Set an explicit `JWT_SECRET` for continuity across signing-key
+  swaps.
+- **Composing apps** that build step-up handlers resolve the key with
+  `auth.StepUpKey(cfg.LocalAuth)` and pass `string(key)` as the handler's
+  secret; `auth.OAuthStateKey` is the state-signer counterpart. Both fail with
+  an error that never carries key material when no key can be resolved.
+- **Upgrade note.** A deployment that ran EdDSA relying on the
+  DB-bootstrapped `JWT_SECRET` and now leaves the env var unset switches to
+  derived keys: state and step-up tokens in flight at the upgrade fail once and
+  are retried. The `auth_jwt_secrets` row is left untouched and unused. To avoid
+  even that one-time failure, set `JWT_SECRET` explicitly to the persisted value.
+
 ## Rotation procedure
 
 1. Generate a new key pair and choose a new `kid`.
@@ -120,6 +155,12 @@ OIDC handler builds its signer once from `cfg` at construction; call
 
 Startup fails if a `JWT_VERIFY_PUBLIC_KEYS` entry reuses `JWT_SIGNING_KID` with
 a different key.
+
+Derived keys: unless `JWT_SECRET` is set explicitly, step 3 also rotates the
+derived OAuth state and step-up keys, so state and step-up tokens in flight at
+the swap fail and must be retried (see "Derived state and step-up keys"). Old
+public keys in `JWT_VERIFY_PUBLIC_KEYS` do not help here: these tokens are HMAC,
+not signatures.
 
 ## Verify-only deployment and flow-accounts adoption
 
@@ -143,9 +184,10 @@ Notes for adopters:
   issuer switches.
 - The issuing mod-users instance sets `JWT_ALG=EdDSA`, `JWT_SIGNING_KEY`, and
   `JWT_SIGNING_KID`. A mod-users process that itself loads config via
-  `config.Load()` still needs `JWT_SECRET` (OAuth state and step-up), so a
-  verify-only service should build its verifier directly with the library
-  options above rather than run the full mod-users config.
+  `config.Load()` needs `JWT_SECRET` only under HS256; under EdDSA it derives
+  the OAuth state and step-up keys from `JWT_SIGNING_KEY`. A verify-only service
+  holds no signing key, so it should build its verifier directly with the
+  library options above rather than run the full mod-users config.
 - Keep token lifetimes short; see "Revocation" below.
 
 ## Revocation

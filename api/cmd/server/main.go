@@ -495,20 +495,30 @@ func main() {
 		return authzSvcs.Grant.DeleteWildcardGrant(ctx, ent.Uuid, "manage")
 	})
 
-	// Identities handler — identity-management self-service (Phase 4).
-	// When AUTH_REQUIRE_STEP_UP is enabled, the handler is wired with email
-	// sending and JWT signing so it can issue step-up tokens. The consumed-JTI
-	// cache and its janitor goroutine are started here and live for the
-	// process lifetime.
+	// The step-up key is the explicit JWT_SECRET when set, otherwise derived
+	// from the EdDSA signing key. Resolution failure is fatal; the error never
+	// carries key material.
+	stepUpKey, err := auth.StepUpKey(cfg.LocalAuth)
+	if err != nil {
+		slog.ErrorContext(ctx, "step-up key resolution failed", "error", err)
+		os.Exit(1)
+	}
+	stepUpSecret := string(stepUpKey)
+	// The consumed-JTI cache and its janitor goroutine are started here and
+	// live for the process lifetime.
 	stepUpConsumed := new(sync.Map)
 	auth.StartStepUpJanitor(stepUpConsumed, ctx.Done())
+
+	// Identities handler — identity-management self-service (Phase 4).
+	// When AUTH_REQUIRE_STEP_UP is enabled, the handler is wired with email
+	// sending and JWT signing so it can issue step-up tokens.
 	identitiesHandler := handlers.NewIdentitiesHandlerWithDeps(handlers.IdentitiesHandlerDeps{
 		Pool:           pool,
 		Queries:        queries,
 		OAuth:          oauth,
 		Obs:            observerGroup,
 		Sender:         emailSender,
-		JWTSecret:      cfg.LocalAuth.JWTSecret,
+		JWTSecret:      stepUpSecret,
 		Consumed:       stepUpConsumed,
 		StepUpRequired: cfg.Auth.RequireStepUpForCredentialChange,
 		CookiePath:     cfg.Auth.CookiePath,
@@ -519,7 +529,7 @@ func main() {
 	// Reuses the same step-up deps (JWT secret, consumed-JTI cache, flag)
 	// as identitiesHandler.
 	sshKeySvc := usersservice.NewSSHKeyService(pool, db.New(pool), coredb.New(pool), az, observerGroup)
-	sshKeysHandler := handlers.NewSSHKeysHandler(sshKeySvc, cfg.LocalAuth.JWTSecret, stepUpConsumed, cfg.Auth.RequireStepUpForCredentialChange)
+	sshKeysHandler := handlers.NewSSHKeysHandler(sshKeySvc, stepUpSecret, stepUpConsumed, cfg.Auth.RequireStepUpForCredentialChange)
 
 	// Handlers for authenticated routes.
 	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
