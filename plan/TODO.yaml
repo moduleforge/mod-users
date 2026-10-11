@@ -104,6 +104,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 7
+          slug: public-auth-error-literals
+          title: Convert Public Auth Error Literals to Sentinels
+          path: phase-03-decode-and-shape/007-public-auth-error-literals.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
