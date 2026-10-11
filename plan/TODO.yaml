@@ -64,7 +64,7 @@ phases:
             branch: plan/users-conformance-03-001
             commit:
                 - 48b8723
-            merge: null
+            merge: fd0d0dd5618f4838035bacfc138ce205dffac31e
         - number: 2
           slug: decode-wrapper-and-callers
           title: Make server.Decode a DecodeJSON Wrapper and Convert Callers
