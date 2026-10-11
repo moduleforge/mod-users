@@ -581,17 +581,46 @@ func TestRequireOIDCConfirmed_Gates(t *testing.T) {
 	}
 }
 
-// TestConfirm_BadJSON pins the body-parse branch: malformed JSON → 400.
+// TestConfirm_BadJSON pins the body-parse branch: malformed JSON is 400. A
+// caller that authenticates without the body (admin session or setup-token
+// header) is authenticated first and then gets the 400. An unauthenticated
+// caller also gets 400, as the documented exception: its only possible
+// credential is in the body, so the body has to be decoded before a missing
+// credential can be reported. See oidc_credential_order_test.go for the full
+// order matrix.
 func TestConfirm_BadJSON(t *testing.T) {
-	h, _ := newHandler(t, db.OidcConfig{ID: 1})
+	tests := []struct {
+		name    string
+		admin   bool
+		header  bool
+		wantErr int
+	}{
+		{"admin session", true, false, http.StatusBadRequest},
+		{"setup-token header", false, true, http.StatusBadRequest},
+		{"no credential (documented exception)", false, false, http.StatusBadRequest},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandlerWithAdmin(t, func(r *http.Request) (bool, error) {
+				return tc.admin, nil
+			})
+			token, err := h.EnsureSetupToken(context.Background())
+			if err != nil {
+				t.Fatalf("EnsureSetupToken: %v", err)
+			}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/oidc-config/confirm", strings.NewReader("not json"))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	h.Confirm(rr, req)
+			req := httptest.NewRequest(http.MethodPost, "/v1/oidc-config/confirm", strings.NewReader("not json"))
+			req.Header.Set("Content-Type", "application/json")
+			if tc.header {
+				req.Header.Set("X-Setup-Token", token)
+			}
+			rr := httptest.NewRecorder()
+			h.Confirm(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("status: got %d, want 400", rr.Code)
+			if rr.Code != tc.wantErr {
+				t.Errorf("status: got %d, want %d", rr.Code, tc.wantErr)
+			}
+		})
 	}
 }
 
