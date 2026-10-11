@@ -209,4 +209,14 @@ phases:
     - number: 7
       slug: pin-rebump
       title: Re-bump mod-core Pin
-      tasks: []
+      tasks:
+        - number: 1
+          slug: rebump-mod-core-pin
+          title: Re-bump mod-core Pin After Consent
+          path: phase-07-pin-rebump/001-rebump-mod-core-pin.md
+          done: false
+          tier: haiku-med
+          git:
+            branch: null
+            commit: []
+            merge: null
