@@ -85,7 +85,7 @@ phases:
           tier: sonnet-med
           digest: Create/update/PUT /self Validators and ParseUUIDParam put 400s ahead of authorization; local parseUUIDParam deleted; service Update blank checks after masked authz; real-handler shape tests replace the shim; integration tests for non-admin self-update and assume-session; D5 assume-session reading in inventory was reversed (corrected in wire-risk); PUT /self names in an assume session now 403 (filed as followup).
           git:
-            branch: null
+            branch: plan/users-conformance-03-003
             commit: []
             merge: null
         - number: 4
