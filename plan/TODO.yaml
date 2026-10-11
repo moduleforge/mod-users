@@ -62,7 +62,8 @@ phases:
           digest: Removed writeAuthzError, writeServiceError and writeCoreServiceErr wrappers; all call sites use apiresp.WriteError; two wrapper-named tests renamed; ZVum comments reworded; no behavior change; make lint passes.
           git:
             branch: plan/users-conformance-03-001
-            commit: []
+            commit:
+                - 48b8723
             merge: null
         - number: 2
           slug: decode-wrapper-and-callers
