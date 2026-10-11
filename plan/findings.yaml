@@ -90,4 +90,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: api/internal/handlers/identities.go StartLink runs checkStepUp first; a malformed return query (validated inside oauth.LinkAuthorizeURL) is a 400 after the step-up token was consumed, or 409 with no token (audit finding F7). Export the return-path validator (or split LinkAuthorizeURL) so StartLink validates the return query before step-up, keep the registry 404 after step-up, and map LinkAuthorizeURL's internal Sign/rand failures to 500 rather than a bare ErrInvalidInput 400. Add tests (malformed return does not consume a presented token) and a wire-risk entry.
+    - title: AuthorizeCreate comment is stale
+      id: gKQO
+      date: "2026-10-11"
+      tags:
+        - type:documentation
+        - plan/phase:decode-and-shape
+        - priority:unspecified
+        - effort:unspecified
+      text: api/internal/service/user_accounts.go AuthorizeCreate's comment says handlers call it to deny an unauthorized caller before reporting a request-shape error, but POST /user-accounts now validates shape first and the handler no longer calls it. Reword it as the type-level create gate used by Create, noting the HTTP handler validates shape first.
 closed: []
