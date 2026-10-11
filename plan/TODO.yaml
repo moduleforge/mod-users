@@ -93,7 +93,7 @@ phases:
           slug: apps-membership-shape
           title: Apps Membership Parse and Decode Before Authorization
           path: phase-03-decode-and-shape/004-apps-membership-shape.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Apps membership handlers parse path UUIDs and decode/validate body before the nil-target Authorize; assignUserRequest.Validate; loadApp replaces loadAppByUUIDParam; AllowNotFound('app') removed; handler authz tests rewritten; user-account 404s remain post-authorization (task 4.1 will reclassify); integration 142 pass 0 skip.
           git:
