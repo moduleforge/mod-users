@@ -48,3 +48,13 @@ architectural_impact: false
 
 - After the 8 registrars are wrapped and the existing suite is green.
 - After the new 401 and sudo-only tests.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Changed: `api/internal/handlers/{account,self,self_identities,ssh_keys}_routes.go` (8 registrars wrapped in `r.Group` + `r.Use(coreAuthz.RequireAuth)`, doc comments updated); new `api/internal/handlers/require_auth_mount_test.go`; `requireAuthStandIn` added to `self_routes_test.go`, `self_identities_routes_test.go`, `ssh_keys_test.go` routers (existing tests mounted registrars with no actor and now correctly saw 401); `plan/notes/wire-risk.md` entry.
+- Red-before-mount: against the unmounted registrars, 51 subtests failed: anonymous valid request gave 599 (handler reached) on 27 routes; anonymous malformed body/UUID gave 400 on 10 cases. Sudo-only test passed (expected). Log: `.flow/validation-logs/00-red-before-mount.log`.
+- Sudo-only test: chose recovering handler panics (`recoverToSentinel`), not installing a `UserContext`; asserts status is not 401.
+- Inline 401 grep: no `ActorEntityID`/`RequireAuthenticated` checks in non-test `api/internal/handlers`; nothing to remove.
+- F4 (Assume service path uses sudo-unaware `opctx.ActorEntityID`) not touched here (service layer, out of this task's file scope).
+- Postgres integration suite not run (task changes no service behavior).
