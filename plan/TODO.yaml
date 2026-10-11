@@ -131,6 +131,7 @@ phases:
           path: phase-03-decode-and-shape/007-public-auth-error-literals.md
           done: false
           tier: sonnet-med
+          digest: Converted 48 literal sites in handlers/auth (36 500s to apiresp.WriteError wraps, 400s with details and 7 new detail codes, 3 unknown-provider 404s); kept 11 literals (6 credential-failure 401s, 5 register literals per F3) with literal-keep markers; lint script now checks handlers/ (3) and handlers/auth (11); public_error_shape tests; docs/cookie-path.md updated; integration 250 pass 0 skip.
           git:
             branch: null
             commit: []
