@@ -206,3 +206,7 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 7
+      slug: pin-rebump
+      title: Re-bump mod-core Pin
+      tasks: []
