@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Reject blank HS256 secret at API boundary
-      id: pciu
-      date: "2026-10-11"
-      tags:
-        - type:security
-        - priority:low
-        - plan/phase:remediation-01
-        - effort:unspecified
-      text: api/internal/auth/signer.go (NewHS256Signer) and api/internal/auth/jwt.go (NewLocalVerifier ~line 168) guard only against secret == "". A composing app that builds a LocalAuthConfig directly without config.Load/validate (the exported auth.NewSigner path) could pass a whitespace-only HS256 secret and get a weak HMAC key. Pre-existing; the repo's own startup path is protected by validate. Optionally reject strings.TrimSpace(secret) == "" in NewHS256Signer, WithHS256Secret and NewVerifier so the blank rule is uniform at the API boundary. Also consider a minimum length policy for explicit JWT_SECRET across both algorithms (separate decision, would be a behavior change).
+items: []
 closed:
     - id: 0NVf
       title: make lint fails at api/scripts/check-server-e
@@ -24,4 +15,9 @@ closed:
       title: main.go step-up key comment out of order
       disposition: fixed
       ref: phase-04-remediation-01/001-blank-jwt-secret-as-unset.md
+      date: "2026-10-11"
+    - id: pciu
+      title: Reject blank HS256 secret at API boundary
+      disposition: promoted
+      ref: pciu
       date: "2026-10-11"
