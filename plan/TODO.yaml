@@ -74,6 +74,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: apps-membership-shape
+          title: Apps Membership Parse and Decode Before Authorization
+          path: phase-03-decode-and-shape/004-apps-membership-shape.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
