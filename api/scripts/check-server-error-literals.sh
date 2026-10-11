@@ -6,12 +6,13 @@
 # server.Error(...)/server.ErrorWithDetails(...) call sites in the top-level
 # api/internal/handlers/*.go package onto apiresp.WriteError(w, r, err), which
 # classifies errors via sentinel matching instead of hand-picked HTTP
-# status/code/message literals. Exactly 4 documented carve-outs remain (marked
+# status/code/message literals; the provider-exists 409 has since moved onto
+# apiresp.Conflict(...) too. Exactly 3 documented carve-outs remain (marked
 # by a comment), each justified by a comment referencing followup ZVum:
-# apiresp currently exposes no public detail/message-carrying constructor for
-# the specific error shapes those 4 sites need (409 conflict with a custom
-# message, and two authentication-detail-carrying 401s), so they cannot be
-# routed through apiresp.WriteError without losing information.
+# apiresp currently exposes no public detail-carrying constructor for the
+# specific error shapes those 3 sites need (a 404 with details and two
+# authentication-detail-carrying 401s, all in identities.go), so they cannot
+# be routed through apiresp.WriteError without losing information.
 #
 # This script re-greps every build and fails the build if a new literal call
 # to server.Error(/server.ErrorWithDetails( shows up anywhere else in that
@@ -48,7 +49,7 @@ HANDLERS_DIR="$(cd "$SCRIPT_DIR/../internal/handlers" && pwd)"
 # Edits elsewhere in a file therefore never desync the check.
 MARKER='followup ZVum'
 MARKER_WINDOW=8
-EXPECTED_CARVEOUTS=4
+EXPECTED_CARVEOUTS=3
 
 # Collect every top-level *.go file directly in handlers/ (glob does not
 # descend into subdirectories, so handlers/auth/ is excluded automatically),
@@ -101,9 +102,9 @@ if [[ ${#violations[@]} -gt 0 ]]; then
   echo "Handlers in api/internal/handlers/ must route errors through apiresp.WriteError(w, r, err)" >&2
   echo "instead of calling server.Error(...)/server.ErrorWithDetails(...) directly, so error" >&2
   echo "classification stays centralized on the sentinel set apiresp.WriteError understands." >&2
-  echo "Exactly 4 documented carve-outs are allowed (each marked by a 'followup ZVum'" >&2
+  echo "Exactly 3 documented carve-outs are allowed (each marked by a 'followup ZVum'" >&2
   echo "comment within $MARKER_WINDOW lines above the call), because apiresp currently has no public" >&2
-  echo "detail/message-carrying constructor for those specific error shapes." >&2
+  echo "detail-carrying constructor for those specific error shapes." >&2
   echo "If this is a new, similarly-justified carve-out, add a 'followup ZVum'-style comment" >&2
   echo "above the call site and bump EXPECTED_CARVEOUTS in" >&2
   echo "api/scripts/check-server-error-literals.sh. Otherwise, replace the literal call with" >&2

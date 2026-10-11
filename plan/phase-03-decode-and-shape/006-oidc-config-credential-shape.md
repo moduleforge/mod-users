@@ -65,3 +65,17 @@ architectural_impact: false
 - After the credential split and the `Confirm` ordering, with tests green.
 - After `parseBody` and the provider handlers.
 - After the conflict literal and the lint script.
+
+## Status
+
+Outcome: succeeded (2026-10-11).
+
+- Credential order (D8): `api/internal/handlers/oidc_config.go` splits `authorizeConfirm` into `authorizeAmbient` (admin, then `X-Setup-Token`), `verifySetupToken`, `authorizeBodyless` (GET/DELETE) and the shared `authenticateWithBody` gate (ambient, decode, body token). `Confirm`, provider `Create` and `Update` use it. Documented exception (no admin/header and a malformed body is 400) is commented in code and tested.
+- `parseBody` (D7) in `api/internal/handlers/oidc_providers.go`: 1 MiB `MaxBytesReader`, zero-byte body is an empty map, otherwise `server.Decode` into `map[string]json.RawMessage`, then a key allowlist. It writes the 400 itself and returns `ok == false`; callers write nothing. The `json.NewDecoder` call is gone.
+- `GET /providers/{id}` bad id is now 400 (was 404) after the credential, per the audit (F10); `DELETE` already conformed.
+- 409 conflict literal replaced with `apiresp.Conflict` (`users.oidc_provider_exists`); `EXPECTED_CARVEOUTS` is 3 and the script prose is updated.
+- Tests: `api/internal/handlers/oidc_credential_order_test.go` (prefix `oidccfg`), `TestConfirm_BadJSON` rewritten, `TestProviders_Get_InvalidSlug_400`. The new tests were confirmed red against the pre-change handlers and green after.
+- Notes updated: `plan/notes/handler-inventory.md` (rows 29, 31-34) and `plan/notes/wire-risk.md` (3.6 entry).
+- Validation: gofmt, `go vet`, `go vet -tags=integration`, `go test ./...`, `make lint` (3/3 carve-outs), the grep checks, and the Postgres integration suite (`./internal/authz/...`, `./internal/config/...`: 261 PASS lines, 0 SKIP) all pass. Logs are in `.flow/validation-logs/`.
+- Decisions: body `id` is accepted on `PUT` and ignored (path wins) to avoid a new rejection; wrong-typed provider fields are not made 400 (recorded, no new constraints); only the first unknown key is reported; a valid header token authenticates even when the body also carries a wrong token. GUI assumption verified: the OIDC config components send only `display_name`, `issuer_url`, `client_id`, `client_secret`, `claim_style`, `scopes`, `enabled`, `id`, `setup_token`.
+- Findings filed: unknown provider ids silently dropped by confirm (F8); GUI no longer shows the actionable 409 text.

@@ -12,6 +12,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -123,15 +124,16 @@ type providerView struct {
 
 // ----- Handlers --------------------------------------------------------
 
-// Get handles GET /v1/oidc-config/providers/:id. Requires admin or
-// setup token (the body-less Get borrows the Confirmer's authorize helper).
+// Get handles GET /v1/oidc-config/providers/:id. Requires admin or the
+// X-Setup-Token header (the body-less Get borrows the Confirmer's credential
+// helper). Order: credential (401), then id pattern (400), then lookup (404).
 func (h *ProvidersHandler) Get(w http.ResponseWriter, r *http.Request) {
-	if !h.authorize(w, r, "") {
+	if !h.deps.Confirmer.authorizeBodyless(w, r, "oidc provider get") {
 		return
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
 	if !providerIDPattern.MatchString(id) {
-		apiresp.WriteError(w, r, apiresp.ErrNotFound)
+		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 	view, ok, err := h.buildView(r.Context(), id)
@@ -159,12 +161,11 @@ func (h *ProvidersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Parse body into a map so we can distinguish "field absent" from
 	// "field present with null". strict JSON decode into a typed struct
 	// would collapse both cases.
-	raw, err := parseBody(r)
-	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
-	if !h.authorize(w, r, stringField(raw, "setup_token")) {
+	//
+	// Error order: see OIDCConfigHandler.authenticateWithBody (credential in
+	// the body; documented exception to 401-before-400), then the id pattern.
+	var raw map[string]json.RawMessage
+	if !h.authenticateWithBody(w, r, "oidc provider update", &raw) {
 		return
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
@@ -185,12 +186,10 @@ type createRequest struct {
 // unique, slug-validated id plus any editable fields (same shape as PUT).
 // 409 if the id already exists in the DB; the caller can then PUT.
 func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
-	raw, err := parseBody(r)
-	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
-	if !h.authorize(w, r, stringField(raw, "setup_token")) {
+	// Error order: see OIDCConfigHandler.authenticateWithBody, then the
+	// stateless id checks, then the state-dependent 409.
+	var raw map[string]json.RawMessage
+	if !h.authenticateWithBody(w, r, "oidc provider create", &raw) {
 		return
 	}
 
@@ -214,12 +213,11 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// to override an env-declared provider for the first time); a PUT
 	// handles that path.
 	if _, err := h.deps.Queries.GetOIDCProvider(r.Context(), id); err == nil {
-		// Documented exception (followup ZVum): apiresp exposes no public
-		// detail/message-carrying constructor for ErrConflict, so this actionable
-		// 409 message cannot be routed through apiresp.WriteError without losing it.
-		// Mirrors the svc.ErrEmailTaken precedent in the service-error mapping of user_accounts.go. Collapse this
-		// once mod-core adds apiresp.Conflict(...).
-		server.Error(w, http.StatusConflict, "conflict", "provider id already exists; use PUT to update")
+		apiresp.WriteError(w, r, apiresp.Conflict(apiresp.FieldError{
+			Field:   "id",
+			Code:    "users.oidc_provider_exists",
+			Message: "provider id already exists; use PUT to update",
+		}))
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		apiresp.WriteError(w, r, fmt.Errorf("oidc provider create preflight %q: %w", id, err))
@@ -234,7 +232,7 @@ func (h *ProvidersHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Returns 204 regardless of whether a row existed (idempotent) — the GUI
 // will refetch the list to reflect the post-revert state.
 func (h *ProvidersHandler) Revert(w http.ResponseWriter, r *http.Request) {
-	if !h.authorize(w, r, "") {
+	if !h.deps.Confirmer.authorizeBodyless(w, r, "oidc provider delete") {
 		return
 	}
 	id := strings.ToLower(chi.URLParam(r, "id"))
@@ -394,40 +392,104 @@ func (h *ProvidersHandler) rebuildAndRefresh(ctx context.Context) error {
 	return h.deps.Confirmer.RefreshState(ctx)
 }
 
-// authorize mirrors OIDCConfigHandler.authorizeConfirm: admin first,
-// setup-token fallback. The submitted-token argument may be empty for
-// endpoints that don't carry a body.
-func (h *ProvidersHandler) authorize(w http.ResponseWriter, r *http.Request, submittedToken string) bool {
-	ok, err := h.deps.Confirmer.authorizeConfirm(r, submittedToken)
-	if err != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("oidc provider: authorize: %w", err))
-		return false
-	}
-	if !ok {
-		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
-		return false
-	}
-	return true
+// authenticateWithBody runs the shared credential-in-body gate for provider
+// Create and Update (see OIDCConfigHandler.authenticateWithBody for the
+// order and the documented 400-before-401 exception). On success *raw holds
+// the decoded body. It returns false when it has already written the
+// response.
+func (h *ProvidersHandler) authenticateWithBody(w http.ResponseWriter, r *http.Request, op string, raw *map[string]json.RawMessage) bool {
+	return h.deps.Confirmer.authenticateWithBody(w, r, op,
+		func() bool {
+			body, ok := parseBody(w, r)
+			if ok {
+				*raw = body
+			}
+			return ok
+		},
+		func() string { return stringField(*raw, "setup_token") },
+	)
 }
 
 // ----- Body parsing helpers ------------------------------------------
 
-// parseBody reads the request body once into a map so caller helpers can
-// distinguish absent / null / value per field. Returns an empty map for
-// an empty body.
-func parseBody(r *http.Request) (map[string]json.RawMessage, error) {
-	defer r.Body.Close()
-	out := map[string]json.RawMessage{}
-	dec := json.NewDecoder(r.Body)
-	if err := dec.Decode(&out); err != nil {
-		// Empty body → treat as empty object so DELETE-ish PUTs don't fail.
-		if errors.Is(err, io.EOF) {
-			return map[string]json.RawMessage{}, nil
-		}
-		return nil, err
-	}
-	return out, nil
+// providerBodyKeys is the allowlist of top-level keys the provider handlers
+// read: the credential (setup_token), the path/slug (id; Update ignores it in
+// favor of the path id, as before), and the fields upsertAndRespond merges
+// (mergeTextField/mergeSecretField/mergeScopes/boolField). Any other key is a
+// 400, matching DecodeJSON's unknown-field rejection for typed bodies.
+var providerBodyKeys = map[string]struct{}{
+	"setup_token":   {},
+	"id":            {},
+	"display_name":  {},
+	"issuer_url":    {},
+	"client_id":     {},
+	"client_secret": {},
+	"claim_style":   {},
+	"scopes":        {},
+	"enabled":       {},
 }
+
+// parseBody reads the request body once into a map so caller helpers can
+// distinguish absent / null / value per field. A zero-byte body is an empty
+// map (so a bodyless PUT stays accepted); anything else must be a single JSON
+// object within apiresp.DefaultMaxBodyBytes whose top-level keys are all in
+// providerBodyKeys. On failure parseBody has already written the 400
+// response and returns ok == false; callers must just return.
+//
+// The emptiness check peeks one byte (bounded by the cap) and restores it, so
+// the body is decoded in a single pass by server.Decode, which rejects
+// trailing data and over-cap bodies with DecodeJSON's detail codes.
+func parseBody(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, bool) {
+	if r.Body == nil {
+		return map[string]json.RawMessage{}, true
+	}
+	orig := r.Body
+	defer orig.Close()
+	capped := http.MaxBytesReader(w, orig, apiresp.DefaultMaxBodyBytes)
+	var first [1]byte
+	n, err := io.ReadFull(capped, first[:])
+	if n == 0 && errors.Is(err, io.EOF) {
+		return map[string]json.RawMessage{}, true
+	}
+	// Restore the peeked byte (and any read error) in front of the rest.
+	var head io.Reader = bytes.NewReader(first[:n])
+	if err != nil {
+		head = io.MultiReader(head, errReader{err})
+	}
+	r.Body = io.NopCloser(io.MultiReader(head, capped))
+
+	var raw map[string]json.RawMessage
+	if !server.Decode(w, r, &raw) {
+		return nil, false
+	}
+	// Report the lexicographically first unknown key so the response is
+	// deterministic and bounded (one detail, as DecodeJSON reports).
+	unknown := ""
+	found := false
+	for k := range raw {
+		if _, ok := providerBodyKeys[k]; ok {
+			continue
+		}
+		if !found || k < unknown {
+			unknown, found = k, true
+		}
+	}
+	if found {
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
+			Field:   unknown,
+			Code:    "invalid_json_body",
+			Message: "request body contains an unknown field",
+		}))
+		return nil, false
+	}
+	return raw, true
+}
+
+// errReader returns its error on every Read; it replays a read error seen
+// while peeking so the decoder still observes it.
+type errReader struct{ err error }
+
+func (e errReader) Read([]byte) (int, error) { return 0, e.err }
 
 // stringField returns the string at key, or "" if absent / null / wrong type.
 func stringField(raw map[string]json.RawMessage, key string) string {

@@ -299,19 +299,20 @@ type confirmRequest struct {
 // Confirm handles POST /v1/oidc-config/confirm. The caller must either
 // present a valid setup token (pre-confirmation) or be an authenticated
 // admin (post-confirmation reconfig).
+//
+// Error order (credential-in-body route): body-independent credentials (admin
+// bearer, then the X-Setup-Token header) are evaluated first (an AdminChecker
+// fault is a 500), then the body is decoded (400), then, only if no
+// body-independent credential authenticated, the body setup_token is
+// verified (401). Documented exception to 401-before-400: a caller with no
+// admin session and no header token whose body is malformed gets 400, because
+// the body is the only place its credential can be. See authenticateWithBody.
 func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	var req confirmRequest
-	if !server.Decode(w, r, &req) {
-		return
-	}
-
-	authorized, err := h.authorizeConfirm(r, req.SetupToken)
-	if err != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("oidc confirm: authorize: %w", err))
-		return
-	}
-	if !authorized {
-		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
+	if !h.authenticateWithBody(w, r, "oidc confirm",
+		func() bool { return server.Decode(w, r, &req) },
+		func() string { return req.SetupToken },
+	) {
 		return
 	}
 
@@ -387,17 +388,15 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	h.Status(w, r)
 }
 
-// authorizeConfirm validates either an authenticated admin session OR
-// a valid setup token. Admin path is checked first so admins doing a
-// routine reconfigure don't have to fetch a fresh setup token. If the
-// caller didn't submit a token via the JSON body (e.g. GET / DELETE
-// endpoints that have no body), the X-Setup-Token header is consulted
-// as a fallback so the same dual-auth model applies uniformly.
-// Returns:
-//   - (true, nil)  — authorized; proceed.
-//   - (false, nil) — neither path succeeded; 401.
-//   - (_,    err)  — AdminChecker had an internal fault; 500.
-func (h *OIDCConfigHandler) authorizeConfirm(r *http.Request, submitted string) (bool, error) {
+// authorizeAmbient checks the credentials that do not depend on the request
+// body: an authenticated admin session (AdminChecker) first, so admins doing
+// a routine reconfigure never have to fetch a setup token, then the
+// X-Setup-Token header. Returns:
+//   - (true, nil)  - authenticated; proceed.
+//   - (false, nil) - neither credential authenticated; the caller may still
+//     present a body setup_token, otherwise 401.
+//   - (_,    err)  - AdminChecker had an internal fault; 500.
+func (h *OIDCConfigHandler) authorizeAmbient(r *http.Request) (bool, error) {
 	if h.deps.AdminChecker != nil {
 		isAdmin, err := h.deps.AdminChecker(r)
 		if err != nil {
@@ -407,19 +406,71 @@ func (h *OIDCConfigHandler) authorizeConfirm(r *http.Request, submitted string) 
 			return true, nil
 		}
 	}
-	token := submitted
+	return h.verifySetupToken(r.Header.Get("X-Setup-Token")), nil
+}
+
+// verifySetupToken reports whether token matches the stored setup-token hash.
+// An empty token, or an absent hash (already confirmed and cleared), never
+// matches.
+func (h *OIDCConfigHandler) verifySetupToken(token string) bool {
 	if token == "" {
-		token = r.Header.Get("X-Setup-Token")
+		return false
 	}
-	if token != "" {
-		h.mu.RLock()
-		hash := h.cachedDB.SetupTokenHash
-		h.mu.RUnlock()
-		if hash.Valid && auth.VerifySetupToken(token, hash.String) {
-			return true, nil
-		}
+	h.mu.RLock()
+	hash := h.cachedDB.SetupTokenHash
+	h.mu.RUnlock()
+	return hash.Valid && auth.VerifySetupToken(token, hash.String)
+}
+
+// authorizeBodyless authenticates a route that carries no body (GET/DELETE
+// providers): admin session or X-Setup-Token header. It writes the 500
+// (AdminChecker fault) or 401 itself and returns false in those cases.
+func (h *OIDCConfigHandler) authorizeBodyless(w http.ResponseWriter, r *http.Request, op string) bool {
+	ok, err := h.authorizeAmbient(r)
+	if err != nil {
+		apiresp.WriteError(w, r, fmt.Errorf("%s: authorize: %w", op, err))
+		return false
 	}
-	return false, nil
+	if !ok {
+		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
+		return false
+	}
+	return true
+}
+
+// authenticateWithBody is the shared credential gate for the routes whose
+// credential may travel in the request body (Confirm, provider Create and
+// Update). Order:
+//
+//  1. Body-independent credentials (authorizeAmbient). An AdminChecker fault
+//     is a 500.
+//  2. decode runs next (400 when it fails; it has already written the
+//     response). It runs whether or not step 1 authenticated.
+//  3. When step 1 did not authenticate, the body setup token is verified
+//     (401).
+//
+// Documented exception to 401-before-400 (the body carries the credential,
+// the same class as POST /auth/login): a caller with no admin session and
+// no header token whose body is malformed gets 400, not 401. Callers that
+// authenticate by admin session or header token are authenticated before the
+// body is read. The stateless shape checks that follow (id pattern, required
+// id) run after this gate returns true.
+//
+// Returns false when it has already written the response.
+func (h *OIDCConfigHandler) authenticateWithBody(w http.ResponseWriter, r *http.Request, op string, decode func() bool, bodyToken func() string) bool {
+	ambient, err := h.authorizeAmbient(r)
+	if err != nil {
+		apiresp.WriteError(w, r, fmt.Errorf("%s: authorize: %w", op, err))
+		return false
+	}
+	if !decode() {
+		return false
+	}
+	if !ambient && !h.verifySetupToken(bodyToken()) {
+		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
+		return false
+	}
+	return true
 }
 
 // ----- GET /v1/oidc-config/saved ---------------------------------
