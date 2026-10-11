@@ -110,7 +110,8 @@ phases:
           digest: Stateless checks (path UUIDs, body decode, required fields, ssh key/label parse) moved ahead of the step-up gate on identities and ssh-key routes; users.new_password_required and users.public_key_required codes; parseUUIDPathParam deleted; selfsvc tests; identities.go has no user-account ErrNoRows 404s; integration 134 pass 0 skip.
           git:
             branch: plan/users-conformance-03-005
-            commit: []
+            commit:
+                - 5e5fe90
             merge: null
         - number: 6
           slug: oidc-config-credential-shape
