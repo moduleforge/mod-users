@@ -30,3 +30,7 @@ phases:
       slug: existence-leaks
       title: Close Existence Leaks
       tasks: []
+    - number: 3
+      slug: decode-and-shape
+      title: Decode and Shape Before Authorization
+      tasks: []
