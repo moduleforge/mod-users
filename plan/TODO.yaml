@@ -23,9 +23,11 @@ phases:
           slug: optional-jwt-secret-wiring-and-docs
           title: Make JWT_SECRET Optional Under EdDSA, Wire Derived Keys, And Document
           path: phase-03-derived-hmac-keys/002-optional-jwt-secret-wiring-and-docs.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'JWT_SECRET optional under EdDSA: config skips DB bootstrap and drops the required check under EdDSA (HS256 unchanged); NewOAuth and main.go use the OAuthStateKey/StepUpKey resolvers (explicit secret wins, else HKDF-derived); additive auth facade wrappers; tests for config, oauth, cross-rejection, step-up; docs D19 + D17 amendment, jwt-eddsa.md, consumer-upgrade-notes, README, .env.example. make test.unit.api and build pass; make lint.api fails only on pre-existing identities.go literal-error check.'
           git:
-            branch: null
-            commit: []
+            branch: plan/catalog-ent-and-derived-keys-03-002
+            commit:
+                - a119270
             merge: null
