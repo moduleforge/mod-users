@@ -179,18 +179,24 @@ type ServerConfig struct {
 
 // LocalAuthConfig holds settings for the local (non-OIDC) auth subsystem.
 type LocalAuthConfig struct {
-	// JWTSecret is the HS256 signing secret for locally-issued JWTs.
-	// Populated from JWT_SECRET when set; when the env var is absent
-	// and cfg.DB.URL is non-empty, Load fetches-or-generates-and-
-	// persists a secret in Postgres instead (see
+	// JWTSecret is the HS256 signing secret for locally-issued JWTs. Under
+	// EdDSA it is optional: an explicit value keys the OAuth state signer and
+	// step-up tokens and wins over derivation; an empty value means "derive"
+	// (those keys are then derived from JWTSigningKey, see
+	// internal/auth/derived_keys.go).
+	// Populated from JWT_SECRET when set; under HS256, when the env var is
+	// absent and cfg.DB.URL is non-empty, Load fetches-or-generates-and-
+	// persists a secret in Postgres instead (the DB bootstrap never runs
+	// under EdDSA; see
 	// bootstrapJWTSecretFromDB / fetchOrGeneratePersistedJWTSecret in
 	// jwtsecret_bootstrap.go). A persisted secret that fails the
 	// length check is a fail-loudly error, never silently regenerated.
 	JWTSecret string
 	// JWTAlg selects the algorithm used to sign locally-issued JWTs: "HS256"
 	// (default, keyed by JWTSecret) or "EdDSA" (keyed by JWTSigningKey).
-	// Populated from JWT_ALG. JWTSecret is still required and bootstrapped
-	// under EdDSA: it keys the OAuth state signer and step-up tokens.
+	// Populated from JWT_ALG. JWTSecret is required only under HS256; under
+	// EdDSA an empty JWTSecret means the OAuth state and step-up keys are
+	// derived from JWTSigningKey.
 	JWTAlg string
 	// JWTSigningKey is the parsed Ed25519 private key from JWT_SIGNING_KEY
 	// (PKCS#8 PEM). Non-nil only when JWTAlg is "EdDSA". The raw env value is
@@ -247,8 +253,8 @@ type Config struct {
 // fallback — both names remain supported indefinitely, not as a
 // deprecation window.
 //
-// JWT_SECRET follows a fetch-or-generate-persist fallback: the env var
-// always wins when set. When it is absent and the resolved DB URL is
+// JWT_SECRET follows a fetch-or-generate-persist fallback under HS256: the
+// env var always wins when set. When it is absent and the resolved DB URL is
 // present, Load consults Postgres instead of failing boot outright —
 // fetching an already-persisted secret, or generating and durably
 // persisting a new one on first boot (bootstrapJWTSecretFromDB /
@@ -259,8 +265,11 @@ type Config struct {
 // JWT_ALG (HS256 default | EdDSA), JWT_SIGNING_KEY (PKCS#8 PEM Ed25519
 // private key; required for EdDSA), and JWT_SIGNING_KID (optional "kid"
 // header) and JWT_VERIFY_PUBLIC_KEYS (PEM public key or JSON kid-to-PEM map)
-// are validated here too (see jwt_signing.go). JWT_SECRET stays
-// required under EdDSA.
+// are validated here too (see jwt_signing.go). Under EdDSA JWT_SECRET is
+// optional and the DB bootstrap is skipped: when unset, the OAuth state and
+// step-up keys are derived from the signing key (internal/auth/derived_keys.go);
+// an explicit value is kept as-is and wins. JWT_SECRET stays required under
+// HS256.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
 	// them alongside missing-field errors in one shot.
@@ -402,7 +411,9 @@ func Load() (*Config, error) {
 		},
 	}
 
-	if cfg.LocalAuth.JWTSecret == "" && cfg.DB.URL != "" {
+	// The DB bootstrap is HS256-only: under EdDSA an empty JWT_SECRET means
+	// "derive", so no secret is fetched or persisted.
+	if cfg.LocalAuth.JWTSecret == "" && cfg.DB.URL != "" && cfg.LocalAuth.JWTAlg != JWTAlgEdDSA {
 		secret, err := bootstrapJWTSecretFromDB(context.Background(), cfg.DB.URL)
 		if err != nil {
 			parseErrors = append(parseErrors, fmt.Sprintf("JWT_SECRET: bootstrap from database failed: %v", err))
@@ -437,7 +448,11 @@ func validate(cfg *Config, parseErrors []string) error {
 
 	required := []check{
 		{"MFAPP_DATABASE_URL / DB_URL", cfg.DB.URL},
-		{"JWT_SECRET", cfg.LocalAuth.JWTSecret},
+	}
+	// JWT_SECRET is required only under HS256; under EdDSA it is optional
+	// (derived from the signing key when unset).
+	if cfg.LocalAuth.JWTAlg != JWTAlgEdDSA {
+		required = append(required, check{"JWT_SECRET", cfg.LocalAuth.JWTSecret})
 	}
 
 	// When any OIDC provider is enabled, the OAuth callback plumbing needs

@@ -61,9 +61,10 @@ type emailSender interface {
 }
 
 // IdentitiesHandlerDeps carries optional dependencies for step-up challenge
-// support. When Sender and JWTSecret are empty/nil, step-up endpoints are
-// mounted but will return errors; in practice they are only mounted when
-// step-up is configured.
+// support. JWTSecret is the step-up HMAC key (auth.StepUpKey: the explicit
+// JWT_SECRET, or under EdDSA a key derived from the signing key). When Sender
+// and JWTSecret are empty/nil, step-up endpoints are mounted but will return
+// errors; in practice they are only mounted when step-up is configured.
 type IdentitiesHandlerDeps struct {
 	Pool           *pgxpool.Pool
 	Queries        *db.Queries

@@ -138,7 +138,8 @@ type OAuth struct {
 //
 // Fatal (nil, error) conditions are limited to construction-level problems
 // that toggling a provider off cannot fix:
-//   - missing state-signer key (JWT_SECRET)
+//   - no resolvable state-signer key (neither JWT_SECRET nor, under EdDSA,
+//     a signing key to derive from; see OAuthStateKey)
 //   - missing OAUTH_REDIRECT_BASE_URL when providers are configured
 //   - missing AUTH_FRONTEND_RETURN_URL when providers are configured
 //
@@ -156,10 +157,12 @@ func NewOAuth(ctx context.Context, cfg *config.Config) (*OAuth, error) {
 	// State signer is unconditionally required — without it we can't sign
 	// the state cookie for any flow, including a future /start once a
 	// provider is toggled on via onboarding.
-	if cfg.LocalAuth.JWTSecret == "" {
-		return nil, errors.New("oauth: JWT_SECRET is required to sign state tokens")
+	stateKey, err := OAuthStateKey(cfg.LocalAuth)
+	if err != nil {
+		// The resolver's errors never carry key material.
+		return nil, fmt.Errorf("oauth: no key available to sign state tokens: %w", err)
 	}
-	signer, err := NewStateSigner([]byte(cfg.LocalAuth.JWTSecret))
+	signer, err := NewStateSigner(stateKey)
 	if err != nil {
 		return nil, err
 	}
