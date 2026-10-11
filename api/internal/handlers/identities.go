@@ -28,6 +28,12 @@ import (
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
+// linkAuthorizer is the subset of *localauth.OAuth StartLink calls, declared
+// as an interface so tests can inject sign/random failures.
+type linkAuthorizer interface {
+	LinkAuthorizeURL(providerID, userAccountUUID, returnPath string) (authorizeURL, stateToken string, err error)
+}
+
 // IdentitiesHandler serves identity-management endpoints under /v1/self.
 //
 // All endpoints are gated by RequireAuth + RequireVerifiedEmail in main.go.
@@ -36,7 +42,7 @@ import (
 type IdentitiesHandler struct {
 	pool      *pgxpool.Pool
 	queries   *db.Queries
-	oauth     *localauth.OAuth
+	oauth     linkAuthorizer
 	obs       *observer.ObserverGroup
 	sender    emailSender
 	jwtSecret string
@@ -200,11 +206,26 @@ type startLinkResponse struct {
 	State        string `json:"state"`
 }
 
+// errReturnPathInvalid is the 400 for a malformed StartLink return query.
+func errReturnPathInvalid() error {
+	return apiresp.InvalidInput(apiresp.FieldError{
+		Field: "return", Code: "users.return_path_invalid", Message: "return must be a site-relative path",
+	})
+}
+
 // StartLink mints a link-mode OIDC authorize URL for the caller. The returned
 // state token, when presented at /auth/oidc/{provider}/callback, will insert
 // a new identity row instead of resolving/creating a user account.
 func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
+
+	// Stateless shape check runs before the step-up gate so a malformed
+	// return path is a 400 and never consumes a step-up token.
+	returnPath := r.URL.Query().Get("return")
+	if err := localauth.ValidateReturnPath(returnPath); err != nil {
+		apiresp.WriteError(w, r, errReturnPathInvalid())
+		return
+	}
 
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
 		writeStepUpRequired(w, r)
@@ -213,16 +234,19 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 
 	providerID := normalizeIdentityProviderID(r)
 
-	returnPath := r.URL.Query().Get("return")
-
 	authURL, state, err := h.oauth.LinkAuthorizeURL(providerID, uc.UserUUID, returnPath)
 	if err != nil {
-		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
+		switch {
+		case errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable):
 			apiresp.WriteError(w, r, apiresp.ErrNotFound)
-			return
+		case errors.Is(err, localauth.ErrInvalidReturnPath):
+			// Unreachable after the pre-check above; kept so the mapping
+			// stays correct if the two validators ever diverge.
+			apiresp.WriteError(w, r, errReturnPathInvalid())
+		default:
+			// Sign or random-source failure: an internal error, not a client one.
+			apiresp.WriteError(w, r, fmt.Errorf("identities.StartLink: build authorize url: %w", err))
 		}
-		slog.WarnContext(r.Context(), "identities.StartLink: bad request", "error", err, "provider", providerID)
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 

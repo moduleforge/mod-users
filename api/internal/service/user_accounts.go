@@ -193,9 +193,11 @@ func authorizeType(ctx context.Context, az coreAuthz.Authorizer, op string, type
 	return az.Authorize(ctx, op, nil)
 }
 
-// AuthorizeCreate performs only the type-level create authorization used by
-// Create. Handlers call it to deny an unauthorized caller before reporting a
-// request-shape error (e.g. an undecodable body).
+// AuthorizeCreate performs only the type-level create authorization that
+// Create runs first, as the service's type-level create gate. It is not the
+// HTTP ordering mechanism: the HTTP handler validates request shape (400)
+// before calling Create, so an undecodable body is reported ahead of this
+// gate.
 func (s *UserAccountService) AuthorizeCreate(ctx context.Context) error {
 	// Create is a type-level operation: a wildcard grant, or a grant on
 	// natural_person's type entity, authorizes it. typeID is a types.id,

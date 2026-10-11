@@ -100,15 +100,18 @@ type registerSSHKeyRequest struct {
 	Label     *string `json:"label"`
 }
 
-// Validate implements apiresp.Validator: public_key is required. Key-format
-// and label validation need the sshkey parser and live in the service.
+// Validate implements apiresp.Validator: public_key is required, and the key
+// and label must pass the stateless sshkey checks (sshkey.Parse,
+// sshkey.NormalizeLabel; no database). They run here, ahead of the step-up
+// gate, so a malformed key or label is a 400 and never consumes a step-up
+// token. The service repeats the same checks for in-process callers.
 func (r *registerSSHKeyRequest) Validate() []apiresp.FieldError {
 	if r.PublicKey == "" {
 		return []apiresp.FieldError{{
 			Field: "public_key", Code: "users.public_key_required", Message: "public_key is required",
 		}}
 	}
-	return nil
+	return usersservice.ValidateSSHKeyShape(r.PublicKey, r.Label)
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +283,7 @@ func (h *SSHKeysHandler) list(w http.ResponseWriter, r *http.Request, accountUUI
 }
 
 // decodeRegister decodes and validates the register body (stateless: JSON
-// shape, size cap, required public_key). It runs before the step-up gate so a
+// shape, size cap, required public_key, key and label format). It runs before the step-up gate so a
 // malformed request is a 400 and never consumes a step-up token. When it
 // returns false it has already written the 400 response.
 func (h *SSHKeysHandler) decodeRegister(w http.ResponseWriter, r *http.Request) (registerSSHKeyRequest, bool) {
@@ -292,8 +295,9 @@ func (h *SSHKeysHandler) decodeRegister(w http.ResponseWriter, r *http.Request) 
 }
 
 // register registers the already-decoded key for accountUUID. Key-format and
-// label validation is the service's job (via sshkey.Parse/NormalizeLabel; see
-// the algorithm policy in docs/mod-users-spec.md's Security requirements).
+// label validation already ran in registerSSHKeyRequest.Validate; the service
+// repeats it for in-process callers (algorithm policy: docs/mod-users-spec.md's
+// Security requirements).
 func (h *SSHKeysHandler) register(w http.ResponseWriter, r *http.Request, accountUUID uuid.UUID, req registerSSHKeyRequest, stepUpUsed bool) {
 	key, err := h.svc.Register(r.Context(), accountUUID, req.PublicKey, req.Label, stepUpUsed)
 	if err != nil {

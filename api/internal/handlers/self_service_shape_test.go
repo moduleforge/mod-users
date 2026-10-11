@@ -200,9 +200,9 @@ func TestSelfsvcSSHKeys_NoTokenMalformedIs400AndWellFormedIs409(t *testing.T) {
 
 	// Well-formed, no token: unchanged 409 envelope, on every gated route.
 	for _, tc := range []struct{ method, path, body string }{
-		{http.MethodPost, "/self/ssh-keys", `{"public_key":"ssh-ed25519 AAAA"}`},
+		{http.MethodPost, "/self/ssh-keys", `{"public_key":"` + stepordValidKey + `"}`},
 		{http.MethodDelete, "/self/ssh-keys/" + uuid.New().String(), ``},
-		{http.MethodPost, "/user-accounts/" + uc.UserUUID + "/ssh-keys", `{"public_key":"ssh-ed25519 AAAA"}`},
+		{http.MethodPost, "/user-accounts/" + uc.UserUUID + "/ssh-keys", `{"public_key":"` + stepordValidKey + `"}`},
 		{http.MethodDelete, "/user-accounts/" + uc.UserUUID + "/ssh-keys/" + uuid.New().String(), ``},
 	} {
 		req = withUC(httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body)), uc)
