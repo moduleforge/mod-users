@@ -9,4 +9,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: make lint fails at api/scripts/check-server-error-literals.sh on api/internal/handlers/identities.go:318 (literal server.Error call outside allowlist); not touched by this task, confirm whether pre-existing and tracked.
+    - title: Weak explicit JWT_SECRET beats derived key
+      id: WutU
+      date: "2026-10-11"
+      tags:
+        - type:security
+        - priority:medium
+        - plan/phase:derived-hmac-keys
+        - effort:unspecified
+      text: 'In api/internal/auth/derived_keys.go (resolveKey) and api/internal/config/config.go (JWT_SECRET read near line 388), an explicit JWT_SECRET is read via os.Getenv with no trimming or length check. Under EdDSA a whitespace-only or very short value is non-empty, so it wins over the HKDF-derived key and becomes the HMAC key for OAuth state and step-up tokens, which a caller could then forge. Before this change such a value under EdDSA was replaced by the strong DB-bootstrapped secret. Recommended: treat whitespace-only JWT_SECRET as unset (trim for the emptiness test) and/or reject an explicit secret shorter than 32 bytes under EdDSA, with a test.'
 closed: []
