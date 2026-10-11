@@ -60,7 +60,11 @@ type SSHKey struct {
 //     (existence masking);
 //  2. load the account holder entity via coredb.GetEntityByID -- an
 //     archived or missing holder returns the same masked ErrForbidden;
-//  3. only then parse input, touch key data, or write.
+//  3. only then touch key data or write.
+//
+// The one exception is Register: its stateless key and label validation
+// (sshkey.Parse, sshkey.NormalizeLabel) runs before step 1, so a malformed
+// key is a 400 even for a caller who may not update the account.
 type SSHKeyService struct {
 	db    txhelper.DB
 	q     db.Querier
@@ -127,11 +131,8 @@ func (s *SSHKeyService) loadAuthorizedAccount(ctx context.Context, accountUUID u
 // enforced by the schema, not by a Go pre-check, since a pre-check alone
 // would lose a concurrent-registration race.
 func (s *SSHKeyService) Register(ctx context.Context, accountUUID uuid.UUID, publicKeyLine string, label *string, stepUpUsed bool) (SSHKey, error) {
-	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, "update")
-	if err != nil {
-		return SSHKey{}, err
-	}
-
+	// Stateless key and label validation runs before authorization (400 ahead
+	// of 403). The duplicate-fingerprint 409 stays after it, in the insert.
 	parsed, err := sshkey.Parse(publicKeyLine)
 	if err != nil {
 		return SSHKey{}, mapSSHKeyParseError(err)
@@ -139,6 +140,11 @@ func (s *SSHKeyService) Register(ctx context.Context, accountUUID uuid.UUID, pub
 	normalizedLabel, err := sshkey.NormalizeLabel(label, parsed.Comment)
 	if err != nil {
 		return SSHKey{}, mapSSHKeyLabelError(err)
+	}
+
+	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, "update")
+	if err != nil {
+		return SSHKey{}, err
 	}
 
 	var out SSHKey
