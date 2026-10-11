@@ -100,7 +100,7 @@ phases:
             branch: plan/users-conformance-03-004
             commit:
                 - 53d3a85
-            merge: null
+            merge: 7a9c26d8d8bc1cb7e8e30e422d1aea9eba9deae4
         - number: 5
           slug: self-service-shape
           title: Identities and SSH Keys Stateless Checks Before Step-Up and Authorization
