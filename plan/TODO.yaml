@@ -48,6 +48,7 @@ phases:
           path: phase-04-remediation-01/001-blank-jwt-secret-as-unset.md
           done: false
           tier: sonnet-med
+          digest: Blank/whitespace-only JWT_SECRET treated as unset under EdDSA in resolveKey and config.Load (non-blank explicit secret unchanged, untrimmed); main.go comment reordered; docs/jwt-eddsa.md precedence note; tests added. Tests, vet, build pass; lint fails only on pre-existing 0NVf.
           findings:
             - WutU
             - ccun
