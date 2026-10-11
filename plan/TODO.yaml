@@ -51,6 +51,7 @@ phases:
     - number: 3
       slug: decode-and-shape
       title: Decode and Shape Before Authorization
+      diff_base: 119da4dab93a0a5870165564a8e77829df685d1b
       tasks:
         - number: 1
           slug: remove-pass-through-wrappers
