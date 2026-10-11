@@ -26,3 +26,39 @@ This plan's working documents (`plan/overview.md`, `plan/notes/`, the phase task
 ## References
 - `plan/overview.md` and `plan/notes/` in this plan worktree.
 - Existing docs: `docs/jwt-eddsa.md`, `docs/cors.md`, `docs/cookie-path.md`, `docs/architecture.md`, `docs/mod-users-spec.md`.
+
+## Status
+- Outcome: succeeded (2026-10-10). Docs only; `git diff` shows `README.md`, `docs/architecture.md`, `docs/cors.md`, `docs/cookie-path.md`, new `docs/consumer-upgrade-notes.md`, and this task document.
+- Decisions: the repo keeps decision records as `D<n>` entries in `docs/architecture.md` "Key decisions" (no `decisions/` directory), so five concise entries D13 to D17 were added there (alg pinned per key, kid map, `email_verified_at` snake_case and always present, EdDSA keeps `JWT_SECRET`, CORS fails closed). Two short additions outside the requested set: the local-mode pattern-reflection limit in `docs/cors.md` and the test-redirect prefix effect in `docs/cookie-path.md`, both so those docs agree with the new notes (backlog 7ok7 and dnKQ describe them).
+- Link chain: `README.md` links `docs/consumer-upgrade-notes.md`; `docs/architecture.md` Further reading links it too; D13 to D17 sit in the already-linked architecture doc. Link and anchor check by script over the five edited docs: only pre-existing links into the `docs/mf-standards` submodule (not checked out here) do not resolve.
+- Code checks run: greps for every exported name and env var in the notes (log `.flow/validation-logs/01-name-greps.log`); read `api/internal/config/jwtsecret_bootstrap.go` and `config.go` (`Load`, `validate`), `api/internal/auth/jwt.go`, `signer.go`, `stepup.go`, `api/internal/server/server.go` (`corsOptions`), `api/handlers/handlers.go`, `api/handlers/authhandlers/authhandlers.go`, `api/internal/handlers/auth/oidc.go` (`testResultPath`), `login.go`, `anonymous.go`, `api/internal/handlers/assume.go`, `api/openapi.yaml`, `gui/src/components/auth-page.tsx`, `gui/src/lib/api.ts`, `scripts/checkout-deps.sh`, the two deploy manifests; confirmed sibling `app-mfgit`, `app-mftodo`, `app-mfmanager` each have a hardening commit on `scripts/checkout-deps.sh` in git history.
+- Not verified: bash 4 / git 2.31 are inferred from the script (`${var,,}` and a code comment); the script has no runtime version check, and the notes say so.
+
+### Inventory
+| Item | Disposition |
+|---|---|
+| overview.md goals and constraints (five upstream requests, backward-compatible API) | promoted: `docs/consumer-upgrade-notes.md` sections per area |
+| overview.md phase table, dependency ordering, code anchors, report-back deliverable | discarded: purely procedural; code anchors are superseded by the merged code |
+| plan/notes sibling-checkout-deps audit | discarded: findings are fixed in the sibling repos; the one durable fact (they carry ported copies, mirror fixes) promoted to the notes' checkout-deps section |
+| 1.001 signer and config | promoted: notes (EdDSA) |
+| 1.002 verifier public-key mode, `NewLocalVerifier` | promoted: notes; rationale D13, D14 |
+| 1.003 tests and docs | already captured: `docs/jwt-eddsa.md`, `README.md` config table, `architecture.md` |
+| 2.001 CORS default-deny | already captured: `docs/cors.md`; summarized in notes; rationale D17 |
+| 3.001 cookie base path | already captured: `docs/cookie-path.md`; facade break promoted to notes |
+| 3.002 test-redirect prefix | promoted: notes and `docs/cookie-path.md` |
+| 4.001 AuthPage mode callback | already captured: `gui/README.md`, TSDoc; summarized in notes |
+| 4.002 self `email_verified_at` | already captured: `docs/mod-users-spec.md`; notes; rationale D15 |
+| 4.003 GUI lockfile and link (premise stale, no change) | already captured: `gui/README.md`, `AGENTS.md`; one line in notes |
+| 5.001 checkout-deps hardening | already captured: script header and `--help`, `docs/project-structure.md`; promoted to notes |
+| 5.002 sibling audit | discarded (see notes item above) |
+| 6.001 signer wiring and key revocation docs, legacy-constructor residual | already captured: `docs/jwt-eddsa.md`; residual promoted to notes |
+| 6.002 reject step-up as bearer; legacy `NewVerifier` empty-issuer refusal | promoted: notes; D16 |
+| 7.001 step-up empty-secret guard | promoted: notes |
+| 8.001 reject CORS wildcard patterns, manifest placeholders | already captured: `docs/cors.md`, `README.md`; manifest placeholders promoted to notes |
+| 9.001 email_verified_at after login | already captured: spec, `gui/README.md`; payload list and OpenAPI schemas promoted to notes |
+| 9.002 checkout-deps test gaps (xtrace limit on `--verify --remote`, unreachable allowlist re-check) | discarded: test-suite internals, documented in the test script; not consumer-facing |
+| findings.yaml closed: QI2I, RmRX, nIyL, SUyS, OO6Y, D6o7 (fixed) | already captured: jwt-eddsa.md, cors.md, notes (as above) |
+| findings.yaml closed: GlTi, dnKQ, mJdk, 66qf | promoted: notes "Known limits and open items" |
+| findings.yaml closed: BODx, 7ok7, jKvl, xuSi, nJel (promoted, later fixed) | already captured: cors.md, cookie-path.md, spec and gui README, script and its tests |
+| findings.yaml closed: 5eQ7, dUlk, ll8e (sibling scripts) | discarded: fixed in those repos (commits verified) |
+| findings.yaml closed: rzI8 (dismissed, no length cap on cookie base path) | discarded: operator-set value, not exploitable; recorded reason is sufficient |

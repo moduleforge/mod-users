@@ -14,6 +14,8 @@ If a proxy strips the mount prefix, the API sees `/v1/auth/oidc/...` while the b
 
 Set `USERS_COOKIE_PATH` to the public base path. The cookie `Path` becomes the base plus `/v1/auth/oidc/`, for example `/manage/v1/auth/oidc/`. The same value is used when the cookie is set (OIDC start, identity link start) and when it is cleared (callback), so the clear always matches.
 
+The same value prefixes the OIDC provider test redirect: after a provider test, the browser is sent to `<USERS_COOKIE_PATH>/oidc-config` rather than `/oidc-config`. Only the validated configured value is used; `X-Forwarded-Prefix` is never trusted.
+
 Caddy example, where the app is served under `/manage` and the prefix is stripped:
 
 ```caddyfile

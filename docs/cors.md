@@ -20,6 +20,8 @@ Entries are bare `scheme://host[:port]` origins: no trailing slash and no path, 
 
 The wildcard is never combined with credentials. Every mode except `local` counts as production-like for this guard.
 
+Known limit: in `local` mode only the bare `*` (or an empty value) gets the credential-free wildcard. A pattern entry such as `https://*.example.com` is not rejected there; it is passed to the CORS library as a pattern and reflected with credentials.
+
 ## Behavior change for existing deployments
 
 Earlier versions set credentials unconditionally and the underlying CORS library treated an empty origin list as allow-all, so an unset `CORS_ORIGINS` produced `Access-Control-Allow-Origin: *` together with credentials in every `DEPLOY_MODE`.
