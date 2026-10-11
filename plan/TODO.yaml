@@ -112,7 +112,7 @@ phases:
             branch: plan/users-conformance-03-005
             commit:
                 - 5e5fe90
-            merge: null
+            merge: 17255c76a9e6cc11604d521997f6d0795441829e
         - number: 6
           slug: oidc-config-credential-shape
           title: OIDC Config Credential Routes Decode and Ordering
