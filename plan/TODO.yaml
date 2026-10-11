@@ -64,16 +64,18 @@ phases:
             branch: plan/users-conformance-03-001
             commit:
                 - 48b8723
-            merge: null
+            merge: fd0d0dd5618f4838035bacfc138ce205dffac31e
         - number: 2
           slug: decode-wrapper-and-callers
           title: Make server.Decode a DecodeJSON Wrapper and Convert Callers
           path: phase-03-decode-and-shape/002-decode-wrapper-and-callers.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: server.Decode is a thin wrapper over apiresp.DecodeJSON; all 16 callers converted; ssh-key register uses WithMaxBytes(32 KiB); UserAccountsHandler.Create 403-before-400 special case deleted; real-handler decode tests; client audit found only the known GUI mismatches (resetPassword new_password, apps.addMember role) left to task 5.1; integration 48 pass 0 skip.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-03-002
+            commit:
+                - 071c510
             merge: null
         - number: 3
           slug: user-accounts-and-self-shape
