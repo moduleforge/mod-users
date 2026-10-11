@@ -18,7 +18,7 @@ phases:
             branch: plan/users-conformance-01-001
             commit:
                 - 3f44b9d
-            merge: null
+            merge: 77ffe8ad94323b007d76ae9e07445af2b80fc93d
         - number: 2
           slug: mount-require-auth
           title: Mount RequireAuth in Authenticated Registrars
