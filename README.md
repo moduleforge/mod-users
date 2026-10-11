@@ -40,7 +40,7 @@ Local-auth JWT settings (see [docs/jwt-eddsa.md](./docs/jwt-eddsa.md); full list
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `JWT_SECRET` | required | HS256 secret; also signs OAuth state and step-up tokens |
+| `JWT_SECRET` | required for HS256; optional under EdDSA | HS256 secret; also signs OAuth state and step-up tokens. Under `JWT_ALG=EdDSA`, when unset those keys are derived from `JWT_SIGNING_KEY` |
 | `JWT_ALG` | `HS256` | `HS256` or `EdDSA` signing for locally-issued tokens |
 | `JWT_SIGNING_KEY` | unset | Ed25519 private key (PKCS#8 PEM; literal `\n` accepted); required for `EdDSA` |
 | `JWT_SIGNING_KID` | unset | `kid` header for issued tokens |

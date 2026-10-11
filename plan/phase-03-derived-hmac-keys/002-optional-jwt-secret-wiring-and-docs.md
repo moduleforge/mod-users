@@ -64,3 +64,12 @@ architectural_impact: true
 - After `docs/architecture.md` (D17 amendment and D19).
 - After `docs/jwt-eddsa.md` and `docs/consumer-upgrade-notes.md`.
 - After README, `.env.example`, and deploy comment edits.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Code: `api/internal/config/config.go` (bootstrap and required-check skipped under EdDSA), `api/internal/auth/oauth.go` and `oauth_state.go` (state key via `OAuthStateKey`), `api/cmd/server/main.go` (step-up key via `StepUpKey`, fatal on failure), `api/auth/auth.go` (additive facade wrappers `OAuthStateKey`, `StepUpKey`).
+- Tests: config (`jwt_signing_test.go`), auth (`derived_wiring_test.go`), handlers (`stepup_derived_test.go`). `make test.unit.api`, `make build.api`, and `go test -tags integration ./internal/config/` pass.
+- `make lint.api`: only the pre-existing `check-server-error-literals` failure in `identities.go` (lines 318/397/415, identical to base); `go vet` clean.
+- Step-up with `RequireStepUpForCredentialChange` false and no resolvable key: cannot arise (HS256 requires the secret; EdDSA requires the signing key, so a key always resolves); main fails startup if resolution fails regardless of the flag.
+- Docs updated: architecture (D17 amended, D19 added, bootstrap section), jwt-eddsa, consumer-upgrade-notes, README, `.env.example`. Deploy manifests contained no "required" wording, so unchanged. `docs/mod-users-spec.md` has no `JWT_SECRET` text.
