@@ -54,6 +54,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: decode-wrapper-and-callers
+          title: Make server.Decode a DecodeJSON Wrapper and Convert Callers
+          path: phase-03-decode-and-shape/002-decode-wrapper-and-callers.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
