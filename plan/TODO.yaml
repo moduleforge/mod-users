@@ -64,6 +64,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: user-accounts-and-self-shape
+          title: Stateless Checks Before Authorization for User Accounts and Self
+          path: phase-03-decode-and-shape/003-user-accounts-and-self-shape.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
