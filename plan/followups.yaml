@@ -788,16 +788,6 @@ items:
         - plan/phase:authorize-type-grant-arm
         - plan/slug:type-scoped-grants
       text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
-    - title: config.Load()/validate() in mod-users still r
-      id: GlTi
-      date: "2026-10-10"
-      tags:
-        - type:enhancement
-        - priority:low
-        - effort:medium
-        - plan/phase:eddsa-verify-only-key
-        - plan/slug:flow-accounts-upstream
-      text: config.Load()/validate() in mod-users still require JWT_SECRET (bootstrapped from DB), so mod-users' own server is not verify-only; the verify-only mode is available to library consumers via auth.NewVerifierWithOptions. Decide whether a later task should make JWT_SECRET optional in Load (affects step-up tokens and other HS256 users).
     - title: CORS docs still say only bare * errors
       id: BODx
       date: "2026-10-10"
