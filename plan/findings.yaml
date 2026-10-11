@@ -54,4 +54,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'api/internal/handlers/health.go Ready writes err.Error() from pool.Ping into the 503 body ("db": ...) on the unauthenticated GET /readyz route. Driver errors can include host, port, user and database names. Log the error server-side and return a fixed value such as "unavailable".'
+    - title: GUI loses 409 provider-exists message
+      id: jzT7
+      date: "2026-10-11"
+      tags:
+        - type:enhancement
+        - plan/phase:decode-and-shape
+        - priority:unspecified
+        - effort:unspecified
+      text: 'POST /v1/oidc-config/providers on an existing id now answers via apiresp.Conflict with detail {field: id, code: users.oidc_provider_exists, message: "provider id already exists; use PUT to update"}, and the top-level error.message becomes apiresp''s fixed conflict text. gui/src/lib/oidc-provider.ts parseError reads only body.error.code and body.error.message, so the add-provider modal (gui/src/components/oidc-provider-add-modal.tsx) no longer shows the actionable "use PUT to update" wording. Either surface error.details[0].message in parseError for this code, or map users.oidc_provider_exists to a friendly string in the modal.'
 closed: []
