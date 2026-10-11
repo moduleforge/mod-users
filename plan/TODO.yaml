@@ -84,6 +84,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: self-service-shape
+          title: Identities and SSH Keys Stateless Checks Before Step-Up and Authorization
+          path: phase-03-decode-and-shape/005-self-service-shape.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
