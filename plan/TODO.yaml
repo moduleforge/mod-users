@@ -34,6 +34,7 @@ phases:
     - number: 2
       slug: existence-leaks
       title: Close Existence Leaks
+      diff_base: 2fc3c6df240f111706e89a6145a154de1d26b39b
       tasks:
         - number: 1
           slug: user-account-masked-miss
