@@ -94,6 +94,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 6
+          slug: oidc-config-credential-shape
+          title: OIDC Config Credential Routes Decode and Ordering
+          path: phase-03-decode-and-shape/006-oidc-config-credential-shape.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
