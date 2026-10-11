@@ -284,7 +284,7 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		return nil
 	})
 	if err != nil {
-		if isPgUniqueViolation(err) {
+		if isEmailTakenViolation(err) {
 			return UserAccount{}, ErrEmailTaken
 		}
 		return UserAccount{}, err
@@ -586,6 +586,12 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 		return s.obs.Observe(ctx, tx, "update", "user_account", &eid, before, after)
 	})
 	if err != nil {
+		// A unique violation on user_accounts.email is a post-authorization
+		// state conflict (409), not a 500. Any other failure, including a
+		// 23505 on a different constraint, stays an internal error.
+		if isEmailTakenViolation(err) {
+			return UserAccount{}, ErrEmailTaken
+		}
 		return UserAccount{}, err
 	}
 
@@ -798,6 +804,20 @@ func uaSnapshot(ua db.UserAccount) map[string]any {
 func isPgUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return extractPgError(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// userAccountsEmailConstraint is the Postgres name of the inline UNIQUE
+// constraint on user_accounts.email (auto-named by 0100_baseline.sql).
+const userAccountsEmailConstraint = "user_accounts_email_key"
+
+// isEmailTakenViolation reports whether err carries a unique violation (23505)
+// on the user_accounts.email constraint. It matches the constraint name
+// exactly and unwraps with errors.As, because the violation reaches the
+// caller wrapped by the transaction closure; a 23505 on any other constraint
+// raised in the same transaction is not an email conflict and must stay a 500.
+func isEmailTakenViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == userAccountsEmailConstraint
 }
 
 // extractPgError unwraps a *pgconn.PgError from err, if present.

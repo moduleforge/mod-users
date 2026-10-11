@@ -46,3 +46,15 @@ architectural_impact: false
 
 - Phase 3 has landed.
 - The GUI's `useApiError` (from `@moduleforge/core-gui`) treats `unprocessable_entity` as an inline code, so a new 422 needs no GUI change.
+
+## Status
+
+Outcome: succeeded (2026-10-11).
+
+- Audit: one line per post-authorization site is appended to `plan/notes/handler-inventory.md` under "Post-authorization classification (task 4.1)". Only two statuses changed.
+- `PUT /user-accounts/{uuid}` and `POST /user-accounts`: a unique violation on `user_accounts_email_key` now maps to `svc.ErrEmailTaken` (409 `users.email_taken`) via `isEmailTakenViolation` (`errors.As` plus exact constraint name) in `api/internal/service/user_accounts.go`. Create's 409 never fired before (followup 4Olf); it is fixed by the same helper. Other 23505 constraints stay 500.
+- `POST /apps/{uuid}/user-accounts`: a body `user_uuid` naming no account is 422 `users.user_account_unknown` (`api/internal/handlers/apps.go`). Path `{user_account_uuid}` misses on Remove/UpdateRoles stay 404. Non-member Remove/UpdateRoles silent success is pinned by tests, not re-statused.
+- Classified, no change: `StartLink` registry 404 (config state, post-step-up) and 500 for internal faults, `RemovePassword` no-credential idempotent 204, oidc provider `GET` unknown id 404 (after credential), `Unlink` 409-before-404 (F6), ssh-key revoke key miss masked 403 (F5 decided). Findings filed: `Unlink` ordering (v2BM) and OIDC link-mode insert race (8VhV).
+- Tests: `api/internal/service/user_accounts_conflict_test.go`, `api/internal/handlers/apps_membership_conflict_test.go`, `api/internal/authz/user_account_update_conflict_integration_test.go`; `fakeTx` in `user_accounts_upgrade_test.go` gained an `execErr` hook.
+- Wire notes appended to `plan/notes/wire-risk.md`.
+- Validation: gofmt clean, `go vet` (plain and `-tags=integration`), `go test ./...`, `make lint` all pass. Postgres integration suite (`-tags=integration -p 1 ./internal/authz/...`, throwaway container) passed with the new tests running (not skipped); `internal/config` integration suite not run.

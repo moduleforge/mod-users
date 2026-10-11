@@ -121,8 +121,15 @@ func (h *AppsHandler) AssignUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ua, err := h.q.GetUserAccountByUUID(r.Context(), userUUID)
-	if err == pgx.ErrNoRows {
-		apiresp.WriteError(w, r, apiresp.ErrNotFound)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The account is a referenced value in the body, not the addressed
+		// resource (the app in the path is), so a miss is a 422 on the field
+		// rather than a 404 for the route. Authorization has already passed.
+		apiresp.WriteError(w, r, apiresp.Unprocessable(apiresp.FieldError{
+			Field:   "user_uuid",
+			Code:    "users.user_account_unknown",
+			Message: "no user account exists with that uuid",
+		}))
 		return
 	}
 	if err != nil {
