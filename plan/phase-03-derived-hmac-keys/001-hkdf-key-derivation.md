@@ -50,3 +50,9 @@ architectural_impact: false
 - Followup `GlTi` (read via `followups_list`): the open question this plan resolves.
 - `api/internal/auth/signer.go`, `api/internal/auth/stepup.go`, `api/internal/auth/oauth_state.go`, `api/internal/config/jwt_signing.go`.
 - `docs/architecture.md` D17 (amended in task 002).
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Added `api/internal/auth/derived_keys.go` (labels, `deriveKey`, `OAuthStateKey`, `StepUpKey`) and `api/internal/auth/derived_keys_test.go`.
+- Validation: `go test ./internal/auth/...` passed; `go vet ./...` passed; known-answer vectors cross-checked against an independent RFC 5869 computation. `make lint` fails in `api/scripts/check-server-error-literals.sh` on pre-existing `api/internal/handlers/identities.go:318`, outside this task's change set; `golangci-lint` reports no issues in the new files.
