@@ -257,7 +257,7 @@ phases:
           slug: step-up-ordering-gaps
           title: Close Step-Up Ordering Gaps for SSH Keys and StartLink
           path: phase-08-remediation-01/001-step-up-ordering-gaps.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: SSH key/label shape validated in registerSSHKeyRequest.Validate before step-up (ValidateSSHKeyShape); StartLink validates return query before step-up (ValidateReturnPath, ErrInvalidReturnPath), internal link failures now 500; AuthorizeCreate comment fixed; stepord tests; integration 250 pass 0 skip. Fixes jAXe, P2k6, gKQO.
           findings:
