@@ -138,6 +138,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: order-tests-self-service-routes
+          title: Order Tests for Self, Identities and SSH Key Routes
+          path: phase-04-conflicts-and-order-tests/003-order-tests-self-service-routes.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: gui-wire-docs-and-validation
       title: GUI Alignment, Wire Risk Docs and Validation
