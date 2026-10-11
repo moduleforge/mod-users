@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: LoginResponse.user type is wider than payload
-      id: mJdk
-      date: "2026-10-10"
-      tags:
-        - type:bug
-        - plan/phase:backlog-fixes
-        - priority:unspecified
-        - effort:unspecified
-      text: gui/src/lib/api.ts types LoginResponse.user as UserAccountSelf, but the login, email-code verify and assume handlers (api/internal/handlers/auth/login.go sessionUser, emailcode.go, api/internal/handlers/assume.go) send only uuid, email and email_verified_at. Fields such as given_name, family_name, entity_uuid and is_admin are typed as present on useAuth().user right after sign-in but are undefined until refreshUser() runs. Either narrow the type (Pick) and widen the auth-context user state, or have the server emit the full self shape or the GUI refresh after sign-in.
     - title: Assume test gap; LoginResponse typing
       id: 66qf
       date: "2026-10-10"
@@ -104,3 +95,8 @@ closed:
       disposition: promoted
       ref: nJel
       date: "2026-10-10"
+    - id: mJdk
+      title: LoginResponse.user type is wider than payload
+      disposition: promoted
+      ref: mJdk
+      date: "2026-10-11"
