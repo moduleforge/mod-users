@@ -892,3 +892,11 @@ items:
         - priority:low
         - effort:medium
       text: api/openapi.yaml (AGENTS.md calls it the authoritative REST spec) documents /v1/users, /v1/users/{user_uuid}, /v1/users/{user_uuid}/grant, /v1/users/{user_uuid}/assume and /v1/users/{user_uuid}/audit, but the served routes (api/internal/handlers/account_routes.go RegisterAccountRoutes) are /v1/user-accounts, /v1/user-accounts/{uuid}, /grant-admin, /revoke-admin and /assume; the audit route moved to /v1/audit (mod-audit). docs/architecture.md's API-surface table repeats the /v1/users names. Separate from followup biJk (identities surface missing). Rewrite these paths and their request/response/error schemas to match the handlers.
+    - title: PUT /self names 403 in assume session
+      id: 7kHY
+      date: "2026-10-11"
+      tags:
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+      text: In an assume session the token subject is the admin and sudo_user_uuid is the assumed user, so buildUserContext sets uc to the admin's account and the effective actor (opctx.EffectiveActorEntityID) is the assumed user. PUT /self loads uc.UserAccountID (the admin's own account), so a body containing names is now authorized as the assumed user against the admin's entity and gets 403 unless the assumed user holds update on it; before mod-core's AuthorizeResolve it silently wrote the admin's own names. A body without names is unaffected, and a non-admin updating their own names works (the entity owns itself). Decide whether PUT /self in an assume session should target the effective actor's (assumed user's) account, be forbidden explicitly, or keep acting on the admin; the users-conformance inventory's D5 assume-session reading was the reverse of the code and is corrected in the wire-risk note.
