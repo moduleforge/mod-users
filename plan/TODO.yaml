@@ -163,6 +163,7 @@ phases:
           path: phase-04-conflicts-and-order-tests/002-order-tests-account-routes.md
           done: false
           tier: sonnet-med
+          digest: Shared order harness (order_helpers_test.go) and order tests for the 12 account/apps routes; red checks verified; no production code changed.
           git:
             branch: null
             commit: []
