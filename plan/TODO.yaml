@@ -16,3 +16,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: optional-jwt-secret-wiring-and-docs
+          title: Make JWT_SECRET Optional Under EdDSA, Wire Derived Keys, And Document
+          path: phase-03-derived-hmac-keys/002-optional-jwt-secret-wiring-and-docs.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
