@@ -13,9 +13,14 @@
 # resolver, but this standalone lint script has no access to that resolver,
 # so callers (e.g. CI) must supply prerequisite migration directories
 # explicitly, in dependency order. Each prereq dir is applied in order
-# before the primary dir, all against the same ephemeral database (sharing
-# one goose_db_version tracking table — safe as long as version numbers
-# don't collide across modules).
+# before the primary dir, all against the same ephemeral database. Each prereq
+# dir is tracked in its own goose version table (goose_prereq_<n>), separate
+# from the primary dir's default goose_db_version table. Version spaces are
+# therefore independent per module: goose rejects out-of-order versions
+# within one table ("found N missing migrations before current version"),
+# and this module's baseline (0100) is numbered below the authz prereqs
+# (05xx). Separate tables avoid that without -allow-missing, which would
+# weaken the lint's out-of-order detection for the module's own migrations.
 #
 # Connectivity: the container publishes 5432 to an OS-assigned free port on
 # 127.0.0.1 (`-p 127.0.0.1:0:5432`), and the script connects to that mapped
@@ -91,9 +96,11 @@ if ! docker exec "$CNAME" pg_isready -U postgres >/dev/null 2>&1; then
 fi
 
 if [[ ${#PREREQ_DIRS[@]} -gt 0 ]]; then
+  PN=0
   for pdir in "${PREREQ_DIRS[@]}"; do
-    echo "shadow-db-lint: applying prereq $pdir via goose..."
-    goose -dir "$pdir" postgres "$URL" up
+    PN=$((PN + 1))
+    echo "shadow-db-lint: applying prereq $pdir via goose (table goose_prereq_${PN})..."
+    goose -dir "$pdir" -table "goose_prereq_${PN}" postgres "$URL" up
     RC=$?
     if [[ $RC -ne 0 ]]; then
       echo "shadow-db-lint: prereq apply failed: $pdir" >&2

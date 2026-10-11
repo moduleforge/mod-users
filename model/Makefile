@@ -7,6 +7,16 @@ DATABASE_URL ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 CORE_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/core-model 2>/dev/null || echo ../../mod-core/model)
 AUTHZ_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/authz-model 2>/dev/null || echo ../../mod-authz/model)
 
+# Aggregate directory holding the sibling repos. Same convention as
+# ../scripts/link-siblings.sh: MODULEFORGE_SIBLINGS_DIR overrides; otherwise
+# ../../ (which link-siblings.sh / `make preflight` makes resolve to the
+# siblings from a plain checkout or any task/plan worktree depth).
+SIBLINGS_DIR := $(or $(MODULEFORGE_SIBLINGS_DIR),../..)
+
+# Prerequisite migration dirs for shadow-db-lint, in dependency order
+# (core, then authz). CI overrides this with absolute paths.
+SHADOW_DB_PREREQ_DIRS ?= $(SIBLINGS_DIR)/mod-core/model/migrations $(SIBLINGS_DIR)/mod-authz/model/migrations
+
 .DEFAULT_GOAL := build
 
 # ---------------------------------------------------------------------------
