@@ -165,7 +165,7 @@ phases:
           tier: sonnet-med
           digest: Shared order harness (order_helpers_test.go) and order tests for the 12 account/apps routes; red checks verified; no production code changed.
           git:
-            branch: null
+            branch: plan/users-conformance-04-002
             commit: []
             merge: null
         - number: 3
