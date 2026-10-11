@@ -252,6 +252,7 @@ phases:
           path: phase-09-backlog-fixes/001-email-verified-after-login.md
           done: false
           tier: sonnet-med
+          digest: 'Server-side fix: login, email-code verify, anonymous (explicit null) and admin assume payloads now carry email_verified_at with /v1/self semantics (shared sessionUser and emailVerifiedAtValue helpers), so useAuth().emailVerifiedAt is correct right after login(), register() and email-code sign-in. OpenAPI: removed email_verified_at from shared UserDetail, added UserSelf (required nullable email_verified_at) for GET/PUT /v1/self and LoginResponse for login/email-code/assume. Go and GUI tests (230 pass) and typecheck pass. Finding mJdk filed: LoginResponse.user still typed UserAccountSelf though sign-in payloads send only uuid, email, email_verified_at (pre-existing).'
           git:
             branch: null
             commit: []
