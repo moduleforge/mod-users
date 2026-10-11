@@ -30,7 +30,7 @@ phases:
             branch: plan/users-conformance-01-002
             commit:
                 - e21c59c
-            merge: null
+            merge: 92fe351ff555741c6201ebb030671c9179d08ed4
     - number: 2
       slug: existence-leaks
       title: Close Existence Leaks
