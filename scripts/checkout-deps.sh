@@ -13,15 +13,14 @@
 #                        target is neither absent nor already-matching, the
 #                        whole run aborts (exit 4) without mutating anything.
 #
-# Full contract: `checkout-deps.sh --help`, or see
-# plan/notes/bootstrap-script-design.md's "checkout-deps.sh command-line
-# contract" section (go-module-ci-pinning plan) and, once authored,
-# docs/mf-standards/versions-lockfile.md.
+# Full contract: `checkout-deps.sh --help`, or the scripts/checkout-deps.sh
+# section of docs/consumer-upgrade-notes.md.
 #
-# This is one of two carrier-repo copies (the other lives in mod-users/) --
-# the two are kept byte-identical by convention, the same distribution model
-# scripts/link-siblings.sh already uses. Do not diverge the two without
-# updating both.
+# This hardened script is shared by copy, not by import: the same file is
+# carried in mod-users, app-mfgit, app-mftodo, and app-mfmanager, the same
+# distribution model scripts/link-siblings.sh already uses. Keep the copies in
+# step by convention. Do not change this file without porting the change to
+# every copy.
 #
 # Security: MODULEFORGE_READ_TOKEN, when set, authenticates over HTTPS via a
 # per-invocation GIT_CONFIG_* environment entry (never argv, where ps and
