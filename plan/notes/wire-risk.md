@@ -1,0 +1,44 @@
+# Wire Risk
+
+> **Ephemeral plan document.** This file is ephemeral and will be removed after the implementation is complete. Project documents must be updated or created to capture the context and information contained herein. Link only from other plan documents; do not link to this document from non-plan documents.
+
+## Purpose and scope
+
+This note is the plan's running list of wire-visible changes (common rule 4). Each implementing task appends or corrects the entries for what it actually changed, under [Recorded by tasks](#recorded-by-tasks). Task 5.2 copies the final list into the project docs (`api/openapi.yaml` where the path exists, `README.md`, `AGENTS.md`, `docs/mod-users-spec.md`, `docs/consumer-upgrade-notes.md`) and names the downstream clients. The planned list below is the planner's expectation, not a record. Decision ids (Dn) refer to the [handler inventory](./handler-inventory.md#planning-decisions).
+
+## Planned changes
+
+The HTTP clients are `@moduleforge/users-gui`, the app GUIs and servers that compose mod-users, and external clients of `/v1/auth/*`.
+
+1. **401 before 400 on direct mounts (D1).** An unauthenticated request with a malformed body or UUID on an authenticated route gets 401 with code `unauthenticated`. Composed apps already run mod-users' `requireAuth` first, so production clients keep seeing 401 `unauthorized` there. The new behavior only shows on direct mounts and in tests.
+2. **User accounts mask misses (D2).** A missing account on `GET`/`PUT`/`DELETE /user-accounts/{uuid}` and `POST .../assume` gives 403 to every caller, admins included. It was 404. `POST .../assume` with no actor on the context gives 401 (was 404). The ssh-key operator routes keep their masked 403.
+3. **Stricter decoding everywhere (D6, D7).**
+   - Unknown JSON fields are rejected with 400 on every body route, including the public `/v1/auth/*` routes. They were silently ignored.
+   - Trailing data after the JSON value is rejected.
+   - Bodies over 1 MiB get 400 with detail `body_too_large`; the ssh-key register cap stays at 32 KiB, now with `body_too_large`.
+   - Decode and path-UUID 400s gain `details` (`invalid_json_body`, `invalid_uuid`, field errors). The top-level code stays `invalid_input`.
+   - Literal "invalid JSON body" messages become apiresp's fixed message.
+4. **`POST /user-accounts` (D4).** A malformed body, or missing email, given_name or family_name, or a short password, now gives 400 to any authenticated caller. Before, a caller without create permission got 403.
+5. **`PUT /user-accounts/{uuid}` (D4).** A present-but-blank `email`, `given_name` or `family_name` gives 400 (was stored). A duplicate email gives 409 `users.email_taken` (was 500; planned, task 4.1).
+6. **`PUT /self` (D5).** A present-but-blank `given_name` or `family_name` gives 400 with `natural_persons.given_name_required` or `natural_persons.family_name_required` (was stored blank). App GUIs pairing mod-core's `ProfileEditor` with this route should show the inline error.
+7. **Apps membership (D3).** A bad path UUID, malformed body or missing or invalid `user_uuid` gives 400 before the 403. A non-admin with a bad request now sees 400, where before they saw 403. An unknown app for an authorized admin stays 404. `AllowNotFound("app")` is no longer set on the shared entity resolver. Anything else that uses plain `Resolve` with slug `app` on that resolver gets 403 instead of 404, which matches mod-core alone. A body `user_uuid` that names no account gives 422 (was 404; planned, task 4.1). `gui/src/lib/api.ts` `apps.addMember` sending `role` would be rejected as an unknown field; task 5.1 aligns it to `roles`.
+8. **Step-up after shape checks (D9).** On the identities and ssh-key credential routes, a malformed body or UUID gives 400 even when no step-up token is present (was 409 `users.step_up_required`). A malformed request no longer consumes a step-up token.
+9. **SSH key parsing before authorization (D10).** A malformed `public_key` or label gives 400 to a caller who may not update the account (was 403).
+10. **OIDC config (D7, D8).**
+    - Admin-bearer or `X-Setup-Token` callers with a malformed body get 400 after authentication. Body-token callers with a malformed body still get 400 first, a documented exception.
+    - Provider bodies are capped at 1 MiB, unknown keys are rejected, and trailing data is rejected.
+    - The 409 on an existing provider id keeps its status and code and gains detail `users.oidc_provider_exists`.
+11. **Public auth literals (D12).**
+    - 500 `internal_error` messages become generic.
+    - Required-field 400s keep their status and code and may gain field details (new detail codes are listed by task 3.7).
+    - `GET /auth/oidc/{provider}/start` no longer echoes the internal error text in its 400 message.
+    - Credential-failure 401 messages and the middleware's `unauthorized` 401s are unchanged.
+
+In-process callers:
+
+12. `UserAccountService.Get`/`Update`/`Delete`/`Assume` return `ErrForbidden` on a miss (was `ErrNotFound`). `Assume` with no actor returns `ErrUnauthenticated`.
+13. Consumer authorizers (mod-users `Authorizer`, test fakes) receive an extra `Authorize` call with target `0` on each masked miss. It must be denied quietly (common rule 5), and audit logs show one such call per masked miss.
+
+## Recorded by tasks
+
+Tasks append dated entries here: route, old behavior, new behavior, and the client that may notice.
