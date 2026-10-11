@@ -154,7 +154,8 @@ phases:
           digest: Duplicate email on PUT/POST user-accounts now 409 users.email_taken (isEmailTakenViolation, closes 4Olf); apps add-member unknown user_uuid now 422; rest classified and left; findings v2BM, 8VhV filed.
           git:
             branch: plan/users-conformance-04-001
-            commit: []
+            commit:
+                - cb5e2b2
             merge: null
         - number: 2
           slug: order-tests-account-routes
