@@ -857,16 +857,6 @@ items:
         - plan/phase:backlog-fixes
         - plan/slug:flow-accounts-upstream
       text: gui/src/lib/api.ts types LoginResponse.user as UserAccountSelf, but the login, email-code verify and assume handlers (api/internal/handlers/auth/login.go sessionUser, emailcode.go, api/internal/handlers/assume.go) send only uuid, email and email_verified_at. Fields such as given_name, family_name, entity_uuid and is_admin are typed as present on useAuth().user right after sign-in but are undefined until refreshUser() runs. Either narrow the type (Pick) and widen the auth-context user state, or have the server emit the full self shape or the GUI refresh after sign-in.
-    - title: Assume test gap; LoginResponse typing
-      id: 66qf
-      date: "2026-10-10"
-      tags:
-        - type:bug
-        - priority:low
-        - effort:unspecified
-        - plan/phase:backlog-fixes
-        - plan/slug:flow-accounts-upstream
-      text: '(1) The admin assume-identity payload now carries email_verified_at (api/internal/handlers/assume.go ~91-103, shared emailVerifiedAtValue in self.go) and the spec/OpenAPI promise it, but no Assume handler test asserts the user object; add a small test with a stub service returning verified and unverified accounts asserting the key is present with a timestamp or explicit null. (2) gui/src/lib/api.ts (~183-189, 249): LoginResponse.user is still typed UserAccountSelf although sign-in and assume payloads carry only uuid, email and email_verified_at, so TypeScript will not flag consumers reading user.entity_uuid and similar; narrow it to Pick<UserAccountSelf, ''uuid'' | ''email'' | ''email_verified_at''> plus optional extras. The anonymous payload is not a LoginResponse and carries uuid and is_anonymous.'
     - title: writeCoreServiceErr pass-through in self.go
       id: 6ZEz
       date: "2026-10-11"
