@@ -96,12 +96,11 @@ func (h *Handler) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Token == "" {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "token is required")
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "token", Code: "users.token_required", Message: "token is required"}))
 		return
 	}
 	if len(req.Password) < 12 {
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "password must be at least 12 characters",
-			[]apiresp.FieldError{{Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters"}})
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters"}))
 		return
 	}
 
@@ -111,19 +110,20 @@ func (h *Handler) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 
 	reset, err := h.queries.GetActivePasswordReset(r.Context(), tokenHash)
 	if err == pgx.ErrNoRows {
+		// literal-keep: credential-failure 401 whose message the GUI displays.
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired reset token")
 		return
 	}
 	if err != nil {
 		slog.ErrorContext(r.Context(), "password_reset_confirm: get reset", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to look up token")
+		apiresp.WriteError(w, r, fmt.Errorf("password_reset_confirm: get reset: %w", err))
 		return
 	}
 
 	hash, err := localauth.HashPassword(req.Password)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "password_reset_confirm: hash password", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process password")
+		apiresp.WriteError(w, r, fmt.Errorf("password_reset_confirm: hash password: %w", err))
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *Handler) PasswordResetConfirm(w http.ResponseWriter, r *http.Request) {
 		PasswordHash:  hash,
 	}); err != nil {
 		slog.ErrorContext(r.Context(), "password_reset_confirm: upsert auth_local", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to update password")
+		apiresp.WriteError(w, r, fmt.Errorf("password_reset_confirm: upsert auth_local: %w", err))
 		return
 	}
 
