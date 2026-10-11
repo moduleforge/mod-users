@@ -19,6 +19,9 @@
 # ../../mod-authz/api. (The mod-users/model => ../model replace is
 # intra-repo and needs no symlink, and correctly has no lockfile key.)
 #
+# Exit codes: 1 lockfile missing / refusing to overwrite a real path; 3 lockfile
+# malformed (strict shared reader, scripts/lib/lockfile.sh).
+#
 # Env:
 #   MODULEFORGE_SIBLINGS_DIR — override the aggregate directory that holds
 #     mod-core/, mod-users/, mod-authz/, mod-audit/, mfgen/. Defaults to the
@@ -43,20 +46,15 @@ if [ ! -f "$LOCKFILE" ]; then
 	exit 1
 fi
 
-# Pin lines are the only lines indented by exactly two spaces (host/owner/
-# lockfileVersion are top-level, zero-indent) -- the same plain regex scan
-# checkout-deps.sh and update-pins.sh use, deliberately not a YAML library.
-declare -a SIBLINGS
-while IFS= read -r line; do
-	if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+[0-9a-fA-F]{40} ]]; then
-		SIBLINGS+=("${BASH_REMATCH[1]}")
-	fi
-done <"$LOCKFILE"
-
-if [ "${#SIBLINGS[@]}" -eq 0 ]; then
-	echo "link-siblings: ERROR: no pins found in $LOCKFILE" >&2
-	exit 1
-fi
+# The pin keys come from the same shared reader checkout-deps.sh and
+# update-pins.sh use (scripts/lib/lockfile.sh), so all three parse the
+# lockfile identically; a malformed lockfile exits 3 there.
+err() { echo "link-siblings: ERROR: $*" >&2; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/lockfile.sh
+. "$SCRIPT_DIR/lib/lockfile.sh"
+read_lockfile "$LOCKFILE"
+declare -a SIBLINGS=("${LF_KEYS[@]}")
 
 if [ -n "${MODULEFORGE_SIBLINGS_DIR:-}" ]; then
 	AGGREGATE_DIR="$(cd "$MODULEFORGE_SIBLINGS_DIR" && pwd)"
