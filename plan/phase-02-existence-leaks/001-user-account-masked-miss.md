@@ -57,3 +57,12 @@ architectural_impact: false
 
 - After the helper and the four `UserAccountService` methods, with the service tests green.
 - After the handler and ssh-key changes and the flipped tests.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Validation: gofmt clean; `go vet ./...` and `go vet -tags=integration ./...` clean; `go test ./...` green; `make lint` green; Postgres integration suite (`./internal/authz/...`, throwaway postgres:16 container) ran with 132 passing subtests/tests and 0 skips. Both greps pass (`GetUserAccountByUUID` only in `authorizeUserAccount` and `LoadByUUID`; no `ErrNoRows` in the two handlers).
+- Source: `api/internal/service/user_accounts.go` (new `authorizeUserAccount`), `api/internal/service/ssh_keys.go`, `api/internal/handlers/user_accounts.go`, `api/internal/handlers/assume.go`; tests in `api/internal/service/user_accounts_masked_miss_test.go`, `api/internal/handlers/user_accounts_masked_miss_test.go`, `ssh_keys_test.go`, `user_accounts_upgrade_test.go`.
+- `LoadByUUID` callers: none in non-test code (only the handler-test `userAccountServicer` interface and its stub); nothing exposes it over HTTP, so it is unchanged.
+- Decisions: Assume's admin lookup uses `opctx.EffectiveActorEntityID` (manager decision F4); ssh-key revoke key miss stays a masked 403 (F5). ssh `loadAuthorizedAccount` now goes through the helper, so it requires an authenticated context and authorizes before the archived-holder check; the existing unit tests gained an authenticated context.
+- Wire changes appended to the wire-risk note.

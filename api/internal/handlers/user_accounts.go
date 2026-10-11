@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -149,10 +148,6 @@ func (h *UserAccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	ua, err := h.svc.Get(r.Context(), id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			apiresp.WriteError(w, r, apiresp.ErrNotFound)
-			return
-		}
 		slog.ErrorContext(r.Context(), "user_accounts.get", "error", err)
 		writeServiceError(w, r, err)
 		return

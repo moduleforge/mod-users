@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/moduleforge/core-api/apiresp"
-	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	db "github.com/moduleforge/mod-users/model/db"
@@ -67,10 +66,6 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 
 	sudoUA, actorUA, err := h.svc.Assume(r.Context(), parsed)
 	if err != nil {
-		if errors.Is(err, coreservice.ErrNotFound) {
-			apiresp.WriteError(w, r, apiresp.ErrNotFound)
-			return
-		}
 		slog.ErrorContext(r.Context(), "assume: service error", "error", err)
 		writeServiceError(w, r, err)
 		return

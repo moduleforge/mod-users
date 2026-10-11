@@ -53,13 +53,14 @@ type SSHKey struct {
 // Every method follows the same order of work, per AGENTS.md's
 // "Authorization is checked first" convention and docs/architecture/
 // ssh-keys.md's D9:
-//  1. load the target user_accounts row by UUID -- a miss returns the
-//     masked apiresp.ErrForbidden, never ErrNotFound (existence masking);
+//  1. load the target user_accounts row by UUID and call Authorize against
+//     its account holder entity (authorizeUserAccount), propagating any
+//     error unchanged -- a miss makes a target-0 Authorize call, discards
+//     it and returns the masked apiresp.ErrForbidden, never ErrNotFound
+//     (existence masking);
 //  2. load the account holder entity via coredb.GetEntityByID -- an
-//     archived holder returns the same masked ErrForbidden;
-//  3. call Authorize against the account holder entity, propagating any
-//     error unchanged;
-//  4. only then parse input, touch key data, or write.
+//     archived or missing holder returns the same masked ErrForbidden;
+//  3. only then parse input, touch key data, or write.
 type SSHKeyService struct {
 	db    txhelper.DB
 	q     db.Querier
@@ -85,31 +86,27 @@ func NewSSHKeyService(
 	}
 }
 
-// loadAuthorizedAccount performs steps 1-3 of every SSHKeyService method's
-// order of work: it loads accountUUID's user_accounts row, loads and checks
-// its account holder entity for archival, and authorizes op against that
-// entity. It returns the loaded row and the account holder entity id
+// loadAuthorizedAccount performs steps 1-2 of every SSHKeyService method's
+// order of work: it loads accountUUID's user_accounts row and authorizes op
+// against its account holder entity (masking a miss), then loads and checks
+// the account holder entity for archival. It returns the loaded row and the account holder entity id
 // (needed by callers for the write/audit steps) on success.
 func (s *SSHKeyService) loadAuthorizedAccount(ctx context.Context, accountUUID uuid.UUID, op string) (db.UserAccount, int64, error) {
-	ua, err := s.q.GetUserAccountByUUID(ctx, accountUUID)
+	ua, err := authorizeUserAccount(ctx, s.q, s.az, op, accountUUID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return db.UserAccount{}, 0, apiresp.ErrForbidden
-		}
-		return db.UserAccount{}, 0, fmt.Errorf("ssh_keys: load account: %w", err)
+		return db.UserAccount{}, 0, err
 	}
 
 	accountHolder := ua.AccountHolder
 	entity, err := s.coreQ.GetEntityByID(ctx, accountHolder)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.UserAccount{}, 0, apiresp.ErrForbidden
+		}
 		return db.UserAccount{}, 0, fmt.Errorf("ssh_keys: load account holder entity: %w", err)
 	}
 	if entity.ArchivedAt != nil {
 		return db.UserAccount{}, 0, apiresp.ErrForbidden
-	}
-
-	if err := s.az.Authorize(ctx, op, &accountHolder); err != nil {
-		return db.UserAccount{}, 0, err
 	}
 
 	return ua, accountHolder, nil
