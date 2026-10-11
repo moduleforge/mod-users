@@ -45,4 +45,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'gui/src/lib/api.ts: userAccounts.grantAdmin and revokeAdmin call POST/DELETE /v1/user-accounts/{uuid}/admin, but the server routes (api/internal/handlers/account_routes.go) are POST /user-accounts/{uuid}/grant-admin and /revoke-admin. userAccounts.audit calls GET /v1/user-accounts/{uuid}/audit, which no longer exists (api/cmd/server/main.go documents the audit routes as /v1/audit/by-actor/{uuid} and /v1/audit/by-entity/{entity_uuid}); audit.byEntity sends ?entity_uuid= to /v1/audit. These client methods would 404 or hit the wrong route.'
+    - title: /readyz returns raw DB error unauthenticated
+      id: FAVu
+      date: "2026-10-11"
+      tags:
+        - type:security
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/internal/handlers/health.go Ready writes err.Error() from pool.Ping into the 503 body ("db": ...) on the unauthenticated GET /readyz route. Driver errors can include host, port, user and database names. Log the error server-side and return a fixed value such as "unavailable".'
 closed: []
