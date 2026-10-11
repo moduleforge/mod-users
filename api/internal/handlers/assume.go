@@ -57,10 +57,9 @@ func (h *AssumeHandler) SetSigner(s *auth.Signer) {
 // Returns a JWT where the bearer acts as the assumed user account while the
 // audit trail preserves the original admin identity.
 func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
-	rawUUID := chi.URLParam(r, "uuid")
-	parsed, err := uuid.Parse(rawUUID)
+	parsed, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
 	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 

@@ -45,6 +45,35 @@ type createUserAccountRequest struct {
 	FamilyName string  `json:"family_name"`
 }
 
+// Validate runs the stateless shape checks for POST /v1/user-accounts. It
+// runs inside server.Decode, ahead of authorization, and uses the same codes
+// and messages as UserAccountService.Create (which keeps its own checks for
+// in-process callers).
+func (r *createUserAccountRequest) Validate() []apiresp.FieldError {
+	var out []apiresp.FieldError
+	if strings.TrimSpace(strings.ToLower(r.Email)) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "email", Code: "users.email_required", Message: "email is required",
+		})
+	}
+	if strings.TrimSpace(r.GivenName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "given_name", Code: "users.given_name_required", Message: "given_name is required",
+		})
+	}
+	if strings.TrimSpace(r.FamilyName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "family_name", Code: "users.family_name_required", Message: "family_name is required",
+		})
+	}
+	if r.Password != nil && len(*r.Password) < 12 {
+		out = append(out, apiresp.FieldError{
+			Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
+		})
+	}
+	return out
+}
+
 // Create handles POST /v1/user-accounts (admin).
 func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
@@ -122,8 +151,9 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /v1/user-accounts/{uuid} (admin).
 func (h *UserAccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -152,10 +182,33 @@ type updateUserAccountRequest struct {
 	FamilyName *string `json:"family_name"`
 }
 
+// Validate runs the stateless shape checks for PUT /v1/user-accounts/{uuid}:
+// a present field must not be blank after trimming.
+func (r *updateUserAccountRequest) Validate() []apiresp.FieldError {
+	var out []apiresp.FieldError
+	if r.Email != nil && strings.TrimSpace(*r.Email) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "email", Code: "users.email_required", Message: "email is required",
+		})
+	}
+	if r.GivenName != nil && strings.TrimSpace(*r.GivenName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "given_name", Code: "users.given_name_required", Message: "given_name is required",
+		})
+	}
+	if r.FamilyName != nil && strings.TrimSpace(*r.FamilyName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "family_name", Code: "users.family_name_required", Message: "family_name is required",
+		})
+	}
+	return out
+}
+
 // Update handles PUT /v1/user-accounts/{uuid} (admin).
 func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -180,8 +233,9 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /v1/user-accounts/{uuid} (admin) — soft-deletes by archiving the entity.
 func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -198,8 +252,9 @@ func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Delegates to the injected grantAdmin function, which checks authorization and
 // creates a wildcard manage grant for the target user.
 func (h *UserAccountsHandler) GrantAdmin(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -216,8 +271,9 @@ func (h *UserAccountsHandler) GrantAdmin(w http.ResponseWriter, r *http.Request)
 // Delegates to the injected revokeAdmin function, which checks authorization and
 // deletes the wildcard manage grant for the target user.
 func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -228,17 +284,6 @@ func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request
 	}
 
 	server.JSON(w, http.StatusOK, map[string]any{"uuid": id.String()})
-}
-
-// parseUUIDParam extracts the {uuid} chi URL parameter, writing a 400 on parse failure.
-func parseUUIDParam(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	raw := chi.URLParam(r, "uuid")
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return uuid.UUID{}, false
-	}
-	return id, true
 }
 
 // userAccountResponse builds a public-facing map from a service UserAccount.
