@@ -266,5 +266,6 @@ phases:
             - gKQO
           git:
             branch: plan/users-conformance-08-001
-            commit: []
+            commit:
+                - 9a366ad
             merge: null
