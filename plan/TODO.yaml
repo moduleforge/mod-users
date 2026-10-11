@@ -173,7 +173,7 @@ phases:
           slug: order-tests-self-service-routes
           title: Order Tests for Self, Identities and SSH Key Routes
           path: phase-04-conflicts-and-order-tests/003-order-tests-self-service-routes.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Order tests for 15 self/identities/ssh-keys routes plus D11 gate tests; red check via moving requireStepUp above Decode; no production change. Limit: IdentitiesHandler concrete pool, DELETE identity/password past step-up not driven.'
           git:
