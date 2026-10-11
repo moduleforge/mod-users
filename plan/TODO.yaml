@@ -284,5 +284,6 @@ phases:
           digest: 'Wrote docs/consumer-upgrade-notes.md (EdDSA/verifier API and config, token hardening, CORS, cookie base path and breaking NewIdentitiesHandler cookiePath, GUI and email_verified_at wire name, checkout-deps script and sibling copies, known limits); added Key decisions D13-D17 to docs/architecture.md (repo keeps decisions there, no decisions dir); linked from README; small known-limit additions to cors.md and cookie-path.md. Every name and behavior verified against code; Status table has a disposition for all plan items (overview, notes, 18 task statuses, closed findings). Docs only. Observations: docs/jwt-eddsa.md says JWT_SECRET ''required'' without the DB bootstrap mention (not wrong, covered in new notes); scripts/checkout-deps.sh header has stale ''two carrier-repo copies'' and plan/notes reference.'
           git:
             branch: plan/flow-accounts-upstream-10-001
-            commit: []
+            commit:
+                - 1a40140
             merge: null
