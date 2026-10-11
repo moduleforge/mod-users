@@ -16,7 +16,8 @@ phases:
           digest: 'Added api/internal/auth/derived_keys.go: HKDF-SHA256 derivation of OAuth-state and step-up keys from the Ed25519 seed with labels mod-users/v1/oauth-state and mod-users/v1/step-up; resolvers prefer an explicit JWTSecret, else derive under EdDSA, never return empty. Known-answer vectors cross-checked vs RFC 5869. Unit tests, vet pass.'
           git:
             branch: plan/catalog-ent-and-derived-keys-03-001
-            commit: []
+            commit:
+                - c620d57
             merge: null
         - number: 2
           slug: optional-jwt-secret-wiring-and-docs
