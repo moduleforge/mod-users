@@ -37,18 +37,6 @@ func NewUserAccountsHandler(service *svc.UserAccountService, grantAdmin, revokeA
 	return &UserAccountsHandler{svc: service, grantAdmin: grantAdmin, revokeAdmin: revokeAdmin}
 }
 
-// writeServiceError maps a service error to the appropriate HTTP response.
-//
-// localAuthz.ErrUnauthenticated/ErrForbidden, svc.ErrInvalidInput, and
-// svc.ErrEmailTaken are all promoted aliases of (or, for ErrEmailTaken,
-// built directly via) apiresp's canonical sentinels, so a plain
-// apiresp.WriteError classifies every one of them correctly — including
-// field-level details, e.g. svc.ErrEmailTaken's users.email_taken detail —
-// with no local mapping-point special case.
-func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
-	apiresp.WriteError(w, r, err)
-}
-
 // createUserAccountRequest is the body for POST /v1/user-accounts (admin).
 type createUserAccountRequest struct {
 	Email      string  `json:"email"`
@@ -64,7 +52,7 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		// Authorize before reporting a malformed body so an unauthorized
 		// caller gets 403, not a 400 request-shape oracle.
 		if aerr := h.svc.AuthorizeCreate(r.Context()); aerr != nil {
-			writeServiceError(w, r, aerr)
+			apiresp.WriteError(w, r, aerr)
 			return
 		}
 		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
@@ -81,7 +69,7 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, svc.ErrInvalidInput) {
 			slog.ErrorContext(r.Context(), "user_accounts.create", "error", err)
 		}
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -124,7 +112,7 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.list", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -149,7 +137,7 @@ func (h *UserAccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	ua, err := h.svc.Get(r.Context(), id)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.get", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -191,7 +179,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.update", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -207,7 +195,7 @@ func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.delete", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -225,7 +213,7 @@ func (h *UserAccountsHandler) GrantAdmin(w http.ResponseWriter, r *http.Request)
 
 	if err := h.grantAdmin(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.grant-admin", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -243,7 +231,7 @@ func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request
 
 	if err := h.revokeAdmin(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.revoke-admin", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 

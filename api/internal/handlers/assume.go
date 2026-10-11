@@ -67,7 +67,7 @@ func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
 	sudoUA, actorUA, err := h.svc.Assume(r.Context(), parsed)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "assume: service error", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
