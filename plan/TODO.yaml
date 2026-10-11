@@ -59,6 +59,7 @@ phases:
           path: phase-03-decode-and-shape/001-remove-pass-through-wrappers.md
           done: false
           tier: haiku-med
+          digest: Removed writeAuthzError, writeServiceError and writeCoreServiceErr wrappers; all call sites use apiresp.WriteError; two wrapper-named tests renamed; ZVum comments reworded; no behavior change; make lint passes.
           git:
             branch: null
             commit: []
