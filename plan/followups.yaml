@@ -881,3 +881,11 @@ items:
         - priority:low
         - effort:small
       text: 'GET /v1/apps/{uuid}/user-accounts (api/internal/handlers/apps.go ListAppUsers, ~line 160) returns each member as {user_account_id: <internal BIGINT>, roles}, violating the AGENTS.md convention that internal IDs are never exposed in HTTP responses (only uuid fields). The GUI type gui/src/lib/api.ts AppMembersResponse/AppMember ({members: [{user_uuid, email, given_name, family_name, role, added_at}]}) does not match the server shape ({user_accounts: [{user_account_id, roles}]}) either. Fix: return the member''s user account uuid (join user_accounts in model/queries/apps_user_accounts.sql ListAppUserAccounts) and align the GUI response type; record the wire change for consumers.'
+    - title: OpenAPI user-account paths are stale
+      id: fs0H
+      date: "2026-10-11"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:medium
+      text: api/openapi.yaml (AGENTS.md calls it the authoritative REST spec) documents /v1/users, /v1/users/{user_uuid}, /v1/users/{user_uuid}/grant, /v1/users/{user_uuid}/assume and /v1/users/{user_uuid}/audit, but the served routes (api/internal/handlers/account_routes.go RegisterAccountRoutes) are /v1/user-accounts, /v1/user-accounts/{uuid}, /grant-admin, /revoke-admin and /assume; the audit route moved to /v1/audit (mod-audit). docs/architecture.md's API-surface table repeats the /v1/users names. Separate from followup biJk (identities surface missing). Rewrite these paths and their request/response/error schemas to match the handlers.
