@@ -43,7 +43,17 @@ phases:
     - number: 3
       slug: decode-and-shape
       title: Decode and Shape Before Authorization
-      tasks: []
+      tasks:
+        - number: 1
+          slug: remove-pass-through-wrappers
+          title: Remove Pass-Through Error Wrappers
+          path: phase-03-decode-and-shape/001-remove-pass-through-wrappers.md
+          done: false
+          tier: haiku-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
