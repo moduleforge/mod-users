@@ -180,7 +180,7 @@ phases:
             branch: plan/users-conformance-04-003
             commit:
                 - 73f3b09
-            merge: null
+            merge: 046389bdd2ab
         - number: 4
           slug: order-tests-credential-and-public-routes
           title: Order Tests for Credential and Public Routes
