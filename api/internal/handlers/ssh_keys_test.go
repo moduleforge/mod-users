@@ -191,7 +191,7 @@ func TestSSHKeysRoutes_MountedAtRightPathAndMethod(t *testing.T) {
 
 			var req *http.Request
 			if tt.method == http.MethodPost {
-				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: stepordValidKey})
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}
@@ -236,7 +236,7 @@ func TestSSHKeysHandler_StepUp_SelfRoutes_FlagOn_NoToken_Returns409(t *testing.T
 
 			var req *http.Request
 			if tt.method == http.MethodPost {
-				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: stepordValidKey})
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}
@@ -290,7 +290,7 @@ func TestSSHKeysHandler_StepUp_SelfRoutes_FlagOn_ValidToken_Proceeds(t *testing.
 
 			var req *http.Request
 			if tt.method == http.MethodPost {
-				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: stepordValidKey})
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}
@@ -316,7 +316,7 @@ func TestSSHKeysHandler_StepUp_SelfRoutes_FlagOff_NoTokenNeeded(t *testing.T) {
 	h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, false)
 	r := newSSHKeysTestRouter(h)
 
-	req := jsonRequest(t, http.MethodPost, "/self/ssh-keys", registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+	req := jsonRequest(t, http.MethodPost, "/self/ssh-keys", registerSSHKeyRequest{PublicKey: stepordValidKey})
 	req = withUC(req, uc)
 
 	rec := httptest.NewRecorder()
@@ -363,7 +363,7 @@ func TestSSHKeysHandler_OperatorRoutes_NeverStepUpGated(t *testing.T) {
 
 			var req *http.Request
 			if tt.method == http.MethodPost {
-				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: stepordValidKey})
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}
@@ -410,7 +410,7 @@ func TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_NoToken_Retur
 
 			var req *http.Request
 			if tt.method == http.MethodPost {
-				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: stepordValidKey})
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}
@@ -467,7 +467,7 @@ func TestSSHKeysHandler_StepUp_OperatorRoutes_SelfTargeting_FlagOn_ValidToken_Pr
 
 			var req *http.Request
 			if tt.method == http.MethodPost {
-				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: stepordValidKey})
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}
@@ -499,7 +499,7 @@ func TestSSHKeysHandler_StepUp_OperatorRoutes_DifferentAccount_FlagOn_NoTokenNee
 	h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, true)
 	r := newSSHKeysTestRouter(h)
 
-	req := jsonRequest(t, http.MethodPost, "/user-accounts/"+otherAccountUUID.String()+"/ssh-keys", registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+	req := jsonRequest(t, http.MethodPost, "/user-accounts/"+otherAccountUUID.String()+"/ssh-keys", registerSSHKeyRequest{PublicKey: stepordValidKey})
 	req = withUC(req, uc)
 
 	rec := httptest.NewRecorder()
@@ -573,7 +573,7 @@ func TestSSHKeysHandler_StatusMapping_Conflict(t *testing.T) {
 	h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, false)
 	r := newSSHKeysTestRouter(h)
 
-	req := jsonRequest(t, http.MethodPost, "/self/ssh-keys", registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+	req := jsonRequest(t, http.MethodPost, "/self/ssh-keys", registerSSHKeyRequest{PublicKey: stepordValidKey})
 	req = withUC(req, uc)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -603,7 +603,7 @@ func TestSSHKeysHandler_RegisterSuccess_ReturnsDocumentedFieldsNoInternalIDs(t *
 	h := NewSSHKeysHandler(svc, stepUpTestSecret, &sync.Map{}, false)
 	r := newSSHKeysTestRouter(h)
 
-	req := jsonRequest(t, http.MethodPost, "/self/ssh-keys", registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+	req := jsonRequest(t, http.MethodPost, "/self/ssh-keys", registerSSHKeyRequest{PublicKey: stepordValidKey})
 	req = withUC(req, uc)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -683,7 +683,7 @@ func TestSSHKeysHandler_MalformedUUID_Returns400(t *testing.T) {
 
 			var req *http.Request
 			if tt.method == http.MethodPost {
-				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: "ssh-ed25519 AAAA"})
+				req = jsonRequest(t, tt.method, tt.path, registerSSHKeyRequest{PublicKey: stepordValidKey})
 			} else {
 				req = httptest.NewRequest(tt.method, tt.path, nil)
 			}

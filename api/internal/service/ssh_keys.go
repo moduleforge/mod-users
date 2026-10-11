@@ -321,42 +321,85 @@ func sshKeyAuditSnapshot(row db.ModUsersSshPublicKey, stepUpUsed bool) map[strin
 	}
 }
 
-// mapSSHKeyParseError maps a sshkey.Parse error to its detail code on
-// field "public_key", per the sentinel-to-detail-code table
-// api/internal/sshkey defines. A sentinel this function does not recognize
-// is wrapped and returned as an internal error rather than silently
-// defaulting to one of the known codes.
-func mapSSHKeyParseError(err error) error {
+// sshKeyParseFieldError maps a sshkey.Parse error to its detail on field
+// "public_key", per the sentinel-to-detail-code table api/internal/sshkey
+// defines. ok is false for a sentinel it does not recognize.
+func sshKeyParseFieldError(err error) (fe apiresp.FieldError, ok bool) {
 	switch {
 	case errors.Is(err, sshkey.ErrTooWeak):
-		return apiresp.InvalidInput(apiresp.FieldError{
+		return apiresp.FieldError{
 			Field: "public_key", Code: "users.ssh_key_too_weak", Message: "key is too weak",
-		})
+		}, true
 	case errors.Is(err, sshkey.ErrUnsupportedType):
-		return apiresp.InvalidInput(apiresp.FieldError{
+		return apiresp.FieldError{
 			Field: "public_key", Code: "users.ssh_key_type_unsupported", Message: "key type is not supported",
-		})
+		}, true
 	case errors.Is(err, sshkey.ErrInvalid):
-		return apiresp.InvalidInput(apiresp.FieldError{
+		return apiresp.FieldError{
 			Field: "public_key", Code: "users.ssh_key_invalid", Message: "key is invalid",
-		})
+		}, true
 	default:
-		return fmt.Errorf("ssh_keys: parse public key: %w", err)
+		return apiresp.FieldError{}, false
 	}
 }
 
-// mapSSHKeyLabelError maps a sshkey.NormalizeLabel error to its detail
-// code on field "label".
-func mapSSHKeyLabelError(err error) error {
-	if errors.Is(err, sshkey.ErrLabelTooLong) {
-		return apiresp.InvalidInput(apiresp.FieldError{
+// sshKeyLabelFieldError maps a sshkey.NormalizeLabel error to its detail on
+// field "label". ok is false for a sentinel it does not recognize.
+func sshKeyLabelFieldError(err error) (fe apiresp.FieldError, ok bool) {
+	switch {
+	case errors.Is(err, sshkey.ErrLabelTooLong):
+		return apiresp.FieldError{
 			Field: "label", Code: "users.ssh_key_label_too_long", Message: "label is too long",
-		})
-	}
-	if errors.Is(err, sshkey.ErrLabelInvalidChars) {
-		return apiresp.InvalidInput(apiresp.FieldError{
+		}, true
+	case errors.Is(err, sshkey.ErrLabelInvalidChars):
+		return apiresp.FieldError{
 			Field: "label", Code: "users.ssh_key_label_invalid", Message: "label contains invalid characters",
-		})
+		}, true
+	default:
+		return apiresp.FieldError{}, false
+	}
+}
+
+// mapSSHKeyParseError maps a sshkey.Parse error to its invalid-input error.
+// A sentinel this function does not recognize is wrapped and returned as an
+// internal error rather than silently defaulting to one of the known codes.
+func mapSSHKeyParseError(err error) error {
+	if fe, ok := sshKeyParseFieldError(err); ok {
+		return apiresp.InvalidInput(fe)
+	}
+	return fmt.Errorf("ssh_keys: parse public key: %w", err)
+}
+
+// mapSSHKeyLabelError maps a sshkey.NormalizeLabel error to its
+// invalid-input error.
+func mapSSHKeyLabelError(err error) error {
+	if fe, ok := sshKeyLabelFieldError(err); ok {
+		return apiresp.InvalidInput(fe)
 	}
 	return fmt.Errorf("ssh_keys: normalize label: %w", err)
+}
+
+// ValidateSSHKeyShape runs the stateless key and label checks Register
+// performs (sshkey.Parse, sshkey.NormalizeLabel) and returns them as field
+// errors with the same detail codes Register produces. It touches no state,
+// so an HTTP handler can call it before any step-up or authorization gate and
+// report a malformed request as 400. publicKeyLine must be non-empty (the
+// caller's required-field check owns that). An unrecognized parser sentinel
+// is reported as users.ssh_key_invalid; Register remains the authoritative
+// check for in-process callers.
+func ValidateSSHKeyShape(publicKeyLine string, label *string) []apiresp.FieldError {
+	parsed, err := sshkey.Parse(publicKeyLine)
+	if err != nil {
+		if fe, ok := sshKeyParseFieldError(err); ok {
+			return []apiresp.FieldError{fe}
+		}
+		return []apiresp.FieldError{{Field: "public_key", Code: "users.ssh_key_invalid", Message: "key is invalid"}}
+	}
+	if _, err := sshkey.NormalizeLabel(label, parsed.Comment); err != nil {
+		if fe, ok := sshKeyLabelFieldError(err); ok {
+			return []apiresp.FieldError{fe}
+		}
+		return []apiresp.FieldError{{Field: "label", Code: "users.ssh_key_label_invalid", Message: "label contains invalid characters"}}
+	}
+	return nil
 }

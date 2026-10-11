@@ -35,3 +35,10 @@ architectural_impact: false
 ## Assumptions
 
 - Findings `jAXe`, `P2k6` and `gKQO` are open in the plan findings store and are closed by this task.
+
+## Status
+
+- Outcome: succeeded (2026-10-11). Findings `jAXe`, `P2k6`, `gKQO` addressed.
+- Changes: `api/internal/handlers/ssh_keys.go` (`Validate` runs key/label checks), `api/internal/service/ssh_keys.go` (exported `ValidateSSHKeyShape`; shared field-error mappers), `api/internal/auth/oauth.go` (`ErrInvalidReturnPath`, exported `ValidateReturnPath`), `api/internal/handlers/identities.go` (`StartLink` validates `return` before step-up; non-404 link failures are wrapped 500s; `oauth` field is now a small `linkAuthorizer` interface), `api/internal/service/user_accounts.go` (`AuthorizeCreate` comment), tests in `api/internal/handlers/step_up_ordering_test.go` plus valid-key fixtures in `ssh_keys_test.go` and `self_service_shape_test.go`, and `plan/notes/wire-risk.md`.
+- Validation: gofmt clean; `go vet` (plain and `-tags=integration`), `make lint`, `go test ./...` pass; Postgres integration suites (`internal/authz`, `internal/config`) ran with 250 passes and 0 skips.
+- Decision: new detail code `users.return_path_invalid` (field `return`) for a malformed return query.
