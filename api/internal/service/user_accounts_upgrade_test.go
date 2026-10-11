@@ -231,6 +231,11 @@ type fakeTx struct {
 	mu      sync.Mutex
 	execs   []string       // SQL strings passed to Exec
 	queryUA db.UserAccount // returned by QueryRow (GetUserAccountByID)
+
+	// execErr, when non-nil, is returned by an Exec whose SQL contains
+	// execErrSubstr (the statement is still recorded in execs).
+	execErr       error
+	execErrSubstr string
 }
 
 func (f *fakeTx) execWasCalled(sqlSubstr string) bool {
@@ -249,6 +254,9 @@ func (f *fakeTx) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTa
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.execs = append(f.execs, sql)
+	if f.execErr != nil && strings.Contains(sql, f.execErrSubstr) {
+		return pgconn.CommandTag{}, f.execErr
+	}
 	return pgconn.NewCommandTag("OK"), nil
 }
 
