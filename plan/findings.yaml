@@ -1,0 +1,57 @@
+version: 2
+items:
+    - title: GUI reset-password sends new_password
+      id: 9qmR
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: gui/src/lib/api.ts ResetPasswordRequest and gui/src/components/reset-password-page.tsx send {token, new_password} to POST /v1/auth/password-reset/confirm, but api/internal/handlers/auth/reset.go (passwordResetConfirmBody) reads the field "password". The decoder silently drops new_password, so the password is empty and every GUI reset attempt is answered with 400 users.password_too_short. Fix the GUI field name (or accept new_password server-side). Becomes an invalid_json_body 400 once the server decodes strictly (unknown fields rejected), so it must be fixed before strict decoding lands.
+    - title: Create never returns 409 email_taken
+      id: 4Olf
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/internal/service/user_accounts.go: UserAccountService.Create wraps the CreateUserAccount error with fmt.Errorf("...: %w") inside the txhelper.Run closure, then isPgUniqueViolation/extractPgError (user_accounts.go ~756-769) type-assert *pgconn.PgError directly instead of using errors.As. A duplicate email (user_accounts.email is UNIQUE) therefore never maps to ErrEmailTaken and POST /v1/user-accounts answers 500 instead of 409 users.email_taken. UpdateUserAccount''s duplicate-email path has the same shape. Match with errors.As (ssh_keys.go Register already works because its closure returns the raw error).'
+    - title: credential_change code violates CHECK
+      id: bc1h
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: api/internal/handlers/identities.go sendStepUpCode inserts an email_codes row with purpose "credential_change", but model/migrations/sql/0100_baseline.sql defines CHECK (purpose IN ('login', 'verify_email')) on email_codes and no later migration changes it. By reading the source (not run against a database) the insert fails, is only logged, and POST /v1/self/credential/step-up answers 204 without ever creating or sending a code, which would leave step-up verification unusable when AUTH_REQUIRE_STEP_UP is on. Verify against a live database and either widen the CHECK or change the purpose.
+    - title: Fire-and-forget email sends use dead ctx
+      id: 1KXD
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: api/internal/handlers/auth/reset.go PasswordResetRequest and api/internal/handlers/auth/register.go Register (the verify_email send) start a goroutine that uses r.Context() and the handler then returns immediately. net/http cancels the request context when ServeHTTP returns, so the goroutine's DB and send calls run on a canceled context and most likely fail (errors are only logged). EmailCodeRequest avoids this by waiting for the goroutine. Detach with context.WithoutCancel (plus a timeout) or wait for completion.
+    - title: GUI admin/audit paths do not match server
+      id: bxIA
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: 'gui/src/lib/api.ts: userAccounts.grantAdmin and revokeAdmin call POST/DELETE /v1/user-accounts/{uuid}/admin, but the server routes (api/internal/handlers/account_routes.go) are POST /user-accounts/{uuid}/grant-admin and /revoke-admin. userAccounts.audit calls GET /v1/user-accounts/{uuid}/audit, which no longer exists (api/cmd/server/main.go documents the audit routes as /v1/audit/by-actor/{uuid} and /v1/audit/by-entity/{entity_uuid}); audit.byEntity sends ?entity_uuid= to /v1/audit. These client methods would 404 or hit the wrong route.'
+    - title: /readyz returns raw DB error unauthenticated
+      id: FAVu
+      date: "2026-10-11"
+      tags:
+        - type:security
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/internal/handlers/health.go Ready writes err.Error() from pool.Ping into the 503 body ("db": ...) on the unauthenticated GET /readyz route. Driver errors can include host, port, user and database names. Log the error server-side and return a fixed value such as "unavailable".'
+closed: []
