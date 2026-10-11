@@ -18,7 +18,7 @@ phases:
             branch: plan/catalog-ent-and-derived-keys-03-001
             commit:
                 - c620d57
-            merge: null
+            merge: bc19ca6c996b4042b525a99e1ed95be7b84a347e
         - number: 2
           slug: optional-jwt-secret-wiring-and-docs
           title: Make JWT_SECRET Optional Under EdDSA, Wire Derived Keys, And Document
