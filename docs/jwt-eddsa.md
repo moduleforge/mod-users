@@ -109,8 +109,12 @@ OAuth state and step-up tokens are HMAC-signed, not asymmetric. Under
 `JWT_ALG=EdDSA` they need no separate secret:
 
 - **Precedence.** An explicit `JWT_SECRET` wins and is used as-is for both
-  purposes (no length policy change). When it is unset, each key is derived from
-  `JWT_SIGNING_KEY`. The Postgres secret bootstrap never runs under EdDSA.
+  purposes (no length policy change). A blank or whitespace-only `JWT_SECRET` is
+  treated as unset under EdDSA. When it is unset, each key is derived from
+  `JWT_SIGNING_KEY`. An explicit `JWT_SECRET` keys both OAuth state and step-up,
+  so the label separation below does not apply; the token types stay
+  distinguishable by structure and purpose claim (OAuth state) or the `typ`
+  header (step-up). The Postgres secret bootstrap never runs under EdDSA.
 - **Derivation.** HKDF-SHA256 (RFC 5869): input keying material is the Ed25519
   key's 32-byte seed, no salt, 32-byte output, and the purpose label is the HKDF
   info input. Labels: `mod-users/v1/oauth-state` (OAuth state signer) and

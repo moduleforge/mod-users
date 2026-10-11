@@ -28,3 +28,7 @@ Under EdDSA, `JWT_SECRET` is no longer required. On main a whitespace-only value
 
 - Finding `WutU` in this plan's `plan/findings.yaml` (type:security).
 - Finding `ccun` in this plan's `plan/findings.yaml` (type:style).
+
+## Status
+
+Outcome: succeeded (2026-10-11). `resolveKey` treats blank/whitespace-only `JWT_SECRET` as unset; `config.Load` normalizes it to `""` under EdDSA only; `main.go` comment reordered; `docs/jwt-eddsa.md` Precedence updated. Tests added in `api/internal/auth/derived_keys_test.go` and `api/internal/config/jwt_signing_test.go`. `go test` (auth, config, handlers), `go vet ./...`, `make build.api` pass; `make lint` fails only on the pre-existing `identities.go:415` allowlist check (0NVf); golangci-lint reports only pre-existing issues in unchanged lines.

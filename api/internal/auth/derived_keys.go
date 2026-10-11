@@ -5,6 +5,7 @@ import (
 	"crypto/hkdf"
 	"crypto/sha256"
 	"errors"
+	"strings"
 
 	"github.com/moduleforge/mod-users/api/internal/config"
 )
@@ -60,12 +61,14 @@ func deriveKey(key ed25519.PrivateKey, label string) ([]byte, error) {
 	return out, nil
 }
 
-// resolveKey applies the precedence rule: an explicit JWTSecret wins
-// (including the whole HS256 path); otherwise, under EdDSA, the key is
+// resolveKey applies the precedence rule: an explicit, non-blank JWTSecret
+// wins byte-for-byte and untrimmed (including the whole HS256 path); a blank
+// or whitespace-only JWTSecret is treated as unset and is never returned as
+// key material; otherwise, under EdDSA, the key is
 // derived from the signing key under label; otherwise an error is returned.
 // It never returns an empty key with a nil error.
 func resolveKey(lc config.LocalAuthConfig, label string) ([]byte, error) {
-	if lc.JWTSecret != "" {
+	if strings.TrimSpace(lc.JWTSecret) != "" {
 		return []byte(lc.JWTSecret), nil
 	}
 	if lc.JWTAlg == config.JWTAlgEdDSA && len(lc.JWTSigningKey) > 0 {

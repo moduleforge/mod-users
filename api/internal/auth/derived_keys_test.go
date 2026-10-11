@@ -191,3 +191,37 @@ func TestIssueStepUpTokenEmptySecretGuard(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+func TestResolversBlankSecretTreatedAsUnset(t *testing.T) {
+	key := testSigningKey(7)
+	for name, fn := range map[string]func(config.LocalAuthConfig) ([]byte, error){
+		"state": OAuthStateKey, "stepup": StepUpKey,
+	} {
+		t.Run(name, func(t *testing.T) {
+			want, err := fn(eddsaCfg("", key))
+			if err != nil {
+				t.Fatalf("derive: %v", err)
+			}
+			for _, blank := range []string{"   ", "\t\n"} {
+				got, err := fn(eddsaCfg(blank, key))
+				if err != nil || !bytes.Equal(got, want) {
+					t.Errorf("blank %q: want derived key, got %x, %v", blank, got, err)
+				}
+				// No derivation under HS256 or without a signing key.
+				for _, lc := range []config.LocalAuthConfig{
+					{JWTSecret: blank, JWTAlg: config.JWTAlgHS256, JWTSigningKey: key},
+					{JWTSecret: blank, JWTAlg: config.JWTAlgEdDSA},
+				} {
+					got, err := fn(lc)
+					if err == nil || len(got) != 0 {
+						t.Errorf("blank %q: want error and no key, got %x, %v", blank, got, err)
+					}
+				}
+			}
+			got, err := fn(eddsaCfg("  padded  ", key))
+			if err != nil || string(got) != "  padded  " {
+				t.Errorf("non-blank secret must be untrimmed: %q, %v", got, err)
+			}
+		})
+	}
+}
