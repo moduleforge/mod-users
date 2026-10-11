@@ -29,7 +29,17 @@ phases:
     - number: 2
       slug: existence-leaks
       title: Close Existence Leaks
-      tasks: []
+      tasks:
+        - number: 1
+          slug: user-account-masked-miss
+          title: Mask User Account Misses in the Service Layer
+          path: phase-02-existence-leaks/001-user-account-masked-miss.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 3
       slug: decode-and-shape
       title: Decode and Shape Before Authorization
