@@ -265,5 +265,6 @@ phases:
           digest: 'Added 11 test cases to scripts/test-checkout-deps.sh (69 PASS): bash -x and SHELLOPTS=xtrace for --verify --remote and --pinned (with trace-present positive controls), trailing-dot host, lookalike host, CRLF lockfile, GitHub.com case-insensitivity, glob allowlist case, direct git_fetch_auth allowlist re-check via function extraction (re-check unreachable from CLI). Fixed token_host_allowed to run under local set -f (restoring caller setting). Negative control (replacing set +x in git_fetch_auth) made the --pinned xtrace cases fail. --verify --remote xtrace cases cannot detect a removed guard (output discarded); only --pinned cases do. shellcheck clean. The set -f change must be mirrored in sibling copies (app-mftodo and app-mfgit use read -a instead; app-mfmanager in progress).'
           git:
             branch: plan/flow-accounts-upstream-09-002
-            commit: []
+            commit:
+                - 4bd299e
             merge: null
