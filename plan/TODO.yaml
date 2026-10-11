@@ -124,16 +124,18 @@ phases:
             branch: plan/users-conformance-03-006
             commit:
                 - f56122a
-            merge: null
+            merge: ec2f72ca4bc9d6c0be5f3e8ad00823457f51cfd0
         - number: 7
           slug: public-auth-error-literals
           title: Convert Public Auth Error Literals to Sentinels
           path: phase-03-decode-and-shape/007-public-auth-error-literals.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Converted 48 literal sites in handlers/auth (36 500s to apiresp.WriteError wraps, 400s with details and 7 new detail codes, 3 unknown-provider 404s); kept 11 literals (6 credential-failure 401s, 5 register literals per F3) with literal-keep markers; lint script now checks handlers/ (3) and handlers/auth (11); public_error_shape tests; docs/cookie-path.md updated; integration 250 pass 0 skip.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-03-007
+            commit:
+                - a244ae4
             merge: null
     - number: 4
       slug: conflicts-and-order-tests
