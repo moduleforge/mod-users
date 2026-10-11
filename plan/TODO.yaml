@@ -121,7 +121,7 @@ phases:
           tier: sonnet-high
           digest: 'OIDC config credential routes: ambient credentials then decode (400) then body setup_token (401) with documented credential-in-body exception; parseBody 1 MiB allowlist with unknown-key 400; GET provider bad id now 400; 409 uses apiresp.Conflict detail users.oidc_provider_exists (carve-outs 3); oidccfg tests (red then green); credential-failure 401s and action-required envelopes preserved; header now wins over a wrong body token; integration 261 pass 0 skip.'
           git:
-            branch: null
+            branch: plan/users-conformance-03-006
             commit: []
             merge: null
         - number: 7
