@@ -168,7 +168,7 @@ phases:
             branch: plan/users-conformance-04-002
             commit:
                 - 631b627
-            merge: null
+            merge: a1b638ef3f13
         - number: 3
           slug: order-tests-self-service-routes
           title: Order Tests for Self, Identities and SSH Key Routes
