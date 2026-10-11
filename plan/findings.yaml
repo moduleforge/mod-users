@@ -72,4 +72,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: POST /v1/oidc-config/confirm (api/internal/handlers/oidc_config.go, OIDCConfigHandler.Confirm) passes enabled_providers through normalizeEnabledSet, which lowercases, dedupes and silently DROPS ids that are not in the env registry; the request still succeeds with 200 and the response gives no hint that an id was ignored. The HTTP error-precedence rule would classify a referenced value outside a registry as 422 after authorization, but that would be a new behavior for the config page and its status semantics, so no status was chosen and the current behavior is kept (pinned by TestNormalizeEnabledSet_DropsUnknown). Decide whether unknown ids should become 422 (with a details entry per id), stay silently ignored (document it), or be echoed back in the response.
+    - title: ssh key parse runs after step-up
+      id: jAXe
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:decode-and-shape
+        - priority:unspecified
+        - effort:unspecified
+      text: On the self ssh-key register routes (api/internal/handlers/ssh_keys.go RegisterSelf and the service Register), sshkey.Parse and NormalizeLabel still run service-side after checkStepUp, so a malformed key or label presented with a single-use step-up token consumes the token and then returns 400, and without a token returns 409 step_up_required instead of 400. Add sshkey.Parse and NormalizeLabel checks (stateless, no DB) to registerSSHKeyRequest.Validate so they run before checkStepUp, keeping the service copies for in-process callers, with tests that a malformed key or label does not consume a presented step-up token and returns 400 even with no token, and update the wire-risk entry (it records 409-first but not the token consumption).
 closed: []
