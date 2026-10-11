@@ -52,3 +52,13 @@ architectural_impact: false
 ## Assumptions
 
 - Task 4.2 has landed. Task 4.4 must not run in parallel with this one (same package).
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Added `api/internal/handlers/self_service_order_test.go` only; no production code and no change to `order_helpers_test.go` (the shared fakes were reused as is; new fakes use the `orderSelf` prefix).
+- Operator SSH-key routes (list, register, revoke): `ordertest.Run` with masked miss (403), malformed key/JSON 400 for the forbidden caller (D10), duplicate key 409 and unknown key (masked 403) as late cases. Other 12 routes: explicit table test (anonymous 401; malformed 400 with and without a step-up token and without consuming it; missing token 409 `users.step_up_required` envelope; success path where fakeable), plus credential 401s after shape and `natural_persons.*` blank-name codes on `PUT /self` (D5).
+- D11 gate tests: unverified caller with malformed body gets 403 `users.email_unverified` on every write route (read routes ungated); unconfirmed OIDC state gives 503 before 401. Both carry a comment naming the documented exception.
+- Limit: `IdentitiesHandler` holds a concrete `*pgxpool.Pool`, so `Unlink` and `RemovePassword` cannot be driven past step-up; their order is covered up to the step-up gate only.
+- Red before green: moving `requireStepUp` above `Decode` in `SetPassword` failed 11 subtests (all `POST /self/credential/password` malformed-body 400 cases and the no-token cases); reverted, all green.
+- Validation: gofmt, vet, `go test ./internal/handlers -run Order -v` (518 passes, 0 fail), `go test ./...`, `make lint` all pass; the only changed file outside `plan/` is the new test file.
