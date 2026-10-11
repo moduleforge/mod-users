@@ -76,7 +76,7 @@ phases:
             branch: plan/users-conformance-03-002
             commit:
                 - 071c510
-            merge: null
+            merge: 324a392dd3745076c014650569c6cf3e9aa3e90d
         - number: 3
           slug: user-accounts-and-self-shape
           title: Stateless Checks Before Authorization for User Accounts and Self
