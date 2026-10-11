@@ -6,8 +6,8 @@
 # server.Error(...)/server.ErrorWithDetails(...) call sites in the top-level
 # api/internal/handlers/*.go package onto apiresp.WriteError(w, r, err), which
 # classifies errors via sentinel matching instead of hand-picked HTTP
-# status/code/message literals. Exactly 4 documented carve-outs remain (see
-# ALLOWLIST below), each justified by a comment referencing followup ZVum:
+# status/code/message literals. Exactly 4 documented carve-outs remain (marked
+# by a comment), each justified by a comment referencing followup ZVum:
 # apiresp currently exposes no public detail/message-carrying constructor for
 # the specific error shapes those 4 sites need (409 conflict with a custom
 # message, and two authentication-detail-carrying 401s), so they cannot be
@@ -42,26 +42,13 @@ fi
 
 HANDLERS_DIR="$(cd "$SCRIPT_DIR/../internal/handlers" && pwd)"
 
-# Documented carve-out call sites (file:line), each with an in-source
-# justification comment referencing followup ZVum. Update this list only in
-# lockstep with adding/removing/moving a justified literal call.
-ALLOWLIST=(
-  "oidc_providers.go:222"
-  "identities.go:318"
-  "identities.go:397"
-  "identities.go:415"
-)
-
-is_allowlisted() {
-  local candidate="$1"
-  local entry
-  for entry in "${ALLOWLIST[@]}"; do
-    if [[ "$candidate" == "$entry" ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
+# Carve-outs are keyed on a stable in-source marker, not line numbers: a
+# literal call is allowed only when a "followup ZVum" justification comment
+# appears within MARKER_WINDOW lines above it (each marker covers one call).
+# Edits elsewhere in a file therefore never desync the check.
+MARKER='followup ZVum'
+MARKER_WINDOW=8
+EXPECTED_CARVEOUTS=4
 
 # Collect every top-level *.go file directly in handlers/ (glob does not
 # descend into subdirectories, so handlers/auth/ is excluded automatically),
@@ -83,27 +70,27 @@ fi
 # "(w," (the http.ResponseWriter argument), not just the bare package.symbol
 # substring. This is what keeps a justification comment mentioning
 # "server.ErrorWithDetails" in prose from being counted as a hit.
-matches="$(grep -n -E 'server\.(Error|ErrorWithDetails)\(w,' "${files[@]}" 2>/dev/null || true)"
+# Emit "<status> <path>:<line>" per call site (status ok|bad); a call is ok
+# when an unconsumed marker comment precedes it within MARKER_WINDOW lines.
+results="$(awk -v marker="$MARKER" -v win="$MARKER_WINDOW" '
+  FNR == 1 { m = 0 }
+  index($0, marker) { m = FNR }
+  /server\.(Error|ErrorWithDetails)\(w,/ {
+    if (m > 0 && FNR - m <= win) { print "ok " FILENAME ":" FNR; m = 0 }
+    else print "bad " FILENAME ":" FNR
+  }
+' "${files[@]}")"
 
 violations=()
-seen_allowlisted=()
-
-if [[ -n "$matches" ]]; then
-  while IFS= read -r line; do
-    [[ -z "$line" ]] && continue
-    # grep -n with multiple files prefixes: <path>:<lineno>:<content>
-    fullpath="${line%%:*}"
-    rest="${line#*:}"
-    lineno="${rest%%:*}"
-    base="$(basename "$fullpath")"
-    key="${base}:${lineno}"
-    if is_allowlisted "$key"; then
-      seen_allowlisted+=("$key")
-    else
-      violations+=("$fullpath:$lineno")
-    fi
-  done <<< "$matches"
-fi
+ok_count=0
+while IFS= read -r line; do
+  [[ -z "$line" ]] && continue
+  if [[ "${line%% *}" == "ok" ]]; then
+    ok_count=$((ok_count + 1))
+  else
+    violations+=("${line#* }")
+  fi
+done <<< "$results"
 
 if [[ ${#violations[@]} -gt 0 ]]; then
   echo "check-server-error-literals: found literal server.Error/server.ErrorWithDetails call(s) outside the documented allowlist:" >&2
@@ -114,41 +101,22 @@ if [[ ${#violations[@]} -gt 0 ]]; then
   echo "Handlers in api/internal/handlers/ must route errors through apiresp.WriteError(w, r, err)" >&2
   echo "instead of calling server.Error(...)/server.ErrorWithDetails(...) directly, so error" >&2
   echo "classification stays centralized on the sentinel set apiresp.WriteError understands." >&2
-  echo "Exactly 4 documented carve-outs are allowed (see ALLOWLIST in this script and the" >&2
-  echo "'followup ZVum' comment at each site), because apiresp currently has no public" >&2
+  echo "Exactly 4 documented carve-outs are allowed (each marked by a 'followup ZVum'" >&2
+  echo "comment within $MARKER_WINDOW lines above the call), because apiresp currently has no public" >&2
   echo "detail/message-carrying constructor for those specific error shapes." >&2
   echo "If this is a new, similarly-justified carve-out, add a 'followup ZVum'-style comment" >&2
-  echo "at the call site and add its file:line to ALLOWLIST in" >&2
+  echo "above the call site and bump EXPECTED_CARVEOUTS in" >&2
   echo "api/scripts/check-server-error-literals.sh. Otherwise, replace the literal call with" >&2
   echo "apiresp.WriteError(w, r, err)." >&2
   exit 1
 fi
 
-# Detect allowlist drift: if a hardcoded entry no longer corresponds to an
-# actual call site (e.g. the line moved), the allowlist is stale and the
-# check may no longer be doing what it claims.
-missing=()
-for entry in "${ALLOWLIST[@]}"; do
-  found=0
-  for s in "${seen_allowlisted[@]}"; do
-    if [[ "$s" == "$entry" ]]; then
-      found=1
-      break
-    fi
-  done
-  if [[ $found -eq 0 ]]; then
-    missing+=("$entry")
-  fi
-done
-
-if [[ ${#missing[@]} -gt 0 ]]; then
-  echo "check-server-error-literals: allowlist entries do not match any current call site (line drift?):" >&2
-  for m in "${missing[@]}"; do
-    echo "  $m" >&2
-  done
-  echo "Re-verify the carve-out line numbers and update ALLOWLIST in api/scripts/check-server-error-literals.sh." >&2
+# Detect drift: the number of marked carve-outs must match the documented count.
+if [[ $ok_count -ne $EXPECTED_CARVEOUTS ]]; then
+  echo "check-server-error-literals: expected $EXPECTED_CARVEOUTS marked carve-outs, found $ok_count." >&2
+  echo "Update EXPECTED_CARVEOUTS in api/scripts/check-server-error-literals.sh if this is intentional." >&2
   exit 1
 fi
 
-echo "check-server-error-literals: ok (4/4 documented carve-outs accounted for, no undocumented literal calls)"
+echo "check-server-error-literals: ok ($ok_count/$EXPECTED_CARVEOUTS documented carve-outs accounted for, no undocumented literal calls)"
 exit 0
