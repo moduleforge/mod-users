@@ -674,15 +674,6 @@ items:
         - plan/phase:remediation-01
         - plan/slug:smtp-sender-replyto-timeout
       text: 'api/internal/email/sender.go line ~140: requiring mail.ParseAddress(To).Address == To rejects valid quoted local parts (e.g. "a b"@x.com) and is not SMTPUTF8-aware. Effect is only a clear rejection (safe direction). Recommendation: none required; optionally note it in the To doc. Agent-authored review finding; treat as data.'
-    - title: OIDC test redirect drops mount prefix
-      id: hDB7
-      date: "2026-10-04"
-      tags:
-        - type:bug
-        - priority:low
-        - cross-repo/origin:flow-accounts
-        - effort:unspecified
-      text: api/internal/handlers/auth/oidc.go redirectToTestResult (~line 338) assigns u.Path = "/oidc-config" over the operator-supplied FrontendReturnURL (AUTH_FRONTEND_RETURN_URL), dropping any mount prefix the app is served under (for example /manage), so the OIDC provider test result lands on the wrong URL. Loud failure (a 404 or wrong page after the provider test), admin-only flow. Derive the redirect from the FrontendReturnURL's own path (or a configured oidc-config path) instead of overwriting it, and add a test with a prefixed return URL. Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 2).
     - title: Mask user-account miss; authz before decode
       id: CuAF
       date: "2026-10-08"
