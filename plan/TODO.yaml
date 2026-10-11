@@ -172,3 +172,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: wire-risk-docs
+          title: Document Wire Risks and Helper Usage
+          path: phase-05-gui-wire-docs-and-validation/002-wire-risk-docs.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
