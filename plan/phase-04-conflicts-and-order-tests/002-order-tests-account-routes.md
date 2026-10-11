@@ -58,3 +58,12 @@ architectural_impact: false
 
 - After `order_helpers_test.go` compiles and one route passes.
 - After all 12 routes pass.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Added `api/internal/handlers/order_helpers_test.go` (shared harness, all identifiers prefixed `order`) and `api/internal/handlers/account_routes_order_test.go` (12 routes via `ordertest.Run`, extra Route entries per Validator rule, Late entries for create/update duplicate email 409, assign unknown `user_uuid` 422, remove/roles unknown `user_account_uuid` 404).
+- Plain table tests (not modelled by ordertest): malformed path UUIDs on every `{uuid}`/`{user_account_uuid}` route (401/400/400), the masked-miss `Authorize(op, 0)` exactly-once test for Get/Update/Delete/Assume, and the harness authorizer target-0 pin. List and create use identical Existing/Missing paths with the success status as `AuthorizedMissingStatus`.
+- Red check: moving the AssignUser decode after `Authorize` failed the unauthorized-bad-body assertions on all assign entries; replacing the masked miss with ErrNotFound failed indistinguishable-403 and authorized-missing for Get/Update (and Delete/Assume); disabling `isEmailTakenViolation` failed the create and update duplicate 409 Late cases. All reverted.
+- Validation: gofmt, vet, `-run Order` (315 passing subtests), `go test ./...`, `make lint` all pass. Postgres integration suite not run (test-only change, no production code touched).
+- Harness notes: `RequireAuth` (core) stands in for mod-users' token-verifying `requireAuth` ahead of `RequireVerifiedEmail`, otherwise anonymous requests would hit the verified-email gate without a UserContext.
