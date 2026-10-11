@@ -255,3 +255,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: checkout-deps-test-gaps
+          title: Close checkout-deps Test Gaps
+          path: phase-09-backlog-fixes/002-checkout-deps-test-gaps.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
