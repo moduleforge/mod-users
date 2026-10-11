@@ -47,7 +47,7 @@ phases:
             branch: plan/users-conformance-02-001
             commit:
                 - "5804983"
-            merge: null
+            merge: e47b9047ceef64a5e144a1aca570544e9d7c0d41
     - number: 3
       slug: decode-and-shape
       title: Decode and Shape Before Authorization
