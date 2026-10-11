@@ -244,24 +244,29 @@ phases:
     - number: 9
       slug: backlog-fixes
       title: Backlog Fixes jKvl And nJel
+      diff_base: 8250570dffc35a0d3a4c3b441e1e7f0cf8cb1b3b
       tasks:
         - number: 1
           slug: email-verified-after-login
           title: Email Verified State Correct After Login
           path: phase-09-backlog-fixes/001-email-verified-after-login.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Server-side fix: login, email-code verify, anonymous (explicit null) and admin assume payloads now carry email_verified_at with /v1/self semantics (shared sessionUser and emailVerifiedAtValue helpers), so useAuth().emailVerifiedAt is correct right after login(), register() and email-code sign-in. OpenAPI: removed email_verified_at from shared UserDetail, added UserSelf (required nullable email_verified_at) for GET/PUT /v1/self and LoginResponse for login/email-code/assume. Go and GUI tests (230 pass) and typecheck pass. Finding mJdk filed: LoginResponse.user still typed UserAccountSelf though sign-in payloads send only uuid, email, email_verified_at (pre-existing).'
           git:
-            branch: null
-            commit: []
+            branch: plan/flow-accounts-upstream-09-001
+            commit:
+                - 29260d1
             merge: null
         - number: 2
           slug: checkout-deps-test-gaps
           title: Close checkout-deps Test Gaps
           path: phase-09-backlog-fixes/002-checkout-deps-test-gaps.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Added 11 test cases to scripts/test-checkout-deps.sh (69 PASS): bash -x and SHELLOPTS=xtrace for --verify --remote and --pinned (with trace-present positive controls), trailing-dot host, lookalike host, CRLF lockfile, GitHub.com case-insensitivity, glob allowlist case, direct git_fetch_auth allowlist re-check via function extraction (re-check unreachable from CLI). Fixed token_host_allowed to run under local set -f (restoring caller setting). Negative control (replacing set +x in git_fetch_auth) made the --pinned xtrace cases fail. --verify --remote xtrace cases cannot detect a removed guard (output discarded); only --pinned cases do. shellcheck clean. The set -f change must be mirrored in sibling copies (app-mftodo and app-mfgit use read -a instead; app-mfmanager in progress).'
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/flow-accounts-upstream-09-002
+            commit:
+                - 4bd299e
+            merge: 4644e5cdf7ccc17edbcde213a0ddb2f27c3d86ee
