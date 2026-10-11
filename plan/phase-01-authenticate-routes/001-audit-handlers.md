@@ -48,3 +48,11 @@ architectural_impact: false
 - [http-error-precedence.md](/Users/zane/playground/moduleforge/docs-mf-standards/architecture/http-error-precedence.md): the normative spec.
 - [Handler inventory](../notes/handler-inventory.md) and [wire-risk note](../notes/wire-risk.md).
 - [Sibling audit example](/Users/zane/playground/moduleforge/mod-authz/worktrees/plan/authz-conformance/plan/notes/handler-inventory.md): the shape of the authz plan's table.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Output: `plan/notes/handler-inventory.md`. The preliminary route table was corrected in place (12 corrections listed under "Corrections to the preliminary table"), and `## Audit table` now holds the five-axis table (45 routes plus D1-D3), the D1-D15 verification, the literal-site table (76 sites, disposition per site) and findings F1-F18. The Consumers affected section and the dependent-tests list were extended.
+- Validation: `git diff --stat -- . ':!plan/'` is empty; the audit table has rows 1-45 and D1-D3 plus the literal-site table; the route-count command gives 45 (the glob includes `oidcconfig_routes.go`).
+- Decisions flagged, not changed: F1 (GUI `new_password` vs server `password`, the D6 halt case), F3 (D12 register literals vs displayed messages), F4 (`Assume` sudo-unaware actor lookup), F5 (masked key miss after authorization), F8 (confirm drops unknown provider ids), F10 (provider GET bad id 404 vs 400).
+- Findings filed: 9qmR, 4Olf, bc1h, 1KXD, bxIA, FAVu.
