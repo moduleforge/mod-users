@@ -166,7 +166,8 @@ phases:
           digest: Shared order harness (order_helpers_test.go) and order tests for the 12 account/apps routes; red checks verified; no production code changed.
           git:
             branch: plan/users-conformance-04-002
-            commit: []
+            commit:
+                - 631b627
             merge: null
         - number: 3
           slug: order-tests-self-service-routes
