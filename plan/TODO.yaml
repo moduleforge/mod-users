@@ -244,4 +244,14 @@ phases:
     - number: 9
       slug: backlog-fixes
       title: Backlog Fixes jKvl And nJel
-      tasks: []
+      tasks:
+        - number: 1
+          slug: email-verified-after-login
+          title: Email Verified State Correct After Login
+          path: phase-09-backlog-fixes/001-email-verified-after-login.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
