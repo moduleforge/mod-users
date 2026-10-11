@@ -56,3 +56,12 @@ architectural_impact: false
 
 - After the `Create`/`Update` `Validator`s and the UUID swap, with existing tests green.
 - After `PUT /self` and the new real-handler tests.
+
+## Status
+
+succeeded, 2026-10-11. Validation: gofmt clean, `go vet ./...` and `go vet -tags=integration ./...` clean, `go test ./...` green, `make lint` green, both greps empty. Postgres integration suite (`go test -tags=integration -p 1 ./internal/authz/...`, throwaway container) passed and ran (not skipped), including the new `TestInteg_ShapeSelfUpdate_*` tests.
+
+- Changed: `api/internal/handlers/user_accounts.go` (create and update `Validate`, `apiresp.ParseUUIDParam`, `parseUUIDParam` deleted), `api/internal/handlers/assume.go`, `api/internal/handlers/self.go` (`selfUpdateRequest.Validate`), `api/internal/service/user_accounts.go` (service `Update` blank checks), `api/internal/handlers/user_accounts_authz_test.go` (shim replaced with real handler and service tests, prefix `shape`), `api/internal/authz/shape_self_update_integration_test.go`, and `plan/notes/wire-risk.md`.
+- Decision: the service `Update` also rejects blank fields for in-process callers, after masked authorization.
+- D5 findings: a non-admin updates their own names (owner arm; integration test). In an assume session the JWT subject is the admin and the assumed user is the effective actor, the reverse of the inventory's reading; `PUT /self` still targets the admin's own account (`uc.UserAccountID`), so names in the body get 403 unless the assumed user holds `update` on the admin's entity. Recorded in the wire-risk note. A corporation or service-account holder sending names reaches mod-core and gets 404 (not unit-testable without a database).
+- Remaining for later tasks: `parseUUIDPathParam` in `ssh_keys.go`; `apps.go` and `identities.go` still map user-account `pgx.ErrNoRows` to 404 (tasks 3.4 and 3.5).

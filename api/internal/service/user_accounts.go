@@ -499,6 +499,26 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 	}
 	eid := ua.AccountHolder
 
+	// Reject a present-but-blank field only after authorization, so an
+	// unauthorized caller never learns request-shape rules. The HTTP handler
+	// checks the same rules statelessly before calling here; this covers
+	// in-process callers.
+	if in.Email != nil && strings.TrimSpace(*in.Email) == "" {
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "email", Code: "users.email_required", Message: "email is required",
+		})
+	}
+	if in.GivenName != nil && strings.TrimSpace(*in.GivenName) == "" {
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "given_name", Code: "users.given_name_required", Message: "given_name is required",
+		})
+	}
+	if in.FamilyName != nil && strings.TrimSpace(*in.FamilyName) == "" {
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "family_name", Code: "users.family_name_required", Message: "family_name is required",
+		})
+	}
+
 	before := uaSnapshot(ua)
 
 	newEmail := ua.Email // pgtype.Text
