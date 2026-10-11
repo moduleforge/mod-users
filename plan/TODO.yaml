@@ -73,7 +73,7 @@ phases:
           tier: sonnet-med
           digest: server.Decode is a thin wrapper over apiresp.DecodeJSON; all 16 callers converted; ssh-key register uses WithMaxBytes(32 KiB); UserAccountsHandler.Create 403-before-400 special case deleted; real-handler decode tests; client audit found only the known GUI mismatches (resetPassword new_password, apps.addMember role) left to task 5.1; integration 48 pass 0 skip.
           git:
-            branch: null
+            branch: plan/users-conformance-03-002
             commit: []
             merge: null
         - number: 3
