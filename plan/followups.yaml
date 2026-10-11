@@ -855,16 +855,6 @@ items:
         - effort:small
         - cross-repo/origin:docs-mf-standards
       text: 'api/internal/auth/jwt.go newVerifier (~lines 217-225): when the OIDC issuer URL starts with `https://`, discovery and JWKS are fetched through an http.Client with `tls.Config{InsecureSkipVerify: true}` (comment: "For local dev with self-signed certs ... In production, use the default client"), but the condition is simply the https scheme, not a dev-mode check. In a production deployment with an https issuer (e.g. MFManager''s IdP on AWS), a network attacker (MITM between the app and the issuer) can serve their own discovery document and JWKS, so any OIDC-verified token can be forged for every app using this shared verifier (the app-side callback token flow, user sessions via the OIDC path). Introduced in commit 27aa1d6 ("make OIDC non-fatal in local mode"). Fix: use the default verified client unless an explicit, opt-in local-development setting (a dedicated env/config flag, off by default, and ideally restricted to loopback/known dev hosts) requests skipping verification; add a test that an https issuer with an untrusted certificate fails discovery by default. Found while reviewing the ModuleForge managed-app navigation standard; the standard now requires verified TLS for issuer discovery and JWKS outside local development.'
-    - title: make lint fails at api/scripts/check-server-e
-      id: 0NVf
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - priority:medium
-        - effort:small
-        - plan/phase:derived-hmac-keys
-        - plan/slug:catalog-ent-and-derived-keys
-      text: make lint fails at api/scripts/check-server-error-literals.sh on api/internal/handlers/identities.go:318 (literal server.Error call outside allowlist); not touched by this task, confirm whether pre-existing and tracked.
     - title: Reject blank HS256 secret at API boundary
       id: pciu
       date: "2026-10-11"
