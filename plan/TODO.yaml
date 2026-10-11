@@ -23,11 +23,13 @@ phases:
           slug: mount-require-auth
           title: Mount RequireAuth in Authenticated Registrars
           path: phase-01-authenticate-routes/002-mount-require-auth.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Mounted coreAuthz.RequireAuth inside r.Group in the 8 authenticated registrars; 27-route anonymous 401 / malformed-input 401 / sudo-only not-401 tests (red before mount: 51 subtests); existing tests get requireAuthStandIn; make lint passes; public auth routes untouched. F4 (Assume sudo-unaware admin lookup) is left to the service task.'
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-01-002
+            commit:
+                - e21c59c
             merge: null
     - number: 2
       slug: existence-leaks
