@@ -876,3 +876,12 @@ items:
         - effort:small
         - cross-repo/origin:core
       text: 'Origin: wave program http-error-precedence-conformance, core-handler-conformance analysis. The wave manifest assigns deletion of writeCoreServiceErr pass-throughs to the mod-core share, but the function lives in mod-users api/internal/handlers/self.go (line ~150, called ~86), not in mod-core (no pass-through writers exist in mod-core httpapi). Fold into the users-conformance plan: delete writeCoreServiceErr and route its callers straight to apiresp.WriteError once core service errors are already apiresp sentinels, alongside the writeAuthzError/writeServiceError wrapper removal.'
+    - title: OIDC verifier skips TLS check for https
+      id: 8chg
+      date: "2026-10-11"
+      tags:
+        - type:security
+        - priority:high
+        - effort:small
+        - cross-repo/origin:docs-mf-standards
+      text: 'api/internal/auth/jwt.go newVerifier (~lines 217-225): when the OIDC issuer URL starts with `https://`, discovery and JWKS are fetched through an http.Client with `tls.Config{InsecureSkipVerify: true}` (comment: "For local dev with self-signed certs ... In production, use the default client"), but the condition is simply the https scheme, not a dev-mode check. In a production deployment with an https issuer (e.g. MFManager''s IdP on AWS), a network attacker (MITM between the app and the issuer) can serve their own discovery document and JWKS, so any OIDC-verified token can be forged for every app using this shared verifier (the app-side callback token flow, user sessions via the OIDC path). Introduced in commit 27aa1d6 ("make OIDC non-fatal in local mode"). Fix: use the default verified client unless an explicit, opt-in local-development setting (a dedicated env/config flag, off by default, and ideally restricted to loopback/known dev hosts) requests skipping verification; add a test that an https issuer with an untrusted certificate fails discovery by default. Found while reviewing the ModuleForge managed-app navigation standard; the standard now requires verified TLS for issuer discovery and JWKS outside local development.'
