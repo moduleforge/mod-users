@@ -136,7 +136,7 @@ phases:
             branch: plan/users-conformance-03-007
             commit:
                 - a244ae4
-            merge: null
+            merge: 32972e752c0a40d940b6a570dea959c6591b2943
     - number: 4
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
