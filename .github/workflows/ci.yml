@@ -145,7 +145,7 @@ jobs:
       - name: Lint (all sub-projects)
         working-directory: mod-users
         env:
-          SHADOW_DB_PREREQ_DIRS: ${{ github.workspace }}/mod-core/model/migrations
+          SHADOW_DB_PREREQ_DIRS: ${{ github.workspace }}/mod-core/model/migrations ${{ github.workspace }}/mod-authz/model/migrations
         run: make lint
 
   test:
