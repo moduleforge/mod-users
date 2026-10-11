@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-For people who compose, embed or verify tokens from this module (the first consumer is flow-accounts). One section per area, each naming the exact public API, configuration or behaviour change and pointing to the detailed doc rather than repeating it. It covers the EdDSA verify-only key, token hardening, CORS, the cookie base path, the GUI, and `scripts/checkout-deps.sh`, and ends with known limits. Design rationale lives under [Key decisions](./architecture.md#key-decisions) (D14 to D18).
+For people who compose, embed or verify tokens from this module (the first consumer is flow-accounts). One section per area, each naming the exact public API, configuration or behaviour change and pointing to the detailed doc rather than repeating it. It covers the EdDSA verify-only key, token hardening, CORS, the cookie base path, the GUI, and `scripts/checkout-deps.sh`, and ends with known limits. Design rationale lives under [Key decisions](./architecture.md#key-decisions) (D14 to D19).
 
 ## EdDSA verify-only key
 
@@ -22,13 +22,16 @@ Public Go API, package `github.com/moduleforge/mod-users/api/auth`:
 - `auth.NewVerifierWithOptions(ctx, opts...)` with the options `WithOIDC`, `WithHS256Secret`, `WithLocalIssuer`, `WithEd25519PublicKey` and `WithEd25519PublicKeys`. A verify-only service passes only `WithLocalIssuer` plus public keys and holds nothing that can mint tokens.
 - `auth.NewLocalVerifier(ctx, cfg.LocalAuth)`: the verifier matching the local-auth config. Under `JWT_ALG=EdDSA` it accepts only EdDSA (the signing key's public half plus `JWT_VERIFY_PUBLIC_KEYS`); under HS256 it accepts the `JWT_SECRET` plus any configured public keys.
 - `auth.NewSigner(cfg.LocalAuth)`: the signer selected by `JWT_ALG`.
+- `auth.OAuthStateKey(cfg.LocalAuth)` and `auth.StepUpKey(cfg.LocalAuth)` (additive): resolve the OAuth state and step-up HMAC keys, returning the explicit `JWT_SECRET` when set and otherwise, under EdDSA, a key derived from the signing key. An app that builds the identities or SSH-key handlers itself passes `string(key)` from `auth.StepUpKey` as their `jwtSecret` argument (constructor signatures are unchanged) and should fail startup on error. The returned keys are secret: never log them.
 
 `auth.NewVerifier` keeps its signature but changed behaviour:
 
 - An empty `jwtSecret` now yields a verifier that accepts no HS256 tokens (previously an empty HMAC key was usable).
 - A non-empty `jwtSecret` with an empty `localIssuer` is refused with an error.
 
-`JWT_SECRET` is still required in every mode: it keys OAuth state and step-up tokens, and is the HS256 secret under `JWT_ALG=HS256`. Under EdDSA it is never accepted as a session-token verification key. When the environment variable is unset and a database URL is resolved, `config.Load` does not fail; it reads the secret from the `auth_jwt_secrets` table, or generates 32 random bytes (64 hex characters) and persists them on first boot. This runs over a dedicated short-lived connection (10 second timeout) under a Postgres advisory lock, and creates the table if it does not exist yet. An explicit `JWT_SECRET` always wins; a persisted value shorter than 64 characters fails startup rather than being regenerated; an unreachable database fails `config.Load`. A verify-only service should not run `config.Load`: build the verifier directly with the options above.
+`JWT_SECRET` is required only under HS256, where it is the signing secret. When the environment variable is unset and a database URL is resolved, `config.Load` does not fail; it reads the secret from the `auth_jwt_secrets` table, or generates 32 random bytes (64 hex characters) and persists them on first boot. This runs over a dedicated short-lived connection (10 second timeout) under a Postgres advisory lock, and creates the table if it does not exist yet. An explicit `JWT_SECRET` always wins; a persisted value shorter than 64 characters fails startup rather than being regenerated; an unreachable database fails `config.Load`.
+
+Under `JWT_ALG=EdDSA`, `JWT_SECRET` is optional and the database bootstrap never runs. When it is unset, the OAuth state and step-up HMAC keys are derived from `JWT_SIGNING_KEY` with HKDF-SHA256 under the labels `mod-users/v1/oauth-state` and `mod-users/v1/step-up`; an explicit `JWT_SECRET` wins and is used for both. It is never accepted as a session-token verification key. Consequences for upgrades: a deployment that relied on the bootstrapped secret under EdDSA and leaves the variable unset sees in-flight state and step-up tokens fail once at the switch (users retry); the `auth_jwt_secrets` row is left untouched and unused; and swapping `JWT_SIGNING_KEY` later invalidates in-flight state and step-up tokens unless an explicit `JWT_SECRET` is set. Details: [jwt-eddsa.md](./jwt-eddsa.md#derived-state-and-step-up-keys) and D19. A verify-only service should not run `config.Load`: build the verifier directly with the options above.
 
 ## Token hardening
 
@@ -82,4 +85,3 @@ Details: the header comment and `--help` of [scripts/checkout-deps.sh](../script
 
 - Local-mode CORS pattern reflection: see the caveat under [CORS](#cors). Pattern entries are not rejected in `DEPLOY_MODE=local` and are still reflected with credentials.
 - `LoginResponse.user` is typed wider than the payload: the GUI types it as `UserAccountSelf`, but the login, email-code and assume payloads carry only `uuid`, `email` and `email_verified_at` (anonymous sign-in carries `uuid`, `is_anonymous` and `email_verified_at`). Call `refreshUser()` when the full profile is needed.
-- Whether `JWT_SECRET` should become optional (for example under `JWT_ALG=EdDSA`, where it only keys OAuth state and step-up tokens) is an open design question. Today it is required, with the database bootstrap described under [EdDSA verify-only key](#eddsa-verify-only-key).

@@ -38,6 +38,24 @@ func NewSigner(lc config.LocalAuthConfig) (*Signer, error) {
 	return inner.NewSigner(lc)
 }
 
+// OAuthStateKey returns the HMAC key for the OAuth state signer: the explicit
+// JWT_SECRET (lc.JWTSecret) when set, otherwise, under EdDSA, a key derived
+// from the signing key with HKDF-SHA256. It fails, without key material in the
+// error, when neither is available. The result is secret; never log it.
+func OAuthStateKey(lc config.LocalAuthConfig) ([]byte, error) {
+	return inner.OAuthStateKey(lc)
+}
+
+// StepUpKey returns the HMAC key for step-up tokens: the explicit JWT_SECRET
+// (lc.JWTSecret) when set, otherwise, under EdDSA, a key derived from the
+// signing key with HKDF-SHA256 under a purpose label distinct from
+// OAuthStateKey's. Composing apps that build the identities or SSH-key
+// handlers pass string(key) as their jwtSecret argument. The result is secret;
+// never log it.
+func StepUpKey(lc config.LocalAuthConfig) ([]byte, error) {
+	return inner.StepUpKey(lc)
+}
+
 // NewVerifier constructs a JWT verifier that handles both OIDC and local tokens.
 func NewVerifier(ctx context.Context, issuerURL, clientID, jwtSecret, localIssuer string) (*Verifier, error) {
 	return inner.NewVerifier(ctx, issuerURL, clientID, jwtSecret, localIssuer)
