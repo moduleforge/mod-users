@@ -16,11 +16,12 @@
 # Full contract: `checkout-deps.sh --help`, or the scripts/checkout-deps.sh
 # section of docs/consumer-upgrade-notes.md.
 #
-# This hardened script is shared by copy, not by import: the same file is
-# carried in mod-users, app-mfgit, app-mftodo, and app-mfmanager, the same
-# distribution model scripts/link-siblings.sh already uses. Keep the copies in
-# step by convention. Do not change this file without porting the change to
-# every copy.
+# This hardened script is shared by copy, not by import: the same file (and its
+# sourced helper scripts/lib/lockfile.sh, the single lockfile reader also used
+# by update-pins.sh and link-siblings.sh) is carried in mod-users, app-mfgit,
+# app-mftodo, and app-mfmanager, the same distribution model
+# scripts/link-siblings.sh already uses. Keep the copies in step by
+# convention. Do not change this file without porting the change to every copy.
 #
 # Security: MODULEFORGE_READ_TOKEN, when set, authenticates over HTTPS via a
 # per-invocation GIT_CONFIG_* environment entry (never argv, where ps and
@@ -79,13 +80,17 @@ OPTIONS
                   Unknown key names are a usage error.
   --format text|json
                   Report format. Default: text. (--verify only.)
-  --strict        Exit 1 if any sibling is not `ok`. (--verify only.)
+  --strict        Exit 1 if any sibling is not `ok`, or has a dirty worktree
+                  (the same condition --pinned refuses with exit 4: HEAD
+                  alone is not the pinned content). (--verify only.)
                   Without it, drift is reported and the exit code stays 0,
                   because local checkouts deliberately float.
-  --remote        Additionally verify each pinned SHA is reachable from its
-                  remote's default branch. Downgrades `missing` from a
-                  --strict failure to informational, since a CI runner
-                  legitimately has no local siblings. (--verify only.)
+  --remote        Additionally verify each pinned SHA is fetchable AND an
+                  ancestor of its remote's default branch tip (fetched, then
+                  `git merge-base --is-ancestor`); fails closed if the
+                  default branch cannot be determined. Downgrades `missing`
+                  from a --strict failure to informational, since a CI
+                  runner legitimately has no local siblings. (--verify only.)
   --depth N       Fetch depth for --pinned. Default 1; 0 means full history.
   --submodules    After cloning, run `git submodule update --init --recursive`
                   in each sibling. Off by default; no job uses it today.
@@ -123,15 +128,19 @@ ENVIRONMENT
 EXIT CODES
   0  Success. --verify produced a report (even if drift/missing was found);
      --pinned materialized every requested sibling.
-  1  --strict only: at least one sibling is not `ok`.
+  1  --strict only: at least one sibling is not `ok` or has a dirty worktree;
+     with --remote, a pin is not fetchable or not on the default branch.
   2  Usage error: unknown flag, conflicting modes, unknown --repos key.
   3  Precondition failure: lockfile missing or malformed (including a host,
-     owner, pin key or repo of the wrong shape, an `overrides` entry with no
-     matching pin or an unknown override field, or a token with a host that is
+     owner, pin key or repo of the wrong shape, a pin line that is not exactly
+     `  <repo>: <40-hex>` (quoted, tab/odd indent, longer value), a duplicate
+     key, more than one YAML document, an `overrides` entry with no matching
+     pin or an unknown override field, or a token with a host that is
      not allowed); not inside a git
      repo; --pinned invoked from inside a Flow worktree (pins govern CI and
      fresh clones only -- use `make preflight` there); a pinned SHA cannot be
-     fetched from its remote (almost always an unpushed local commit).
+     fetched from its remote (almost always an unpushed local commit), or a
+     fetched checkout's HEAD is not the pin.
   4  --pinned only: refuse-to-mutate. One or more target paths exist and do
      not match their pin. Nothing was modified. Remedy: --into <dir>.
 
@@ -152,179 +161,15 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Lockfile parsing (no YAML library -- the schema is deliberately flat and
-# line-oriented so this is a plain regex scan; see update-pins.sh, which
-# depends on the same one-key-per-line shape for exact-line rewrites).
+# Lockfile parsing: shared with update-pins.sh and link-siblings.sh via
+# scripts/lib/lockfile.sh (valid_host/owner/repo, the token host allowlist and
+# read_lockfile). One reader, so the three scripts cannot disagree about what
+# the lockfile says. See that file for the strict, fail-closed grammar.
 # ---------------------------------------------------------------------------
 
-# Shape checks for values read from the git-tracked lockfile. Each is the
-# only gate between untrusted text and a clone URL / auth-header scope, so
-# they are strict allowlist regexes (no '/', '@', ':', '?', '#', whitespace,
-# or '..'), and callers report a fixed message that never echoes the value.
-valid_host() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] && [[ "$1" != *..* ]]; }
-valid_owner() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]]; }
-# Repo names and pin keys may contain '.', '_' and '-', but never be '.' or
-# '..' (path traversal in the URL and the checkout directory) or lead with '-'.
-valid_repo() { [[ "$1" =~ ^[A-Za-z0-9_.-]+$ ]] && [[ "$1" != . && "$1" != .. && "$1" != -* ]]; }
-
-# token_host_allowed HOST -- is HOST on the token allowlist
-# (MODULEFORGE_TOKEN_ALLOWED_HOSTS, default github.com)? Hostnames compare
-# case-insensitively. A malformed allowlist entry is a hard refusal (exit 3).
-# Every entry is validated, not just the ones scanned before a match.
-token_host_allowed() {
-	local allowed="${MODULEFORGE_TOKEN_ALLOWED_HOSTS:-github.com}" h host_lc="${1,,}" found=1
-	allowed="${allowed//,/ }"
-	# Split on whitespace without pathname expansion: an entry such as `github.c*`
-	# must stay a (malformed) literal, not expand against the cwd.
-	local had_noglob=0
-	case "$-" in *f*) had_noglob=1 ;; esac
-	set -f
-	for h in $allowed; do
-		if ! valid_host "$h"; then
-			err "MODULEFORGE_TOKEN_ALLOWED_HOSTS has an entry that is not a plain hostname"
-			exit 3
-		fi
-		[ "${h,,}" = "$host_lc" ] && found=0
-	done
-	[ "$had_noglob" -eq 1 ] || set +f
-	return "$found"
-}
-
-# require_token_host_allowed HOST -- with a token set, HOST must be on the
-# allowlist, checked before any network call. Without a token there is
-# nothing to protect and the SSH path is not restricted.
-require_token_host_allowed() {
-	[ "$TOKEN_SET" -eq 1 ] || return 0
-	token_host_allowed "$1" && return 0
-	err "refusing to send MODULEFORGE_READ_TOKEN: a lockfile host is not in the token host allowlist (default github.com; set MODULEFORGE_TOKEN_ALLOWED_HOSTS for a self-hosted forge)"
-	exit 3
-}
-
-# Populates globals: LF_HOST, LF_OWNER, LF_KEYS (ordered array), LF_SHA (map),
-# and the per-key overrides maps LF_OV_HOST / LF_OV_OWNER / LF_OV_REPO.
-read_lockfile() {
-	local file="$1"
-	if [ ! -f "$file" ]; then
-		err "lockfile not found: $file"
-		exit 3
-	fi
-
-	# Everything after the key, not the second ': '-separated field: a value
-	# such as `evil:80` must reach the shape check whole, not be truncated into
-	# something that passes it. Only the ends are trimmed: whitespace inside a
-	# value is a shape failure.
-	LF_HOST="$(awk '/^host:/{sub(/^host:[ \t]*/, ""); sub(/[ \t\r]+$/, ""); print; exit}' "$file")"
-	LF_OWNER="$(awk '/^owner:/{sub(/^owner:[ \t]*/, ""); sub(/[ \t\r]+$/, ""); print; exit}' "$file")"
-	if [ -z "$LF_HOST" ] || [ -z "$LF_OWNER" ]; then
-		err "malformed lockfile: missing host/owner: $file"
-		exit 3
-	fi
-	# The lockfile is git-tracked, so host and owner are untrusted: they become
-	# a clone URL and, with a token, the scope of an auth header. Refuse a wrong
-	# shape with a fixed message that names the key and never echoes the value.
-	if ! valid_host "$LF_HOST"; then
-		err "malformed lockfile: host: is not a plain hostname"
-		exit 3
-	fi
-	if ! valid_owner "$LF_OWNER"; then
-		err "malformed lockfile: owner: is not a plain account name"
-		exit 3
-	fi
-
-	LF_KEYS=()
-	# Pin lines are the only lines indented by exactly two spaces (host/owner/
-	# lockfileVersion are top-level, zero-indent); this alone disambiguates
-	# them from the header comment block without tracking "after pins:" state.
-	# The optional top-level `overrides:` block (see versions-lockfile.md, "The
-	# `overrides` block") is the one place that needs section state: its
-	# entries are `  <key>:` at two spaces with fields at four, so lines are
-	# only treated as pins while outside it.
-	local in_overrides=0 cur_ov="" line stripped fname fval
-	local -a ov_keys=()
-	while IFS= read -r line || [ -n "$line" ]; do
-		# Top-level (zero-indent, non-comment, non-blank) line switches section.
-		if [[ "$line" =~ ^[^[:space:]#] ]]; then
-			if [[ "$line" =~ ^overrides:[[:space:]]*(#.*)?$ ]]; then
-				in_overrides=1
-			else
-				in_overrides=0
-			fi
-			cur_ov=""
-			continue
-		fi
-		if [ "$in_overrides" -eq 0 ]; then
-			if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+([0-9a-fA-F]{40}) ]]; then
-				local key="${BASH_REMATCH[1]}" sha="${BASH_REMATCH[2]}"
-				valid_repo "$key" || { err "malformed lockfile: a pin key is not a plain repository name"; exit 3; }
-				LF_KEYS+=("$key")
-				LF_SHA["$key"]="$sha"
-			fi
-			continue
-		fi
-		# Inside overrides: skip blanks and comment-only lines.
-		stripped="${line%%#*}"
-		[[ "$stripped" =~ ^[[:space:]]*$ ]] && continue
-		if [[ "$stripped" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]*$ ]]; then
-			cur_ov="${BASH_REMATCH[1]}"
-			valid_repo "$cur_ov" || { err "malformed lockfile: an overrides entry key is not a plain repository name"; exit 3; }
-			if [ -n "${LF_OV_SEEN[$cur_ov]+x}" ]; then
-				err "malformed lockfile: duplicate overrides entry '$cur_ov': $file"
-				exit 3
-			fi
-			LF_OV_SEEN["$cur_ov"]=1
-			ov_keys+=("$cur_ov")
-		elif [ -n "$cur_ov" ] && [[ "$stripped" =~ ^\ \ \ \ ([A-Za-z0-9_]+):[[:space:]]*(.*)$ ]]; then
-			fname="${BASH_REMATCH[1]}"
-			fval="${BASH_REMATCH[2]}"
-			# trim trailing whitespace, then one layer of matching quotes
-			fval="${fval%"${fval##*[![:space:]]}"}"
-			if [[ "$fval" =~ ^\"(.*)\"$ ]] || [[ "$fval" =~ ^\'(.*)\'$ ]]; then
-				fval="${BASH_REMATCH[1]}"
-			fi
-			case "$fname" in
-			host)
-				valid_host "$fval" || { err "malformed lockfile: overrides.$cur_ov.host is not a plain hostname: $file"; exit 3; }
-				LF_OV_HOST["$cur_ov"]="$fval"
-				;;
-			owner | repo)
-				if [ "$fname" = owner ]; then
-					valid_owner "$fval" || { err "malformed lockfile: overrides.$cur_ov.owner is not a plain account name: $file"; exit 3; }
-				else
-					valid_repo "$fval" || { err "malformed lockfile: overrides.$cur_ov.repo is not a plain repository name: $file"; exit 3; }
-				fi
-				if [ "$fname" = owner ]; then LF_OV_OWNER["$cur_ov"]="$fval"; else LF_OV_REPO["$cur_ov"]="$fval"; fi
-				;;
-			*)
-				err "malformed lockfile: unknown field '$fname' in overrides.$cur_ov (only host, owner, repo are accepted): $file"
-				exit 3
-				;;
-			esac
-		else
-			err "malformed lockfile: unrecognized line in overrides block: $stripped ($file)"
-			exit 3
-		fi
-	done <"$file"
-
-	local ok
-	for ok in "${ov_keys[@]}"; do
-		if [ -z "${LF_SHA[$ok]+x}" ]; then
-			err "malformed lockfile: overrides.$ok has no matching key under pins: $file"
-			exit 3
-		fi
-	done
-
-	# With a token, every host that can receive it must be allowlisted, checked
-	# here before any network call: the top-level host and each override host.
-	local k
-	for k in "${LF_KEYS[@]}"; do
-		require_token_host_allowed "${LF_OV_HOST[$k]:-$LF_HOST}"
-	done
-
-	if [ "${#LF_KEYS[@]}" -eq 0 ]; then
-		err "malformed lockfile: no pins found: $file"
-		exit 3
-	fi
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/lockfile.sh
+. "$SCRIPT_DIR/lib/lockfile.sh"
 
 # ---------------------------------------------------------------------------
 # Remote / auth
@@ -385,15 +230,32 @@ git_fetch_auth() {
 	git -C "$dir" fetch --quiet "${DEPTH_ARGS[@]}" "$remote" "$ref"
 }
 
-# check_remote_reachable KEY SHA -- attempt a throwaway shallow fetch of SHA
-# into a scratch bare repo to prove it exists on the remote, without cloning
-# a working tree anywhere. Used by --remote. Always cleans up after itself.
+# check_remote_reachable KEY SHA -- prove SHA is on the remote's default branch
+# without cloning a working tree anywhere: fetch SHA, then fetch the remote's
+# HEAD (its default branch) into a scratch bare repo and require
+# `git merge-base --is-ancestor SHA <default-branch tip>`. Fetchable-by-SHA alone
+# is not enough: it would admit an unmerged side-branch (or, on GitHub, fork)
+# commit. Returns 0 ok; 1 not fetchable; 2 not an ancestor of the default
+# branch; 3 default branch could not be determined (fail closed). Always cleans
+# up after itself.
 check_remote_reachable() {
 	local key="$1" sha="$2" url tmp rc=0
 	url="$(clone_url "$key")"
 	tmp="$(mktemp -d)"
 	git init --quiet --bare "$tmp" >/dev/null
-	git_fetch_auth "$tmp" "$url" "$sha" "$(clone_host "$key")" >/dev/null 2>&1 || rc=1
+	if ! git_fetch_auth "$tmp" "$url" "$sha" "$(clone_host "$key")" >/dev/null 2>&1; then
+		rc=1
+	else
+		# The ancestry test needs history between the pin and the tip, so this
+		# fetch is full-depth but blob-less (git_fetch_auth reads DEPTH_ARGS,
+		# shadowed here by dynamic scope). FETCH_HEAD ends up at the tip.
+		local -a DEPTH_ARGS=(--filter=blob:none)
+		if ! git_fetch_auth "$tmp" "$url" HEAD "$(clone_host "$key")" >/dev/null 2>&1; then
+			rc=3
+		elif ! git -C "$tmp" merge-base --is-ancestor "$sha" FETCH_HEAD >/dev/null 2>&1; then
+			rc=2
+		fi
+	fi
 	rm -rf "$tmp"
 	return "$rc"
 }
@@ -401,6 +263,14 @@ check_remote_reachable() {
 # ---------------------------------------------------------------------------
 # --pinned
 # ---------------------------------------------------------------------------
+
+# assert_head_is_pin DIR PIN -- defense in depth after checkout: DIR's HEAD must
+# be exactly PIN (never trust that the fetch/checkout resolved what was asked).
+assert_head_is_pin() {
+	local dir="$1" pin="$2" head
+	head="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
+	[ "$head" = "${pin,,}" ]
+}
 
 clone_pin() {
 	local key="$1" pin="$2" dest="$3" url
@@ -411,6 +281,10 @@ clone_pin() {
 		return 1
 	fi
 	git -C "$dest" checkout --quiet --detach FETCH_HEAD
+	if ! assert_head_is_pin "$dest" "$pin"; then
+		err "$key: checked-out HEAD is not the pinned SHA ${pin:0:8}"
+		return 1
+	fi
 	if [ "$SUBMODULES" -eq 1 ]; then
 		git -C "$dest" submodule update --init --recursive
 	fi
@@ -670,10 +544,17 @@ run_verify() {
 	for key in "${SELECTED_KEYS[@]}"; do
 		compute_status "$key"
 		if [ "$REMOTE_CHECK" -eq 1 ]; then
-			if check_remote_reachable "$key" "${LF_SHA[$key]}"; then
+			local rrc=0
+			check_remote_reachable "$key" "${LF_SHA[$key]}" || rrc=$?
+			if [ "$rrc" -eq 0 ]; then
 				REMOTE_OK["$key"]=1
 			else
 				REMOTE_OK["$key"]=0
+				case "$rrc" in
+				2) err "$key: pinned ${LF_SHA[$key]:0:8} is not an ancestor of the remote default branch (unmerged or side-branch commit)" ;;
+				3) err "$key: cannot determine the remote default branch; refusing to treat ${LF_SHA[$key]:0:8} as reachable" ;;
+				*) err "$key: pinned ${LF_SHA[$key]:0:8} cannot be fetched from its remote" ;;
+				esac
 			fi
 		fi
 	done
@@ -704,6 +585,15 @@ run_verify() {
 					fail=1
 				fi
 			fi
+			# A dirty worktree is a --pinned conflict (exit 4); --strict gates on it
+			# too, since `ok` otherwise asserts HEAD only, not the content. Missing
+			# siblings carry no worktree state ("-").
+			case "${ST_DIRTY[$key]:-}" in
+			dirty*)
+				err "$key: worktree is dirty (--strict requires a clean worktree)"
+				fail=1
+				;;
+			esac
 		done
 		if [ "$fail" -eq 1 ]; then
 			exit 1
@@ -852,8 +742,6 @@ REPO_NAME="$(basename "$R")"
 
 LOCKFILE="${LOCKFILE:-$R/versions.lock.yaml}"
 
-declare -A LF_SHA=() LF_OV_HOST=() LF_OV_OWNER=() LF_OV_REPO=() LF_OV_SEEN=()
-LF_KEYS=()
 read_lockfile "$LOCKFILE"
 
 if [ "${#REPOS_FILTER[@]}" -gt 0 ]; then

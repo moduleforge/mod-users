@@ -204,7 +204,10 @@ test.gui:     ; @$(MAKE) -C gui     test
 
 .PHONY: test.unit.scripts test.unit.model test.unit.api test.unit.gui
 # test.unit.scripts exercises scripts/checkout-deps.sh's lockfile and
-# token-handling guards with a stub git (no network, no real credential).
+# token-handling guards, the shared scripts/lib/lockfile.sh reader as used by
+# checkout-deps.sh / update-pins.sh / link-siblings.sh, and the --remote
+# default-branch ancestry check, with a stub git or local fake remotes under a
+# temp dir (no network, no real credential, no real lockfile touched).
 test.unit.scripts: ; @bash scripts/test-checkout-deps.sh
 test.unit.model:   ; @$(MAKE) -C model   test.unit
 test.unit.api:     ; @$(MAKE) -C api     test.unit

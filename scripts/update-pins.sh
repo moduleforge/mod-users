@@ -14,10 +14,10 @@
 # section (go-module-ci-pinning plan) and, once authored,
 # docs/mf-standards/versions-lockfile.md.
 #
-# This is one of two carrier-repo copies (the other lives in mod-users/) --
-# the two are kept byte-identical by convention, the same distribution model
-# scripts/link-siblings.sh already uses. Do not diverge the two without
-# updating both.
+# Shared by copy with the other carrier repos, together with the sourced
+# scripts/lib/lockfile.sh reader (also used by checkout-deps.sh and
+# link-siblings.sh), the same distribution model scripts/link-siblings.sh
+# already uses. Do not diverge the copies without updating all of them.
 
 set -euo pipefail
 
@@ -50,71 +50,54 @@ SIBLING ROOT RESOLUTION
 EXIT CODES
   0  Lockfile updated, or already current (no-op).
   2  Usage error.
-  3  Precondition failure: sibling checkout not found; origin unreachable;
-     --from-head on an unpushed HEAD; --ref not reachable from origin/main.
+  3  Precondition failure: lockfile missing or malformed (strict, fail-closed
+     grammar shared with checkout-deps.sh); sibling checkout not found; the
+     sibling's `origin` remote does not match the lockfile's host/owner (or
+     the key's overrides); origin unreachable; --from-head on an unpushed
+     HEAD; --ref not reachable from origin/main.
 EOF
 }
 
 # ---------------------------------------------------------------------------
-# Lockfile parsing (mirrors checkout-deps.sh's -- see that script's comment
-# for why this is a plain regex scan and not a YAML library).
+# Lockfile parsing: the one shared reader, scripts/lib/lockfile.sh (see that
+# file, and checkout-deps.sh, for why this is a plain regex scan and not a YAML
+# library, and for the strict fail-closed grammar).
 # ---------------------------------------------------------------------------
 
-read_lockfile() {
-	local file="$1"
-	if [ ! -f "$file" ]; then
-		err "lockfile not found: $file"
-		exit 3
-	fi
-
-	LF_HOST="$(awk -F': *' '/^host:/{print $2; exit}' "$file" | tr -d '[:space:]')"
-	LF_OWNER="$(awk -F': *' '/^owner:/{print $2; exit}' "$file" | tr -d '[:space:]')"
-	if [ -z "$LF_HOST" ] || [ -z "$LF_OWNER" ]; then
-		err "malformed lockfile: missing host/owner: $file"
-		exit 3
-	fi
-
-	LF_KEYS=()
-	# The optional `overrides:` block is hand-authored and never touched by this
-	# script (only individual pin lines are rewritten); skip it here so its
-	# entries are never mistaken for pins. checkout-deps.sh validates it.
-	local in_overrides=0
-	while IFS= read -r line || [ -n "$line" ]; do
-		if [[ "$line" =~ ^[^[:space:]#] ]]; then
-			if [[ "$line" =~ ^overrides:[[:space:]]*(#.*)?$ ]]; then in_overrides=1; else in_overrides=0; fi
-			continue
-		fi
-		[ "$in_overrides" -eq 1 ] && continue
-		if [[ "$line" =~ ^\ \ ([A-Za-z0-9._-]+):[[:space:]]+([0-9a-fA-F]{40}) ]]; then
-			local key="${BASH_REMATCH[1]}" sha="${BASH_REMATCH[2]}"
-			LF_KEYS+=("$key")
-			LF_SHA["$key"]="$sha"
-		fi
-	done <"$file"
-
-	if [ "${#LF_KEYS[@]}" -eq 0 ]; then
-		err "malformed lockfile: no pins found: $file"
-		exit 3
-	fi
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/lockfile.sh
+. "$SCRIPT_DIR/lib/lockfile.sh"
 
 # update_pin_line FILE KEY NEW_SHA COMMENT -- rewrite exactly KEY's line,
 # keeping its existing key/padding prefix byte-for-byte and replacing only
 # the SHA and trailing provenance comment. Every other line is copied
-# through untouched.
+# through untouched. KEY is matched literally (never interpolated into a
+# regex), must pass valid_repo, and only the first matching line is rewritten.
 update_pin_line() {
 	local file="$1" key="$2" new_sha="$3" comment="$4"
-	local tmp replaced=0 line prefix
+	local tmp replaced=0 line prefix rest
+
+	valid_repo "$key" || {
+		err "refusing to rewrite a pin whose key is not a plain repository name"
+		exit 3
+	}
+	[[ "$new_sha" =~ ^[0-9a-f]{40}$ ]] || {
+		err "internal error: new SHA for $key is not 40 lower-case hex"
+		exit 3
+	}
 	tmp="$(mktemp)"
 
 	while IFS= read -r line || [ -n "$line" ]; do
-		if [[ "$line" =~ ^(\ \ ${key}:[[:space:]]+)[0-9a-fA-F]{40} ]]; then
-			prefix="${BASH_REMATCH[1]}"
-			printf '%s%s  # %s\n' "$prefix" "$new_sha" "$comment" >>"$tmp"
-			replaced=1
-		else
-			printf '%s\n' "$line" >>"$tmp"
+		if [ "$replaced" -eq 0 ] && [[ "$line" == "  $key:"* ]]; then
+			rest="${line#"  $key:"}"
+			if [[ "$rest" =~ ^([[:space:]]+)[0-9a-fA-F]{40} ]]; then
+				prefix="  $key:${BASH_REMATCH[1]}"
+				printf '%s%s  # %s\n' "$prefix" "$new_sha" "$comment" >>"$tmp"
+				replaced=1
+				continue
+			fi
 		fi
+		printf '%s\n' "$line" >>"$tmp"
 	done <"$file"
 
 	if [ "$replaced" -ne 1 ]; then
@@ -123,6 +106,37 @@ update_pin_line() {
 		exit 3
 	fi
 	mv "$tmp" "$file"
+}
+
+# origin_matches_lockfile KEY DIR -- does DIR's `origin` URL (as git would use
+# it, after insteadOf rewriting) point at the lockfile's host/owner for KEY
+# (overrides.<key>.host/owner applied)? Mismatch or an unparseable URL sets
+# ORIGIN_MISMATCH to a message that never contains the raw URL (it may carry
+# credentials) and returns 1. Host and owner compare case-insensitively.
+ORIGIN_MISMATCH=""
+origin_matches_lockfile() {
+	local key="$1" dir="$2" url host owner
+	local want_host="${LF_OV_HOST[$key]:-$LF_HOST}" want_owner="${LF_OV_OWNER[$key]:-$LF_OWNER}"
+	url="$(git -C "$dir" remote get-url origin 2>/dev/null)" || {
+		ORIGIN_MISMATCH="$key: $dir has no 'origin' remote to compare with the lockfile"
+		return 1
+	}
+	# scp-like and ssh://: [ssh://]user@host(:|/)owner/repo ; https/http: [user@]host[:port]/owner/repo
+	if [[ "$url" =~ ^(ssh://)?[A-Za-z0-9._-]+@([A-Za-z0-9.-]+)(:[0-9]+)?[:/]([A-Za-z0-9._-]+)/[A-Za-z0-9._-]+(\.git)?/?$ ]]; then
+		host="${BASH_REMATCH[2]}"
+		owner="${BASH_REMATCH[4]}"
+	elif [[ "$url" =~ ^https?://([^/@]+@)?([A-Za-z0-9.-]+)(:[0-9]+)?/([A-Za-z0-9._-]+)/[A-Za-z0-9._-]+(\.git)?/?$ ]]; then
+		host="${BASH_REMATCH[2]}"
+		owner="${BASH_REMATCH[4]}"
+	else
+		ORIGIN_MISMATCH="$key: cannot parse the host/owner of $dir's 'origin' URL; expected ${want_host}/${want_owner} per the lockfile"
+		return 1
+	fi
+	if [ "${host,,}" != "${want_host,,}" ] || [ "${owner,,}" != "${want_owner,,}" ]; then
+		ORIGIN_MISMATCH="$key: $dir's 'origin' is ${host}/${owner} but the lockfile says ${want_host}/${want_owner}; refusing to record a pin from a different remote (a fork?)"
+		return 1
+	fi
+	return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -194,8 +208,6 @@ R="$(git rev-parse --path-format=absolute --show-toplevel 2>/dev/null)" || {
 }
 LOCKFILE="${LOCKFILE:-$R/versions.lock.yaml}"
 
-declare -A LF_SHA=()
-LF_KEYS=()
 read_lockfile "$LOCKFILE"
 
 # Positional REPO args restrict the run; validate against the lockfile's own
@@ -247,6 +259,13 @@ for key in "${TARGET_REPOS[@]}"; do
 	dir="$S/$key"
 	if [ ! -d "$dir" ]; then
 		err "sibling checkout not found: $dir -- pin bumping reads origin/main from a local checkout, so it must already exist."
+		exit 3
+	fi
+
+	# The lockfile's host/owner (not whatever the sibling's origin happens to be)
+	# define where pins come from: check before any network call.
+	if ! origin_matches_lockfile "$key" "$dir"; then
+		err "$ORIGIN_MISMATCH"
 		exit 3
 	fi
 
