@@ -36,4 +36,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: api/internal/handlers/auth/reset.go PasswordResetRequest and api/internal/handlers/auth/register.go Register (the verify_email send) start a goroutine that uses r.Context() and the handler then returns immediately. net/http cancels the request context when ServeHTTP returns, so the goroutine's DB and send calls run on a canceled context and most likely fail (errors are only logged). EmailCodeRequest avoids this by waiting for the goroutine. Detach with context.WithoutCancel (plus a timeout) or wait for completion.
+    - title: GUI admin/audit paths do not match server
+      id: bxIA
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - plan/phase:authenticate-routes
+        - priority:unspecified
+        - effort:unspecified
+      text: 'gui/src/lib/api.ts: userAccounts.grantAdmin and revokeAdmin call POST/DELETE /v1/user-accounts/{uuid}/admin, but the server routes (api/internal/handlers/account_routes.go) are POST /user-accounts/{uuid}/grant-admin and /revoke-admin. userAccounts.audit calls GET /v1/user-accounts/{uuid}/audit, which no longer exists (api/cmd/server/main.go documents the audit routes as /v1/audit/by-actor/{uuid} and /v1/audit/by-entity/{entity_uuid}); audit.byEntity sends ?entity_uuid= to /v1/audit. These client methods would 404 or hit the wrong route.'
 closed: []
