@@ -88,7 +88,7 @@ phases:
             branch: plan/users-conformance-03-003
             commit:
                 - 698b7ff
-            merge: null
+            merge: 6597d6c4f1811dbcd49576968e1f7329ff7c66b6
         - number: 4
           slug: apps-membership-shape
           title: Apps Membership Parse and Decode Before Authorization
