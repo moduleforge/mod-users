@@ -10,6 +10,8 @@ export type {
   ApiActionResponse,
   RequestOptions,
   LoginResponse,
+  LoginUser,
+  SessionUser,
   OIDCProvider,
   RegisterRequest,
   EmailCodePurpose,

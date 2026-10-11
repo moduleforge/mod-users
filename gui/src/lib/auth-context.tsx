@@ -11,7 +11,7 @@ import {
   api,
   ApiActionRequiredError,
   ApiRequestError,
-  type UserAccountSelf,
+  type SessionUser,
 } from './api';
 import {
   DEFAULT_UNAUTHENTICATED_REDIRECT_URL,
@@ -40,7 +40,7 @@ function isCurrentPath(path: string): boolean {
 
 interface AuthContextValue {
   token: string | null;
-  user: UserAccountSelf | null;
+  user: SessionUser | null;
   isLoading: boolean;
   isAdmin: boolean;
   /** ISO timestamp the signed-in account's email was verified; null when unverified or signed out. */
@@ -53,7 +53,7 @@ interface AuthContextValue {
     familyName: string,
   ) => Promise<void>;
   logout: () => void;
-  setTokenAndUser: (token: string, user: UserAccountSelf) => void;
+  setTokenAndUser: (token: string, user: SessionUser) => void;
   /**
    * Finalize an externally-obtained session (e.g., OAuth callback) by
    * storing the token and hydrating the user from `/v1/self`. On an
@@ -102,10 +102,10 @@ export function AuthProvider({
     }
   }
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserAccountSelf | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const setTokenAndUser = useCallback((newToken: string, newUser: UserAccountSelf) => {
+  const setTokenAndUser = useCallback((newToken: string, newUser: SessionUser) => {
     storeToken(newToken);
     setToken(newToken);
     setUser(newUser);

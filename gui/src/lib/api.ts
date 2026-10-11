@@ -187,8 +187,17 @@ export interface LoginResponse {
    * sign-in. Those payloads carry only a subset of the other fields
    * (`uuid`, `email`); call `refreshUser()` when the full profile is needed.
    */
-  user: UserAccountSelf;
+  user: LoginUser;
 }
+
+/** The user fields present on login, email-code and assume payloads. */
+export type LoginUser = Pick<UserAccountSelf, 'uuid' | 'email' | 'email_verified_at'>;
+
+/**
+ * Session user held by the auth context: the login fields are always present;
+ * the rest of `UserAccountSelf` is present only after `/v1/self` hydration.
+ */
+export type SessionUser = LoginUser & Partial<UserAccountSelf>;
 
 export interface OIDCProvider {
   id: string;
