@@ -342,17 +342,43 @@ END $$;
 --     'entities_owner_immutable'. An UPDATE ... SET owner_id = <anon entity
 --     id> therefore raises this trigger's "a system actor may not own an
 --     entity" message, not the immutability message.
+--
+-- Name resolution (search_path pin). This trigger fires on every entities
+-- write, including writes made by mod-core's SECURITY DEFINER functions
+-- (types_create_entity_trigger / types_create_entity_for), which pin
+-- `search_path = public, pg_temp`. A trigger function with no SET clause of its
+-- own inherits the firing function's search_path, so an unqualified
+-- `system_actors` resolved against `public, pg_temp` and failed with
+-- 42P01 whenever this module's tables live in a displaced schema
+-- (e.g. mod_<app>). Hard-coding `public.` would break exactly that layout, so
+-- the function instead carries its own `SET search_path` naming the schema
+-- system_actors actually landed in. That schema is read at migration time
+-- (current_schema(): the first existing schema on the migrating connection's
+-- search_path, which is where the unqualified CREATE TABLE above put
+-- system_actors and where this function itself lands), then baked into the
+-- function by dynamic SQL. `pg_catalog` leads and `pg_temp` trails, so neither
+-- a caller's search_path nor a session-temporary `system_actors` can shadow the
+-- real table (Postgres' "Writing SECURITY DEFINER Functions Safely" advice).
+-- The function stays SECURITY INVOKER; only name resolution is pinned.
 -- +goose StatementBegin
-CREATE FUNCTION entities_check_no_system_actor_owner() RETURNS TRIGGER AS $$
+DO $do$
 BEGIN
-  IF NEW.owner_id IS NOT NULL
-     AND EXISTS (SELECT 1 FROM system_actors WHERE entity_id = NEW.owner_id)
-  THEN
-    RAISE EXCEPTION 'entities: a system actor may not own an entity (owner_id=%)', NEW.owner_id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+  EXECUTE format($fn$
+    CREATE FUNCTION entities_check_no_system_actor_owner() RETURNS TRIGGER
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, %I, pg_temp
+    AS $body$
+    BEGIN
+      IF NEW.owner_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM system_actors WHERE entity_id = NEW.owner_id)
+      THEN
+        RAISE EXCEPTION 'entities: a system actor may not own an entity (owner_id=%%)', NEW.owner_id;
+      END IF;
+      RETURN NEW;
+    END;
+    $body$
+  $fn$, current_schema());
+END $do$;
 -- +goose StatementEnd
 
 CREATE TRIGGER entities_no_system_actor_owner

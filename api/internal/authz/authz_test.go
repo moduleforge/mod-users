@@ -3,6 +3,7 @@ package authz_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	authzapi "github.com/moduleforge/authz-api/authz"
@@ -361,8 +362,29 @@ func TestAuthorize_WildcardAdmin_Create_InspectsOpIDs(t *testing.T) {
 // --- AuthorizeType (type-level) tests ---
 //
 // AuthorizeType answers "may the effective actor perform operation on
-// resources of type typeID?" typeID is a types.id, never an entities.id, so
-// entity-level ownership and targeted grants must never influence the result.
+// resources of type typeID?" typeID is a types.id, never an entities.id. The
+// call is allowed by a wildcard grant, or by a grant on the exact type's entity
+// (the type-grant arm, stubbed here with SetTypeGrantFn), held directly or
+// through target groups by the actor or its actor groups. Entity-level
+// ownership and targeted grants over an entity whose id equals typeID must
+// never influence the result: the entity-level grant-or-own check is never
+// invoked, and typeID is never treated as an entities.id.
+
+// typeGrantCall records one invocation of a type-grant stub.
+type typeGrantCall struct {
+	actor  int64
+	typeID int64
+	opIDs  []int32
+}
+
+// recordingTypeGrantFn returns a type-grant stub that returns (result, err) and
+// appends every invocation to *calls.
+func recordingTypeGrantFn(calls *[]typeGrantCall, result bool, err error) func(context.Context, int64, int64, []int32) (bool, error) {
+	return func(_ context.Context, actor, typeID int64, opIDs []int32) (bool, error) {
+		*calls = append(*calls, typeGrantCall{actor: actor, typeID: typeID, opIDs: opIDs})
+		return result, err
+	}
+}
 
 // countingGrantOrOwnFn returns a grant-or-own stub that reports true exactly
 // when targetEntityID == matchID (simulating owning, or holding a grant over,
@@ -377,7 +399,8 @@ func countingGrantOrOwnFn(matchID int64, calls *int) func(context.Context, int64
 // TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied is the unit-level
 // reproduction of the type-target confusion: an actor with entity-level
 // authority over entity N, where N equals the type id, must be denied a
-// type-level create, and the entity-level check must never be consulted.
+// type-level create when it holds no type grant, and the entity-level check
+// must never be consulted.
 func TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied(t *testing.T) {
 	const typeID = int64(7)
 
@@ -386,6 +409,8 @@ func TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied(t *testing.T) {
 			az := authz.NewWithStubOpReg(wildcardDenyFn)
 			calls := 0
 			az.SetGrantOrOwnFn(countingGrantOrOwnFn(typeID, &calls))
+			var typeCalls []typeGrantCall
+			az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
 			err := az.AuthorizeType(ctxWithActor(1), op, typeID)
 			if !errors.Is(err, authz.ErrForbidden) {
@@ -394,18 +419,23 @@ func TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied(t *testing.T) {
 			if calls != 0 {
 				t.Errorf("grant-or-own check must never be invoked by AuthorizeType, got %d call(s)", calls)
 			}
+			if len(typeCalls) != 1 {
+				t.Errorf("type-grant arm should run exactly once after a wildcard miss, got %d call(s)", len(typeCalls))
+			}
 		})
 	}
 }
 
 // TestAuthorizeType_WildcardHolder_Allowed verifies a wildcard holder is
-// allowed, again without consulting the entity-level check.
+// allowed without consulting the entity-level check or the type-grant arm.
 func TestAuthorizeType_WildcardHolder_Allowed(t *testing.T) {
 	for _, op := range []string{"create", "list"} {
 		t.Run(op, func(t *testing.T) {
 			az := authz.NewWithStubOpReg(wildcardAllowFn)
 			calls := 0
 			az.SetGrantOrOwnFn(countingGrantOrOwnFn(7, &calls))
+			var typeCalls []typeGrantCall
+			az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
 			if err := az.AuthorizeType(ctxWithActor(1), op, 7); err != nil {
 				t.Errorf("wildcard holder should be allowed %q, got: %v", op, err)
@@ -413,18 +443,107 @@ func TestAuthorizeType_WildcardHolder_Allowed(t *testing.T) {
 			if calls != 0 {
 				t.Errorf("grant-or-own check must never be invoked, got %d call(s)", calls)
 			}
+			if len(typeCalls) != 0 {
+				t.Errorf("wildcard allow must short-circuit the type-grant arm, got %d call(s)", len(typeCalls))
+			}
 		})
 	}
 }
 
+// TestAuthorizeType_TypeGrant_Allowed verifies a wildcard miss followed by a
+// type-grant hit allows, and that the arm receives the effective actor, the
+// exact typeID and the operation's SatisfiedBy closure.
+func TestAuthorizeType_TypeGrant_Allowed(t *testing.T) {
+	const typeID = int64(7)
+
+	cases := []struct {
+		name string
+		ctx  context.Context
+		op   string
+		want int64 // effective actor
+	}{
+		{"actor/create", ctxWithActor(1), "create", 1},
+		{"actor/list", ctxWithActor(1), "list", 1},
+		{"sudo-actor", ctxWithSudoActor(1, 50), "create", 50},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardDenyFn)
+			az.SetGrantOrOwnFn(grantOrOwnDenyFn)
+			var typeCalls []typeGrantCall
+			az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
+
+			if err := az.AuthorizeType(tc.ctx, tc.op, typeID); err != nil {
+				t.Fatalf("type-grant holder should be allowed %q, got: %v", tc.op, err)
+			}
+			if len(typeCalls) != 1 {
+				t.Fatalf("type-grant arm calls: got %d, want 1", len(typeCalls))
+			}
+			got := typeCalls[0]
+			if got.actor != tc.want {
+				t.Errorf("type-grant arm actor: got %d, want effective actor %d", got.actor, tc.want)
+			}
+			if got.typeID != typeID {
+				t.Errorf("type-grant arm typeID: got %d, want %d", got.typeID, typeID)
+			}
+			wantIDs, err := authz.StandardOpRegistry().SatisfiedBy(tc.op)
+			if err != nil {
+				t.Fatalf("SatisfiedBy(%q): %v", tc.op, err)
+			}
+			if !reflect.DeepEqual(got.opIDs, wantIDs) {
+				t.Errorf("type-grant arm opIDs: got %v, want the SatisfiedBy closure %v", got.opIDs, wantIDs)
+			}
+		})
+	}
+}
+
+// TestAuthorizeType_TypeGrantMiss_Forbidden verifies a wildcard miss plus a
+// type-grant miss returns ErrForbidden.
+func TestAuthorizeType_TypeGrantMiss_Forbidden(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardDenyFn)
+	az.SetGrantOrOwnFn(grantOrOwnAllowFn) // entity-level authority must not help
+	var typeCalls []typeGrantCall
+	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
+
+	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("expected ErrForbidden, got: %v", err)
+	}
+	if len(typeCalls) != 1 {
+		t.Errorf("type-grant arm calls: got %d, want 1", len(typeCalls))
+	}
+}
+
+// TestAuthorizeType_TypeGrantDBError verifies a type-grant arm error is
+// returned unchanged rather than swallowed into a denial.
+func TestAuthorizeType_TypeGrantDBError(t *testing.T) {
+	dbErr := errors.New("type grant query failed")
+	az := authz.NewWithStubOpReg(wildcardDenyFn)
+	var typeCalls []typeGrantCall
+	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, dbErr))
+
+	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	if !errors.Is(err, dbErr) {
+		t.Errorf("expected type-grant DB error to propagate, got: %v", err)
+	}
+	if errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("a DB error must not be reported as a denial, got: %v", err)
+	}
+}
+
 // TestAuthorizeType_NoActor verifies an unauthenticated context returns
-// ErrUnauthenticated.
+// ErrUnauthenticated and never reaches the type-grant arm.
 func TestAuthorizeType_NoActor(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardAllowFn)
+	var typeCalls []typeGrantCall
+	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 
 	err := az.AuthorizeType(context.Background(), "create", 7)
 	if !errors.Is(err, authz.ErrUnauthenticated) {
 		t.Errorf("expected ErrUnauthenticated, got: %v", err)
+	}
+	if len(typeCalls) != 0 {
+		t.Errorf("type-grant arm must not run without an actor, got %d call(s)", len(typeCalls))
 	}
 }
 
@@ -438,6 +557,8 @@ func TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor(t *testing.T) {
 		return actor == 1, nil // only the real actor (1) is a wildcard admin
 	})
 	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
+	var typeCalls []typeGrantCall
+	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
 	err := az.AuthorizeType(ctxWithSudoActor(1, 50), "create", 7)
 	if !errors.Is(err, authz.ErrForbidden) {
@@ -449,27 +570,40 @@ func TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor(t *testing.T) {
 }
 
 // TestAuthorizeType_UnknownOperation mirrors Authorize's unknown-slug
-// fallback: a non-admin is forbidden, a wildcard-manage holder is allowed.
+// fallback: a non-admin is forbidden, a wildcard-manage holder is allowed, and
+// the type-grant arm is never consulted (the closure is unknown).
 func TestAuthorizeType_UnknownOperation(t *testing.T) {
 	t.Run("non-admin", func(t *testing.T) {
 		az := authz.NewWithStubOpReg(wildcardDenyFn)
+		var typeCalls []typeGrantCall
+		az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 		err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7)
 		if !errors.Is(err, authz.ErrForbidden) {
 			t.Errorf("non-admin with unknown operation should return ErrForbidden, got: %v", err)
 		}
+		if len(typeCalls) != 0 {
+			t.Errorf("type-grant arm must not run for an unknown operation, got %d call(s)", len(typeCalls))
+		}
 	})
 	t.Run("wildcard-manage", func(t *testing.T) {
 		az := authz.NewWithStubOpReg(wildcardAllowFn)
+		var typeCalls []typeGrantCall
+		az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 		if err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7); err != nil {
 			t.Errorf("wildcard-manage holder with unknown operation should be allowed, got: %v", err)
+		}
+		if len(typeCalls) != 0 {
+			t.Errorf("type-grant arm must not run for an unknown operation, got %d call(s)", len(typeCalls))
 		}
 	})
 }
 
 // TestAuthorizeType_BadTypeID verifies typeID <= 0 fails closed, even for a
-// wildcard holder.
+// wildcard holder, and never reaches the type-grant arm.
 func TestAuthorizeType_BadTypeID(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardAllowFn)
+	var typeCalls []typeGrantCall
+	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 
 	for _, typeID := range []int64{0, -1} {
 		err := az.AuthorizeType(ctxWithActor(1), "create", typeID)
@@ -477,16 +611,25 @@ func TestAuthorizeType_BadTypeID(t *testing.T) {
 			t.Errorf("typeID=%d should return ErrForbidden even for a wildcard holder, got: %v", typeID, err)
 		}
 	}
+	if len(typeCalls) != 0 {
+		t.Errorf("type-grant arm must not run for typeID <= 0, got %d call(s)", len(typeCalls))
+	}
 }
 
 // TestAuthorizeType_WildcardDBError verifies a wildcard-check DB error
-// propagates rather than being swallowed into a denial.
+// propagates rather than being swallowed into a denial, and that the
+// type-grant arm is not consulted afterwards.
 func TestAuthorizeType_WildcardDBError(t *testing.T) {
 	dbErr := errors.New("pool connection lost")
 	az := authz.NewWithStubOpReg(wildcardErrFn(dbErr))
+	var typeCalls []typeGrantCall
+	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 
 	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected DB error to propagate, got: %v", err)
+	}
+	if len(typeCalls) != 0 {
+		t.Errorf("type-grant arm must not run after a wildcard-check error, got %d call(s)", len(typeCalls))
 	}
 }

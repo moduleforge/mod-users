@@ -349,7 +349,7 @@ items:
         - plan/slug:ssh-public-keys
         - priority:low
         - effort:medium
-      text: '[phase-01 gate, arch-003, minor] Operator Register/Revoke on SSH keys authorize via the generic ''update'' op (api/internal/service/ssh_keys.go:131,226), which now also grants credential-install/impersonation-grade capability (SSH git access) to any principal holding only ''update'' on a user, not just the impersonation-grade ''assume''/''login'' ops. Practical escalation is already limited since ''update'' can also change email today (see the separate followup on that). Consider authorizing operator SSH-key register/revoke against ''assume'' instead, or record this as an accepted trade-off in docs/architecture.md''s key decisions once that section exists.'
+      text: 'Operator Register/Revoke on SSH keys authorize via the generic ''update'' operation on the account holder (api/internal/service/ssh_keys.go, loadAuthorizedAccount calls at lines 133 and 228), which also grants credential-install, impersonation-grade capability (SSH git access) to any principal holding only ''update'' on a user, not just the ''assume''/''login'' operations. Type-scoped grants widen the reach: ''update'' or ''manage'' on the natural_person type entity confers ''update'' over every natural_person instance (docs/architecture.md D13), so such a holder can install an SSH key on every user''s account. Practical escalation is otherwise limited since ''update'' can also change email. Consider authorizing operator SSH-key register/revoke against ''assume'' instead, or record this as an accepted trade-off in docs/architecture.md''s key decisions, stating that ''update'' on a natural_person type entity is credential-install authority over every user.'
     - title: SSH-key routes mask 403, sibling routes 404
       id: tbmN
       date: "2026-09-28"
@@ -439,7 +439,7 @@ items:
         - plan/slug:ssh-public-keys
         - priority:medium
         - effort:small
-      text: '[phase-01 gate, security lens flagged_for_manager, needs a decision] The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git — an existing authorization pattern that now reaches a new, persistent impersonation capability. Confirm whether such non-self ownership relationships occur in practice for natural_person entities, and whether this is intended for SSH-key registration specifically.'
+      text: 'The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git. Type grants add a second route to the same capability: ''update'' or ''manage'' on the natural_person type entity reaches every natural_person instance (docs/architecture.md D13) and so the operator SSH-key routes, which authorize ''update'' on the account holder (api/internal/service/ssh_keys.go). Confirm whether non-self ownership relationships occur in practice for natural_person entities, and whether either route is intended for SSH-key registration specifically.'
     - title: Integration suite (ssh_keys_integration_test.
       id: trmJ
       date: "2026-09-28"
@@ -692,16 +692,6 @@ items:
         - cross-repo/origin:flow-accounts
         - effort:unspecified
       text: api/internal/handlers/auth/oidc.go redirectToTestResult (~line 338) assigns u.Path = "/oidc-config" over the operator-supplied FrontendReturnURL (AUTH_FRONTEND_RETURN_URL), dropping any mount prefix the app is served under (for example /manage), so the OIDC provider test result lands on the wrong URL. Loud failure (a 404 or wrong page after the provider test), admin-only flow. Derive the redirect from the FrontendReturnURL's own path (or a configured oidc-config path) instead of overwriting it, and add a test with a prefixed return URL. Documented in flow-accounts docs/architecture/manage-mount-and-base-path.md (Specification 2).
-    - title: UserAccountService.List not on AuthorizeType
-      id: 4dka
-      date: "2026-10-05"
-      tags:
-        - type:style
-        - priority:low
-        - effort:small
-        - plan/phase:type-target-authorization
-        - plan/slug:fix-actor-group-target-confusion
-      text: 'Review finding (suggestion, medium confidence; agent-authored data): UserAccountService.List in api/internal/service/user_accounts.go still calls Authorize(ctx, "list", nil). That is correct and fail-closed (wildcard-only) today and has no bypass, but it does not use the new type-level API. If type-scoped grants are introduced later, migrate List to authorizeType for consistency. No action needed now.'
     - title: Mask user-account miss; authz before decode
       id: CuAF
       date: "2026-10-08"
@@ -825,3 +815,102 @@ items:
         - plan/phase:authorize-type-grant-arm
         - plan/slug:type-scoped-grants
       text: link-siblings.sh repointed the shared mod-users/worktrees sibling symlinks to the staging directory; reset them (plain root make) when sibling-build mode ends.
+    - title: config.Load()/validate() in mod-users still r
+      id: GlTi
+      date: "2026-10-10"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/phase:eddsa-verify-only-key
+        - plan/slug:flow-accounts-upstream
+      text: config.Load()/validate() in mod-users still require JWT_SECRET (bootstrapped from DB), so mod-users' own server is not verify-only; the verify-only mode is available to library consumers via auth.NewVerifierWithOptions. Decide whether a later task should make JWT_SECRET optional in Load (affects step-up tokens and other HS256 users).
+    - title: CORS docs still say only bare * errors
+      id: BODx
+      date: "2026-10-10"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:unspecified
+        - plan/phase:remediation-03
+        - plan/slug:flow-accounts-upstream
+      text: .env.example (lines 14-16) says other modes reject '*' in CORS_ORIGINS at boot and docs/mod-users-spec.md:333 says a '*' in CORS_ORIGINS is a startup error; both are narrower than the behavior now, which rejects any entry containing * outside local mode. Change both to 'any entry containing *'. Fix the inaccurate comment at api/internal/server/server.go:59 together with the local-mode pattern finding.
+    - title: Local CORS patterns reflect with credentials
+      id: dnKQ
+      date: "2026-10-10"
+      tags:
+        - type:security
+        - priority:high
+        - effort:unspecified
+        - plan/phase:remediation-03
+        - plan/slug:flow-accounts-upstream
+      text: 'In DeployModeLocal, api/internal/server/server.go corsOptions (~64-90) passes pattern entries such as https://*.example.com, http* or https://* with wildcard=false, so AllowCredentials is true and go-chi/cors v1.2.2 reflects any matching Origin with Access-Control-Allow-Credentials: true. Reachable only in local mode when the operator sets the pattern explicitly; a test case blesses it and the comment ''The wildcard is never combined with credentials'' is inaccurate for it. Suggested: in local mode treat any entry containing * like the bare wildcard (collapse to ["*"], no credentials) or reject patterns in local mode; update the test and docs/cors.md. Optional: share one CORS_ORIGINS parser between config.Load and corsOptions to remove drift risk. Escalation (quoted data): growth control (max_rounds 3 reached) left no room to fix this in the plan; internal escalation is off so the question was surfaced: promote to project backlog at priority:high, or dismiss with a concrete reason? Recommended: promote and fix in a later plan (small change; local-mode only, requires explicit operator pattern).'
+    - title: Cookie path docs omit test-redirect effect
+      id: 7ok7
+      date: "2026-10-10"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:unspecified
+        - plan/phase:cookie-base-path
+        - plan/slug:flow-accounts-upstream
+      text: 'docs/cookie-path.md and .env.example describe only the oidc_state cookie Path; when USERS_COOKIE_PATH is set, redirectToTestResult (api/internal/handlers/auth/oidc.go ~361-366) also redirects to <base>/oidc-config, which assumes the base is the frontend''s public prefix too. docs/mod-users-spec.md:341 and api/openapi.yaml:965 describe the cookie as scoped to /v1/auth/oidc/ with no mention of the mount prefix. Suggested: add a sentence to docs/cookie-path.md (and optionally .env.example) about the test redirect, and reword the spec/openapi lines to say ''/v1/auth/oidc/ under the mount prefix'' or link docs/cookie-path.md.'
+    - title: emailVerifiedAt reads null after login
+      id: jKvl
+      date: "2026-10-10"
+      tags:
+        - type:bug
+        - priority:high
+        - effort:unspecified
+        - plan/phase:users-gui-improvements
+        - plan/slug:flow-accounts-upstream
+      text: 'gui/src/lib/auth-context.tsx (~235-239) derives emailVerifiedAt as user?.email_verified_at ?? null, but the user state is also set by setTokenAndUser(response.user) after login(), register() (chains a login) and email-code login (email-code-page.tsx:64). The login and email-code handlers (api/internal/handlers/auth/login.go:88-93, emailcode.go:181-186) return only {uuid, email} (anonymous: {uuid, is_anonymous}), with no email_verified_at, yet LoginResponse.user is typed as UserAccountSelf with a non-optional field. So right after sign-in a verified account reads emailVerifiedAt === null (unverified) until refreshUser() or a reload, which would wrongly trigger a verify-email prompt; the new tests only cover the mount-time /v1/self fetch. Fix options: call api.self.get() / refreshUser() after setTokenAndUser in login, register and email-code paths; or make the field optional and return undefined when absent (unknown vs unverified); or add email_verified_at to the login and email-code user payloads. Add a test that logs in and reads emailVerifiedAt. Also api/openapi.yaml: email_verified_at was added to the shared UserDetail schema (also used by admin endpoints that emit email_verified boolean instead); introduce a self-specific schema or required list for /v1/self.'
+    - title: checkout-deps strictness edge cases
+      id: xuSi
+      date: "2026-10-10"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:unspecified
+        - plan/phase:checkout-deps-token-handling
+        - plan/slug:flow-accounts-upstream
+      text: 'scripts/checkout-deps.sh review notes (none exploitable): (1) top-level host:/owner: are now strictly validated, so a trailing YAML comment or quotes (host: "github.com") that the old parse accepted now exit 3; document the accepted form in --help/lockfile docs or strip one layer of matching quotes like the overrides parser (~175-186, 211-212). (2) `for h in $allowed` expands MODULEFORGE_TOKEN_ALLOWED_HOSTS unquoted with globbing on; use set -f or read -ra (~175-186). (3) GIT_CONFIG_COUNT=2 overrides any caller GIT_CONFIG_COUNT, and git older than 2.31 ignores the variables so no header or redirect hardening applies and private repos fail without a clear message; append after an existing count and/or check git >= 2.31 and mention it in --help (~371-374). (4) clone_pin is called as `if ! clone_pin`, which disables errexit inside, so failures of git init/remote add/checkout --detach are ignored and the run reports cloned; chain steps with || return 1 and assert the exit code in the --pinned test (~400-412, pre-existing). (5) the local --verify path fails with exit 3 on a non-allowlisted host even without network use when a token is set (~311-316); document or defer to first network use. (6) scripts/update-pins.sh (~70-71) still parses top-level host/owner with the old unvalidated awk; reuse valid_host/valid_owner. (7) the header comment still says the other carrier copy lives in mod-users; the make target needs bash 4 so it fails on macOS /bin/bash 3.2 unless a newer bash is first on PATH.'
+    - title: checkout-deps tests miss xtrace/host cases
+      id: nJel
+      date: "2026-10-10"
+      tags:
+        - type:security
+        - priority:high
+        - effort:small
+        - plan/phase:checkout-deps-token-handling
+        - plan/slug:flow-accounts-upstream
+      text: 'scripts/test-checkout-deps.sh (58 cases) does not test the set +x xtrace protection around token dereferences: a regression removing a set +x would pass all cases. Add a case running the script under bash -x (or SHELLOPTS=xtrace) asserting no_leak over combined stdout and stderr for the token and its base64. Also add cases for the in-git_fetch_auth allowlist re-check, a trailing-dot host (github.com.), a host-suffix lookalike (github.com.evil.example), a CRLF lockfile, and positive case-insensitivity (GitHub.com with a token). The ps/argv check itself is sound (positive control, token and base64); optionally note its single-snapshot limitation.'
+    - title: Migrate off ../mod-core/gui workspace member
+      id: njXo
+      date: "2026-10-11"
+      tags:
+        - type:optimization
+        - priority:medium
+        - effort:medium
+        - cross-repo/origin:docs-mf-standards
+      text: 'mod-users/package.json roots a bun workspace with a `../mod-core/gui` member ("workspaces": ["gui", "../mod-core/gui"]). The ModuleForge standards (building-applications.md, building-common.md) now say worktree workspaces over `../` sibling members share node_modules in the sibling checkout and are not the supported pattern for apps (private `.gui-siblings` copies are the standard). mod-users is a module repo, so the standard text is app-scoped, but it carries the same shared-checkout hazard (concurrent worktrees clobbering links, duplicate React). Decide whether to migrate mod-users'' GUI workspace off the `../` member (e.g. a private materialized copy or a peer-only setup) or keep it as a documented, tracked exception. The standards docs will describe it as a known deviation in the meantime.'
+    - title: LoginResponse.user type is wider than payload
+      id: mJdk
+      date: "2026-10-10"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:backlog-fixes
+        - plan/slug:flow-accounts-upstream
+      text: gui/src/lib/api.ts types LoginResponse.user as UserAccountSelf, but the login, email-code verify and assume handlers (api/internal/handlers/auth/login.go sessionUser, emailcode.go, api/internal/handlers/assume.go) send only uuid, email and email_verified_at. Fields such as given_name, family_name, entity_uuid and is_admin are typed as present on useAuth().user right after sign-in but are undefined until refreshUser() runs. Either narrow the type (Pick) and widen the auth-context user state, or have the server emit the full self shape or the GUI refresh after sign-in.
+    - title: Assume test gap; LoginResponse typing
+      id: 66qf
+      date: "2026-10-10"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:unspecified
+        - plan/phase:backlog-fixes
+        - plan/slug:flow-accounts-upstream
+      text: '(1) The admin assume-identity payload now carries email_verified_at (api/internal/handlers/assume.go ~91-103, shared emailVerifiedAtValue in self.go) and the spec/OpenAPI promise it, but no Assume handler test asserts the user object; add a small test with a stub service returning verified and unverified accounts asserting the key is present with a timestamp or explicit null. (2) gui/src/lib/api.ts (~183-189, 249): LoginResponse.user is still typed UserAccountSelf although sign-in and assume payloads carry only uuid, email and email_verified_at, so TypeScript will not flag consumers reading user.entity_uuid and similar; narrow it to Pick<UserAccountSelf, ''uuid'' | ''email'' | ''email_verified_at''> plus optional extras. The anonymous payload is not a LoginResponse and carries uuid and is_anonymous.'

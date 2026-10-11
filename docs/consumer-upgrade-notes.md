@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 
-For people who compose, embed or verify tokens from this module (the first consumer is flow-accounts). One section per area, each naming the exact public API, configuration or behaviour change and pointing to the detailed doc rather than repeating it. It covers the EdDSA verify-only key, token hardening, CORS, the cookie base path, the GUI, and `scripts/checkout-deps.sh`, and ends with known limits. Design rationale lives under [Key decisions](./architecture.md#key-decisions) (D13 to D17).
+For people who compose, embed or verify tokens from this module (the first consumer is flow-accounts). One section per area, each naming the exact public API, configuration or behaviour change and pointing to the detailed doc rather than repeating it. It covers the EdDSA verify-only key, token hardening, CORS, the cookie base path, the GUI, and `scripts/checkout-deps.sh`, and ends with known limits. Design rationale lives under [Key decisions](./architecture.md#key-decisions) (D14 to D18).
 
 ## EdDSA verify-only key
 

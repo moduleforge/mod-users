@@ -23,6 +23,13 @@ func (a *Authorizer) SetGrantOrOwnFn(fn func(ctx context.Context, actorEntityID,
 	a.grantOrOwnFn = fn
 }
 
+// SetTypeGrantFn sets the type-grant override function on the Authorizer.
+// Used by unit tests to inject AuthorizeType's type-grant arm outcome (a grant
+// on the exact type's entity) without a live Postgres.
+func (a *Authorizer) SetTypeGrantFn(fn func(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error)) {
+	a.typeGrantFn = fn
+}
+
 // stubOpReg is a minimal OperationRegistry that accepts any operation slug and
 // returns a slice containing a dummy op ID. Used by unit tests that need to
 // exercise the Authorize flow without a real authz_operations table.
@@ -60,7 +67,8 @@ var errUnknownOp = ErrForbidden
 // NewWithStubOpReg builds an Authorizer suitable for unit tests.
 // It uses a real OperationRegistry loaded from in-memory stubs, and sets
 // wildcardGrantFn to the given function. Pool is nil; tests that reach
-// checkGrantOrOwn without first calling SetGrantOrOwnFn will panic (that
+// checkGrantOrOwn without first calling SetGrantOrOwnFn (or checkTypeGrant
+// without SetTypeGrantFn) will panic (that
 // path requires a DB).
 //
 // The stub OperationRegistry contains the standard seed operations so that
