@@ -1,6 +1,9 @@
 slug: users-conformance
 version: 1
 title: ""
+remediation:
+    rounds: 1
+    tasks_added: 0
 phases:
     - number: 1
       slug: authenticate-routes
@@ -243,3 +246,8 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 8
+      slug: remediation-01
+      title: Remediation Round 1
+      kind: remediation
+      tasks: []
