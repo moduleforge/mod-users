@@ -38,3 +38,7 @@ phases:
       slug: conflicts-and-order-tests
       title: State Conflicts and Order Tests
       tasks: []
+    - number: 5
+      slug: gui-wire-docs-and-validation
+      title: GUI Alignment, Wire Risk Docs and Validation
+      tasks: []
