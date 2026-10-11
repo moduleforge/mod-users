@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: main.go step-up key comment out of order
-      id: ccun
-      date: "2026-10-11"
-      tags:
-        - type:style
-        - priority:low
-        - plan/phase:derived-hmac-keys
-        - effort:unspecified
-      text: In api/cmd/server/main.go around lines 500-511 the new step-up key resolution comment block sits inside the existing comment that ends with the consumed-JTI cache and janitor goroutine note, so the comment reads out of order. Move the stepUpKey resolution above that comment or give it its own paragraph. Also consider noting in docs/jwt-eddsa.md that an explicit JWT_SECRET collapses OAuth-state/step-up label separation (tokens stay distinguishable by structure and purpose claim).
     - title: Reject blank HS256 secret at API boundary
       id: pciu
       date: "2026-10-11"
@@ -26,6 +17,11 @@ closed:
       date: "2026-10-11"
     - id: WutU
       title: Weak explicit JWT_SECRET beats derived key
+      disposition: fixed
+      ref: phase-04-remediation-01/001-blank-jwt-secret-as-unset.md
+      date: "2026-10-11"
+    - id: ccun
+      title: main.go step-up key comment out of order
       disposition: fixed
       ref: phase-04-remediation-01/001-blank-jwt-secret-as-unset.md
       date: "2026-10-11"
