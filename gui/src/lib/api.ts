@@ -245,7 +245,7 @@ export interface ForgotPasswordRequest {
 
 export interface ResetPasswordRequest {
   token: string;
-  new_password: string;
+  password: string;
 }
 
 // ─── User Accounts ───────────────────────────────────────────────────────────
@@ -305,10 +305,9 @@ export interface AuditListResponse {
 
 export interface App {
   uuid: string;
+  slug: string;
   name: string;
-  description: string;
   created_at: string;
-  updated_at: string;
 }
 
 export interface AppListResponse {
@@ -329,14 +328,20 @@ export interface AppMembersResponse {
   members: AppMember[];
 }
 
+/**
+ * Body for `POST /v1/apps` and (as `Partial`) `PUT /v1/apps/{uuid}`. Both
+ * fields are required on create; the server treats a blank field on update as
+ * "leave unchanged".
+ */
 export interface CreateAppRequest {
+  slug: string;
   name: string;
-  description?: string;
 }
 
 export interface AddAppMemberRequest {
   user_uuid: string;
-  role: string;
+  /** Role names to assign; the server accepts an array (possibly empty). */
+  roles?: string[];
 }
 
 // ─── SSH keys ────────────────────────────────────────────────────────────────

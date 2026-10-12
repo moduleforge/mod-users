@@ -35,3 +35,15 @@ architectural_impact: false
 ## Assumptions
 
 - This task touches only `gui/`, so it is parallel-eligible with task 5.2.
+
+## Status
+
+- Outcome: succeeded (2026-10-11).
+- Source files changed: `gui/src/lib/api.ts`, `gui/src/components/reset-password-page.tsx`, `gui/src/components/oidc-provider-add-modal.tsx`.
+- `CreateAppRequest` is now `{ slug, name }` (both required); `App` is `{ uuid, slug, name, created_at }`. `update` takes `Partial<CreateAppRequest>`: mod-core treats a blank field on update as "leave unchanged", so neither field is required on update.
+- `AddAppMemberRequest` is `{ user_uuid, roles?: string[] }` per mod-users `assignUserRequest`.
+- `ResetPasswordRequest` field renamed `new_password` to `password` to match mod-users `auth/reset.go` (manager finding 9qmR); the call site in `reset-password-page.tsx` updated to match.
+- Add-provider modal (manager finding jzT7) now surfaces the structured `ApiRequestError.details` messages when present, falling back to `err.message`.
+- `getMembers` / `AppMembersResponse` unchanged (tracked by followup ZJ5N).
+- No app GUI under `app-*/gui/src` uses the changed wrappers or types (grep).
+- Validation: `bun run typecheck` passed; `bun test` passed (230 pass, 0 fail). Logs under `.flow/validation-logs/`. `bun.lock` untouched.
