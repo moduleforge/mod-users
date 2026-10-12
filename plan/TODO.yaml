@@ -228,6 +228,7 @@ phases:
           path: phase-05-gui-wire-docs-and-validation/003-full-validation.md
           done: false
           tier: sonnet-low
+          digest: 'Full validation green: gofmt, vet (both tags), go test, make lint, model tests, Postgres integration, gui typecheck and 230 tests, checklist greps; audit closure recorded by evidence; no code changes.'
           git:
             branch: null
             commit: []
