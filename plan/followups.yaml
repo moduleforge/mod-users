@@ -900,3 +900,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: In an assume session the token subject is the admin and sudo_user_uuid is the assumed user, so buildUserContext sets uc to the admin's account and the effective actor (opctx.EffectiveActorEntityID) is the assumed user. PUT /self loads uc.UserAccountID (the admin's own account), so a body containing names is now authorized as the assumed user against the admin's entity and gets 403 unless the assumed user holds update on it; before mod-core's AuthorizeResolve it silently wrote the admin's own names. A body without names is unaffected, and a non-admin updating their own names works (the entity owns itself). Decide whether PUT /self in an assume session should target the effective actor's (assumed user's) account, be forbidden explicitly, or keep acting on the admin; the users-conformance inventory's D5 assume-session reading was the reverse of the code and is corrected in the wire-risk note.
+    - title: /readyz returns raw DB error unauthenticated
+      id: FAVu
+      date: "2026-10-11"
+      tags:
+        - type:security
+        - priority:high
+        - effort:unspecified
+        - plan/phase:authenticate-routes
+        - plan/slug:users-conformance
+      text: 'api/internal/handlers/health.go Ready writes err.Error() from pool.Ping into the 503 body ("db": ...) on the unauthenticated GET /readyz route. Driver errors can include host, port, user and database names. Log the error server-side and return a fixed value such as "unavailable".'
