@@ -5,8 +5,8 @@ items:
       date: "2026-10-11"
       tags:
         - type:bug
+        - priority:high
         - plan/phase:authenticate-routes
-        - priority:unspecified
         - effort:unspecified
       text: api/internal/handlers/identities.go sendStepUpCode inserts an email_codes row with purpose "credential_change", but model/migrations/sql/0100_baseline.sql defines CHECK (purpose IN ('login', 'verify_email')) on email_codes and no later migration changes it. By reading the source (not run against a database) the insert fails, is only logged, and POST /v1/self/credential/step-up answers 204 without ever creating or sending a code, which would leave step-up verification unusable when AUTH_REQUIRE_STEP_UP is on. Verify against a live database and either widen the CHECK or change the purpose.
     - title: Fire-and-forget email sends use dead ctx
