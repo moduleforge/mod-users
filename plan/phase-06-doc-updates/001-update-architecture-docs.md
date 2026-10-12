@@ -43,3 +43,13 @@ Review and update mod-users' architecture and spec docs so they reflect the erro
 ## Metadata
 
 architectural_impact: false
+
+## Status
+
+- Outcome: succeeded (2026-10-11). Docs-only; no Go package docs edited, so the Go validation check is not applicable.
+- `docs/architecture.md`: updated (API layer error-order and RequireAuth paragraph; entityResolver service row and Data model apps sentence; routes-wiring note; new D20 and D21).
+- `docs/architecture/ssh-keys.md`: updated (D9 request order, step-up position, key parse before authorization, masked miss).
+- `docs/mod-users-spec.md`: updated (use cases 9 and 11, app-membership resolver text, middleware-gate exceptions and anti-enumeration 204s in Request order).
+- `AGENTS.md` and `docs/consumer-upgrade-notes.md`: already correct.
+- `docs/mf-standards/*`: not edited; sibling docs-mf-standards checked, nothing made false.
+- Link check: no links into `plan/` from README.md, AGENTS.md or docs/.
