@@ -246,7 +246,7 @@ phases:
           tier: sonnet-high
           digest: architecture.md, ssh-keys.md and spec updated for error-precedence (D20/D21, masked miss, RequireAuth groups, exceptions); stale entityResolver claims fixed.
           git:
-            branch: null
+            branch: plan/users-conformance-06-001
             commit: []
             merge: null
     - number: 7
