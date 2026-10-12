@@ -249,7 +249,7 @@ phases:
             branch: plan/users-conformance-06-001
             commit:
                 - a074520
-            merge: null
+            merge: c0bca9f7eb02
     - number: 7
       slug: pin-rebump
       title: Re-bump mod-core Pin
