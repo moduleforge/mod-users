@@ -242,11 +242,13 @@ phases:
           slug: update-architecture-docs
           title: Update Architecture Docs
           path: phase-06-doc-updates/001-update-architecture-docs.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: architecture.md, ssh-keys.md and spec updated for error-precedence (D20/D21, masked miss, RequireAuth groups, exceptions); stale entityResolver claims fixed.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-06-001
+            commit:
+                - a074520
             merge: null
     - number: 7
       slug: pin-rebump
