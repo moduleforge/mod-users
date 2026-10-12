@@ -51,3 +51,12 @@ architectural_impact: false
 ## Assumptions
 
 - Task 4.3 has landed.
+
+## Status
+
+Outcome: succeeded (2026-10-11). Added `api/internal/handlers/oidc_config_order_test.go` (helpers `orderOIDC`) and `api/internal/handlers/auth/order_test.go` (helpers `orderAuth`); test files only, no production changes.
+
+- Validation: gofmt, `go vet ./...`, `go test ./internal/handlers/... -run Order`, `go test ./...` and `make lint` all pass.
+- Red before green: temporarily swapping `authenticateWithBody` to reject a missing ambient credential before decoding made the documented-exception subtests fail for confirm, create and update (401 instead of 400); production file restored.
+- The 5 credential routes are mounted through the real `RegisterOIDCConfigRoutes`; the composed-router test mounts all authenticated registrars plus both public groups on one `/v1` router and shows `GET /v1/self` is 401 while `/auth/providers`, `/oidc-config/status|saved` are 200 and a header-token `POST /oidc-config/confirm` with no identity is 200.
+- Note: the anti-enumeration responses are 204 (not 202) today; the tests pin 204, unchanged.
