@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: OIDC link insert race gives 500
-      id: 8VhV
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - plan/phase:conflicts-and-order-tests
-        - priority:unspecified
-        - effort:unspecified
-      text: OIDCHandler.handleLinkMode in api/internal/handlers/auth/oidc.go checks GetOIDCIdentityByIssuerSubject and redirects with identity_in_use when the (issuer, subject) pair belongs to another account, but the later insert in the same function is not guarded against the UNIQUE (issuer, subject) constraint. Two concurrent link callbacks for the same pair make the loser hit a 23505 and answer a JSON 500 internal_error instead of the identity_in_use redirect. Fix would be to match the unique violation on that constraint name (errors.As plus ConstraintName) and take the same redirect path. Not changed here.
+items: []
 closed:
     - id: jAXe
       title: ssh key parse runs after step-up
@@ -69,4 +60,9 @@ closed:
       title: 'Unlink: 409 precedes identity 404'
       disposition: promoted
       ref: v2BM
+      date: "2026-10-12"
+    - id: 8VhV
+      title: OIDC link insert race gives 500
+      disposition: promoted
+      ref: 8VhV
       date: "2026-10-12"
