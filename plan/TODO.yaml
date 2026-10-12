@@ -231,7 +231,8 @@ phases:
           digest: 'Full validation green: gofmt, vet (both tags), go test, make lint, model tests, Postgres integration, gui typecheck and 230 tests, checklist greps; audit closure recorded by evidence; no code changes.'
           git:
             branch: plan/users-conformance-05-003
-            commit: []
+            commit:
+                - a3428e0
             merge: null
     - number: 6
       slug: doc-updates
