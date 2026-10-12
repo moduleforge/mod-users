@@ -221,7 +221,7 @@ phases:
             branch: plan/users-conformance-05-002
             commit:
                 - 53dcacd
-            merge: null
+            merge: 8eabc850f360
         - number: 3
           slug: full-validation
           title: Full Validation Pass
