@@ -209,7 +209,7 @@ phases:
             branch: plan/users-conformance-05-001
             commit:
                 - 692ea96
-            merge: null
+            merge: de54236577bd
         - number: 2
           slug: wire-risk-docs
           title: Document Wire Risks and Helper Usage
