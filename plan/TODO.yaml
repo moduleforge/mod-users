@@ -196,26 +196,31 @@ phases:
     - number: 5
       slug: gui-wire-docs-and-validation
       title: GUI Alignment, Wire Risk Docs and Validation
+      diff_base: 7bcb01e6461ca0dac736b1475f2f2c6cf5f7071e
       tasks:
         - number: 1
           slug: gui-apps-client-alignment
           title: Align GUI Apps Client Payloads
           path: phase-05-gui-wire-docs-and-validation/001-gui-apps-client-alignment.md
-          done: false
+          done: true
           tier: haiku-med
+          digest: 'GUI aligned: CreateApp slug/name, addMember roles, reset-password field renamed to password (9qmR), add-provider modal reads structured details (jzT7); typecheck and 230 gui tests pass; scope expansion to two components was manager-directed.'
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/users-conformance-05-001
+            commit:
+                - 692ea96
+            merge: de54236577bd
         - number: 2
           slug: wire-risk-docs
           title: Document Wire Risks and Helper Usage
           path: phase-05-gui-wire-docs-and-validation/002-wire-risk-docs.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: OpenAPI precedence section, consumer upgrade notes naming clients, spec bullet, AGENTS.md convention, ErrEmailTaken comment, wire-risk reconciled; anti-enumeration corrected to 204.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-05-002
+            commit:
+                - 53dcacd
             merge: null
         - number: 3
           slug: full-validation
