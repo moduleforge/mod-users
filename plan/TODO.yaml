@@ -202,7 +202,7 @@ phases:
           slug: gui-apps-client-alignment
           title: Align GUI Apps Client Payloads
           path: phase-05-gui-wire-docs-and-validation/001-gui-apps-client-alignment.md
-          done: false
+          done: true
           tier: haiku-med
           digest: 'GUI aligned: CreateApp slug/name, addMember roles, reset-password field renamed to password (9qmR), add-provider modal reads structured details (jzT7); typecheck and 230 gui tests pass; scope expansion to two components was manager-directed.'
           git:
