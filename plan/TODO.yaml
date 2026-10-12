@@ -230,7 +230,7 @@ phases:
           tier: sonnet-low
           digest: 'Full validation green: gofmt, vet (both tags), go test, make lint, model tests, Postgres integration, gui typecheck and 230 tests, checklist greps; audit closure recorded by evidence; no code changes.'
           git:
-            branch: null
+            branch: plan/users-conformance-05-003
             commit: []
             merge: null
     - number: 6
