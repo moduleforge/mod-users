@@ -226,11 +226,13 @@ phases:
           slug: full-validation
           title: Full Validation Pass
           path: phase-05-gui-wire-docs-and-validation/003-full-validation.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: 'Full validation green: gofmt, vet (both tags), go test, make lint, model tests, Postgres integration, gui typecheck and 230 tests, checklist greps; audit closure recorded by evidence; no code changes.'
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-05-003
+            commit:
+                - a3428e0
             merge: null
     - number: 6
       slug: doc-updates
