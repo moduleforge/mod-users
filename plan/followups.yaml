@@ -950,3 +950,13 @@ items:
         - plan/phase:decode-and-shape
         - plan/slug:users-conformance
       text: POST /v1/oidc-config/confirm (api/internal/handlers/oidc_config.go, OIDCConfigHandler.Confirm) passes enabled_providers through normalizeEnabledSet, which lowercases, dedupes and silently DROPS ids that are not in the env registry; the request still succeeds with 200 and the response gives no hint that an id was ignored. The HTTP error-precedence rule would classify a referenced value outside a registry as 422 after authorization, but that would be a new behavior for the config page and its status semantics, so no status was chosen and the current behavior is kept (pinned by TestNormalizeEnabledSet_DropsUnknown). Decide whether unknown ids should become 422 (with a details entry per id), stay silently ignored (document it), or be echoed back in the response.
+    - title: 'Unlink: 409 precedes identity 404'
+      id: v2BM
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:conflicts-and-order-tests
+        - plan/slug:users-conformance
+      text: IdentitiesHandler.Unlink in api/internal/handlers/identities.go runs the last-identity count (errLastIdentity, 409 users.last_identity) before DeleteOIDCIdentityByUUID reports whether the caller's identity exists. A caller with exactly one OIDC identity and no password who sends an identity_uuid that does not exist therefore gets 409 instead of the 404 users.identity_not_found. The scope is the caller's own account, so there is no cross-user leak; the status is only misleading. Fix would be to check existence (or the delete row count) first and apply the last-identity rule only to an identity that exists. Left unchanged and pinned as the current behavior.
