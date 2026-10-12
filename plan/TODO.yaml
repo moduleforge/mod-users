@@ -206,7 +206,7 @@ phases:
           tier: haiku-med
           digest: 'GUI aligned: CreateApp slug/name, addMember roles, reset-password field renamed to password (9qmR), add-provider modal reads structured details (jzT7); typecheck and 230 gui tests pass; scope expansion to two components was manager-directed.'
           git:
-            branch: null
+            branch: plan/users-conformance-05-001
             commit: []
             merge: null
         - number: 2
