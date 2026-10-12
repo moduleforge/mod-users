@@ -189,7 +189,7 @@ phases:
           tier: sonnet-med
           digest: Order tests for 8 oidc-config and 10 public auth routes plus composed-router check; red check via swapping credential/decode order; anti-enumeration pinned at 204 (task text said 202); no production change.
           git:
-            branch: null
+            branch: plan/users-conformance-04-004
             commit: []
             merge: null
     - number: 5
