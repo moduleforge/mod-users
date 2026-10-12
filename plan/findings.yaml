@@ -32,8 +32,8 @@ items:
       date: "2026-10-11"
       tags:
         - type:security
+        - priority:high
         - plan/phase:authenticate-routes
-        - priority:unspecified
         - effort:unspecified
       text: 'api/internal/handlers/health.go Ready writes err.Error() from pool.Ping into the 503 body ("db": ...) on the unauthenticated GET /readyz route. Driver errors can include host, port, user and database names. Log the error server-side and return a fixed value such as "unavailable".'
     - title: oidc confirm drops unknown provider ids
