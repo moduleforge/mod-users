@@ -47,3 +47,10 @@ architectural_impact: false
 ## Assumptions
 
 - Phases 1-4 have landed. Task 5.1 may run in parallel; it touches only `gui/`.
+
+## Status
+
+- Outcome: succeeded (2026-10-11). Validation: diff scope limited to api/openapi.yaml, docs/consumer-upgrade-notes.md, docs/mod-users-spec.md, AGENTS.md; no plan/ links; OpenAPI parses. README.md unchanged (its existing consumer-upgrade-notes link text covers this).
+- Planned vs recorded: all 13 planned items were recorded; 5 and 7 are done in 4.1 (409 and 422). The 3.4 note now says a body user_uuid naming no account is 422.
+- Drift noted, not rewritten: openapi.yaml still lists `/v1/users...` (routes are `/v1/user-accounts...`) and lacks the identities surface (followups fs0H, biJk).
+- Folded in: anti-enumeration status corrected from 202 to 204 in docs/mod-users-spec.md and the two api/openapi.yaml responses (code returns 204).
