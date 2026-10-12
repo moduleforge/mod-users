@@ -940,3 +940,13 @@ items:
         - plan/phase:authenticate-routes
         - plan/slug:users-conformance
       text: 'gui/src/lib/api.ts: userAccounts.grantAdmin and revokeAdmin call POST/DELETE /v1/user-accounts/{uuid}/admin, but the server routes (api/internal/handlers/account_routes.go) are POST /user-accounts/{uuid}/grant-admin and /revoke-admin. userAccounts.audit calls GET /v1/user-accounts/{uuid}/audit, which no longer exists (api/cmd/server/main.go documents the audit routes as /v1/audit/by-actor/{uuid} and /v1/audit/by-entity/{entity_uuid}); audit.byEntity sends ?entity_uuid= to /v1/audit. These client methods would 404 or hit the wrong route.'
+    - title: oidc confirm drops unknown provider ids
+      id: jQbw
+      date: "2026-10-11"
+      tags:
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:decode-and-shape
+        - plan/slug:users-conformance
+      text: POST /v1/oidc-config/confirm (api/internal/handlers/oidc_config.go, OIDCConfigHandler.Confirm) passes enabled_providers through normalizeEnabledSet, which lowercases, dedupes and silently DROPS ids that are not in the env registry; the request still succeeds with 200 and the response gives no hint that an id was ignored. The HTTP error-precedence rule would classify a referenced value outside a registry as 422 after authorization, but that would be a new behavior for the config page and its status semantics, so no status was chosen and the current behavior is kept (pinned by TestNormalizeEnabledSet_DropsUnknown). Decide whether unknown ids should become 422 (with a details entry per id), stay silently ignored (document it), or be echoed back in the response.
