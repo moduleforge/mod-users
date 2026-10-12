@@ -94,7 +94,7 @@ type CreateAnonymousUserResult struct {
 	AnonToken   AnonToken
 }
 
-// ErrEmailTaken is returned by Create when the email is already registered.
+// ErrEmailTaken is returned by Create and Update when the email is already registered.
 //
 // Built via apiresp.Conflict, which wraps apiresp.ErrConflict (rather than
 // being an independent sentinel) so errors.Is(err, apiresp.ErrConflict)
