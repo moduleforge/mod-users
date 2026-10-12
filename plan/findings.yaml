@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Fire-and-forget email sends use dead ctx
-      id: 1KXD
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - plan/phase:authenticate-routes
-        - priority:unspecified
-        - effort:unspecified
-      text: api/internal/handlers/auth/reset.go PasswordResetRequest and api/internal/handlers/auth/register.go Register (the verify_email send) start a goroutine that uses r.Context() and the handler then returns immediately. net/http cancels the request context when ServeHTTP returns, so the goroutine's DB and send calls run on a canceled context and most likely fail (errors are only logged). EmailCodeRequest avoids this by waiting for the goroutine. Detach with context.WithoutCancel (plus a timeout) or wait for completion.
     - title: GUI admin/audit paths do not match server
       id: bxIA
       date: "2026-10-11"
@@ -85,4 +76,9 @@ closed:
       title: credential_change code violates CHECK
       disposition: promoted
       ref: bc1h
+      date: "2026-10-12"
+    - id: 1KXD
+      title: Fire-and-forget email sends use dead ctx
+      disposition: promoted
+      ref: 1KXD
       date: "2026-10-12"
