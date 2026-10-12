@@ -233,7 +233,7 @@ phases:
             branch: plan/users-conformance-05-003
             commit:
                 - a3428e0
-            merge: null
+            merge: 7480fbb16fe7
     - number: 6
       slug: doc-updates
       title: Documentation Updates
