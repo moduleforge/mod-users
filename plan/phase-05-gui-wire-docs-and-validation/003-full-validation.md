@@ -50,3 +50,16 @@ architectural_impact: false
 ## Assumptions
 
 - Tasks 5.1 and 5.2 have landed.
+
+## Status
+
+Outcome: succeeded (2026-10-11). No source files changed; this task only validated.
+
+- `api/`: gofmt clean, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, `make lint` all exit 0. `model/`: `go test ./...` exit 0.
+- Postgres integration (throwaway container, random port, removed afterwards): `./internal/authz/...` and `./internal/config/...` both pass.
+- GUI: `bun install --frozen-lockfile` (no changes), `bun run typecheck` and `bun test` (230 pass, 0 fail), root `make test` all exit 0.
+- Checklist greps: `server.Decode(r,`, `json.NewDecoder` in handlers, `writeAuthzError`/`writeServiceError`/`writeCoreServiceErr`, `parseUUIDParam`/`parseUUIDPathParam` definitions: zero hits. `AllowNotFound`: one hit, a doc comment in `api/internal/handlers/apps.go` saying the constructor does not call it (no call). `r.Use(coreAuthz.RequireAuth)` totals 8 (self_identities 2, ssh_keys 3, account 1, self 2); oidcconfig and auth/routes have 0. `check-server-error-literals.sh`: handlers 3/3 (and auth 11/11). `GetUserAccountByUUID` in `internal/service/`: only the masked helper `authorizeUserAccount` and `LoadByUUID`.
+- `git diff a2d704c -- '*.mod' '*.sum' bun.lock versions.lock.yaml`: empty.
+- Audit table: all 45 registrar rows plus D1-D3 are closed by the landed phases 1-4 work and their order tests (account, self-service, oidc-config, oidc credential, public auth); no row is open. Rows with a documented residual (F3 register literals kept, F5 masked key miss, F6, F8) are deferred to findings; the plan findings store holds 9qmR, 4Olf, bc1h, 1KXD, bxIA, FAVu, jzT7, jQbw, v2BM, 8VhV (open). The audit table text itself was not edited.
+- Existing followups: all listed ids exist except hunL (dismissed, absent); biJk is intentionally not fixed, the rest carry the stated dispositions.
+- Full logs: `.flow/validation-logs/`.
