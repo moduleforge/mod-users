@@ -185,11 +185,13 @@ phases:
           slug: order-tests-credential-and-public-routes
           title: Order Tests for Credential and Public Routes
           path: phase-04-conflicts-and-order-tests/004-order-tests-credential-and-public-routes.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Order tests for 8 oidc-config and 10 public auth routes plus composed-router check; red check via swapping credential/decode order; anti-enumeration pinned at 204 (task text said 202); no production change.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-conformance-04-004
+            commit:
+                - cce6aed
             merge: null
     - number: 5
       slug: gui-wire-docs-and-validation
