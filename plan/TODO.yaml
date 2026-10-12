@@ -214,7 +214,7 @@ phases:
           slug: wire-risk-docs
           title: Document Wire Risks and Helper Usage
           path: phase-05-gui-wire-docs-and-validation/002-wire-risk-docs.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: OpenAPI precedence section, consumer upgrade notes naming clients, spec bullet, AGENTS.md convention, ErrEmailTaken comment, wire-risk reconciled; anti-enumeration corrected to 204.
           git:
