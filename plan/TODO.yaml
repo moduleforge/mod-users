@@ -244,6 +244,7 @@ phases:
           path: phase-06-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: architecture.md, ssh-keys.md and spec updated for error-precedence (D20/D21, masked miss, RequireAuth groups, exceptions); stale entityResolver claims fixed.
           git:
             branch: null
             commit: []
