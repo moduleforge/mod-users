@@ -196,6 +196,7 @@ phases:
     - number: 5
       slug: gui-wire-docs-and-validation
       title: GUI Alignment, Wire Risk Docs and Validation
+      diff_base: 7bcb01e6461ca0dac736b1475f2f2c6cf5f7071e
       tasks:
         - number: 1
           slug: gui-apps-client-alignment
