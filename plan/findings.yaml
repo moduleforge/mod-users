@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: GUI admin/audit paths do not match server
-      id: bxIA
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - plan/phase:authenticate-routes
-        - priority:unspecified
-        - effort:unspecified
-      text: 'gui/src/lib/api.ts: userAccounts.grantAdmin and revokeAdmin call POST/DELETE /v1/user-accounts/{uuid}/admin, but the server routes (api/internal/handlers/account_routes.go) are POST /user-accounts/{uuid}/grant-admin and /revoke-admin. userAccounts.audit calls GET /v1/user-accounts/{uuid}/audit, which no longer exists (api/cmd/server/main.go documents the audit routes as /v1/audit/by-actor/{uuid} and /v1/audit/by-entity/{entity_uuid}); audit.byEntity sends ?entity_uuid= to /v1/audit. These client methods would 404 or hit the wrong route.'
     - title: oidc confirm drops unknown provider ids
       id: jQbw
       date: "2026-10-11"
@@ -81,4 +72,9 @@ closed:
       title: Fire-and-forget email sends use dead ctx
       disposition: promoted
       ref: 1KXD
+      date: "2026-10-12"
+    - id: bxIA
+      title: GUI admin/audit paths do not match server
+      disposition: promoted
+      ref: bxIA
       date: "2026-10-12"
