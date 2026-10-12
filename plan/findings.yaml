@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Create never returns 409 email_taken
-      id: 4Olf
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - plan/phase:authenticate-routes
-        - priority:unspecified
-        - effort:unspecified
-      text: 'api/internal/service/user_accounts.go: UserAccountService.Create wraps the CreateUserAccount error with fmt.Errorf("...: %w") inside the txhelper.Run closure, then isPgUniqueViolation/extractPgError (user_accounts.go ~756-769) type-assert *pgconn.PgError directly instead of using errors.As. A duplicate email (user_accounts.email is UNIQUE) therefore never maps to ErrEmailTaken and POST /v1/user-accounts answers 500 instead of 409 users.email_taken. UpdateUserAccount''s duplicate-email path has the same shape. Match with errors.As (ssh_keys.go Register already works because its closure returns the raw error).'
     - title: credential_change code violates CHECK
       id: bc1h
       date: "2026-10-11"
@@ -97,4 +88,9 @@ closed:
       title: GUI loses 409 provider-exists message
       disposition: fixed
       ref: phase-05-gui-wire-docs-and-validation/001-gui-apps-client-alignment.md
+      date: "2026-10-12"
+    - id: 4Olf
+      title: Create never returns 409 email_taken
+      disposition: fixed
+      ref: phase-04-conflicts-and-order-tests/001-state-conflict-audit.md
       date: "2026-10-12"
