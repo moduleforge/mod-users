@@ -37,6 +37,7 @@ phases:
     - number: 2
       slug: readyz-generic-error
       title: Generic Readiness Probe Error Body
+      diff_base: 993b16c45c1746433304f809298ae6d515264024
       tasks:
         - number: 1
           slug: readyz-generic-body
