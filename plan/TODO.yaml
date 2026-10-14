@@ -83,7 +83,7 @@ phases:
             branch: plan/users-security-hardening-04-001
             commit:
                 - 4cfb454
-            merge: null
+            merge: bc9b7c6f5ba5f67bc3d206d544e8e61a63bb49df
         - number: 2
           slug: limit-attempts-in-handlers
           title: Enforce Attempt Limit, Cooldown, And Constant-Time Verify
