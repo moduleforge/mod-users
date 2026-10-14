@@ -74,6 +74,11 @@ func NewVerifierWithOptions(ctx context.Context, opts ...VerifierOption) (*Verif
 // WithOIDC enables verification of OIDC provider tokens from issuerURL.
 func WithOIDC(issuerURL, clientID string) VerifierOption { return inner.WithOIDC(issuerURL, clientID) }
 
+// WithInsecureSkipTLSVerify disables TLS certificate verification for OIDC
+// discovery and JWKS fetches. LOCAL DEVELOPMENT ONLY; never enable in
+// production.
+func WithInsecureSkipTLSVerify() VerifierOption { return inner.WithInsecureSkipTLSVerify() }
+
 // WithHS256Secret enables local HS256 tokens signed with secret.
 func WithHS256Secret(secret string) VerifierOption { return inner.WithHS256Secret(secret) }
 
