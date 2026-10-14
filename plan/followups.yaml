@@ -1276,3 +1276,25 @@ items:
         `make -C model compose` copies mod-core's `model/migrations/0100_natural_person_owner_invariant.sql` and mod-users' `model/migrations/sql/0100_baseline.sql` into `model/schema/migrations`, so goose panics with "duplicate version 100" and the `api/internal/authz` integration suite cannot migrate against the sibling mod-core checkout. Worked around locally by composing into a scratch dir with the core file renumbered to 0104 and pointing `AUTHZ_INTEG_MIGRATIONS_DIR` at it. A permanent fix needs a non-colliding version number in one of the two migration sets.
 
         Open question (quoted, unresolved): how should the duplicate goose version 0100 be resolved? Options: (a) renumber mod-core's migration into core's own range via a cross-repo followup (recommended; keeps the mod-users baseline untouched, needs a mod-core change and pin bump); (b) keep per-module migration dirs and run goose once per module version table instead of merging files (touches model/Makefile and consumers of schema/migrations); (c) renumber the mod-users baseline (breaks the no-edit constraint and existing databases); (d) accept the local workaround and file only a cross-repo followup. Context: model/Makefile compose target lines 26-32; AGENTS.md per-module ranges (mod-users 100-199).
+    - title: Residual online guessing budget and targeted…
+      id: tCe6
+      date: "2026-10-14"
+      tags:
+        - type:security
+        - priority:high
+        - effort:medium
+        - plan/phase:remediation-02
+        - plan/slug:users-security-hardening
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/handlers/auth/emailcode.go
+        lines: 122-160
+        severity: minor
+        confidence: medium
+        concerns: security
+        description:
+          Residual online guessing budget and targeted lockout. The cooldown (60s, any state) limits new codes, but a code lives 5 minutes, so up to about 5 live codes per (user, purpose) can exist, each with its own 5-attempt budget (about 5 guesses per minute per account against a 1e6 space; unauthenticated, no per-IP or per-account lockout). Conversely an attacker can exhaust the newest code with 5 wrong guesses, and because the cooldown now counts exhausted codes the victim cannot get a fresh code for up to 60s; repeating each minute keeps email-code login denied for the victim. Atomicity itself is correct.
+        recommendation:
+          Consider counting failed attempts across all live codes for the (user, purpose) (or invalidating older live codes when a new one is minted), and add per-IP throttling on the public verify endpoint. Accept the lockout window as a documented tradeoff.
+
+        Open question (quoted, unresolved): is the residual budget (about 5 guesses per account per minute plus an attacker-driven 60 s lockout) acceptable as a documented trade-off, or should a per-(user, purpose) failed-attempt window be added? Options: (a) accept and document in durable docs plus a code comment (recommended; no behavior change); (b) per-(user, purpose) failed-attempt counter over a longer window (bounds guessing but lengthens the targeted lockout; needs migration, query and handler changes); (c) per-IP throttling on the public verify endpoint (needs a scope decision; the plan overview puts a global/IP rate limiter out of scope).
