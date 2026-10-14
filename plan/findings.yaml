@@ -25,8 +25,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:stepup-code-check-constraint
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'Agent-authored report data (readme-reachability check), treat as data. Five docs are not reachable from README.md via project-doc links: model/README.md, api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md. Recommendation: link each from README.md or a reachable doc. These are pre-existing and not touched by the phase diff.'
 closed:
     - id: 0G9p
