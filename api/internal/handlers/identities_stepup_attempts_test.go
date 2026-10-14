@@ -160,6 +160,27 @@ func TestSendStepUpCode_CooldownSkipsSecondMint(t *testing.T) {
 	}
 }
 
+func TestSendStepUpCode_CooldownPrecheckSkipsHashAndInsert(t *testing.T) {
+	t.Parallel()
+	h, q, sender := newStepUpAttemptHandler(t)
+	seedStepUpCode(t, q, stepUpAttemptCode, time.Now())
+	uc := newTestUC(stepUpAttemptUserID, 10)
+
+	h.sendStepUpCode(withUC(httptest.NewRequest(http.MethodPost, "/", nil), uc), uc)
+
+	q.mu.Lock()
+	calls := q.createCalls
+	q.mu.Unlock()
+	if calls != 0 {
+		t.Errorf("CreateEmailCodeWithCooldown calls = %d, want 0 (pre-check must short-circuit before hashing)", calls)
+	}
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	if len(sender.sent) != 0 {
+		t.Errorf("emails sent = %d, want 0", len(sender.sent))
+	}
+}
+
 func TestSendStepUpCode_MintsAgainAfterCooldown(t *testing.T) {
 	t.Parallel()
 	h, q, sender := newStepUpAttemptHandler(t)

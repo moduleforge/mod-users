@@ -171,3 +171,30 @@ func (q *Queries) GetActiveEmailCode(ctx context.Context, arg GetActiveEmailCode
 	)
 	return i, err
 }
+
+const hasRecentEmailCode = `-- name: HasRecentEmailCode :one
+SELECT EXISTS (
+  SELECT 1
+  FROM email_codes
+  WHERE user_account_id = $1::bigint
+    AND purpose = $2::text
+    AND created_at > clock_timestamp() - make_interval(secs => $3::int)
+)::boolean AS recent
+`
+
+type HasRecentEmailCodeParams struct {
+	UserAccountID int64  `json:"user_account_id"`
+	Purpose       string `json:"purpose"`
+	CooldownSecs  int32  `json:"cooldown_secs"`
+}
+
+// Cheap pre-check: true when a code of ANY state (unconsumed, exhausted, or
+// consumed by success) was created for the same (user, purpose) within the last
+// cooldown_secs seconds. Callers skip code generation and hashing when true.
+// Advisory only: CreateEmailCodeWithCooldown remains the authoritative atomic guard.
+func (q *Queries) HasRecentEmailCode(ctx context.Context, arg HasRecentEmailCodeParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasRecentEmailCode, arg.UserAccountID, arg.Purpose, arg.CooldownSecs)
+	var recent bool
+	err := row.Scan(&recent)
+	return recent, err
+}

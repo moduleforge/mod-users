@@ -61,6 +61,7 @@ type IdentitiesHandler struct {
 // *db.Queries satisfies it.
 type emailCodeStore interface {
 	CreateEmailCodeWithCooldown(ctx context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error)
+	HasRecentEmailCode(ctx context.Context, arg db.HasRecentEmailCodeParams) (bool, error)
 	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
 	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
 	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
@@ -582,6 +583,21 @@ func (h *IdentitiesHandler) sendStepUpCode(r *http.Request, uc *localauth.UserCo
 	// the middleware chain is ever mis-ordered.
 	if uc.Email == "" {
 		slog.WarnContext(ctx, "stepup_request: account has no email address (anonymous account)", "user_account_id", uc.UserAccountID)
+		return
+	}
+
+	// Cheap indexed pre-check: skip the code generation and bcrypt hash when the
+	// cooldown already forbids minting. Advisory only; a pre-check error falls
+	// through to CreateEmailCodeWithCooldown, the authoritative atomic guard.
+	recent, err := h.codeStore().HasRecentEmailCode(ctx, db.HasRecentEmailCodeParams{
+		UserAccountID: uc.UserAccountID,
+		Purpose:       "credential_change",
+		CooldownSecs:  int32(emailCodeRequestCooldown / time.Second),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "stepup_request: cooldown pre-check", "error", err)
+	} else if recent {
+		slog.DebugContext(ctx, "stepup_request: request within cooldown, skipping", "user_account_id", uc.UserAccountID)
 		return
 	}
 

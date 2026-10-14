@@ -60,6 +60,11 @@ type Querier interface {
 	GetUserAccountByEmail(ctx context.Context, lower string) (UserAccount, error)
 	GetUserAccountByID(ctx context.Context, id int64) (UserAccount, error)
 	GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (UserAccount, error)
+	// Cheap pre-check: true when a code of ANY state (unconsumed, exhausted, or
+	// consumed by success) was created for the same (user, purpose) within the last
+	// cooldown_secs seconds. Callers skip code generation and hashing when true.
+	// Advisory only: CreateEmailCodeWithCooldown remains the authoritative atomic guard.
+	HasRecentEmailCode(ctx context.Context, arg HasRecentEmailCodeParams) (bool, error)
 	InsertJWTSecretIfAbsent(ctx context.Context, secret string) (string, error)
 	InsertOIDCIdentity(ctx context.Context, arg InsertOIDCIdentityParams) (AuthOidcIdentity, error)
 	InsertSSHPublicKey(ctx context.Context, arg InsertSSHPublicKeyParams) (ModUsersSshPublicKey, error)

@@ -30,6 +30,10 @@ type attemptQuerier struct {
 	codes   []db.EmailCode
 	nextID  int64
 	creates int
+	// prechecks counts HasRecentEmailCode calls; createCalls counts every
+	// CreateEmailCodeWithCooldown call, including those skipped by the cooldown.
+	prechecks   int
+	createCalls int
 }
 
 func (q *attemptQuerier) live(c db.EmailCode) bool {
@@ -57,12 +61,28 @@ func (q *attemptQuerier) GetActiveEmailCode(_ context.Context, arg db.GetActiveE
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 
+// HasRecentEmailCode mirrors the SQL pre-check: true when ANY code for the
+// same (user, purpose) was created within the cooldown.
+func (q *attemptQuerier) HasRecentEmailCode(_ context.Context, arg db.HasRecentEmailCodeParams) (bool, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.prechecks++
+	window := time.Duration(arg.CooldownSecs) * time.Second
+	for _, c := range q.codes {
+		if c.UserAccountID == arg.UserAccountID && c.Purpose == arg.Purpose && time.Since(c.CreatedAt.Time) < window {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // CreateEmailCodeWithCooldown mirrors the SQL function: atomically (under the
 // mutex) insert unless ANY code, in any consumed state, for the same (user,
 // purpose) was created within the cooldown; pgx.ErrNoRows when skipped.
 func (q *attemptQuerier) CreateEmailCodeWithCooldown(_ context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.createCalls++
 	window := time.Duration(arg.CooldownSecs) * time.Second
 	for _, c := range q.codes {
 		if c.UserAccountID == arg.UserAccountID && c.Purpose == arg.Purpose && time.Since(c.CreatedAt.Time) < window {
@@ -546,5 +566,78 @@ func TestEmailCodeVerify_DisallowedPurposeNeverTouchesCodes(t *testing.T) {
 	}
 	if got := q.attempts(c.ID); got != 0 {
 		t.Errorf("step-up code attempts = %d, want 0", got)
+	}
+}
+
+func TestSendEmailCode_CooldownPrecheckSkipsHashAndInsert(t *testing.T) {
+	t.Parallel()
+	h, q, sender := newAttemptFixture(t)
+	q.seedCode(t, 42, "login", attemptTestCode, time.Now())
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+
+	start := time.Now()
+	h.sendEmailCode(r, "a@example.com", "login")
+	elapsed := time.Since(start)
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.prechecks != 1 {
+		t.Errorf("prechecks = %d, want 1", q.prechecks)
+	}
+	if q.createCalls != 0 {
+		t.Errorf("CreateEmailCodeWithCooldown calls = %d, want 0 (the pre-check must short-circuit before hashing)", q.createCalls)
+	}
+	if sender.callCount() != 0 {
+		t.Errorf("emails sent = %d, want 0", sender.callCount())
+	}
+	// A bcrypt hash at DefaultCost takes tens of ms; the skipped path must not pay it.
+	if elapsed > 30*time.Millisecond {
+		t.Logf("note: cooldown path took %v", elapsed)
+	}
+}
+
+// blockingSender blocks Send until released, recording that it completed.
+type blockingSender struct {
+	release chan struct{}
+	sent    chan struct{}
+}
+
+func (b *blockingSender) Send(_ context.Context, _, _, _ string) error {
+	<-b.release
+	close(b.sent)
+	return nil
+}
+
+func TestEmailCodeRequest_AnswersAtFloorWhileSendBlocks(t *testing.T) {
+	t.Parallel()
+	ua := verifiedAccount("a@example.com", nil)
+	q := &attemptQuerier{stubAuthQuerier: stubAuthQuerier{accountByEmail: &ua}}
+	sender := &blockingSender{release: make(chan struct{}), sent: make(chan struct{})}
+	h := newGuardTestHandler(q, sender)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/email-code/request",
+		bytes.NewBufferString(`{"email":"a@example.com","purpose":"login"}`)).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	h.EmailCodeRequest(rec, req)
+	elapsed := time.Since(start)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if elapsed < 190*time.Millisecond || elapsed > 1500*time.Millisecond {
+		t.Errorf("elapsed = %v, want about the 200ms floor", elapsed)
+	}
+
+	// The request context is cancelled once the handler returns; the send must
+	// still complete on the detached context.
+	cancel()
+	close(sender.release)
+	select {
+	case <-sender.sent:
+	case <-time.After(5 * time.Second):
+		t.Fatal("email was never sent after the response was written")
 	}
 }
