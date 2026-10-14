@@ -10,3 +10,7 @@ phases:
       slug: readyz-generic-error
       title: Generic Readiness Probe Error Body
       tasks: []
+    - number: 3
+      slug: stepup-code-check-constraint
+      title: Fix credential_change Email Code CHECK Constraint
+      tasks: []
