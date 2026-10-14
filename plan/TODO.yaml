@@ -184,7 +184,7 @@ phases:
             - 1Ki1
             - CR1R
           git:
-            branch: null
+            branch: plan/users-security-hardening-07-002
             commit: []
             merge: null
         - number: 3
