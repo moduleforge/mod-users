@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -48,9 +49,11 @@ type anonUserCreator interface {
 type authQuerier interface {
 	GetUserAccountByEmail(ctx context.Context, lower string) (db.UserAccount, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (db.AuthLocal, error)
-	CreateEmailCode(ctx context.Context, arg db.CreateEmailCodeParams) (db.EmailCode, error)
+	CreateEmailCodeWithCooldown(ctx context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error)
+	HasRecentEmailCode(ctx context.Context, arg db.HasRecentEmailCodeParams) (bool, error)
 	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
-	ConsumeEmailCode(ctx context.Context, id int64) error
+	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
+	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
 	UpdateUserAccount(ctx context.Context, arg db.UpdateUserAccountParams) error
 	CreatePasswordReset(ctx context.Context, arg db.CreatePasswordResetParams) (db.PasswordReset, error)
 	GetActivePasswordReset(ctx context.Context, tokenHash string) (db.PasswordReset, error)
@@ -70,6 +73,12 @@ type Handler struct {
 	guiBase       string
 	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
 	userSvc       anonUserCreator // nil until SetUserSvc is called
+
+	// Bound on detached email-code sends; see dispatchEmailCode. The zero
+	// value selects the default concurrency.
+	emailCodeConcurrency int
+	emailCodeSlotsOnce   sync.Once
+	emailCodeSlots       chan struct{}
 }
 
 // New constructs a Handler.

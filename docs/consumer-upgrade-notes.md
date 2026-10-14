@@ -81,6 +81,12 @@ Details: the header comment and `--help` of [scripts/checkout-deps.sh](../script
 - Requirements: bash 4 or newer (the script uses `${var,,}` lowercasing; it has no explicit version check) and git 2.31 or newer for the `GIT_CONFIG_COUNT` environment config.
 - The sibling repos `app-mfgit`, `app-mftodo` and `app-mfmanager` carry their own ported copies of this script, and `flow-accounts` has its own. They are not generated from this one: a future fix here must be mirrored into each copy by hand.
 
+## OIDC issuer TLS verification
+
+- Previously, OIDC issuer discovery over `https://` skipped TLS certificate verification. It now verifies the issuer certificate by default, and JWKS fetches follow the same rule.
+- A consumer that relied on a self-signed `https://` issuer in local development must build the verifier with `NewVerifierWithOptions`, passing `WithOIDC` and the new opt-in option `WithInsecureSkipTLSVerify()`.
+- `WithInsecureSkipTLSVerify` is for local development only. It logs a warning (`TLS verification is disabled for OIDC issuer; local development only`) naming the issuer host. Prefer trusting the CA instead; see [OIDC troubleshooting](./oidc-troubleshooting.md#self-signed-issuer-certificate).
+
 ## HTTP error precedence conformance
 
 Request order on authenticated routes is now 401, 400, 403, 404, then 409 or 422; see [Request order and existence masking](./mod-users-spec.md#security-requirements). Composing apps do not need to change their manifests for this change: the registrars mount `RequireAuth` themselves. Clients: `@moduleforge/users-gui`; the apps that compose mod-users (`app-mfdemo`, `app-mfgit`, `app-mfmanager`, `app-mftodo`); apps pairing mod-core's `ProfileEditor` with `PUT /v1/self`; external `/v1/auth/*` clients; and in-process `UserAccountService` callers.

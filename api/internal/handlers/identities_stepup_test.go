@@ -39,12 +39,19 @@ type stepUpFakeQueries struct {
 	mu         sync.Mutex
 	emailCodes map[string]db.EmailCode
 	nextCodeID int64
+	// lastCreated remembers the newest creation time per (user, purpose) even
+	// after the code is consumed/exhausted (and deleted from emailCodes), so the
+	// cooldown covers codes of any state like the SQL does.
+	lastCreated map[string]time.Time
+	creates     int
+	createCalls int // every CreateEmailCodeWithCooldown call, including cooldown skips
 }
 
 func newStepUpFakeQueries() *stepUpFakeQueries {
 	return &stepUpFakeQueries{
-		emailCodes: make(map[string]db.EmailCode),
-		nextCodeID: 1,
+		emailCodes:  make(map[string]db.EmailCode),
+		nextCodeID:  1,
+		lastCreated: make(map[string]time.Time),
 	}
 }
 
@@ -63,6 +70,7 @@ func (f *stepUpFakeQueries) CreateEmailCode(_ context.Context, arg db.CreateEmai
 		CodeHash:      arg.CodeHash,
 		Purpose:       arg.Purpose,
 		ExpiresAt:     arg.ExpiresAt,
+		CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	f.emailCodes[emailCodeKey(arg.UserAccountID, arg.Purpose)] = code
 	return code, nil
@@ -82,16 +90,93 @@ func (f *stepUpFakeQueries) GetActiveEmailCode(_ context.Context, arg db.GetActi
 	return code, nil
 }
 
-func (f *stepUpFakeQueries) ConsumeEmailCode(_ context.Context, id int64) error {
+// ConsumeEmailCode mirrors the SQL :execrows: it reports 1 when it consumed the
+// live code and 0 when the code was already consumed (or never existed).
+func (f *stepUpFakeQueries) ConsumeEmailCode(_ context.Context, id int64) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for k, c := range f.emailCodes {
 		if c.ID == id {
+			f.lastCreated[k] = c.CreatedAt.Time
 			delete(f.emailCodes, k)
-			return nil
+			return 1, nil
 		}
 	}
-	return nil // idempotent
+	return 0, nil
+}
+
+// ClaimEmailCodeAttempt mirrors the SQL: increment failed_attempts, consume
+// (delete, as ConsumeEmailCode does here) when the bound is reached, and return
+// pgx.ErrNoRows when the code is missing or already exhausted.
+func (f *stepUpFakeQueries) ClaimEmailCodeAttempt(_ context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for k, c := range f.emailCodes {
+		if c.ID != arg.ID {
+			continue
+		}
+		if c.FailedAttempts >= arg.MaxAttempts {
+			return db.EmailCode{}, pgx.ErrNoRows
+		}
+		c.FailedAttempts++
+		if c.FailedAttempts >= arg.MaxAttempts {
+			f.lastCreated[k] = c.CreatedAt.Time
+			delete(f.emailCodes, k)
+			now := time.Now()
+			c.ConsumedAt = &now // the claim itself consumed the code
+		} else {
+			f.emailCodes[k] = c
+		}
+		return c, nil
+	}
+	return db.EmailCode{}, pgx.ErrNoRows
+}
+
+// HasRecentEmailCode mirrors the SQL pre-check: true when a code of any state
+// for the same (user, purpose) was created within the cooldown.
+func (f *stepUpFakeQueries) HasRecentEmailCode(_ context.Context, arg db.HasRecentEmailCodeParams) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := emailCodeKey(arg.UserAccountID, arg.Purpose)
+	window := time.Duration(arg.CooldownSecs) * time.Second
+	if live, ok := f.emailCodes[key]; ok && time.Since(live.CreatedAt.Time) < window {
+		return true, nil
+	}
+	if t, ok := f.lastCreated[key]; ok && time.Since(t) < window {
+		return true, nil
+	}
+	return false, nil
+}
+
+// CreateEmailCodeWithCooldown mirrors the SQL function: atomically (under the
+// mutex) insert unless a code of any state for the same (user, purpose) was
+// created within the cooldown; pgx.ErrNoRows when skipped.
+func (f *stepUpFakeQueries) CreateEmailCodeWithCooldown(_ context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.createCalls++
+	key := emailCodeKey(arg.UserAccountID, arg.Purpose)
+	window := time.Duration(arg.CooldownSecs) * time.Second
+	if live, ok := f.emailCodes[key]; ok && time.Since(live.CreatedAt.Time) < window {
+		return db.EmailCode{}, pgx.ErrNoRows
+	}
+	if t, ok := f.lastCreated[key]; ok && time.Since(t) < window {
+		return db.EmailCode{}, pgx.ErrNoRows
+	}
+	id := f.nextCodeID
+	f.nextCodeID++
+	f.creates++
+	code := db.EmailCode{
+		ID:            id,
+		UserAccountID: arg.UserAccountID,
+		CodeHash:      arg.CodeHash,
+		Purpose:       arg.Purpose,
+		ExpiresAt:     arg.ExpiresAt,
+		CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	}
+	f.emailCodes[key] = code
+	f.lastCreated[key] = code.CreatedAt.Time
+	return code, nil
 }
 
 // fakeSender records sent emails for assertion.
@@ -445,7 +530,7 @@ func (h *stepUpVerifyTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	_ = h.q.ConsumeEmailCode(r.Context(), emailCode.ID)
+	_, _ = h.q.ConsumeEmailCode(r.Context(), emailCode.ID)
 
 	token, _, _, err := localauth.IssueStepUpToken([]byte(h.jwtSecret), uc.UserAccountID, localauth.StepUpTTL)
 	if err != nil {

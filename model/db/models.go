@@ -48,13 +48,14 @@ type AuthOidcIdentity struct {
 }
 
 type EmailCode struct {
-	ID            int64              `json:"id"`
-	UserAccountID int64              `json:"user_account_id"`
-	CodeHash      string             `json:"code_hash"`
-	Purpose       string             `json:"purpose"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
-	ConsumedAt    *time.Time         `json:"consumed_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID             int64              `json:"id"`
+	UserAccountID  int64              `json:"user_account_id"`
+	CodeHash       string             `json:"code_hash"`
+	Purpose        string             `json:"purpose"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt     *time.Time         `json:"consumed_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	FailedAttempts int32              `json:"failed_attempts"`
 }
 
 type ModUsersSshPublicKey struct {

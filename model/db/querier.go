@@ -14,15 +14,26 @@ import (
 type Querier interface {
 	ArchiveSSHPublicKey(ctx context.Context, arg ArchiveSSHPublicKeyParams) (int64, error)
 	AssignUserAccountToApp(ctx context.Context, arg AssignUserAccountToAppParams) error
+	// Atomically claims one verification attempt (call before comparing the code).
+	// $2 is the max attempts. The code is consumed when the bound is reached.
+	// No row is returned when the code is already consumed or exhausted.
+	ClaimEmailCodeAttempt(ctx context.Context, arg ClaimEmailCodeAttemptParams) (EmailCode, error)
 	// Clear the setup token once the operator has confirmed configuration.
 	// Idempotent — safe to call on every confirmed boot.
 	ClearSetupTokenHash(ctx context.Context) error
-	ConsumeEmailCode(ctx context.Context, id int64) error
+	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
 	ConsumePasswordReset(ctx context.Context, id int64) error
 	CountActiveSSHPublicKeysByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CountOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CreateAnonToken(ctx context.Context, arg CreateAnonTokenParams) (AnonToken, error)
 	CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams) (EmailCode, error)
+	// Atomically mints a code unless a code of ANY state (unconsumed, exhausted,
+	// or consumed by success) was created for the same (user, purpose) within the
+	// last cooldown_secs seconds. Concurrent callers are serialized by an advisory
+	// lock inside the create_email_code_with_cooldown function, so at most one
+	// code is created per window. No row is returned (pgx.ErrNoRows) when the
+	// cooldown applies; callers must then send no email.
+	CreateEmailCodeWithCooldown(ctx context.Context, arg CreateEmailCodeWithCooldownParams) (EmailCode, error)
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
 	CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (UserAccount, error)
 	DeleteAnonTokensByUserAccountID(ctx context.Context, userAccountID int64) error
@@ -49,6 +60,11 @@ type Querier interface {
 	GetUserAccountByEmail(ctx context.Context, lower string) (UserAccount, error)
 	GetUserAccountByID(ctx context.Context, id int64) (UserAccount, error)
 	GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (UserAccount, error)
+	// Cheap pre-check: true when a code of ANY state (unconsumed, exhausted, or
+	// consumed by success) was created for the same (user, purpose) within the last
+	// cooldown_secs seconds. Callers skip code generation and hashing when true.
+	// Advisory only: CreateEmailCodeWithCooldown remains the authoritative atomic guard.
+	HasRecentEmailCode(ctx context.Context, arg HasRecentEmailCodeParams) (bool, error)
 	InsertJWTSecretIfAbsent(ctx context.Context, secret string) (string, error)
 	InsertOIDCIdentity(ctx context.Context, arg InsertOIDCIdentityParams) (AuthOidcIdentity, error)
 	InsertSSHPublicKey(ctx context.Context, arg InsertSSHPublicKeyParams) (ModUsersSshPublicKey, error)

@@ -73,8 +73,21 @@ func (s *stubAuthQuerier) GetActiveEmailCode(_ context.Context, _ db.GetActiveEm
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 
-func (s *stubAuthQuerier) ConsumeEmailCode(_ context.Context, _ int64) error {
-	return nil
+func (s *stubAuthQuerier) ConsumeEmailCode(_ context.Context, _ int64) (int64, error) {
+	return 1, nil
+}
+
+func (s *stubAuthQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
+	return db.EmailCode{}, pgx.ErrNoRows
+}
+
+func (s *stubAuthQuerier) CreateEmailCodeWithCooldown(_ context.Context, _ db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
+	s.createEmailCodeCalled = true
+	return db.EmailCode{}, nil
+}
+
+func (s *stubAuthQuerier) HasRecentEmailCode(_ context.Context, _ db.HasRecentEmailCodeParams) (bool, error) {
+	return false, nil
 }
 
 func (s *stubAuthQuerier) UpdateUserAccount(_ context.Context, _ db.UpdateUserAccountParams) error {
@@ -282,6 +295,11 @@ func TestEmailCodeRequest_NamedAccount(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", rec.Code)
+	}
+	// The send runs in the background after the 204 floor; wait for it.
+	deadline := time.Now().Add(5 * time.Second)
+	for sender.callCount() < 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
 	}
 	if n := sender.callCount(); n != 1 {
 		t.Errorf("sender.Send called %d time(s); want 1", n)

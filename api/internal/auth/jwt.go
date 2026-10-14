@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -55,6 +57,9 @@ type verifierConfig struct {
 	secret      string
 	localIssuer string
 	edKeys      map[string]ed25519.PublicKey
+	// insecureSkipTLSVerify disables TLS certificate verification for OIDC
+	// discovery and JWKS fetches. Local development only.
+	insecureSkipTLSVerify bool
 }
 
 // VerifierOption configures NewVerifierWithOptions.
@@ -65,6 +70,18 @@ type VerifierOption func(*verifierConfig) error
 func WithOIDC(issuerURL, clientID string) VerifierOption {
 	return func(c *verifierConfig) error {
 		c.issuerURL, c.clientID = issuerURL, clientID
+		return nil
+	}
+}
+
+// WithInsecureSkipTLSVerify disables TLS certificate verification when
+// discovering the OIDC issuer and fetching its JWKS. It is for LOCAL
+// DEVELOPMENT ONLY (e.g. an issuer with a self-signed certificate) and must
+// never be enabled in production: it exposes token verification to
+// man-in-the-middle attacks. It has no effect on non-https issuers.
+func WithInsecureSkipTLSVerify() VerifierOption {
+	return func(c *verifierConfig) error {
+		c.insecureSkipTLSVerify = true
 		return nil
 	}
 }
@@ -214,12 +231,17 @@ func newVerifier(ctx context.Context, c verifierConfig) (*Verifier, error) {
 	issuerURL, clientID := c.issuerURL, c.clientID
 
 	if issuerURL != "" {
-		// For local dev with self-signed certs, use an HTTP client that
-		// skips TLS verification. In production, use the default client.
-		if strings.HasPrefix(issuerURL, "https://") {
+		// TLS certificates are verified by default. Skipping verification
+		// requires the explicit local-development opt-in.
+		if c.insecureSkipTLSVerify && strings.HasPrefix(issuerURL, "https://") {
+			host := issuerURL
+			if u, perr := url.Parse(issuerURL); perr == nil {
+				host = u.Host
+			}
+			slog.Warn("auth: TLS verification is disabled for OIDC issuer; local development only", "issuer_host", host)
 			insecureClient := &http.Client{
 				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // explicit local-dev opt-in
 				},
 			}
 			ctx = oidc.ClientContext(ctx, insecureClient)

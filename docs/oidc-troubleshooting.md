@@ -73,6 +73,23 @@ and personal Microsoft accounts" → Save. Then verify the manifest's
    personal accounts can't grant it. Trim scopes to basics
    (`openid email profile`) when testing with MSA.
 
+## Self-signed issuer certificate
+
+**Symptom:** issuer discovery fails with
+`x509: certificate signed by unknown authority`.
+
+OIDC issuer discovery and JWKS fetches verify TLS by default. Remedies:
+
+- Trust the issuer's CA. `SSL_CERT_FILE` applies on Linux and BSD only;
+  Go's certificate verification on macOS does not honor it.
+  - **Linux and BSD:** point `SSL_CERT_FILE` at a PEM bundle that
+    includes the issuer CA, or add the CA to the system trust store.
+  - **macOS:** add the issuer CA to the macOS keychain (system trust)
+    and set it to trust for SSL. Do not rely on `SSL_CERT_FILE`.
+- Local development only: build the verifier with
+  `WithInsecureSkipTLSVerify()` alongside `WithOIDC`. It disables
+  verification for an `https://` issuer and logs a warning.
+
 ## Use the Test button (9.18)
 
 The "Test configuration" button in the provider Edit modal exercises
