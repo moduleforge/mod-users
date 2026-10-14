@@ -194,6 +194,7 @@ phases:
           path: phase-07-remediation-02/003-allowlist-public-email-code-purpose.md
           done: false
           tier: sonnet-low
+          digest: Allow-listed purposes on public email-code request and verify endpoints. Disallowed purposes mint nothing on request and cannot touch or burn step-up codes on verify.
           findings:
             - 8iUq
           git:
