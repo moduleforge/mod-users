@@ -27,7 +27,7 @@ phases:
           tier: sonnet-low
           digest: Documented the verified-TLS default and the WithInsecureSkipTLSVerify dev-only opt-in in the upgrade notes, the troubleshooting guide and the spec.
           git:
-            branch: null
+            branch: plan/users-security-hardening-01-002
             commit: []
             merge: null
     - number: 2
