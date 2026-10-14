@@ -67,7 +67,7 @@ phases:
             branch: plan/users-security-hardening-03-001
             commit:
                 - b230cac
-            merge: null
+            merge: 2e23c691a2eabb5c78981f20e497d5693531b99a
     - number: 4
       slug: email-code-attempt-limiting
       title: Rate-Limit Email-Code And Step-Up Verification
