@@ -334,7 +334,7 @@ App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served
 
 - **Password storage:** Passwords are stored as argon2id encoded strings. Plaintext passwords are never persisted or logged.
 
-- **OIDC ID token verification:** On callback, the module verifies the ID token signature, issuer, audience, and nonce before trusting any claims. Provider client secrets are stored in environment variables or the `oidc_providers` DB table (plaintext, matching the env-var model); the GUI never reads client secrets back — only a `has_client_secret` boolean is surfaced.
+- **OIDC ID token verification:** On callback, the module verifies the ID token signature, issuer, audience, and nonce before trusting any claims. Provider client secrets are stored in environment variables or the `oidc_providers` DB table (plaintext, matching the env-var model); the GUI never reads client secrets back — only a `has_client_secret` boolean is surfaced. OIDC issuer discovery and JWKS fetches verify TLS certificates; skipping verification requires the explicit, local-development-only `WithInsecureSkipTLSVerify` verifier option.
 
 - **Open-redirect prevention:** The `return` query parameter on `GET /v1/auth/oidc/{provider}/start` is restricted to site-relative paths (must begin with `/`). Absolute URLs and protocol-relative references are rejected with `400`.
 

@@ -81,6 +81,12 @@ Details: the header comment and `--help` of [scripts/checkout-deps.sh](../script
 - Requirements: bash 4 or newer (the script uses `${var,,}` lowercasing; it has no explicit version check) and git 2.31 or newer for the `GIT_CONFIG_COUNT` environment config.
 - The sibling repos `app-mfgit`, `app-mftodo` and `app-mfmanager` carry their own ported copies of this script, and `flow-accounts` has its own. They are not generated from this one: a future fix here must be mirrored into each copy by hand.
 
+## OIDC issuer TLS verification
+
+- Previously, OIDC issuer discovery over `https://` skipped TLS certificate verification. It now verifies the issuer certificate by default, and JWKS fetches follow the same rule.
+- A consumer that relied on a self-signed `https://` issuer in local development must build the verifier with `NewVerifierWithOptions`, passing `WithOIDC` and the new opt-in option `WithInsecureSkipTLSVerify()`.
+- `WithInsecureSkipTLSVerify` is for local development only. It logs a warning (`TLS verification is disabled for OIDC issuer; local development only`) naming the issuer host. Prefer trusting the CA instead; see [OIDC troubleshooting](./oidc-troubleshooting.md#self-signed-issuer-certificate).
+
 ## Known limits and open items
 
 - Local-mode CORS pattern reflection: see the caveat under [CORS](#cors). Pattern entries are not rejected in `DEPLOY_MODE=local` and are still reflected with credentials.
