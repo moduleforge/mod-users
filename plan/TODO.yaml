@@ -6,3 +6,7 @@ phases:
       slug: oidc-tls-verify
       title: Verified TLS For OIDC Issuer Discovery
       tasks: []
+    - number: 2
+      slug: readyz-generic-error
+      title: Generic Readiness Probe Error Body
+      tasks: []
