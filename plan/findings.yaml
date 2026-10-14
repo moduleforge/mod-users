@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: 'Orphan: deploy/local/README.md is not reacha…'
-      id: a5EH
-      date: "2026-10-14"
-      tags:
-        - type:documentation
-        - plan/phase:readyz-generic-error
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: deploy/local/README.md
-        lines: 1
-        severity: minor
-        confidence: high
-        concerns: documentation
-        description:
-          Orphan: deploy/local/README.md is not reachable by markdown link from README.md. docs/architecture.md:179 mentions it only as plain code text.
-        recommendation:
-          Convert the mention in docs/architecture.md:179 to a link, and/or link from docs/project-structure.md.
     - title: 'Orphan: deploy/k8s/README.md is not reachabl…'
       id: TH0G
       date: "2026-10-14"
@@ -111,4 +92,9 @@ closed:
       title: 'Orphan: api/server/CLAUDE.md is not reachabl…'
       disposition: promoted
       ref: DPZi
+      date: "2026-10-14"
+    - id: a5EH
+      title: 'Orphan: deploy/local/README.md is not reacha…'
+      disposition: promoted
+      ref: a5EH
       date: "2026-10-14"
