@@ -62,6 +62,7 @@ phases:
           path: phase-03-stepup-code-check-constraint/001-widen-email-codes-check.md
           done: false
           tier: sonnet-med
+          digest: Added the additive migration 0101 that widens the email_codes purpose CHECK to include credential_change. Verified live on postgres:16, including upgrade from 0100 and a Down/Up round-trip. No code changes were needed.
           git:
             branch: null
             commit: []
