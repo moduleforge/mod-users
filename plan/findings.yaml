@@ -1,0 +1,12 @@
+version: 2
+items:
+    - title: Architecture doc silent on OIDC TLS default
+      id: 0G9p
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - plan/phase:oidc-tls-verify
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Agent-authored report data (architecture conformance, suggestion severity): docs/architecture.md does not mention that OIDC issuer discovery and JWKS fetches verify TLS by default, nor the WithInsecureSkipTLSVerify dev-only opt-in. No divergence found; consider adding a sentence.'
+closed: []
