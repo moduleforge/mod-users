@@ -170,7 +170,8 @@ phases:
             - uFx5
           git:
             branch: plan/users-security-hardening-07-001
-            commit: []
+            commit:
+                - d387208
             merge: null
         - number: 2
           slug: single-use-code-consumption
