@@ -5,7 +5,17 @@ phases:
     - number: 1
       slug: oidc-tls-verify
       title: Verified TLS For OIDC Issuer Discovery
-      tasks: []
+      tasks:
+        - number: 1
+          slug: verified-tls-default
+          title: Verify TLS By Default With Explicit Dev Opt-In
+          path: phase-01-oidc-tls-verify/001-verified-tls-default.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: readyz-generic-error
       title: Generic Readiness Probe Error Body
