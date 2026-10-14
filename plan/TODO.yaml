@@ -134,5 +134,6 @@ phases:
             - J4N9
           git:
             branch: plan/users-security-hardening-06-002
-            commit: []
+            commit:
+                - 41d847b
             merge: null
