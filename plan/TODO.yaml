@@ -13,6 +13,7 @@ phases:
           path: phase-01-oidc-tls-verify/001-verified-tls-default.md
           done: false
           tier: sonnet-med
+          digest: Verified TLS is now the default for OIDC discovery and JWKS fetches; skip-verify is behind explicit WithInsecureSkipTLSVerify opt-in (local dev only), re-exported publicly, four tests cover required cases.
           git:
             branch: null
             commit: []
