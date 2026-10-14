@@ -26,3 +26,7 @@ architectural_impact: false
 ## References
 
 - finding `8iUq`
+
+## Status
+
+succeeded, 2026-10-14. Public request/verify now allow only login/verify_email (request stays 204 and mints nothing; verify returns 400 invalid_input before any DB call). Tests added in api/internal/handlers/auth/emailcode_attempts_test.go; go test -race, go vet, make lint pass.
