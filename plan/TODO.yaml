@@ -81,7 +81,8 @@ phases:
           tier: sonnet-med
           git:
             branch: plan/users-security-hardening-04-001
-            commit: []
+            commit:
+                - 4cfb454
             merge: null
         - number: 2
           slug: limit-attempts-in-handlers
