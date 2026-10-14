@@ -938,16 +938,6 @@ items:
         - plan/phase:conflicts-and-order-tests
         - plan/slug:users-conformance
       text: OIDCHandler.handleLinkMode in api/internal/handlers/auth/oidc.go checks GetOIDCIdentityByIssuerSubject and redirects with identity_in_use when the (issuer, subject) pair belongs to another account, but the later insert in the same function is not guarded against the UNIQUE (issuer, subject) constraint. Two concurrent link callbacks for the same pair make the loser hit a 23505 and answer a JSON 500 internal_error instead of the identity_in_use redirect. Fix would be to match the unique violation on that constraint name (errors.As plus ConstraintName) and take the same redirect path. Not changed here.
-    - title: Re-bump mod-core pin after mod-core push
-      id: nKYg
-      date: "2026-10-12"
-      tags:
-        - type:enhancement
-        - priority:high
-        - plan/slug:users-conformance
-        - effort:unspecified
-      text: The users-conformance work (and the other http-error-precedence wave-2 plans) relies on mod-core local main, which is far ahead of origin/main and contains the core-handler-conformance merges and wave-1 helpers (apiresp.DecodeJSON/ParseUUIDParam, authz.RequireAuth, ordertest). After the user pushes mod-core, run `MODULEFORGE_SIBLINGS_DIR=/Users/zane/playground/moduleforge make pins.update REPOS="mod-core"` in mod-users (never edit SHAs by hand; do not bump mod-audit or mod-authz), confirm `make pins.check`, build and test, and commit versions.lock.yaml locally. Pushing mod-users and downstream app pin bumps are further consent-gated steps. The removed plan task was phase-07 001-rebump-mod-core-pin (see the users-conformance plan summary).
-      scope_rationale: 'Consent-gated release step that cannot run inside the plan: requires pushing mod-core, a user decision.'
     - title: Dangling mf-standards doc links
       id: FcGl
       date: "2026-10-14"
