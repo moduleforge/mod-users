@@ -245,7 +245,7 @@ phases:
           slug: email-code-request-timing-and-precheck
           title: Bound Email Code Request Latency And Pre-Check Cooldown Before Hashing
           path: phase-08-remediation-03/002-email-code-request-timing-and-precheck.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: EmailCodeRequest returns 204 at the 200 ms floor; background send runs on context.WithoutCancel copy. HasRecentEmailCode pre-check in sendEmailCode and sendStepUpCode skips hash and insert within cooldown; falls through to CreateEmailCodeWithCooldown on pre-check error. Validated by build, vet, race tests, make lint.
           findings:
