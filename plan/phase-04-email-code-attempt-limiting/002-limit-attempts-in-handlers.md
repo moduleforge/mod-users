@@ -37,3 +37,10 @@ architectural_impact: true
 - After StepUpVerify changes
 - After cooldown on both request paths
 - After tests
+
+## Status
+
+- Outcome: succeeded (2026-10-14).
+- Validation: `go test -race ./internal/handlers/...`, `go vet ./...`, `make lint`, and `go test ./...` in `api` all pass.
+- Changed: `api/internal/handlers/auth/emailcode.go` (claim before compare, cooldown, bcrypt dummy compare), `api/internal/handlers/auth/register.go` (querier interface), `api/internal/handlers/identities.go` (claim, cooldown, `emailCodeStore` seam), plus tests `api/internal/handlers/auth/emailcode_attempts_test.go`, `api/internal/handlers/identities_stepup_attempts_test.go`, `api/internal/handlers/auth/session_user_test.go`.
+- Decisions: two constants (exported `MaxEmailCodeAttempts` and `EmailCodeRequestCooldown` in the auth package, unexported twins in handlers) with an equality test. The exhausted-claim path also runs a dummy bcrypt compare so lockout costs the same as a wrong guess. `Login`'s dummy hash is argon2, so a separate bcrypt dummy hash was added. No handler-level DB harness exists, so the end-to-end Postgres run (requirement 6) was not performed; the SQL itself is covered by task 001.

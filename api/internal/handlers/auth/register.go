@@ -50,6 +50,8 @@ type authQuerier interface {
 	CreateEmailCode(ctx context.Context, arg db.CreateEmailCodeParams) (db.EmailCode, error)
 	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
 	ConsumeEmailCode(ctx context.Context, id int64) error
+	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
+	GetLatestEmailCodeCreatedAt(ctx context.Context, arg db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error)
 	UpdateUserAccount(ctx context.Context, arg db.UpdateUserAccountParams) error
 	CreatePasswordReset(ctx context.Context, arg db.CreatePasswordResetParams) (db.PasswordReset, error)
 	GetActivePasswordReset(ctx context.Context, tokenHash string) (db.PasswordReset, error)

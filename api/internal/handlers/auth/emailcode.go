@@ -17,6 +17,36 @@ import (
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
+// MaxEmailCodeAttempts bounds the guesses allowed against one email code. The
+// step-up handlers in the parent handlers package keep an equal constant
+// (maxEmailCodeAttempts); a test there asserts the two stay in sync.
+const MaxEmailCodeAttempts = 5
+
+// EmailCodeRequestCooldown is the minimum interval between minted codes for
+// the same (user, purpose) while an earlier code is still live. A request
+// inside the window is skipped silently (the endpoint still answers 204).
+const EmailCodeRequestCooldown = 60 * time.Second
+
+// dummyCodeHash is a bcrypt hash of a throwaway value, generated once at init
+// at bcrypt.DefaultCost, so the unknown-email, no-active-code, and exhausted
+// paths of EmailCodeVerify spend the same bcrypt time as a wrong guess.
+var dummyCodeHash = func() []byte {
+	h, err := bcrypt.GenerateFromPassword([]byte("dummy-email-code-hash"), bcrypt.DefaultCost)
+	if err != nil {
+		panic(fmt.Sprintf("auth: generate dummy email code hash: %v", err))
+	}
+	return h
+}()
+
+// dummyCodeCompare runs the constant-time stand-in comparison. It is a
+// variable so tests can assert the dummy path is exercised.
+var dummyCodeCompare = bcrypt.CompareHashAndPassword
+
+// burnCodeCompare performs the dummy bcrypt comparison and discards the result.
+func burnCodeCompare(code string) {
+	_ = dummyCodeCompare(dummyCodeHash, []byte(code))
+}
+
 // emailCodeRequestBody is the body for POST /v1/auth/email-code/request.
 type emailCodeRequestBody struct {
 	Email   string `json:"email"`
@@ -73,6 +103,23 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "email_code: get user account", "error", err)
+		return
+	}
+
+	// Cooldown: while an earlier unconsumed, unexpired code for this
+	// (user, purpose) is younger than the cooldown, do not mint another.
+	// Without this, requesting fresh codes would reset the guess budget.
+	latest, err := h.queries.GetLatestEmailCodeCreatedAt(ctx, db.GetLatestEmailCodeCreatedAtParams{
+		UserAccountID: ua.ID,
+		Purpose:       purpose,
+	})
+	if err == nil {
+		if latest.Valid && time.Since(latest.Time) < EmailCodeRequestCooldown {
+			slog.DebugContext(ctx, "email_code: request within cooldown, skipping", "user_account_id", ua.ID)
+			return
+		}
+	} else if err != pgx.ErrNoRows {
+		slog.ErrorContext(ctx, "email_code: cooldown lookup", "error", err)
 		return
 	}
 
@@ -136,6 +183,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 
 	ua, err := h.queries.GetUserAccountByEmail(r.Context(), req.Email)
 	if err == pgx.ErrNoRows {
+		burnCodeCompare(req.Code) // constant time: do not reveal unknown email
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
@@ -150,6 +198,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		Purpose:       req.Purpose,
 	})
 	if err == pgx.ErrNoRows {
+		burnCodeCompare(req.Code) // constant time: do not reveal missing code
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
@@ -159,7 +208,25 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(emailCode.CodeHash), []byte(req.Code)); err != nil {
+	// Claim an attempt atomically before comparing, so concurrent guesses can
+	// never exceed MaxEmailCodeAttempts. No row means the code is exhausted or
+	// was consumed concurrently; answer exactly like a wrong code.
+	claimed, err := h.queries.ClaimEmailCodeAttempt(r.Context(), db.ClaimEmailCodeAttemptParams{
+		ID:          emailCode.ID,
+		MaxAttempts: MaxEmailCodeAttempts,
+	})
+	if err == pgx.ErrNoRows {
+		burnCodeCompare(req.Code)
+		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
+		return
+	}
+	if err != nil {
+		slog.ErrorContext(r.Context(), "email_code_verify: claim attempt", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to look up code")
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(claimed.CodeHash), []byte(req.Code)); err != nil {
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}

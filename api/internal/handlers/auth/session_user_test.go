@@ -32,6 +32,12 @@ func (c *codeQuerier) GetActiveEmailCode(_ context.Context, _ db.GetActiveEmailC
 	return c.code, nil
 }
 
+// ClaimEmailCodeAttempt grants the attempt and returns the configured code, as
+// the real query does for a live code.
+func (c *codeQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
+	return c.code, nil
+}
+
 func verifiedAccount(email string, verifiedAt *time.Time) db.UserAccount {
 	ua := namedAccount(email)
 	ua.Uuid = uuid.New()

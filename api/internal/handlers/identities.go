@@ -35,8 +35,11 @@ import (
 // The handler never performs authorization checks itself — the authentication
 // middleware guarantees the caller owns the UserContext in the request context.
 type IdentitiesHandler struct {
-	pool      *pgxpool.Pool
-	queries   *db.Queries
+	pool    *pgxpool.Pool
+	queries *db.Queries
+	// codes overrides the email-code store used by the step-up endpoints.
+	// nil (production) means h.queries; tests inject a fake.
+	codes     emailCodeStore
 	oauth     *localauth.OAuth
 	obs       *observer.ObserverGroup
 	sender    emailSender
@@ -53,6 +56,45 @@ type IdentitiesHandler struct {
 	// the request); it must match the path the OIDC callback clears.
 	cookiePath string
 }
+
+// emailCodeStore is the narrow query subset the step-up endpoints use.
+// *db.Queries satisfies it.
+type emailCodeStore interface {
+	CreateEmailCode(ctx context.Context, arg db.CreateEmailCodeParams) (db.EmailCode, error)
+	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
+	ConsumeEmailCode(ctx context.Context, id int64) error
+	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
+	GetLatestEmailCodeCreatedAt(ctx context.Context, arg db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error)
+}
+
+const (
+	// maxEmailCodeAttempts bounds guesses against one step-up code. It must
+	// equal the auth package's MaxEmailCodeAttempts (asserted by a test).
+	maxEmailCodeAttempts = 5
+	// emailCodeRequestCooldown is the minimum interval between minted step-up
+	// codes while an earlier one is still live. Equal to the auth package's
+	// EmailCodeRequestCooldown (asserted by a test).
+	emailCodeRequestCooldown = 60 * time.Second
+)
+
+// codeStore returns the email-code store for the step-up endpoints.
+func (h *IdentitiesHandler) codeStore() emailCodeStore {
+	if h.codes != nil {
+		return h.codes
+	}
+	return h.queries
+}
+
+// dummyStepUpCodeHash is a bcrypt hash of a throwaway value, generated once at
+// init, compared against on the exhausted-code path so lockout costs the same
+// time as a wrong guess.
+var dummyStepUpCodeHash = func() []byte {
+	h, err := bcrypt.GenerateFromPassword([]byte("dummy-step-up-code-hash"), bcrypt.DefaultCost)
+	if err != nil {
+		panic(fmt.Sprintf("handlers: generate dummy step-up code hash: %v", err))
+	}
+	return h
+}()
 
 // emailSender is the minimal interface for sending email. It matches
 // handlers/auth.Sender to avoid a direct package dependency.
@@ -530,7 +572,7 @@ func (h *IdentitiesHandler) StepUpRequest(w http.ResponseWriter, r *http.Request
 func (h *IdentitiesHandler) sendStepUpCode(r *http.Request, uc *localauth.UserContext) {
 	ctx := r.Context()
 
-	if h.queries == nil || h.sender == nil {
+	if (h.queries == nil && h.codes == nil) || h.sender == nil {
 		slog.ErrorContext(ctx, "stepup_request: handler not fully configured (missing queries or sender)")
 		return
 	}
@@ -544,6 +586,22 @@ func (h *IdentitiesHandler) sendStepUpCode(r *http.Request, uc *localauth.UserCo
 		return
 	}
 
+	// Cooldown: skip minting while an earlier live code is younger than the
+	// cooldown, so requesting new codes cannot reset the guess budget.
+	latest, err := h.codeStore().GetLatestEmailCodeCreatedAt(ctx, db.GetLatestEmailCodeCreatedAtParams{
+		UserAccountID: uc.UserAccountID,
+		Purpose:       "credential_change",
+	})
+	if err == nil {
+		if latest.Valid && time.Since(latest.Time) < emailCodeRequestCooldown {
+			slog.DebugContext(ctx, "stepup_request: request within cooldown, skipping", "user_account_id", uc.UserAccountID)
+			return
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		slog.ErrorContext(ctx, "stepup_request: cooldown lookup", "error", err)
+		return
+	}
+
 	code, hash, err := generateEmailCode()
 	if err != nil {
 		slog.ErrorContext(ctx, "stepup_request: generate code", "error", err)
@@ -551,7 +609,7 @@ func (h *IdentitiesHandler) sendStepUpCode(r *http.Request, uc *localauth.UserCo
 	}
 
 	expiresAt := pgtype.Timestamptz{Time: time.Now().Add(5 * time.Minute), Valid: true}
-	_, err = h.queries.CreateEmailCode(ctx, db.CreateEmailCodeParams{
+	_, err = h.codeStore().CreateEmailCode(ctx, db.CreateEmailCodeParams{
 		UserAccountID: uc.UserAccountID,
 		CodeHash:      hash,
 		Purpose:       "credential_change",
@@ -599,7 +657,7 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	emailCode, err := h.queries.GetActiveEmailCode(r.Context(), db.GetActiveEmailCodeParams{
+	emailCode, err := h.codeStore().GetActiveEmailCode(r.Context(), db.GetActiveEmailCodeParams{
 		UserAccountID: uc.UserAccountID,
 		Purpose:       "credential_change",
 	})
@@ -612,13 +670,31 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(emailCode.CodeHash), []byte(req.Code)); err != nil {
+	// Claim an attempt atomically before comparing, so concurrent guesses can
+	// never exceed maxEmailCodeAttempts. No row means the code is exhausted or
+	// was consumed concurrently; answer exactly like a wrong code (including
+	// the bcrypt cost) so lockout is not observable.
+	claimed, err := h.codeStore().ClaimEmailCodeAttempt(r.Context(), db.ClaimEmailCodeAttemptParams{
+		ID:          emailCode.ID,
+		MaxAttempts: maxEmailCodeAttempts,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = bcrypt.CompareHashAndPassword(dummyStepUpCodeHash, []byte(req.Code))
+		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
+		return
+	}
+	if err != nil {
+		apiresp.WriteError(w, r, fmt.Errorf("stepup_verify: claim attempt: %w", err))
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(claimed.CodeHash), []byte(req.Code)); err != nil {
 		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
 		return
 	}
 
 	// Consume the code before issuing the token.
-	if err := h.queries.ConsumeEmailCode(r.Context(), emailCode.ID); err != nil {
+	if err := h.codeStore().ConsumeEmailCode(r.Context(), emailCode.ID); err != nil {
 		slog.ErrorContext(r.Context(), "stepup_verify: consume code", "error", err)
 	}
 
