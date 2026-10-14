@@ -25,6 +25,7 @@ phases:
           path: phase-01-oidc-tls-verify/002-document-tls-opt-in.md
           done: false
           tier: sonnet-low
+          digest: Documented the verified-TLS default and the WithInsecureSkipTLSVerify dev-only opt-in in the upgrade notes, the troubleshooting guide and the spec.
           git:
             branch: null
             commit: []
