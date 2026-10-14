@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 7
+    tasks_added: 8
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -222,7 +222,7 @@ phases:
       title: Remediation Round 3
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 4
       tasks:
         - number: 1
@@ -234,6 +234,19 @@ phases:
           findings:
             - f7fc
             - 6DKr
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: email-code-request-timing-and-precheck
+          title: Bound Email Code Request Latency And Pre-Check Cooldown Before Hashing
+          path: phase-08-remediation-03/002-email-code-request-timing-and-precheck.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - QGTV
+            - Wr6I
           git:
             branch: null
             commit: []
