@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 2
-    tasks_added: 5
+    tasks_added: 6
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -152,7 +152,7 @@ phases:
       title: Remediation Round 2
       kind: remediation
       security_review: required
-      tasks_added: 3
+      tasks_added: 4
       remediates_phase: 4
       tasks:
         - number: 1
@@ -191,6 +191,19 @@ phases:
           tier: sonnet-low
           findings:
             - 8iUq
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 4
+          slug: email-code-db-integration-tests
+          title: Add Postgres-Backed Integration Tests For Email Code Limiting
+          path: phase-07-remediation-02/004-email-code-db-integration-tests.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - sE2h
+            - R7WT
           git:
             branch: null
             commit: []
