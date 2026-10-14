@@ -990,3 +990,13 @@ items:
         - plan/phase:oidc-tls-verify
         - plan/slug:users-security-hardening
       text: 'Agent-authored report data (readme-reachability, minor severity, not introduced by this phase''s diff): 10 links into the absent docs/mf-standards directory dangle from README.md:33, AGENTS.md:156, docs/mod-users-spec.md (lines 7, 161, 206, 354) and docs/architecture.md (lines 5, 42, 198, 255). Restore or sync the standards copy, or repoint the links.'
+    - title: Docs unreachable from README
+      id: 695p
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:oidc-tls-verify
+        - plan/slug:users-security-hardening
+      text: 'Agent-authored report data (readme-reachability, suggestion severity, pre-existing): api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md and model/README.md are not reachable from README.md. Link them from README.md or a reachable doc.'
