@@ -57,7 +57,17 @@ phases:
     - number: 4
       slug: email-code-attempt-limiting
       title: Rate-Limit Email-Code And Step-Up Verification
-      tasks: []
+      tasks:
+        - number: 1
+          slug: attempts-column-and-queries
+          title: Add Failed-Attempt Tracking Column And Queries
+          path: phase-04-email-code-attempt-limiting/001-attempts-column-and-queries.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: doc-updates
       title: Documentation Updates
