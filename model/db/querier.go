@@ -14,6 +14,10 @@ import (
 type Querier interface {
 	ArchiveSSHPublicKey(ctx context.Context, arg ArchiveSSHPublicKeyParams) (int64, error)
 	AssignUserAccountToApp(ctx context.Context, arg AssignUserAccountToAppParams) error
+	// Atomically claims one verification attempt (call before comparing the code).
+	// $2 is the max attempts. The code is consumed when the bound is reached.
+	// No row is returned when the code is already consumed or exhausted.
+	ClaimEmailCodeAttempt(ctx context.Context, arg ClaimEmailCodeAttemptParams) (EmailCode, error)
 	// Clear the setup token once the operator has confirmed configuration.
 	// Idempotent — safe to call on every confirmed boot.
 	ClearSetupTokenHash(ctx context.Context) error
@@ -40,6 +44,9 @@ type Querier interface {
 	GetAnonTokensByDeviceID(ctx context.Context, deviceID string) ([]AnonToken, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (AuthLocal, error)
 	GetJWTSecret(ctx context.Context) (string, error)
+	// Creation time of the newest unconsumed, unexpired code for the request
+	// cooldown check. No row when there is none.
+	GetLatestEmailCodeCreatedAt(ctx context.Context, arg GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error)
 	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
 	GetOIDCIdentityByIssuerSubject(ctx context.Context, arg GetOIDCIdentityByIssuerSubjectParams) (AuthOidcIdentity, error)
 	// Fetch one provider override row by id.
