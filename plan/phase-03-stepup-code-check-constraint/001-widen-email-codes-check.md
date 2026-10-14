@@ -30,3 +30,14 @@ architectural_impact: false
 
 - After writing the migration file
 - After live-database verification
+
+## Status
+
+Outcome: succeeded (2026-10-14).
+
+- Added `model/migrations/sql/0101_email_codes_credential_change.sql`: Up drops and re-adds `email_codes_purpose_check` allowing `login`, `verify_email`, `credential_change`; Down deletes `credential_change` rows then restores the narrow check. Constraint name confirmed against live postgres:16.
+- `model/migrations/migrate.go` embeds `sql/*.sql` and `make -C model compose` copies `migrations/sql/*.sql`, so the file is picked up with no code change.
+- Live verification (throwaway container, since removed): core + authz + users 0100 applied, then 0101 on top of 0100; `credential_change` and `login` inserts succeed, `bogus` fails with a check violation; Down then Up round-trips (credential_change rejected after Down, accepted after Up).
+- No integration harness covers `CreateEmailCode`/`GetActiveEmailCode` (`api` test.integration is scoped to `./internal/authz/...` against a shared container), so manual verification above stands in.
+- `sqlc generate` produced no diff in `model/db`. `cd api && go test ./...` and `cd model && go build ./...` pass.
+- Requirement 5 (surface `sendStepUpCode` failure) left unchanged to keep the 204 contract.
