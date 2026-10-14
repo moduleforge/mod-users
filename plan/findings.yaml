@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: The search_path pin is correct (pg_catalog f…
-      id: jwyA
-      date: "2026-10-14"
-      tags:
-        - type:security
-        - plan/phase:remediation-03
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0104_email_codes_cooldown_index.sql
-        lines: 33-40
-        severity: suggestion
-        confidence: low
-        concerns: security
-        description:
-          The search_path pin is correct (pg_catalog first, real schema, pg_temp last; every function the body calls is in pg_catalog). Residual: the ALTER FUNCTION target is unqualified, so it resolves through the migrating session's search_path. If that differs from where 0103 created the function, the ALTER could hit a different function or fail. The same applies to the Down. Low risk since 0103 used the same session conventions.
-        recommendation:
-          Optionally qualify the function with current_schema() in the dynamic SQL (%I.create_email_code_with_cooldown) so the pin always targets the function created in that schema.
     - title: The semaphore is global per Handler (default…
       id: x5YS
       date: "2026-10-14"
@@ -470,4 +451,9 @@ closed:
       title: The unauthenticated handler now spawns `go h…
       disposition: promoted
       ref: rQjH
+      date: "2026-10-14"
+    - id: jwyA
+      title: The search_path pin is correct (pg_catalog f…
+      disposition: promoted
+      ref: jwyA
       date: "2026-10-14"
