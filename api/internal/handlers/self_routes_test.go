@@ -109,6 +109,7 @@ func TestSelfRoutes_GetPutSplit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var fired bool
 			r := chi.NewRouter()
+			r.Use(requireAuthStandIn)
 
 			// GET group: mirrors the manifest's GET /v1/self entry —
 			// requireOIDCConfirmed + requireAuth only, no verified-email marker.

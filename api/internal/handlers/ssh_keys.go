@@ -100,6 +100,20 @@ type registerSSHKeyRequest struct {
 	Label     *string `json:"label"`
 }
 
+// Validate implements apiresp.Validator: public_key is required, and the key
+// and label must pass the stateless sshkey checks (sshkey.Parse,
+// sshkey.NormalizeLabel; no database). They run here, ahead of the step-up
+// gate, so a malformed key or label is a 400 and never consumes a step-up
+// token. The service repeats the same checks for in-process callers.
+func (r *registerSSHKeyRequest) Validate() []apiresp.FieldError {
+	if r.PublicKey == "" {
+		return []apiresp.FieldError{{
+			Field: "public_key", Code: "users.public_key_required", Message: "public_key is required",
+		}}
+	}
+	return usersservice.ValidateSSHKeyShape(r.PublicKey, r.Label)
+}
+
 // ---------------------------------------------------------------------------
 // Self-service handlers -- account UUID from localauth.UserContext
 // ---------------------------------------------------------------------------
@@ -119,6 +133,10 @@ func (h *SSHKeysHandler) ListSelf(w http.ResponseWriter, r *http.Request) {
 // h.stepUpRequired is true.
 func (h *SSHKeysHandler) RegisterSelf(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
+	req, ok := h.decodeRegister(w, r)
+	if !ok {
+		return
+	}
 	if err := checkStepUp(r, uc.UserAccountID, h.stepUpRequired, h.jwtSecret, h.consumed); err != nil {
 		writeStepUpRequired(w, r)
 		return
@@ -130,13 +148,18 @@ func (h *SSHKeysHandler) RegisterSelf(w http.ResponseWriter, r *http.Request) {
 		apiresp.WriteError(w, r, err)
 		return
 	}
-	h.register(w, r, accountUUID, stepUpUsed)
+	h.register(w, r, accountUUID, req, stepUpUsed)
 }
 
 // RevokeSelf handles DELETE /v1/self/ssh-keys/{key_uuid}. Step-up-gated
 // when h.stepUpRequired is true.
 func (h *SSHKeysHandler) RevokeSelf(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
+	keyUUID, err := apiresp.ParseUUIDParam("key_uuid", chi.URLParam(r, "key_uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
+		return
+	}
 	if err := checkStepUp(r, uc.UserAccountID, h.stepUpRequired, h.jwtSecret, h.consumed); err != nil {
 		writeStepUpRequired(w, r)
 		return
@@ -146,10 +169,6 @@ func (h *SSHKeysHandler) RevokeSelf(w http.ResponseWriter, r *http.Request) {
 	accountUUID, err := h.callerAccountUUID(uc)
 	if err != nil {
 		apiresp.WriteError(w, r, err)
-		return
-	}
-	keyUUID, ok := parseUUIDPathParam(w, r, "key_uuid")
-	if !ok {
 		return
 	}
 	h.revoke(w, r, accountUUID, keyUUID, stepUpUsed)
@@ -170,8 +189,9 @@ func (h *SSHKeysHandler) RevokeSelf(w http.ResponseWriter, r *http.Request) {
 
 // ListForAccount handles GET /v1/user-accounts/{uuid}/ssh-keys.
 func (h *SSHKeysHandler) ListForAccount(w http.ResponseWriter, r *http.Request) {
-	accountUUID, ok := parseUUIDPathParam(w, r, "uuid")
-	if !ok {
+	accountUUID, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 	h.list(w, r, accountUUID)
@@ -182,7 +202,12 @@ func (h *SSHKeysHandler) ListForAccount(w http.ResponseWriter, r *http.Request) 
 // D9), identically to RegisterSelf, only when the target account is the
 // caller's own -- see isSelfTargetingOperatorCall.
 func (h *SSHKeysHandler) RegisterForAccount(w http.ResponseWriter, r *http.Request) {
-	accountUUID, ok := parseUUIDPathParam(w, r, "uuid")
+	accountUUID, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
+		return
+	}
+	req, ok := h.decodeRegister(w, r)
 	if !ok {
 		return
 	}
@@ -201,7 +226,7 @@ func (h *SSHKeysHandler) RegisterForAccount(w http.ResponseWriter, r *http.Reque
 		stepUpUsed = h.stepUpRequired
 	}
 
-	h.register(w, r, accountUUID, stepUpUsed)
+	h.register(w, r, accountUUID, req, stepUpUsed)
 }
 
 // RevokeForAccount handles DELETE /v1/user-accounts/{uuid}/ssh-keys/{key_uuid}.
@@ -209,12 +234,14 @@ func (h *SSHKeysHandler) RegisterForAccount(w http.ResponseWriter, r *http.Reque
 // D9), identically to RevokeSelf, only when the target account is the
 // caller's own -- see isSelfTargetingOperatorCall.
 func (h *SSHKeysHandler) RevokeForAccount(w http.ResponseWriter, r *http.Request) {
-	accountUUID, ok := parseUUIDPathParam(w, r, "uuid")
-	if !ok {
+	accountUUID, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
-	keyUUID, ok := parseUUIDPathParam(w, r, "key_uuid")
-	if !ok {
+	keyUUID, err := apiresp.ParseUUIDParam("key_uuid", chi.URLParam(r, "key_uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -255,24 +282,23 @@ func (h *SSHKeysHandler) list(w http.ResponseWriter, r *http.Request, accountUUI
 	server.JSON(w, http.StatusOK, sshKeyListResponse{Items: items, Total: total})
 }
 
-// register parses, caps, and validates the request body, then registers the
-// key for accountUUID. All key-format/label validation is the service's job
-// (via sshkey.Parse/NormalizeLabel; see the algorithm policy in
-// docs/mod-users-spec.md's Security requirements) -- this only checks for
-// well-formed JSON and a non-empty public_key.
-func (h *SSHKeysHandler) register(w http.ResponseWriter, r *http.Request, accountUUID uuid.UUID, stepUpUsed bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, sshKeyRegisterBodyMaxBytes)
-
+// decodeRegister decodes and validates the register body (stateless: JSON
+// shape, size cap, required public_key, key and label format). It runs before the step-up gate so a
+// malformed request is a 400 and never consumes a step-up token. When it
+// returns false it has already written the 400 response.
+func (h *SSHKeysHandler) decodeRegister(w http.ResponseWriter, r *http.Request) (registerSSHKeyRequest, bool) {
 	var req registerSSHKeyRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
+	if !server.Decode(w, r, &req, apiresp.WithMaxBytes(sshKeyRegisterBodyMaxBytes)) {
+		return req, false
 	}
-	if req.PublicKey == "" {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
+	return req, true
+}
 
+// register registers the already-decoded key for accountUUID. Key-format and
+// label validation already ran in registerSSHKeyRequest.Validate; the service
+// repeats it for in-process callers (algorithm policy: docs/mod-users-spec.md's
+// Security requirements).
+func (h *SSHKeysHandler) register(w http.ResponseWriter, r *http.Request, accountUUID uuid.UUID, req registerSSHKeyRequest, stepUpUsed bool) {
 	key, err := h.svc.Register(r.Context(), accountUUID, req.PublicKey, req.Label, stepUpUsed)
 	if err != nil {
 		apiresp.WriteError(w, r, err)
@@ -330,17 +356,6 @@ func (h *SSHKeysHandler) isSelfTargetingOperatorCall(r *http.Request, targetAcco
 		return uc, false, err
 	}
 	return uc, callerUUID == targetAccountUUID, nil
-}
-
-// parseUUIDPathParam extracts the named chi URL parameter, writing 400
-// invalid_input on parse failure.
-func parseUUIDPathParam(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, name))
-	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return uuid.UUID{}, false
-	}
-	return id, true
 }
 
 // parseSSHKeyListPagination reads limit/offset query params, leniently

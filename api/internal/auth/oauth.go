@@ -559,6 +559,20 @@ func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookie
 	return principal, payload, nil
 }
 
+// ErrInvalidReturnPath is wrapped by every validateReturnPath rejection, so
+// callers can tell a malformed return path (a client error) from an internal
+// failure while building the authorize URL.
+var ErrInvalidReturnPath = errors.New("oauth: invalid return path")
+
+// ValidateReturnPath is the stateless return-path check LinkAuthorizeURL and
+// AuthorizeURL apply, exported so an HTTP handler can reject a malformed
+// return path before any step-up or other gate. It returns an error wrapping
+// ErrInvalidReturnPath, or nil.
+func ValidateReturnPath(raw string) error {
+	_, err := validateReturnPath(raw)
+	return err
+}
+
 // validateReturnPath ensures the return-path parameter is a site-relative
 // path. Anything with a scheme, authority, or that doesn't start with '/'
 // is rejected to prevent open-redirect attacks.
@@ -567,19 +581,19 @@ func validateReturnPath(raw string) (string, error) {
 		return "/", nil
 	}
 	if !strings.HasPrefix(raw, "/") {
-		return "", fmt.Errorf("oauth: return path must begin with '/', got %q", raw)
+		return "", fmt.Errorf("%w: must begin with '/', got %q", ErrInvalidReturnPath, raw)
 	}
 	// A protocol-relative path like "//example.com/evil" would pass the
 	// leading-slash check but url.Parse would give it a Host. Explicitly reject.
 	if strings.HasPrefix(raw, "//") {
-		return "", fmt.Errorf("oauth: return path must not be protocol-relative")
+		return "", fmt.Errorf("%w: must not be protocol-relative", ErrInvalidReturnPath)
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("oauth: invalid return path %q: %w", raw, err)
+		return "", fmt.Errorf("%w %q: %v", ErrInvalidReturnPath, raw, err)
 	}
 	if u.Scheme != "" || u.Host != "" {
-		return "", fmt.Errorf("oauth: return path must not include scheme or host: %q", raw)
+		return "", fmt.Errorf("%w: must not include scheme or host: %q", ErrInvalidReturnPath, raw)
 	}
 	return raw, nil
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/observer"
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
@@ -151,11 +152,11 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 		// operator-observable failure (slog.Warn at boot) that the user has
 		// no agency to fix mid-request.
 		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
-			server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
+			apiresp.WriteError(w, r, apiresp.ErrNotFound)
 			return
 		}
 		slog.WarnContext(r.Context(), "oidc start: bad request", "error", err, "provider", providerID)
-		server.Error(w, http.StatusBadRequest, "invalid_input", err.Error())
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "return", Code: "users.oidc_start_invalid", Message: "the start request is invalid"}))
 		return
 	}
 
@@ -179,7 +180,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// below; init-failed providers are indistinguishable from unknown at
 	// the wire.
 	if !h.oauth.ProviderAvailable(providerID) {
-		server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
 
@@ -192,13 +193,15 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	code := q.Get("code")
 	rawState := q.Get("state")
 	if code == "" || rawState == "" {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "missing code or state")
+		apiresp.WriteError(w, r, apiresp.InvalidInput(
+			apiresp.FieldError{Field: "code", Code: "users.oidc_code_or_state_required", Message: "code and state are required"},
+		))
 		return
 	}
 
 	cookie, err := r.Cookie(stateCookieName)
 	if err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "missing state cookie")
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "state_cookie", Code: "users.oidc_state_cookie_required", Message: "the state cookie is required"}))
 		return
 	}
 
@@ -207,14 +210,14 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(r.Context(), "oidc callback: exchange failed", "error", err, "provider", providerID)
 		// Unknown ID or init-failed provider → 404, same policy as /start.
 		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
-			server.Error(w, http.StatusNotFound, "not_found", "unknown provider")
+			apiresp.WriteError(w, r, apiresp.ErrNotFound)
 			return
 		}
 		// State/cookie problems are client-fixable → 400. Everything downstream
 		// (token endpoint, id_token verify) reports a generic error via redirect
 		// so the GUI can surface it and the operator can inspect logs.
 		if errors.Is(err, localauth.ErrStateValidation) {
-			server.Error(w, http.StatusBadRequest, "invalid_input", "invalid or expired state")
+			apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "state", Code: "users.oidc_state_invalid", Message: "the state is invalid or expired"}))
 			return
 		}
 		// Test mode: surface the exchange/verify error directly on the
@@ -270,14 +273,14 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "oidc callback: resolve user internal error", "error", err, "provider", providerID)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "user resolution failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: resolve user internal error: %w", err))
 		return
 	}
 
 	ua, err := h.queries.GetUserAccountByID(r.Context(), uc.UserAccountID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: reload user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "user account reload failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: reload user account: %w", err))
 		return
 	}
 
@@ -285,7 +288,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	// opctx actor internally so the Authorizer sees the logging-in user.
 	if err := h.userSvc.RecordLogin(r.Context(), ua.ID, providerID); err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: record login audit", "error", err, "provider", providerID)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "login audit failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: record login audit: %w", err))
 		return
 	}
 
@@ -295,13 +298,13 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: jwt signer unavailable", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "token issuance failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: jwt signer unavailable: %w", err))
 		return
 	}
 	token, err := localauth.IssueLocalJWTWithSigner(ua, signer, h.cfg.LocalAuth.LocalIssuer)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "oidc callback: issue jwt", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "token issuance failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: issue jwt: %w", err))
 		return
 	}
 
@@ -333,7 +336,7 @@ func (h *OIDCHandler) redirectToFrontendError(w http.ResponseWriter, r *http.Req
 	u, err := url.Parse(h.oauth.FrontendReturnURL)
 	if err != nil {
 		// Fall back to a plain error response if the configured URL is bad.
-		server.Error(w, http.StatusInternalServerError, "internal_error", "authentication failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc redirect to frontend error: parse frontend return URL: %w", err))
 		return
 	}
 	q := u.Query()
@@ -354,7 +357,7 @@ func (h *OIDCHandler) redirectToTestResult(
 ) {
 	u, err := url.Parse(h.oauth.FrontendReturnURL)
 	if err != nil {
-		server.Error(w, http.StatusInternalServerError, "internal_error", "test configuration failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc redirect to test result: parse frontend return URL: %w", err))
 		return
 	}
 	// FrontendReturnURL points at /auth/oidc/return; the test banner
@@ -406,7 +409,7 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 			h.redirectToFrontendError(w, r, "authentication_failed")
 		} else {
 			slog.ErrorContext(ctx, "oidc link-mode: load user account", "error", err)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to load user account")
+			apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: load user account: %w", err))
 		}
 		return
 	}
@@ -420,7 +423,7 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		slog.ErrorContext(ctx, "oidc link-mode: lookup identity by issuer/subject", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "identity lookup failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: lookup identity by issuer/subject: %w", err))
 		return
 	}
 
@@ -454,7 +457,7 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 	tx, txErr := h.pool.Begin(ctx)
 	if txErr != nil {
 		slog.ErrorContext(ctx, "oidc link-mode: begin tx", "error", txErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to begin transaction")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: begin tx: %w", txErr))
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -469,7 +472,7 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 	})
 	if insertErr != nil {
 		slog.ErrorContext(ctx, "oidc link-mode: insert identity", "error", insertErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to link identity")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: insert identity: %w", insertErr))
 		return
 	}
 	insertedUUID = identity.Uuid.String()
@@ -480,13 +483,13 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 	}
 	if obsErr := h.safeObserve(ctx, tx, "create", "auth_oidc_identity", &entityID, nil, after); obsErr != nil {
 		slog.ErrorContext(ctx, "oidc link-mode: observe link", "error", obsErr)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to record identity link")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: observe link: %w", obsErr))
 		return
 	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
 		slog.ErrorContext(ctx, "oidc link-mode: commit", "error", fmt.Errorf("commit: %w", commitErr))
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to commit identity link")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: commit: %w", commitErr))
 		return
 	}
 
@@ -504,7 +507,7 @@ func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, pro
 func (h *OIDCHandler) redirectToLinkSuccess(w http.ResponseWriter, r *http.Request, returnPath string) {
 	u, err := url.Parse(h.oauth.FrontendReturnURL)
 	if err != nil {
-		server.Error(w, http.StatusInternalServerError, "internal_error", "identity linked but redirect failed")
+		apiresp.WriteError(w, r, fmt.Errorf("oidc redirect to link success: parse frontend return URL: %w", err))
 		return
 	}
 	q := u.Query()

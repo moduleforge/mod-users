@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/moduleforge/core-api/apiresp"
 	coreservice "github.com/moduleforge/core-api/service"
@@ -52,14 +53,31 @@ type selfUpdateRequest struct {
 	FamilyName *string `json:"family_name"`
 }
 
+// Validate rejects a present-but-blank given_name or family_name before any
+// authorization or lookup, with the same natural_persons.* codes and messages
+// mod-core's NaturalPersonService returns for the same input.
+func (r *selfUpdateRequest) Validate() []apiresp.FieldError {
+	var out []apiresp.FieldError
+	if r.GivenName != nil && strings.TrimSpace(*r.GivenName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "given_name", Code: "natural_persons.given_name_required", Message: "given_name is required",
+		})
+	}
+	if r.FamilyName != nil && strings.TrimSpace(*r.FamilyName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "family_name", Code: "natural_persons.family_name_required", Message: "family_name is required",
+		})
+	}
+	return out
+}
+
 // Put updates the caller's mutable profile fields (currently only
 // natural_person given_name/family_name). Returns the composed profile.
 func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 	uc := auth.MustFromContext(r.Context())
 
 	var req selfUpdateRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -83,7 +101,7 @@ func (h *SelfHandler) Put(w http.ResponseWriter, r *http.Request) {
 			coreservice.UpdateNaturalPersonInput{GivenName: req.GivenName, FamilyName: req.FamilyName},
 		)
 		if err != nil {
-			writeCoreServiceErr(w, r, err)
+			apiresp.WriteError(w, r, err)
 			return
 		}
 	}
@@ -145,13 +163,4 @@ func buildSelfResponse(ua db.UserAccount, profile coreservice.Profile) map[strin
 	}
 
 	return resp
-}
-
-// writeCoreServiceErr maps core service sentinels to HTTP responses by
-// delegating to apiresp.WriteError. coreservice.ErrNotFound/ErrForbidden/
-// ErrInvalidInput are already aliases of apiresp's canonical sentinels (see
-// mod-core/api/service/errors.go), so apiresp.WriteError classifies them
-// correctly with no local switch.
-func writeCoreServiceErr(w http.ResponseWriter, r *http.Request, err error) {
-	apiresp.WriteError(w, r, err)
 }
