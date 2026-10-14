@@ -1141,3 +1141,23 @@ items:
           Project doc is not reachable from README.md: no Markdown link to model/README.md exists in any reachable doc.
         recommendation:
           Link model/README.md from docs/project-structure.md or AGENTS.md, with the link placed inline on the referenced topic.
+    - title: Project doc outside the .claude/ exemption i…
+      id: qN7q
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:email-code-attempt-limiting
+        - plan/slug:users-security-hardening
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/server/CLAUDE.md
+        lines: 1
+        severity: minor
+        confidence: high
+        concerns: documentation
+        description:
+          Project doc outside the .claude/ exemption is not reachable from README.md and has no inbound links. It is an empty claude-mem-context stub.
+        recommendation:
+          Either populate it with real guidance and link it from a reachable doc, or remove it if committed unintentionally.
