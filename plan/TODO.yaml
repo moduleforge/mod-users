@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 2
-    tasks_added: 3
+    tasks_added: 4
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -152,7 +152,7 @@ phases:
       title: Remediation Round 2
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 4
       tasks:
         - number: 1
@@ -166,6 +166,19 @@ phases:
             - 2pnK
             - 9NPY
             - uFx5
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: single-use-code-consumption
+          title: Enforce Single-Use Consumption On Email Code Success
+          path: phase-07-remediation-02/002-single-use-code-consumption.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - 1Ki1
+            - CR1R
           git:
             branch: null
             commit: []
