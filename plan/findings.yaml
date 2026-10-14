@@ -4,10 +4,10 @@ items:
       id: kh4F
       date: "2026-10-14"
       tags:
-        - type:ambiguity
+        - type:bug
         - plan/phase:remediation-03
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: 'Environmental issue, not a finding: make -C model compose copies sibling mod-core migration 0100_natural_person_owner_invariant.sql next to mod-users 0100_baseline.sql; goose panics ''duplicate version 100''. Needs a decision: followup against mod-core or the compose step.'
     - title: The spec's anti-enumeration bullet (and line…
       id: BM3K
