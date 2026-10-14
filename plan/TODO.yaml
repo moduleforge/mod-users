@@ -286,6 +286,7 @@ phases:
           path: phase-09-remediation-04/001-bound-email-code-background-work.md
           done: false
           tier: sonnet-med
+          digest: 'EmailCodeRequest''s detached send now goes through dispatchEmailCode: non-blocking semaphore acquire (drop and log when full), then goroutine under 20 s timeout with deferred recover. Endpoint status, body, and latency unchanged. Added emailcode_bounded_test.go and Handler fields in register.go.'
           findings:
             - rQjH
           git:
