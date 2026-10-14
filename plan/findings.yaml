@@ -62,6 +62,7 @@ items:
           warning is logged once at construction. A misconfigured production consumer that enables it gets only a log line.
         recommendation:
           Optionally restrict to loopback/private hosts or require an additional env guard; the intent does not require this.
+        Open question (evaluator, quoted data): Should the WithInsecureSkipTLSVerify opt-in be further restricted beyond being explicit and off by default? Options: (1) leave as is - explicit option, doc comment, warning log; no code change (recommended); (2) restrict to loopback/private-network issuer hosts - stronger, but may reject Docker Compose service hostnames used in dev; (3) require an additional environment guard - defense in depth, adds a second knob to the public contract.
 closed:
     - id: 0G9p
       title: Architecture doc silent on OIDC TLS default
