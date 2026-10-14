@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: 'Orphan: api/server/CLAUDE.md is not reachabl…'
-      id: DPZi
-      date: "2026-10-14"
-      tags:
-        - type:documentation
-        - plan/phase:readyz-generic-error
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/server/CLAUDE.md
-        lines: 1
-        severity: minor
-        confidence: medium
-        concerns: documentation
-        description:
-          Orphan: api/server/CLAUDE.md is not reachable from README.md. It is agent-config style, so may be intentionally unlinked.
-        recommendation:
-          Link from docs/project-structure.md or AGENTS.md, or accept as an intentional agent-only file.
     - title: 'Orphan: deploy/local/README.md is not reacha…'
       id: a5EH
       date: "2026-10-14"
@@ -125,4 +106,9 @@ closed:
       title: 'Orphan: model/README.md is not reachable fro…'
       disposition: promoted
       ref: fZr4
+      date: "2026-10-14"
+    - id: DPZi
+      title: 'Orphan: api/server/CLAUDE.md is not reachabl…'
+      disposition: promoted
+      ref: DPZi
       date: "2026-10-14"
