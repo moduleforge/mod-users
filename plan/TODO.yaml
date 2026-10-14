@@ -95,7 +95,7 @@ phases:
             branch: plan/users-security-hardening-04-002
             commit:
                 - 0469ec0
-            merge: null
+            merge: c61209522957d3aa566d2681893da290f0bb342e
     - number: 5
       slug: doc-updates
       title: Documentation Updates
