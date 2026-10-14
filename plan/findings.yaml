@@ -71,4 +71,13 @@ items:
           warning is logged once at construction. A misconfigured production consumer that enables it gets only a log line.
         recommendation:
           Optionally restrict to loopback/private hosts or require an additional env guard; the intent does not require this.
+    - title: Dangling mf-standards doc links
+      id: FcGl
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - plan/phase:oidc-tls-verify
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Agent-authored report data (readme-reachability, minor severity, not introduced by this phase''s diff): 10 links into the absent docs/mf-standards directory dangle from README.md:33, AGENTS.md:156, docs/mod-users-spec.md (lines 7, 161, 206, 354) and docs/architecture.md (lines 5, 42, 198, 255). Restore or sync the standards copy, or repoint the links.'
 closed: []
