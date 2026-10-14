@@ -18,3 +18,7 @@ phases:
       slug: email-code-attempt-limiting
       title: Rate-Limit Email-Code And Step-Up Verification
       tasks: []
+    - number: 5
+      slug: doc-updates
+      title: Documentation Updates
+      tasks: []
