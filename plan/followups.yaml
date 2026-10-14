@@ -990,3 +990,23 @@ items:
         recommendation:
           Optionally restrict to loopback/private hosts or require an additional env guard; the intent does not require this.
         Open question (evaluator, quoted data): Should the WithInsecureSkipTLSVerify opt-in be further restricted beyond being explicit and off by default? Options: (1) leave as is - explicit option, doc comment, warning log; no code change (recommended); (2) restrict to loopback/private-network issuer hosts - stronger, but may reject Docker Compose service hostnames used in dev; (3) require an additional environment guard - defense in depth, adds a second knob to the public contract.
+    - title: 'Orphan: model/README.md is not reachable fro…'
+      id: fZr4
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:readyz-generic-error
+        - plan/slug:users-security-hardening
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: model/README.md
+        lines: 1
+        severity: minor
+        confidence: high
+        concerns: documentation
+        description:
+          Orphan: model/README.md is not reachable from README.md via any chain of project-doc links (no reachable doc links to it).
+        recommendation:
+          Link it from docs/project-structure.md or docs/architecture.md (data model section), which README.md reaches.
