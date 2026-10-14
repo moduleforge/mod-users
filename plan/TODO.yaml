@@ -240,7 +240,7 @@ phases:
             branch: plan/users-security-hardening-08-001
             commit:
                 - 73d1a80
-            merge: null
+            merge: 88d659180cc9211525fbc0fbe1d45f0de2f3653a
         - number: 2
           slug: email-code-request-timing-and-precheck
           title: Bound Email Code Request Latency And Pre-Check Cooldown Before Hashing
