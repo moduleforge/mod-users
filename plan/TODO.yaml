@@ -18,7 +18,7 @@ phases:
             branch: plan/users-security-hardening-01-001
             commit:
                 - 565df15
-            merge: null
+            merge: e167543754a9dd8f7a5400e255ae3862fca7bc51
         - number: 2
           slug: document-tls-opt-in
           title: Document TLS Verification Change And Opt-In
