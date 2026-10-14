@@ -704,6 +704,10 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 	// the claim itself consumed the code (the final attempt), this claimer is
 	// the sole consumer; otherwise the consume must affect a row, or a
 	// concurrent request already used the code.
+	// Fail-closed at the exhaustion boundary: a correct guess that holds an
+	// earlier attempt (ConsumedAt == nil) is refused (n == 0) when a concurrent
+	// final-attempt claim consumed the code first, even though its guess was
+	// right. Single-use consumption takes precedence over that request.
 	if claimed.ConsumedAt == nil {
 		n, err := h.codeStore().ConsumeEmailCode(r.Context(), emailCode.ID)
 		if err != nil {
