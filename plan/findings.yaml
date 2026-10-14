@@ -9,29 +9,6 @@ items:
         - priority:medium
         - effort:medium
       text: 'Task 002 Requirement 6 (end-to-end run against a throwaway Postgres 16) was not performed: no handler-level DB integration harness exists, and claim and latest-created queries were covered by task 001 SQL checks. Needs its own task or explicit manager instruction if an end-to-end check is wanted.'
-    - title: The public email-code endpoints accept any p…
-      id: 8iUq
-      date: "2026-10-14"
-      tags:
-        - type:security
-        - plan/phase:email-code-attempt-limiting
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/handlers/auth/emailcode.go
-        lines: 159-170
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          The public email-code endpoints accept any purpose permitted by the DB check, including credential_change (added in
-          migration 0101). An unauthenticated caller can therefore request credential_change codes for a victim (consuming the shared
-          60s cooldown) and verify against it with purpose=credential_change, burning the 5 attempts of the victim's step-up code; a
-          successful verify there falls into the non-login branch and marks the email verified. Mostly pre-existing, but the new
-          attempt/cooldown state is now shared across the authenticated and unauthenticated paths, enabling cross-flow DoS.
-        recommendation:
-          Allow only login and verify_email on the public endpoints (allow-list the purpose).
     - title: 'Test coverage gap: the concurrency tests (au…'
       id: sE2h
       date: "2026-10-14"
@@ -438,4 +415,9 @@ closed:
       title: 'Timing/observability: the attempt claim is a…'
       disposition: fixed
       ref: phase-07-remediation-02/002-single-use-code-consumption.md
+      date: "2026-10-14"
+    - id: 8iUq
+      title: The public email-code endpoints accept any p…
+      disposition: fixed
+      ref: phase-07-remediation-02/003-allowlist-public-email-code-purpose.md
       date: "2026-10-14"
