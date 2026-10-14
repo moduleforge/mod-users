@@ -40,6 +40,9 @@ func TestNewVerifierWithOptions_TLSVerifiedByDefault(t *testing.T) {
 	if !strings.Contains(err.Error(), "discovery") {
 		t.Fatalf("error should mention discovery: %v", err)
 	}
+	if !strings.Contains(err.Error(), "x509") && !strings.Contains(err.Error(), "certificate") {
+		t.Fatalf("error should mention x509 or certificate (TLS verification failure): %v", err)
+	}
 }
 
 func TestNewVerifier_TLSVerifiedAlways(t *testing.T) {

@@ -20,3 +20,11 @@ Scope: `api/internal/auth/jwt_tls_test.go` only. The work targets the plan branc
 ## References
 
 - Finding `J4N9` in this plan's plan/findings.yaml (type:security).
+
+## Status
+
+- Outcome: succeeded
+- Date: 2026-10-14
+- Validation: `cd api && go test ./internal/auth/...` passed; `cd api && go vet ./...` passed; `make lint` passed (exit 0). Logs under `.flow/validation-logs/`.
+- Affected source file: `api/internal/auth/jwt_tls_test.go` (added an assertion that the `TestNewVerifierWithOptions_TLSVerifiedByDefault` error contains "x509" or "certificate").
+- Assumptions applied: none recorded in the task doc.
