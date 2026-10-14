@@ -183,25 +183,6 @@ items:
         recommendation:
           Add a DB-backed integration test for ClaimEmailCodeAttempt under concurrent goroutines, GetLatestEmailCodeCreatedAt, and the
           exhaust-then-request flow.
-    - title: Constants and the dummy-hash helper are dupl…
-      id: 6e7x
-      date: "2026-10-14"
-      tags:
-        - type:conflict
-        - plan/phase:email-code-attempt-limiting
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/handlers/identities.go
-        lines: 60-97
-        severity: suggestion
-        confidence: high
-        concerns: architecture
-        description:
-          Constants and the dummy-hash helper are duplicated between the auth and handlers packages (maxEmailCodeAttempts, cooldown, dummy hash), synchronized only by tests; the emailCodeStore interface duplicates the authQuerier subset. This is consistent with the existing no-direct-package-dependency pattern noted for emailSender, so it is not a boundary violation.
-        recommendation:
-          Optional: extract shared constants into a small internal package if a third consumer appears.
     - title: 'Timing: the cooldown-skip path returns quick…'
       id: qd8e
       date: "2026-10-14"
@@ -420,4 +401,14 @@ closed:
       title: Package-init bcrypt hash generation at Defau…
       disposition: promoted
       ref: lozR
+      date: "2026-10-14"
+    - id: 6e7x
+      title: Constants and the dummy-hash helper are dupl…
+      disposition: dismissed
+      reason: |-
+        Not actionable. The type is corrected from conflict to style, since nothing contradicts. The
+        duplicated constants and dummy-hash helper are a deliberate, test-guarded decision recorded in
+        task 002's Status (exported constants in auth, unexported twins in handlers, plus an equality test).
+        The finding says this is consistent with the existing no-direct-package-dependency pattern.
+        Its recommendation applies only if a third consumer appears, and none exists.
       date: "2026-10-14"
