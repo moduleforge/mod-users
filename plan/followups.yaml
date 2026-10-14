@@ -1239,9 +1239,6 @@ items:
         - type:conflict
         - priority:medium
         - effort:small
-        - plan/phase:remediation-02
-        - plan/slug:users-security-hardening
-        - resolution/branch:a3475d2
       text: |-
         `make -C model compose` copies mod-core's `model/migrations/0100_natural_person_owner_invariant.sql` and mod-users' `model/migrations/sql/0100_baseline.sql` into `model/schema/migrations`, so goose panics with "duplicate version 100" and the `api/internal/authz` integration suite cannot migrate against the sibling mod-core checkout. Worked around locally by composing into a scratch dir with the core file renumbered to 0104 and pointing `AUTHZ_INTEG_MIGRATIONS_DIR` at it. A permanent fix needs a non-colliding version number in one of the two migration sets.
 
