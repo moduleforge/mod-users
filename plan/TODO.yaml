@@ -107,6 +107,7 @@ phases:
           path: phase-05-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: 'Updated docs/architecture.md and docs/mod-users-spec.md for the final remediated email-code/step-up limiting, OIDC TLS default, /readyz body, and migrations 0101-0104; verified against code; no pin content. Changed files: docs/architecture.md, docs/mod-users-spec.md (plus task-doc Status).'
           git:
             branch: null
             commit: []
