@@ -62,15 +62,6 @@ items:
           warning is logged once at construction. A misconfigured production consumer that enables it gets only a log line.
         recommendation:
           Optionally restrict to loopback/private hosts or require an additional env guard; the intent does not require this.
-    - title: Docs unreachable from README
-      id: 695p
-      date: "2026-10-14"
-      tags:
-        - type:documentation
-        - plan/phase:oidc-tls-verify
-        - priority:low
-        - effort:small
-      text: 'Agent-authored report data (readme-reachability, suggestion severity, pre-existing): api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md and model/README.md are not reachable from README.md. Link them from README.md or a reachable doc.'
 closed:
     - id: 0G9p
       title: Architecture doc silent on OIDC TLS default
@@ -86,4 +77,9 @@ closed:
       title: Dangling mf-standards doc links
       disposition: promoted
       ref: FcGl
+      date: "2026-10-14"
+    - id: 695p
+      title: Docs unreachable from README
+      disposition: promoted
+      ref: 695p
       date: "2026-10-14"
