@@ -199,7 +199,8 @@ phases:
             - 8iUq
           git:
             branch: plan/users-security-hardening-07-003
-            commit: []
+            commit:
+                - ddc0175
             merge: null
         - number: 4
           slug: email-code-db-integration-tests
