@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 4
-    tasks_added: 10
+    tasks_added: 11
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -276,7 +276,7 @@ phases:
       title: Remediation Round 4
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 4
       tasks:
         - number: 1
@@ -287,6 +287,18 @@ phases:
           tier: sonnet-med
           findings:
             - rQjH
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: qualify-cooldown-function-in-0104
+          title: Schema-Qualify The Cooldown Function In The 0104 Migration
+          path: phase-09-remediation-04/002-qualify-cooldown-function-in-0104.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - jwyA
           git:
             branch: null
             commit: []
