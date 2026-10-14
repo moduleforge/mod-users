@@ -73,6 +73,19 @@ and personal Microsoft accounts" → Save. Then verify the manifest's
    personal accounts can't grant it. Trim scopes to basics
    (`openid email profile`) when testing with MSA.
 
+## Self-signed issuer certificate
+
+**Symptom:** issuer discovery fails with
+`x509: certificate signed by unknown authority`.
+
+OIDC issuer discovery and JWKS fetches verify TLS by default. Remedies:
+
+- Trust the issuer's CA: add it to the system trust store, or point
+  `SSL_CERT_FILE` at a PEM bundle that includes it.
+- Local development only: build the verifier with
+  `WithInsecureSkipTLSVerify()` alongside `WithOIDC`. It disables
+  verification for an `https://` issuer and logs a warning.
+
 ## Use the Test button (9.18)
 
 The "Test configuration" button in the provider Edit modal exercises
