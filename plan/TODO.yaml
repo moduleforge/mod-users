@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: oidc-tls-verify
       title: Verified TLS For OIDC Issuer Discovery
+      diff_base: a2c29c35eb56020643160ea38f961697a72f00ba
       tasks:
         - number: 1
           slug: verified-tls-default
