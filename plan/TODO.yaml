@@ -319,5 +319,6 @@ phases:
             - BM3K
           git:
             branch: plan/users-security-hardening-09-003
-            commit: []
+            commit:
+                - 4a20d6f
             merge: null
