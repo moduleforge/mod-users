@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 1
+    tasks_added: 2
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -105,7 +105,7 @@ phases:
       title: Remediation Round 1
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 1
       tasks:
         - number: 1
@@ -116,6 +116,18 @@ phases:
           tier: haiku-med
           findings:
             - eyu1
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: assert-certificate-error-in-tls-test
+          title: Assert Certificate Error In Default TLS Verification Test
+          path: phase-06-remediation-01/002-assert-certificate-error-in-tls-test.md
+          done: false
+          tier: haiku-med
+          findings:
+            - J4N9
           git:
             branch: null
             commit: []
