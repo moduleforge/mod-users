@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 8
+    tasks_added: 9
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -222,7 +222,7 @@ phases:
       title: Remediation Round 3
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 4
       tasks:
         - number: 1
@@ -247,6 +247,19 @@ phases:
           findings:
             - QGTV
             - Wr6I
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: document-email-code-limiting
+          title: Document Email Code Attempt Limit, Cooldown, And Exhaustion-Boundary Behavior
+          path: phase-08-remediation-03/003-document-email-code-limiting.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - y3s6
+            - 33Bo
           git:
             branch: null
             commit: []
