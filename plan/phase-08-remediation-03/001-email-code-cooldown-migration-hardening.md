@@ -29,3 +29,10 @@ The work is a single additive goose migration in the `mod-users` module. It targ
 
 - Finding `f7fc` in this plan's `plan/findings.yaml` (cooldown probe lacks a supporting index).
 - Finding `6DKr` in this plan's `plan/findings.yaml` (cooldown function search path is not pinned).
+
+## Status
+
+- Outcome: succeeded (2026-10-14).
+- Added `model/migrations/sql/0104_email_codes_cooldown_index.sql`: non-partial index `email_codes_cooldown_idx` on `(user_account_id, purpose, created_at DESC)`; `ALTER FUNCTION create_email_code_with_cooldown(...) SET search_path = pg_catalog, <current_schema()>, pg_temp` via a DO block; `EXECUTE` is not revoked, with a SQL comment explaining that `SECURITY INVOKER` makes it unnecessary. Down resets `search_path` and drops the index.
+- Validation: EXPLAIN uses an Index Only Scan on the new index (with seqscan disabled on a tiny table); `proconfig` shows `search_path=pg_catalog, public, pg_temp`; authz integration suite (74 passes, including the displaced-schema guard and the email-code cooldown tests) and `go vet -tags integration ./...` pass. Down migration verified in a rolled-back transaction.
+- Note: the composed `model/schema/migrations` dir has a duplicate goose version 100 (sibling mod-core `0100_natural_person_owner_invariant.sql` versus `0100_baseline.sql`); validation used a scratch copy with that file renumbered.
