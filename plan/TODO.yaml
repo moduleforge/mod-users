@@ -318,6 +318,6 @@ phases:
           findings:
             - BM3K
           git:
-            branch: null
+            branch: plan/users-security-hardening-09-003
             commit: []
             merge: null
