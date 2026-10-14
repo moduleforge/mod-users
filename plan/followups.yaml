@@ -946,6 +946,7 @@ items:
         - priority:high
         - plan/slug:users-conformance
         - effort:unspecified
+        - resolution/branch:575b44083ee2696c8e1b6079a0d88474447870b0
       text: The users-conformance work (and the other http-error-precedence wave-2 plans) relies on mod-core local main, which is far ahead of origin/main and contains the core-handler-conformance merges and wave-1 helpers (apiresp.DecodeJSON/ParseUUIDParam, authz.RequireAuth, ordertest). After the user pushes mod-core, run `MODULEFORGE_SIBLINGS_DIR=/Users/zane/playground/moduleforge make pins.update REPOS="mod-core"` in mod-users (never edit SHAs by hand; do not bump mod-audit or mod-authz), confirm `make pins.check`, build and test, and commit versions.lock.yaml locally. Pushing mod-users and downstream app pin bumps are further consent-gated steps. The removed plan task was phase-07 001-rebump-mod-core-pin (see the users-conformance plan summary).
       scope_rationale: 'Consent-gated release step that cannot run inside the plan: requires pushing mod-core, a user decision.'
     - title: Dangling mf-standards doc links
