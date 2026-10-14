@@ -340,16 +340,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[process, non-blocking] Reused an already-documented but not-yet-promoted environment workaround (from git history around followup EMIS) to run the integration suite despite a host Postgres port conflict. Surfacing in case the manager wants this workaround promoted into AGENTS.md or a shared script.'
-    - title: Operator update op grants credential-install
-      id: P3rk
-      date: "2026-09-28"
-      tags:
-        - type:security
-        - plan/phase:phase-01-ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:low
-        - effort:medium
-      text: 'Operator Register/Revoke on SSH keys authorize via the generic ''update'' operation on the account holder (api/internal/service/ssh_keys.go, loadAuthorizedAccount calls at lines 133 and 228), which also grants credential-install, impersonation-grade capability (SSH git access) to any principal holding only ''update'' on a user, not just the ''assume''/''login'' operations. Type-scoped grants widen the reach: ''update'' or ''manage'' on the natural_person type entity confers ''update'' over every natural_person instance (docs/architecture.md D13), so such a holder can install an SSH key on every user''s account. Practical escalation is otherwise limited since ''update'' can also change email. Consider authorizing operator SSH-key register/revoke against ''assume'' instead, or record this as an accepted trade-off in docs/architecture.md''s key decisions, stating that ''update'' on a natural_person type entity is credential-install authority over every user.'
     - title: SSH-key routes mask 403, sibling routes 404
       id: tbmN
       date: "2026-09-28"
