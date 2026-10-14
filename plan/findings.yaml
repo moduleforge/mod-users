@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: 'Orphan: model/README.md is not reachable fro…'
-      id: fZr4
-      date: "2026-10-14"
-      tags:
-        - type:documentation
-        - plan/phase:readyz-generic-error
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/README.md
-        lines: 1
-        severity: minor
-        confidence: high
-        concerns: documentation
-        description:
-          Orphan: model/README.md is not reachable from README.md via any chain of project-doc links (no reachable doc links to it).
-        recommendation:
-          Link it from docs/project-structure.md or docs/architecture.md (data model section), which README.md reaches.
     - title: 'Orphan: api/server/CLAUDE.md is not reachabl…'
       id: DPZi
       date: "2026-10-14"
@@ -139,4 +120,9 @@ closed:
         (url git@github.com:moduleforge/docs-mf-standards.git), and the directory is
         empty only because the submodule is uninitialized in this plan worktree. The
         links resolve in a normal checkout; no doc edit can fix it.
+      date: "2026-10-14"
+    - id: fZr4
+      title: 'Orphan: model/README.md is not reachable fro…'
+      disposition: promoted
+      ref: fZr4
       date: "2026-10-14"
