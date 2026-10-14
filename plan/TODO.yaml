@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -104,5 +104,19 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 1
-      tasks: []
+      tasks:
+        - number: 1
+          slug: qualify-ssl-cert-file-advice
+          title: Qualify SSL_CERT_FILE Advice For macOS In OIDC Troubleshooting
+          path: phase-06-remediation-01/001-qualify-ssl-cert-file-advice.md
+          done: false
+          tier: haiku-med
+          findings:
+            - eyu1
+          git:
+            branch: null
+            commit: []
+            merge: null
