@@ -238,7 +238,8 @@ phases:
             - 6DKr
           git:
             branch: plan/users-security-hardening-08-001
-            commit: []
+            commit:
+                - 73d1a80
             merge: null
         - number: 2
           slug: email-code-request-timing-and-precheck
