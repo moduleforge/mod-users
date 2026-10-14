@@ -25,3 +25,10 @@ Update the durable architecture and spec docs to reflect the security changes ma
 ## Metadata
 
 architectural_impact: false
+
+## Status
+
+- Outcome: succeeded (2026-10-14).
+- Updated `docs/architecture.md` (email_codes data-model row, `/readyz` Health row, email-code limits and bounded background work, step-up code limits, OIDC TLS default and opt-in) and `docs/mod-users-spec.md` (email_codes row, email-code scenario, verify status codes, step-up attempt limits, bounded background work, TLS cross-links).
+- Reviewed, unchanged: `docs/architecture/ssh-keys.md` (no email-code content), `docs/consumer-upgrade-notes.md`, `docs/oidc-troubleshooting.md` (cross-linked only).
+- Validation: no project doc links into `plan/`; constants (5 attempts, 60 s cooldown), option name `WithInsecureSkipTLSVerify`, and migrations `0101`-`0104` checked against code.
