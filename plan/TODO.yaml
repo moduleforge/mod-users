@@ -119,7 +119,7 @@ phases:
           findings:
             - eyu1
           git:
-            branch: null
+            branch: plan/users-security-hardening-06-001
             commit: []
             merge: null
         - number: 2
