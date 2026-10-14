@@ -16,6 +16,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: document-tls-opt-in
+          title: Document TLS Verification Change And Opt-In
+          path: phase-01-oidc-tls-verify/002-document-tls-opt-in.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: readyz-generic-error
       title: Generic Readiness Probe Error Body
