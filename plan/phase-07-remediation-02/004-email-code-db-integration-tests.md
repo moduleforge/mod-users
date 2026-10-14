@@ -32,3 +32,10 @@ architectural_impact: false
 
 - finding `sE2h`
 - finding `R7WT`
+
+## Status
+
+- Outcome: succeeded (2026-10-14).
+- Added `api/internal/authz/email_code_integration_test.go` (build tag `integration`): concurrent `ClaimEmailCodeAttempt` bound, cooldown after exhaustion/consumption and after the window, concurrent cooldown inserts yield one code, concurrent `ConsumeEmailCode` one winner, and handler-level exhaust-then-request and concurrent-correct-submission flows via the real `auth.Handler`.
+- Validation: integration suite passed (`-race`, then full `./internal/authz/...`) against throwaway container `mod-users-ec-integ-7a58dbbb` (`docker run -d --rm ... postgres:16`, port 59342), removed afterwards (`docker ps -a` shows no match); `go vet -tags integration ./...` and `go test ./...` pass.
+- Note: the composed migrations dir has a duplicate goose version 0100 (mod-core vs mod-users); ran against a scratch copy with the core file renumbered 0104. Filed as a finding.
