@@ -42,27 +42,6 @@ items:
           same server mitigates this, so the regression value is retained.
         recommendation:
           Additionally assert the error text contains "x509" or "certificate".
-    - title: 'Hardening only: the opt-in applies to any ht…'
-      id: ASqb
-      date: "2026-10-14"
-      tags:
-        - type:security
-        - plan/phase:oidc-tls-verify
-        - priority:low
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/auth/jwt.go
-        lines: 236-248
-        severity: suggestion
-        confidence: medium
-        concerns: security
-        description:
-          Hardening only: the opt-in applies to any https issuer host, not just loopback or known dev hosts, and the
-          warning is logged once at construction. A misconfigured production consumer that enables it gets only a log line.
-        recommendation:
-          Optionally restrict to loopback/private hosts or require an additional env guard; the intent does not require this.
-        Open question (evaluator, quoted data): Should the WithInsecureSkipTLSVerify opt-in be further restricted beyond being explicit and off by default? Options: (1) leave as is - explicit option, doc comment, warning log; no code change (recommended); (2) restrict to loopback/private-network issuer hosts - stronger, but may reject Docker Compose service hostnames used in dev; (3) require an additional environment guard - defense in depth, adds a second knob to the public contract.
 closed:
     - id: 0G9p
       title: Architecture doc silent on OIDC TLS default
@@ -83,4 +62,9 @@ closed:
       title: Docs unreachable from README
       disposition: promoted
       ref: 695p
+      date: "2026-10-14"
+    - id: ASqb
+      title: 'Hardening only: the opt-in applies to any ht…'
+      disposition: promoted
+      ref: ASqb
       date: "2026-10-14"
