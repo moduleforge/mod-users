@@ -294,6 +294,18 @@ func (s *ecSender) count() int {
 	return len(s.bodies)
 }
 
+// settled waits for the background send to reach want emails (up to 5s), then
+// lingers briefly so an unexpected extra email would also be observed. The
+// request handler answers at its latency floor without waiting for the send.
+func (s *ecSender) settled(want int) int {
+	deadline := time.Now().Add(5 * time.Second)
+	for s.count() < want && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(300 * time.Millisecond)
+	return s.count()
+}
+
 var ecCodeRe = regexp.MustCompile(`code is: (\d{6})`)
 
 func (s *ecSender) lastCode(t *testing.T) string {
@@ -340,8 +352,8 @@ func TestInteg_EmailCode_Handler_ExhaustThenRequestEndToEnd(t *testing.T) {
 	if code := ecRequest(h, email); code != http.StatusNoContent {
 		t.Fatalf("request: status %d, want 204", code)
 	}
-	if sender.count() != 1 {
-		t.Fatalf("emails after first request = %d, want 1", sender.count())
+	if n := sender.settled(1); n != 1 {
+		t.Fatalf("emails after first request = %d, want 1", n)
 	}
 	real := sender.lastCode(t)
 	wrong := "000000"
@@ -362,8 +374,8 @@ func TestInteg_EmailCode_Handler_ExhaustThenRequestEndToEnd(t *testing.T) {
 	if code := ecRequest(h, email); code != http.StatusNoContent {
 		t.Fatalf("re-request: status %d, want 204", code)
 	}
-	if sender.count() != 1 {
-		t.Errorf("emails after in-window re-request = %d, want 1 (no new code)", sender.count())
+	if n := sender.settled(1); n != 1 {
+		t.Errorf("emails after in-window re-request = %d, want 1 (no new code)", n)
 	}
 	if n := ecCountCodes(t, uid, "login"); n != 1 {
 		t.Errorf("codes after in-window re-request = %d, want 1", n)
@@ -377,8 +389,8 @@ func TestInteg_EmailCode_Handler_ExhaustThenRequestEndToEnd(t *testing.T) {
 	if code := ecRequest(h, email); code != http.StatusNoContent {
 		t.Fatalf("post-window request: status %d, want 204", code)
 	}
-	if sender.count() != 2 {
-		t.Fatalf("emails after post-window request = %d, want 2", sender.count())
+	if n := sender.settled(2); n != 2 {
+		t.Fatalf("emails after post-window request = %d, want 2", n)
 	}
 	if code := ecVerify(h, email, sender.lastCode(t)); code != http.StatusOK {
 		t.Errorf("verify with fresh code: status %d, want 200", code)

@@ -44,6 +44,7 @@ type stepUpFakeQueries struct {
 	// cooldown covers codes of any state like the SQL does.
 	lastCreated map[string]time.Time
 	creates     int
+	createCalls int // every CreateEmailCodeWithCooldown call, including cooldown skips
 }
 
 func newStepUpFakeQueries() *stepUpFakeQueries {
@@ -131,12 +132,29 @@ func (f *stepUpFakeQueries) ClaimEmailCodeAttempt(_ context.Context, arg db.Clai
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 
+// HasRecentEmailCode mirrors the SQL pre-check: true when a code of any state
+// for the same (user, purpose) was created within the cooldown.
+func (f *stepUpFakeQueries) HasRecentEmailCode(_ context.Context, arg db.HasRecentEmailCodeParams) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := emailCodeKey(arg.UserAccountID, arg.Purpose)
+	window := time.Duration(arg.CooldownSecs) * time.Second
+	if live, ok := f.emailCodes[key]; ok && time.Since(live.CreatedAt.Time) < window {
+		return true, nil
+	}
+	if t, ok := f.lastCreated[key]; ok && time.Since(t) < window {
+		return true, nil
+	}
+	return false, nil
+}
+
 // CreateEmailCodeWithCooldown mirrors the SQL function: atomically (under the
 // mutex) insert unless a code of any state for the same (user, purpose) was
 // created within the cooldown; pgx.ErrNoRows when skipped.
 func (f *stepUpFakeQueries) CreateEmailCodeWithCooldown(_ context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.createCalls++
 	key := emailCodeKey(arg.UserAccountID, arg.Purpose)
 	window := time.Duration(arg.CooldownSecs) * time.Second
 	if live, ok := f.emailCodes[key]; ok && time.Since(live.CreatedAt.Time) < window {

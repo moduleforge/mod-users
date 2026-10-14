@@ -115,6 +115,9 @@ func (s *stubUAQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEmail
 func (s *stubUAQuerier) CreateEmailCodeWithCooldown(_ context.Context, _ db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
 	return db.EmailCode{}, nil
 }
+func (s *stubUAQuerier) HasRecentEmailCode(_ context.Context, _ db.HasRecentEmailCodeParams) (bool, error) {
+	return false, nil
+}
 func (s *stubUAQuerier) CreatePasswordReset(_ context.Context, _ db.CreatePasswordResetParams) (db.PasswordReset, error) {
 	return db.PasswordReset{}, nil
 }

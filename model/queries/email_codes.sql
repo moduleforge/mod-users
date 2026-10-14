@@ -45,3 +45,16 @@ FROM create_email_code_with_cooldown(
   sqlc.arg(expires_at)::timestamptz,
   sqlc.arg(cooldown_secs)::int
 );
+
+-- name: HasRecentEmailCode :one
+-- Cheap pre-check: true when a code of ANY state (unconsumed, exhausted, or
+-- consumed by success) was created for the same (user, purpose) within the last
+-- cooldown_secs seconds. Callers skip code generation and hashing when true.
+-- Advisory only: CreateEmailCodeWithCooldown remains the authoritative atomic guard.
+SELECT EXISTS (
+  SELECT 1
+  FROM email_codes
+  WHERE user_account_id = sqlc.arg(user_account_id)::bigint
+    AND purpose = sqlc.arg(purpose)::text
+    AND created_at > clock_timestamp() - make_interval(secs => sqlc.arg(cooldown_secs)::int)
+)::boolean AS recent;

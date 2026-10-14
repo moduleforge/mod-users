@@ -48,6 +48,7 @@ type authQuerier interface {
 	GetUserAccountByEmail(ctx context.Context, lower string) (db.UserAccount, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (db.AuthLocal, error)
 	CreateEmailCodeWithCooldown(ctx context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error)
+	HasRecentEmailCode(ctx context.Context, arg db.HasRecentEmailCodeParams) (bool, error)
 	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
 	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
 	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)

@@ -28,3 +28,13 @@ The work targets the plan branch `plan/users-security-hardening` and lands throu
 
 - Finding `QGTV` in this plan's `plan/findings.yaml` (email code request latency reveals account existence).
 - Finding `Wr6I` in this plan's `plan/findings.yaml` (cooldown is checked only after hashing and code generation).
+
+## Status
+
+Outcome: succeeded (2026-10-14).
+
+- `EmailCodeRequest` now answers 204 at the 200 ms floor without waiting for the background work, which runs on `context.WithoutCancel`. See `api/internal/handlers/auth/emailcode.go`.
+- New query `HasRecentEmailCode` (`model/queries/email_codes.sql`, sqlc regenerated in `model/db/`) is called by `sendEmailCode` and `sendStepUpCode` (`api/internal/handlers/identities.go`) before generating and hashing a code. A pre-check error falls through to the authoritative `CreateEmailCodeWithCooldown`.
+- Fakes updated; new tests cover the floor with a blocking sender and the no-hash/no-insert cooldown path. Tests that assumed a synchronous send now wait for it.
+- Validation: `go build`, `go vet`, `go test -race ./internal/handlers/...`, `make lint` pass; sqlc rerun produces no further diff.
+- `StepUpRequest` was left waiting for its background work (out of stated scope).

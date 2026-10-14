@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -83,21 +84,20 @@ func (h *Handler) EmailCodeRequest(w http.ResponseWriter, r *http.Request) {
 		req.Purpose = "login"
 	}
 
-	// Perform the real work in a goroutine; always wait ~200ms before responding.
-	done := make(chan struct{}, 1)
-	go func() {
-		defer func() { done <- struct{}{} }()
-		h.sendEmailCode(r, req.Email, req.Purpose)
-	}()
+	// Perform the real work in a goroutine on a context detached from request
+	// cancellation, and answer at the 200ms floor regardless of whether the
+	// work has finished. Waiting for the work would make latency reveal whether
+	// the email exists or is inside its cooldown; the detached context lets the
+	// email still be sent after the response.
+	bg := r.WithContext(context.WithoutCancel(r.Context()))
+	go h.sendEmailCode(bg, req.Email, req.Purpose)
 
-	// Ensure at least 200ms response time.
 	timer := time.NewTimer(200 * time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-timer.C:
-		<-done
-	case <-done:
-		<-timer.C
+	case <-r.Context().Done():
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -118,6 +118,21 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "email_code: get user account", "error", err)
+		return
+	}
+
+	// Cheap indexed pre-check: skip the code generation and bcrypt hash when the
+	// cooldown already forbids minting. Advisory only; a pre-check error falls
+	// through to CreateEmailCodeWithCooldown, the authoritative atomic guard.
+	recent, err := h.queries.HasRecentEmailCode(ctx, db.HasRecentEmailCodeParams{
+		UserAccountID: ua.ID,
+		Purpose:       purpose,
+		CooldownSecs:  int32(EmailCodeRequestCooldown / time.Second),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "email_code: cooldown pre-check", "error", err)
+	} else if recent {
+		slog.DebugContext(ctx, "email_code: request within cooldown, skipping", "user_account_id", ua.ID)
 		return
 	}
 
