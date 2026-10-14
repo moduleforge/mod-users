@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 6
+    tasks_added: 7
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -221,5 +221,20 @@ phases:
       slug: remediation-03
       title: Remediation Round 3
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 4
-      tasks: []
+      tasks:
+        - number: 1
+          slug: email-code-cooldown-migration-hardening
+          title: Index The Cooldown Probe And Pin The Cooldown Function Search Path
+          path: phase-08-remediation-03/001-email-code-cooldown-migration-hardening.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - f7fc
+            - 6DKr
+          git:
+            branch: null
+            commit: []
+            merge: null
