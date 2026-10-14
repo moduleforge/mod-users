@@ -27,6 +27,13 @@ type Querier interface {
 	CountOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CreateAnonToken(ctx context.Context, arg CreateAnonTokenParams) (AnonToken, error)
 	CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams) (EmailCode, error)
+	// Atomically mints a code unless a code of ANY state (unconsumed, exhausted,
+	// or consumed by success) was created for the same (user, purpose) within the
+	// last cooldown_secs seconds. Concurrent callers are serialized by an advisory
+	// lock inside the create_email_code_with_cooldown function, so at most one
+	// code is created per window. No row is returned (pgx.ErrNoRows) when the
+	// cooldown applies; callers must then send no email.
+	CreateEmailCodeWithCooldown(ctx context.Context, arg CreateEmailCodeWithCooldownParams) (EmailCode, error)
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
 	CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (UserAccount, error)
 	DeleteAnonTokensByUserAccountID(ctx context.Context, userAccountID int64) error
@@ -44,9 +51,6 @@ type Querier interface {
 	GetAnonTokensByDeviceID(ctx context.Context, deviceID string) ([]AnonToken, error)
 	GetAuthLocal(ctx context.Context, userAccountID int64) (AuthLocal, error)
 	GetJWTSecret(ctx context.Context) (string, error)
-	// Creation time of the newest unconsumed, unexpired code for the request
-	// cooldown check. No row when there is none.
-	GetLatestEmailCodeCreatedAt(ctx context.Context, arg GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error)
 	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
 	GetOIDCIdentityByIssuerSubject(ctx context.Context, arg GetOIDCIdentityByIssuerSubjectParams) (AuthOidcIdentity, error)
 	// Fetch one provider override row by id.

@@ -30,14 +30,18 @@ WHERE id = $1
   AND failed_attempts < sqlc.arg(max_attempts)::int
 RETURNING id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at, failed_attempts;
 
--- name: GetLatestEmailCodeCreatedAt :one
--- Creation time of the newest unconsumed, unexpired code for the request
--- cooldown check. No row when there is none.
-SELECT created_at
-FROM email_codes
-WHERE user_account_id = $1
-  AND purpose = $2
-  AND consumed_at IS NULL
-  AND expires_at > now()
-ORDER BY created_at DESC
-LIMIT 1;
+-- name: CreateEmailCodeWithCooldown :one
+-- Atomically mints a code unless a code of ANY state (unconsumed, exhausted,
+-- or consumed by success) was created for the same (user, purpose) within the
+-- last cooldown_secs seconds. Concurrent callers are serialized by an advisory
+-- lock inside the create_email_code_with_cooldown function, so at most one
+-- code is created per window. No row is returned (pgx.ErrNoRows) when the
+-- cooldown applies; callers must then send no email.
+SELECT id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at, failed_attempts
+FROM create_email_code_with_cooldown(
+  sqlc.arg(user_account_id)::bigint,
+  sqlc.arg(code_hash)::text,
+  sqlc.arg(purpose)::text,
+  sqlc.arg(expires_at)::timestamptz,
+  sqlc.arg(cooldown_secs)::int
+);

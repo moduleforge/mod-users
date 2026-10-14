@@ -22,7 +22,7 @@ import (
 
 // attemptQuerier is a stateful in-memory email_codes store mirroring the SQL
 // semantics of GetActiveEmailCode, ClaimEmailCodeAttempt, ConsumeEmailCode,
-// CreateEmailCode, and GetLatestEmailCodeCreatedAt.
+// and CreateEmailCodeWithCooldown.
 type attemptQuerier struct {
 	stubAuthQuerier
 
@@ -34,20 +34,6 @@ type attemptQuerier struct {
 
 func (q *attemptQuerier) live(c db.EmailCode) bool {
 	return c.ConsumedAt == nil && c.ExpiresAt.Time.After(time.Now())
-}
-
-func (q *attemptQuerier) CreateEmailCode(_ context.Context, arg db.CreateEmailCodeParams) (db.EmailCode, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	q.nextID++
-	q.creates++
-	c := db.EmailCode{
-		ID: q.nextID, UserAccountID: arg.UserAccountID, CodeHash: arg.CodeHash,
-		Purpose: arg.Purpose, ExpiresAt: arg.ExpiresAt,
-		CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
-	}
-	q.codes = append(q.codes, c)
-	return c, nil
 }
 
 func (q *attemptQuerier) newest(userID int64, purpose string) (int, bool) {
@@ -71,13 +57,27 @@ func (q *attemptQuerier) GetActiveEmailCode(_ context.Context, arg db.GetActiveE
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 
-func (q *attemptQuerier) GetLatestEmailCodeCreatedAt(_ context.Context, arg db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
+// CreateEmailCodeWithCooldown mirrors the SQL function: atomically (under the
+// mutex) insert unless ANY code, in any consumed state, for the same (user,
+// purpose) was created within the cooldown; pgx.ErrNoRows when skipped.
+func (q *attemptQuerier) CreateEmailCodeWithCooldown(_ context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if i, ok := q.newest(arg.UserAccountID, arg.Purpose); ok {
-		return q.codes[i].CreatedAt, nil
+	window := time.Duration(arg.CooldownSecs) * time.Second
+	for _, c := range q.codes {
+		if c.UserAccountID == arg.UserAccountID && c.Purpose == arg.Purpose && time.Since(c.CreatedAt.Time) < window {
+			return db.EmailCode{}, pgx.ErrNoRows
+		}
 	}
-	return pgtype.Timestamptz{}, pgx.ErrNoRows
+	q.nextID++
+	q.creates++
+	c := db.EmailCode{
+		ID: q.nextID, UserAccountID: arg.UserAccountID, CodeHash: arg.CodeHash,
+		Purpose: arg.Purpose, ExpiresAt: arg.ExpiresAt,
+		CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	}
+	q.codes = append(q.codes, c)
+	return c, nil
 }
 
 func (q *attemptQuerier) ConsumeEmailCode(_ context.Context, id int64) error {
@@ -349,5 +349,63 @@ func TestEmailCodeVerify_ConcurrentGuessesNeverExceedMax(t *testing.T) {
 	}
 	if rec := verifyCode(h, "a@example.com", attemptTestCode); rec.Code != http.StatusUnauthorized {
 		t.Errorf("correct code after concurrent exhaustion: status = %d, want 401", rec.Code)
+	}
+}
+
+func TestSendEmailCode_CooldownCoversExhaustedCode(t *testing.T) {
+	t.Parallel()
+	h, q, sender := newAttemptFixture(t)
+	q.seedCode(t, 42, "login", attemptTestCode, time.Now())
+	for i := 0; i < MaxEmailCodeAttempts; i++ {
+		verifyCode(h, "a@example.com", "000000")
+	}
+	if rec := verifyCode(h, "a@example.com", attemptTestCode); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("exhausted code accepted: status = %d", rec.Code)
+	}
+
+	h.sendEmailCode(httptest.NewRequest(http.MethodPost, "/", nil), "a@example.com", "login")
+	if q.creates != 0 {
+		t.Fatalf("creates after exhaustion within cooldown = %d, want 0", q.creates)
+	}
+	if sender.callCount() != 0 {
+		t.Errorf("emails sent after exhaustion within cooldown = %d, want 0", sender.callCount())
+	}
+
+	// Age the exhausted code past the cooldown: a new code is minted.
+	q.mu.Lock()
+	q.codes[0].CreatedAt = pgtype.Timestamptz{Time: time.Now().Add(-EmailCodeRequestCooldown - time.Second), Valid: true}
+	q.mu.Unlock()
+	h.sendEmailCode(httptest.NewRequest(http.MethodPost, "/", nil), "a@example.com", "login")
+	if q.creates != 1 || sender.callCount() != 1 {
+		t.Fatalf("after cooldown: creates=%d emails=%d, want 1/1", q.creates, sender.callCount())
+	}
+}
+
+func TestSendEmailCode_ConcurrentRequestsMintOnce(t *testing.T) {
+	t.Parallel()
+	h, q, sender := newAttemptFixture(t)
+
+	const n = 20
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			h.sendEmailCode(httptest.NewRequest(http.MethodPost, "/", nil), "a@example.com", "login")
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	q.mu.Lock()
+	creates := q.creates
+	q.mu.Unlock()
+	if creates != 1 {
+		t.Errorf("creates = %d, want exactly 1", creates)
+	}
+	if sender.callCount() != 1 {
+		t.Errorf("emails sent = %d, want exactly 1", sender.callCount())
 	}
 }

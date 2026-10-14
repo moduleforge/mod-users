@@ -60,11 +60,10 @@ type IdentitiesHandler struct {
 // emailCodeStore is the narrow query subset the step-up endpoints use.
 // *db.Queries satisfies it.
 type emailCodeStore interface {
-	CreateEmailCode(ctx context.Context, arg db.CreateEmailCodeParams) (db.EmailCode, error)
+	CreateEmailCodeWithCooldown(ctx context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error)
 	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
 	ConsumeEmailCode(ctx context.Context, id int64) error
 	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
-	GetLatestEmailCodeCreatedAt(ctx context.Context, arg db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error)
 }
 
 const (
@@ -72,7 +71,7 @@ const (
 	// equal the auth package's MaxEmailCodeAttempts (asserted by a test).
 	maxEmailCodeAttempts = 5
 	// emailCodeRequestCooldown is the minimum interval between minted step-up
-	// codes while an earlier one is still live. Equal to the auth package's
+	// codes, measured from the newest code of any state (live, exhausted, or consumed). Equal to the auth package's
 	// EmailCodeRequestCooldown (asserted by a test).
 	emailCodeRequestCooldown = 60 * time.Second
 )
@@ -586,35 +585,27 @@ func (h *IdentitiesHandler) sendStepUpCode(r *http.Request, uc *localauth.UserCo
 		return
 	}
 
-	// Cooldown: skip minting while an earlier live code is younger than the
-	// cooldown, so requesting new codes cannot reset the guess budget.
-	latest, err := h.codeStore().GetLatestEmailCodeCreatedAt(ctx, db.GetLatestEmailCodeCreatedAtParams{
-		UserAccountID: uc.UserAccountID,
-		Purpose:       "credential_change",
-	})
-	if err == nil {
-		if latest.Valid && time.Since(latest.Time) < emailCodeRequestCooldown {
-			slog.DebugContext(ctx, "stepup_request: request within cooldown, skipping", "user_account_id", uc.UserAccountID)
-			return
-		}
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		slog.ErrorContext(ctx, "stepup_request: cooldown lookup", "error", err)
-		return
-	}
-
 	code, hash, err := generateEmailCode()
 	if err != nil {
 		slog.ErrorContext(ctx, "stepup_request: generate code", "error", err)
 		return
 	}
 
+	// Atomic cooldown + insert: no row is inserted when a code of any state
+	// (live, exhausted, or consumed) was created within the cooldown, so
+	// requesting new codes cannot reset the guess budget. No row means no email.
 	expiresAt := pgtype.Timestamptz{Time: time.Now().Add(5 * time.Minute), Valid: true}
-	_, err = h.codeStore().CreateEmailCode(ctx, db.CreateEmailCodeParams{
+	_, err = h.codeStore().CreateEmailCodeWithCooldown(ctx, db.CreateEmailCodeWithCooldownParams{
 		UserAccountID: uc.UserAccountID,
 		CodeHash:      hash,
 		Purpose:       "credential_change",
 		ExpiresAt:     expiresAt,
+		CooldownSecs:  int32(emailCodeRequestCooldown / time.Second),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.DebugContext(ctx, "stepup_request: request within cooldown, skipping", "user_account_id", uc.UserAccountID)
+		return
+	}
 	if err != nil {
 		slog.ErrorContext(ctx, "stepup_request: insert email code", "error", err)
 		return

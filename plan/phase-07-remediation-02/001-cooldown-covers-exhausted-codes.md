@@ -33,3 +33,13 @@ architectural_impact: false
 - finding `2pnK`
 - finding `9NPY`
 - finding `uFx5`
+
+## Status
+
+Outcome: succeeded (2026-10-14).
+
+- Added migration `model/migrations/sql/0103_email_code_cooldown_function.sql` (additive): plpgsql `create_email_code_with_cooldown` takes a per-(user, purpose) `pg_advisory_xact_lock`, then does `INSERT ... WHERE NOT EXISTS` over codes of any state created within the cooldown (a plain single-statement insert is not race-safe under READ COMMITTED).
+- `model/queries/email_codes.sql`: new `CreateEmailCodeWithCooldown` query; `GetLatestEmailCodeCreatedAt` removed; `model/db` regenerated (rerun clean).
+- Handlers `api/internal/handlers/auth/emailcode.go` and `api/internal/handlers/identities.go` use the atomic query; `pgx.ErrNoRows` means skip, no email sent. Comments updated.
+- Fakes and new tests: exhausted-code cooldown and 20-way concurrent mint-once for both endpoints.
+- Validation: `go build`, `go vet`, `go test -race ./internal/handlers/... ./internal/service/...`, `make lint` pass (log `.flow/validation-logs/03-go.log`). Function run against a throwaway `postgres:16` container (removed): exhausted-then-request inserted no row; 20 concurrent calls yielded one row; after cooldown a row is inserted.

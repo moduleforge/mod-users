@@ -39,12 +39,18 @@ type stepUpFakeQueries struct {
 	mu         sync.Mutex
 	emailCodes map[string]db.EmailCode
 	nextCodeID int64
+	// lastCreated remembers the newest creation time per (user, purpose) even
+	// after the code is consumed/exhausted (and deleted from emailCodes), so the
+	// cooldown covers codes of any state like the SQL does.
+	lastCreated map[string]time.Time
+	creates     int
 }
 
 func newStepUpFakeQueries() *stepUpFakeQueries {
 	return &stepUpFakeQueries{
-		emailCodes: make(map[string]db.EmailCode),
-		nextCodeID: 1,
+		emailCodes:  make(map[string]db.EmailCode),
+		nextCodeID:  1,
+		lastCreated: make(map[string]time.Time),
 	}
 }
 
@@ -88,6 +94,7 @@ func (f *stepUpFakeQueries) ConsumeEmailCode(_ context.Context, id int64) error 
 	defer f.mu.Unlock()
 	for k, c := range f.emailCodes {
 		if c.ID == id {
+			f.lastCreated[k] = c.CreatedAt.Time
 			delete(f.emailCodes, k)
 			return nil
 		}
@@ -110,6 +117,7 @@ func (f *stepUpFakeQueries) ClaimEmailCodeAttempt(_ context.Context, arg db.Clai
 		}
 		c.FailedAttempts++
 		if c.FailedAttempts >= arg.MaxAttempts {
+			f.lastCreated[k] = c.CreatedAt.Time
 			delete(f.emailCodes, k)
 		} else {
 			f.emailCodes[k] = c
@@ -119,14 +127,34 @@ func (f *stepUpFakeQueries) ClaimEmailCodeAttempt(_ context.Context, arg db.Clai
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 
-func (f *stepUpFakeQueries) GetLatestEmailCodeCreatedAt(_ context.Context, arg db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
+// CreateEmailCodeWithCooldown mirrors the SQL function: atomically (under the
+// mutex) insert unless a code of any state for the same (user, purpose) was
+// created within the cooldown; pgx.ErrNoRows when skipped.
+func (f *stepUpFakeQueries) CreateEmailCodeWithCooldown(_ context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	code, ok := f.emailCodes[emailCodeKey(arg.UserAccountID, arg.Purpose)]
-	if !ok || (code.ExpiresAt.Valid && code.ExpiresAt.Time.Before(time.Now())) {
-		return pgtype.Timestamptz{}, pgx.ErrNoRows
+	key := emailCodeKey(arg.UserAccountID, arg.Purpose)
+	window := time.Duration(arg.CooldownSecs) * time.Second
+	if live, ok := f.emailCodes[key]; ok && time.Since(live.CreatedAt.Time) < window {
+		return db.EmailCode{}, pgx.ErrNoRows
 	}
-	return code.CreatedAt, nil
+	if t, ok := f.lastCreated[key]; ok && time.Since(t) < window {
+		return db.EmailCode{}, pgx.ErrNoRows
+	}
+	id := f.nextCodeID
+	f.nextCodeID++
+	f.creates++
+	code := db.EmailCode{
+		ID:            id,
+		UserAccountID: arg.UserAccountID,
+		CodeHash:      arg.CodeHash,
+		Purpose:       arg.Purpose,
+		ExpiresAt:     arg.ExpiresAt,
+		CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	}
+	f.emailCodes[key] = code
+	f.lastCreated[key] = code.CreatedAt.Time
+	return code, nil
 }
 
 // fakeSender records sent emails for assertion.
