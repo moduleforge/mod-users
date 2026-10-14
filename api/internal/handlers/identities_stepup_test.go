@@ -89,17 +89,19 @@ func (f *stepUpFakeQueries) GetActiveEmailCode(_ context.Context, arg db.GetActi
 	return code, nil
 }
 
-func (f *stepUpFakeQueries) ConsumeEmailCode(_ context.Context, id int64) error {
+// ConsumeEmailCode mirrors the SQL :execrows: it reports 1 when it consumed the
+// live code and 0 when the code was already consumed (or never existed).
+func (f *stepUpFakeQueries) ConsumeEmailCode(_ context.Context, id int64) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for k, c := range f.emailCodes {
 		if c.ID == id {
 			f.lastCreated[k] = c.CreatedAt.Time
 			delete(f.emailCodes, k)
-			return nil
+			return 1, nil
 		}
 	}
-	return nil // idempotent
+	return 0, nil
 }
 
 // ClaimEmailCodeAttempt mirrors the SQL: increment failed_attempts, consume
@@ -119,6 +121,8 @@ func (f *stepUpFakeQueries) ClaimEmailCodeAttempt(_ context.Context, arg db.Clai
 		if c.FailedAttempts >= arg.MaxAttempts {
 			f.lastCreated[k] = c.CreatedAt.Time
 			delete(f.emailCodes, k)
+			now := time.Now()
+			c.ConsumedAt = &now // the claim itself consumed the code
 		} else {
 			f.emailCodes[k] = c
 		}
@@ -508,7 +512,7 @@ func (h *stepUpVerifyTestHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	_ = h.q.ConsumeEmailCode(r.Context(), emailCode.ID)
+	_, _ = h.q.ConsumeEmailCode(r.Context(), emailCode.ID)
 
 	token, _, _, err := localauth.IssueStepUpToken([]byte(h.jwtSecret), uc.UserAccountID, localauth.StepUpTTL)
 	if err != nil {

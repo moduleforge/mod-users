@@ -62,7 +62,7 @@ type IdentitiesHandler struct {
 type emailCodeStore interface {
 	CreateEmailCodeWithCooldown(ctx context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error)
 	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
-	ConsumeEmailCode(ctx context.Context, id int64) error
+	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
 	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
 }
 
@@ -684,9 +684,20 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Consume the code before issuing the token.
-	if err := h.codeStore().ConsumeEmailCode(r.Context(), emailCode.ID); err != nil {
-		slog.ErrorContext(r.Context(), "stepup_verify: consume code", "error", err)
+	// Grant success only to the request that actually consumes the code. When
+	// the claim itself consumed the code (the final attempt), this claimer is
+	// the sole consumer; otherwise the consume must affect a row, or a
+	// concurrent request already used the code.
+	if claimed.ConsumedAt == nil {
+		n, err := h.codeStore().ConsumeEmailCode(r.Context(), emailCode.ID)
+		if err != nil {
+			apiresp.WriteError(w, r, fmt.Errorf("stepup_verify: consume code: %w", err))
+			return
+		}
+		if n == 0 {
+			apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
+			return
+		}
 	}
 
 	token, _, _, err := localauth.IssueStepUpToken([]byte(h.jwtSecret), uc.UserAccountID, localauth.StepUpTTL)

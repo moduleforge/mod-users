@@ -21,7 +21,7 @@ type Querier interface {
 	// Clear the setup token once the operator has confirmed configuration.
 	// Idempotent — safe to call on every confirmed boot.
 	ClearSetupTokenHash(ctx context.Context) error
-	ConsumeEmailCode(ctx context.Context, id int64) error
+	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
 	ConsumePasswordReset(ctx context.Context, id int64) error
 	CountActiveSSHPublicKeysByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
 	CountOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) (int64, error)

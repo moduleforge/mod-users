@@ -49,7 +49,7 @@ type authQuerier interface {
 	GetAuthLocal(ctx context.Context, userAccountID int64) (db.AuthLocal, error)
 	CreateEmailCodeWithCooldown(ctx context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error)
 	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
-	ConsumeEmailCode(ctx context.Context, id int64) error
+	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
 	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
 	UpdateUserAccount(ctx context.Context, arg db.UpdateUserAccountParams) error
 	CreatePasswordReset(ctx context.Context, arg db.CreatePasswordResetParams) (db.PasswordReset, error)

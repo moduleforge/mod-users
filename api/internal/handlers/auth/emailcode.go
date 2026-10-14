@@ -225,9 +225,21 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Consume the code.
-	if err := h.queries.ConsumeEmailCode(r.Context(), emailCode.ID); err != nil {
-		slog.ErrorContext(r.Context(), "email_code_verify: consume code", "error", err)
+	// Grant success only to the request that actually consumes the code. When
+	// the claim itself consumed the code (the final attempt), this claimer is
+	// the sole consumer; otherwise the consume must affect a row, or a
+	// concurrent request already used the code.
+	if claimed.ConsumedAt == nil {
+		n, err := h.queries.ConsumeEmailCode(r.Context(), emailCode.ID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "email_code_verify: consume code", "error", err)
+			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to look up code")
+			return
+		}
+		if n == 0 {
+			server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
+			return
+		}
 	}
 
 	if req.Purpose == "login" {

@@ -108,7 +108,7 @@ func (s *stubUAQuerier) CreateEmailCode(_ context.Context, _ db.CreateEmailCodeP
 func (s *stubUAQuerier) GetActiveEmailCode(_ context.Context, _ db.GetActiveEmailCodeParams) (db.EmailCode, error) {
 	return db.EmailCode{}, pgx.ErrNoRows
 }
-func (s *stubUAQuerier) ConsumeEmailCode(_ context.Context, _ int64) error { return nil }
+func (s *stubUAQuerier) ConsumeEmailCode(_ context.Context, _ int64) (int64, error) { return 1, nil }
 func (s *stubUAQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
 	return db.EmailCode{}, pgx.ErrNoRows
 }

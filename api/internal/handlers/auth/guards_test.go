@@ -73,8 +73,8 @@ func (s *stubAuthQuerier) GetActiveEmailCode(_ context.Context, _ db.GetActiveEm
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 
-func (s *stubAuthQuerier) ConsumeEmailCode(_ context.Context, _ int64) error {
-	return nil
+func (s *stubAuthQuerier) ConsumeEmailCode(_ context.Context, _ int64) (int64, error) {
+	return 1, nil
 }
 
 func (s *stubAuthQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
