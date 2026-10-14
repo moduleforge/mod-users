@@ -27,3 +27,9 @@ Files likely touched: `api/internal/handlers/auth/emailcode.go` and its tests.
 ## References
 
 1. Finding `rQjH` in this plan's `plan/findings.yaml`: unauthenticated `EmailCodeRequest` spawns an unbounded, deadline-less, recover-less background goroutine.
+
+## Status
+
+Outcome: succeeded (2026-10-14). Validation: new unit tests (panic recovery, deadline cancellation, saturated-bound drop at the ~200 ms floor) pass; `go build ./...`, `go vet ./...`, `go test -race ./internal/handlers/...` (count=3), and `make lint` all pass from `api/`.
+
+Changed: `api/internal/handlers/auth/emailcode.go` (dispatchEmailCode, runBoundedEmailWork, 20 s timeout, per-Handler semaphore of 16), `api/internal/handlers/auth/register.go` (Handler semaphore fields), `api/internal/handlers/auth/emailcode_bounded_test.go` (new).
