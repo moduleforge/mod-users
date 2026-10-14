@@ -45,6 +45,7 @@ phases:
           path: phase-02-readyz-generic-error/001-readyz-generic-body.md
           done: false
           tier: sonnet-low
+          digest: Ready now logs the ping error with slog.ErrorContext and returns the fixed body {"status":"not_ready","db":"unavailable"}. The pool is accepted through a small Pinger interface. Tests, OpenAPI description and spec line updated.
           git:
             branch: null
             commit: []
