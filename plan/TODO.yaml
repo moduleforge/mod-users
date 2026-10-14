@@ -2,7 +2,7 @@ slug: users-security-hardening
 version: 1
 title: ""
 remediation:
-    rounds: 2
+    rounds: 3
     tasks_added: 6
 phases:
     - number: 1
@@ -217,3 +217,9 @@ phases:
             commit:
                 - 30c3bbf
             merge: 194d466099790f880d87b03fc08a2440be4ccee6
+    - number: 8
+      slug: remediation-03
+      title: Remediation Round 3
+      kind: remediation
+      remediates_phase: 4
+      tasks: []
