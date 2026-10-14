@@ -199,12 +199,11 @@ items:
         confidence: low
         concerns: security
         description:
-          Timing: the cooldown-skip path returns quickly and is padded to 200ms, while the real mint path does bcrypt generation plus SMTP
-          send and can exceed 200ms (pre-existing floor, not a ceiling). A slow real path remains distinguishable from skip/unknown-email
-          paths, which weakens the constant-time claim for enumeration. In verify, unknown-email does 1 DB round trip plus bcrypt while a
-          known email does 3 plus bcrypt (negligible vs bcrypt, but not equal). Dummy hash cost equals DefaultCost and matches real hashes, which is correct.
+          Timing: the cooldown-skip path returns quickly and is padded to 200ms, while the real mint path does bcrypt generation plus SMTP send and can exceed 200ms (pre-existing floor, not a ceiling). A slow real path remains distinguishable from skip/unknown-email paths, which weakens the constant-time claim for enumeration. In verify, unknown-email does 1 DB round trip plus bcrypt while a known email does 3 plus bcrypt (negligible vs bcrypt, but not equal). Dummy hash cost equals DefaultCost and matches real hashes, which is correct.
         recommendation:
           Enforce the delay after completion with a fixed floor and send mail asynchronously so the response is independent of SMTP latency.
+
+        Open question (surfaced by finding evaluation, quoted data): Should the request endpoints (EmailCodeRequest/sendStepUpCode) make response time independent of SMTP latency (respond at a fixed 200 ms and send mail asynchronously on a detached context), or carry this pre-existing request-path enumeration timing to the backlog? Option 1: fix now; closes the request-path timing oracle, adds a background goroutine per request with its own lifecycle and test-harness changes. Option 2: keep in backlog as security/low; verify-path timing is already equalized. Recommended option: keep in backlog as security/low.
 closed:
     - id: 0G9p
       title: Architecture doc silent on OIDC TLS default
