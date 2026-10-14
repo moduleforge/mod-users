@@ -129,6 +129,7 @@ phases:
           path: phase-06-remediation-01/002-assert-certificate-error-in-tls-test.md
           done: false
           tier: haiku-med
+          digest: Added a third assertion to TestNewVerifierWithOptions_TLSVerifiedByDefault requiring the discovery error to contain 'x509' or 'certificate', so an unrelated discovery failure no longer passes the test. Test passes against the current error text. No other behavior changed.
           findings:
             - J4N9
           git:
