@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Task 002 Requirement 6 (end-to-end run agains
-      id: R7WT
-      date: "2026-10-14"
-      tags:
-        - type:bug
-        - plan/phase:email-code-attempt-limiting
-        - priority:medium
-        - effort:medium
-      text: 'Task 002 Requirement 6 (end-to-end run against a throwaway Postgres 16) was not performed: no handler-level DB integration harness exists, and claim and latest-created queries were covered by task 001 SQL checks. Needs its own task or explicit manager instruction if an end-to-end check is wanted.'
     - title: Composed migrations collide at version 0100
       id: xw9l
       date: "2026-10-14"
@@ -400,6 +391,11 @@ closed:
       date: "2026-10-14"
     - id: sE2h
       title: 'Test coverage gap: the concurrency tests (au…'
+      disposition: fixed
+      ref: phase-07-remediation-02/004-email-code-db-integration-tests.md
+      date: "2026-10-14"
+    - id: R7WT
+      title: Task 002 Requirement 6 (end-to-end run agains
       disposition: fixed
       ref: phase-07-remediation-02/004-email-code-db-integration-tests.md
       date: "2026-10-14"
