@@ -300,6 +300,7 @@ phases:
           path: phase-09-remediation-04/002-qualify-cooldown-function-in-0104.md
           done: false
           tier: sonnet-low
+          digest: Schema-qualified the cooldown function in the Up ALTER FUNCTION and the Down RESET search_path of migration 0104 via current_schema(), with no hardcoded public schema. Migrations 0100 through 0103 are untouched. All validation passed.
           findings:
             - jwyA
           git:
