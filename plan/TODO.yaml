@@ -187,7 +187,7 @@ phases:
             branch: plan/users-security-hardening-07-002
             commit:
                 - 314ade4
-            merge: null
+            merge: d872c6e394336f6e16a020507fa6283295b3f7c8
         - number: 3
           slug: allowlist-public-email-code-purpose
           title: Allow-List Purposes On Public Email Code Endpoints
