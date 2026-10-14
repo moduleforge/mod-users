@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: The unauthenticated handler now spawns `go h…
-      id: rQjH
-      date: "2026-10-14"
-      tags:
-        - type:security
-        - plan/phase:remediation-03
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/handlers/auth/emailcode.go
-        lines: 87-104
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          The unauthenticated handler now spawns `go h.sendEmailCode(...)` on context.WithoutCancel and returns at 200ms regardless of completion. The goroutine has no deadline, no concurrency bound, and no recover. Previously the handler blocked on the work, so in-flight work was bounded by open requests. Now a slow or hung DB or SMTP call (bcrypt, email send) is decoupled from request lifetime, so an attacker can accumulate goroutines faster than they finish. A panic in the goroutine is not caught by net/http's per-handler recover and would terminate the process. The cooldown pre-check limits hashing only for repeat (user, purpose) pairs, not for distinct valid emails.
-        recommendation:
-          Wrap the background work in a bounded context (context.WithTimeout over context.WithoutCancel), add a deferred recover that logs, and optionally bound concurrency with a semaphore or worker pool; drop work when saturated, which is acceptable under the anti-enumeration contract.
     - title: The search_path pin is correct (pg_catalog f…
       id: jwyA
       date: "2026-10-14"
@@ -484,4 +465,9 @@ closed:
       title: The spec now states 204 for the email-code a…
       disposition: promoted
       ref: yOBc
+      date: "2026-10-14"
+    - id: rQjH
+      title: The unauthenticated handler now spawns `go h…
+      disposition: promoted
+      ref: rQjH
       date: "2026-10-14"
