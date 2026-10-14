@@ -268,5 +268,6 @@ phases:
             - 33Bo
           git:
             branch: plan/users-security-hardening-08-003
-            commit: []
+            commit:
+                - 0ee3895
             merge: null
