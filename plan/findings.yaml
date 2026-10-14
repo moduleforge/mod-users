@@ -114,6 +114,15 @@ items:
           Pre-existing, not changed by this diff: the 200ms response floor only masks timing when work finishes within 200ms; the request handler waits on the goroutine (<-done), so slow SMTP sends for existing accounts remain a possible enumeration side channel. The new allow-list early return and cooldown skip are fast paths hidden by the same floor.
         recommendation:
           Send the email asynchronously after responding, or bound the wait to the floor.
+    - title: 'Environmental issue, not a finding: make -C m'
+      id: kh4F
+      date: "2026-10-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-03
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Environmental issue, not a finding: make -C model compose copies sibling mod-core migration 0100_natural_person_owner_invariant.sql next to mod-users 0100_baseline.sql; goose panics ''duplicate version 100''. Needs a decision: followup against mod-core or the compose step.'
 closed:
     - id: 0G9p
       title: Architecture doc silent on OIDC TLS default
