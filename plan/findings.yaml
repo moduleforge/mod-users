@@ -1,5 +1,14 @@
 version: 2
-items: []
+items:
+    - title: Task 002 Requirement 6 (end-to-end run agains
+      id: R7WT
+      date: "2026-10-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:email-code-attempt-limiting
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Task 002 Requirement 6 (end-to-end run against a throwaway Postgres 16) was not performed: no handler-level DB integration harness exists, and claim and latest-created queries were covered by task 001 SQL checks. Needs its own task or explicit manager instruction if an end-to-end check is wanted.'
 closed:
     - id: 0G9p
       title: Architecture doc silent on OIDC TLS default
