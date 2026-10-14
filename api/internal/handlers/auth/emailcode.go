@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -23,8 +24,9 @@ import (
 const MaxEmailCodeAttempts = 5
 
 // EmailCodeRequestCooldown is the minimum interval between minted codes for
-// the same (user, purpose) while an earlier code is still live. A request
-// inside the window is skipped silently (the endpoint still answers 204).
+// the same (user, purpose), measured from the newest code of any state
+// (live, exhausted, or consumed). A request inside the window is skipped
+// silently (the endpoint still answers 204).
 const EmailCodeRequestCooldown = 60 * time.Second
 
 // dummyCodeHash is a bcrypt hash of a throwaway value, generated once at init
@@ -106,23 +108,6 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 		return
 	}
 
-	// Cooldown: while an earlier unconsumed, unexpired code for this
-	// (user, purpose) is younger than the cooldown, do not mint another.
-	// Without this, requesting fresh codes would reset the guess budget.
-	latest, err := h.queries.GetLatestEmailCodeCreatedAt(ctx, db.GetLatestEmailCodeCreatedAtParams{
-		UserAccountID: ua.ID,
-		Purpose:       purpose,
-	})
-	if err == nil {
-		if latest.Valid && time.Since(latest.Time) < EmailCodeRequestCooldown {
-			slog.DebugContext(ctx, "email_code: request within cooldown, skipping", "user_account_id", ua.ID)
-			return
-		}
-	} else if err != pgx.ErrNoRows {
-		slog.ErrorContext(ctx, "email_code: cooldown lookup", "error", err)
-		return
-	}
-
 	// Generate 6-digit code.
 	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
 	if err != nil {
@@ -137,13 +122,22 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 		return
 	}
 
+	// Atomic cooldown + insert: no row is inserted when a code of any state
+	// (live, exhausted, or consumed) was created for this (user, purpose)
+	// within the cooldown, so exhausting a code cannot reset the guess budget
+	// by minting a fresh one early. No row means no email.
 	expiresAt := pgtype.Timestamptz{Time: time.Now().Add(5 * time.Minute), Valid: true}
-	_, err = h.queries.CreateEmailCode(ctx, db.CreateEmailCodeParams{
+	_, err = h.queries.CreateEmailCodeWithCooldown(ctx, db.CreateEmailCodeWithCooldownParams{
 		UserAccountID: ua.ID,
 		CodeHash:      string(hash),
 		Purpose:       purpose,
 		ExpiresAt:     expiresAt,
+		CooldownSecs:  int32(EmailCodeRequestCooldown / time.Second),
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.DebugContext(ctx, "email_code: request within cooldown, skipping", "user_account_id", ua.ID)
+		return
+	}
 	if err != nil {
 		slog.ErrorContext(ctx, "email_code: insert", "error", err)
 		return

@@ -222,3 +222,67 @@ func (c *claimCountingStore) ClaimEmailCodeAttempt(ctx context.Context, arg db.C
 	}
 	return row, err
 }
+
+func TestSendStepUpCode_CooldownCoversExhaustedCode(t *testing.T) {
+	t.Parallel()
+	h, q, sender := newStepUpAttemptHandler(t)
+	seedStepUpCode(t, q, stepUpAttemptCode, time.Now())
+	for i := 0; i < maxEmailCodeAttempts; i++ {
+		stepUpVerifyCall(h, "000000")
+	}
+	if rec := stepUpVerifyCall(h, stepUpAttemptCode); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("exhausted code accepted: status = %d", rec.Code)
+	}
+	uc := newTestUC(stepUpAttemptUserID, 10)
+
+	h.sendStepUpCode(withUC(httptest.NewRequest(http.MethodPost, "/", nil), uc), uc)
+	sender.mu.Lock()
+	sent := len(sender.sent)
+	sender.mu.Unlock()
+	q.mu.Lock()
+	creates := q.creates
+	q.mu.Unlock()
+	if creates != 0 || sent != 0 {
+		t.Fatalf("after exhaustion within cooldown: creates=%d emails=%d, want 0/0", creates, sent)
+	}
+
+	// Age the exhausted code past the cooldown: a new code is minted.
+	q.mu.Lock()
+	q.lastCreated[emailCodeKey(stepUpAttemptUserID, "credential_change")] = time.Now().Add(-emailCodeRequestCooldown - time.Second)
+	q.mu.Unlock()
+	h.sendStepUpCode(withUC(httptest.NewRequest(http.MethodPost, "/", nil), uc), uc)
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	if len(sender.sent) != 1 {
+		t.Fatalf("emails sent after cooldown = %d, want 1", len(sender.sent))
+	}
+}
+
+func TestSendStepUpCode_ConcurrentRequestsMintOnce(t *testing.T) {
+	t.Parallel()
+	h, q, sender := newStepUpAttemptHandler(t)
+	uc := newTestUC(stepUpAttemptUserID, 10)
+
+	const n = 20
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			h.sendStepUpCode(withUC(httptest.NewRequest(http.MethodPost, "/", nil), uc), uc)
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	q.mu.Lock()
+	creates := q.creates
+	q.mu.Unlock()
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	if creates != 1 || len(sender.sent) != 1 {
+		t.Errorf("creates=%d emails=%d, want exactly 1/1", creates, len(sender.sent))
+	}
+}

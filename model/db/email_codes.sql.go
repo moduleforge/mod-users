@@ -90,6 +90,53 @@ func (q *Queries) CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams
 	return i, err
 }
 
+const createEmailCodeWithCooldown = `-- name: CreateEmailCodeWithCooldown :one
+SELECT id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at, failed_attempts
+FROM create_email_code_with_cooldown(
+  $1::bigint,
+  $2::text,
+  $3::text,
+  $4::timestamptz,
+  $5::int
+)
+`
+
+type CreateEmailCodeWithCooldownParams struct {
+	UserAccountID int64              `json:"user_account_id"`
+	CodeHash      string             `json:"code_hash"`
+	Purpose       string             `json:"purpose"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	CooldownSecs  int32              `json:"cooldown_secs"`
+}
+
+// Atomically mints a code unless a code of ANY state (unconsumed, exhausted,
+// or consumed by success) was created for the same (user, purpose) within the
+// last cooldown_secs seconds. Concurrent callers are serialized by an advisory
+// lock inside the create_email_code_with_cooldown function, so at most one
+// code is created per window. No row is returned (pgx.ErrNoRows) when the
+// cooldown applies; callers must then send no email.
+func (q *Queries) CreateEmailCodeWithCooldown(ctx context.Context, arg CreateEmailCodeWithCooldownParams) (EmailCode, error) {
+	row := q.db.QueryRow(ctx, createEmailCodeWithCooldown,
+		arg.UserAccountID,
+		arg.CodeHash,
+		arg.Purpose,
+		arg.ExpiresAt,
+		arg.CooldownSecs,
+	)
+	var i EmailCode
+	err := row.Scan(
+		&i.ID,
+		&i.UserAccountID,
+		&i.CodeHash,
+		&i.Purpose,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+		&i.FailedAttempts,
+	)
+	return i, err
+}
+
 const getActiveEmailCode = `-- name: GetActiveEmailCode :one
 SELECT id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at, failed_attempts
 FROM email_codes
@@ -120,29 +167,4 @@ func (q *Queries) GetActiveEmailCode(ctx context.Context, arg GetActiveEmailCode
 		&i.FailedAttempts,
 	)
 	return i, err
-}
-
-const getLatestEmailCodeCreatedAt = `-- name: GetLatestEmailCodeCreatedAt :one
-SELECT created_at
-FROM email_codes
-WHERE user_account_id = $1
-  AND purpose = $2
-  AND consumed_at IS NULL
-  AND expires_at > now()
-ORDER BY created_at DESC
-LIMIT 1
-`
-
-type GetLatestEmailCodeCreatedAtParams struct {
-	UserAccountID int64  `json:"user_account_id"`
-	Purpose       string `json:"purpose"`
-}
-
-// Creation time of the newest unconsumed, unexpired code for the request
-// cooldown check. No row when there is none.
-func (q *Queries) GetLatestEmailCodeCreatedAt(ctx context.Context, arg GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, getLatestEmailCodeCreatedAt, arg.UserAccountID, arg.Purpose)
-	var created_at pgtype.Timestamptz
-	err := row.Scan(&created_at)
-	return created_at, err
 }

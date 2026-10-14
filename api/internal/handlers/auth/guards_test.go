@@ -81,8 +81,9 @@ func (s *stubAuthQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEma
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 
-func (s *stubAuthQuerier) GetLatestEmailCodeCreatedAt(_ context.Context, _ db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
-	return pgtype.Timestamptz{}, pgx.ErrNoRows
+func (s *stubAuthQuerier) CreateEmailCodeWithCooldown(_ context.Context, _ db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error) {
+	s.createEmailCodeCalled = true
+	return db.EmailCode{}, nil
 }
 
 func (s *stubAuthQuerier) UpdateUserAccount(_ context.Context, _ db.UpdateUserAccountParams) error {
