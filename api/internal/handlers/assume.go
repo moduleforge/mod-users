@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/moduleforge/core-api/apiresp"
-	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	db "github.com/moduleforge/mod-users/model/db"
@@ -58,21 +57,16 @@ func (h *AssumeHandler) SetSigner(s *auth.Signer) {
 // Returns a JWT where the bearer acts as the assumed user account while the
 // audit trail preserves the original admin identity.
 func (h *AssumeHandler) Assume(w http.ResponseWriter, r *http.Request) {
-	rawUUID := chi.URLParam(r, "uuid")
-	parsed, err := uuid.Parse(rawUUID)
+	parsed, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
 	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
 	sudoUA, actorUA, err := h.svc.Assume(r.Context(), parsed)
 	if err != nil {
-		if errors.Is(err, coreservice.ErrNotFound) {
-			apiresp.WriteError(w, r, apiresp.ErrNotFound)
-			return
-		}
 		slog.ErrorContext(r.Context(), "assume: service error", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 

@@ -133,7 +133,12 @@ export function OidcProviderAddModal({
         if (err.status === 409) {
           setFormError('Provider already exists — use Edit instead.');
         } else {
-          setFormError(err.message);
+          // Prefer the structured per-field details when the server sends them;
+          // fall back to the top-level error message otherwise.
+          const detailMessages = (err.details ?? [])
+            .map((d) => d.message)
+            .filter((m) => m.length > 0);
+          setFormError(detailMessages.length > 0 ? detailMessages.join(' ') : err.message);
         }
       } else {
         setFormError('Could not create provider.');

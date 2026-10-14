@@ -44,8 +44,11 @@ func ErrorWithDetails(w http.ResponseWriter, status int, code string, message st
 	})
 }
 
-// Decode reads JSON from the request body into v.
-func Decode(r *http.Request, v any) error {
-	defer r.Body.Close()
-	return json.NewDecoder(r.Body).Decode(v)
+// Decode reads JSON from the request body into v via apiresp.DecodeJSON. It
+// rejects unknown fields, trailing data, empty bodies and bodies over the
+// default 1 MiB cap (override with apiresp.WithMaxBytes). When it returns
+// false it has already written the 400 invalid_input response, so the caller
+// must return without writing anything further.
+func Decode(w http.ResponseWriter, r *http.Request, v any, opts ...apiresp.DecodeOption) bool {
+	return apiresp.DecodeJSON(w, r, v, opts...)
 }

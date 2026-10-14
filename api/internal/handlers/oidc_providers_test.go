@@ -311,12 +311,13 @@ func TestProviders_Get_UnknownID_404(t *testing.T) {
 	}
 }
 
-// TestProviders_Get_InvalidSlug_404 — slug validation triggers 404 on GET.
-func TestProviders_Get_InvalidSlug_404(t *testing.T) {
+// TestProviders_Get_InvalidSlug_400 — slug validation is a stateless shape
+// check, so a malformed id is 400 (after the credential), not 404.
+func TestProviders_Get_InvalidSlug_400(t *testing.T) {
 	h, _, _, _ := newProvidersHandlerForTest(t, config.ProviderRegistry{})
 	rr := routeRequest(h, http.MethodGet, "/v1/oidc-config/providers/-bad", "")
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("status: got %d, want 404", rr.Code)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", rr.Code)
 	}
 }
 

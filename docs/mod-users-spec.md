@@ -47,7 +47,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Action:** Requests a code with `POST /v1/auth/email-code` (providing email), then submits the code via `POST /v1/auth/email-code/verify`.
 
-**Outcome:** The code request always returns `202` regardless of whether the email matches a known account (prevents enumeration). A hashed, time-limited code is generated and sent to the email address. On successful verification, the code is marked consumed and a JWT is returned. Expired or already-consumed codes are rejected with `401`.
+**Outcome:** The code request always returns `204` regardless of whether the email matches a known account (prevents enumeration). A hashed, time-limited code is generated and sent to the email address. On successful verification, the code is marked consumed and a JWT is returned. Expired or already-consumed codes are rejected with `401`.
 
 ---
 
@@ -57,7 +57,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Action:** Requests a reset email with `POST /v1/auth/password-reset` (providing email), then submits the reset token and new password to `POST /v1/auth/password-reset/confirm`.
 
-**Outcome:** The reset request always returns `202` (prevents enumeration). A hashed, time-limited reset token is generated and sent to the email address. On successful confirmation, the `auth_local` password hash is updated, the token is marked consumed, and `200` is returned. Invalid or expired tokens are rejected with `401`.
+**Outcome:** The reset request always returns `204` (prevents enumeration). A hashed, time-limited reset token is generated and sent to the email address. On successful confirmation, the `auth_local` password hash is updated, the token is marked consumed, and `200` is returned. Invalid or expired tokens are rejected with `401`.
 
 ---
 
@@ -107,7 +107,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Action:** Calls any of: `GET /v1/users` (list/search), `POST /v1/users` (create), `GET /v1/users/{uuid}` (retrieve), `PUT /v1/users/{uuid}` (update), `DELETE /v1/users/{uuid}` (archive, soft-delete), or `POST /v1/users/{uuid}/grant` (grant or revoke admin privileges).
 
-**Outcome:** User list supports search by email or name with pagination. Create accepts optional password and admin flag. Archive sets `archived_at` on the underlying record (soft-delete; the record is preserved). Admin grants/revocations are reflected immediately on the `user_accounts` record. All mutating operations are audited.
+**Outcome:** User list supports search by email or name with pagination. Create accepts optional password and admin flag. Archive sets `archived_at` on the underlying record (soft-delete; the record is preserved). Admin grants/revocations are reflected immediately on the `user_accounts` record. All mutating operations are audited. An unknown account UUID on `GET`/`PUT`/`DELETE` is a masked `403`, never a `404`, and a duplicate email on create or update is `409` `users.email_taken` (see [Request order and existence masking](#security-requirements)).
 
 ---
 
@@ -125,9 +125,9 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Actor:** Authenticated admin user.
 
-**Action:** Calls the `/v1/apps/{uuid}/user-accounts` membership endpoints: `POST` to assign a user account to an app (with optional roles), `GET` to list an app's members, `DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid}` to remove a member, and `PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles` to update a member's roles. The `{uuid}` path param is resolved to the app's internal id via mod-core's shared `entityResolver` service.
+**Action:** Calls the `/v1/apps/{uuid}/user-accounts` membership endpoints: `POST` to assign a user account to an app (with optional roles), `GET` to list an app's members, `DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid}` to remove a member, and `PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles` to update a member's roles. The `{uuid}` path param is resolved to the app's id with mod-core's `GetAppByUUID` query, after the caller is authorized.
 
-**Outcome:** Applications are tenant-like groupings, now owned and CRUD-managed by mod-core (list, create, retrieve, update, archive live there — not in this module). This module retains only the `apps_user_accounts` membership join: users can be assigned to an app with roles, listed, removed, or have their roles updated. Each membership record carries a `roles` array.
+**Outcome:** Applications are tenant-like groupings, now owned and CRUD-managed by mod-core (list, create, retrieve, update, archive live there — not in this module). This module retains only the `apps_user_accounts` membership join: users can be assigned to an app with roles, listed, removed, or have their roles updated. Each membership record carries a `roles` array. Path UUIDs, the body shape and `user_uuid` are validated (`400`) before authorization; a body `user_uuid` naming no account is `422` `users.user_account_unknown`, while an unknown app (the addressed resource) stays `404` for an authorized admin.
 
 ---
 
@@ -213,7 +213,7 @@ When the guest account later provides an email address (via `PUT /v1/self`), the
 
 - **All write operations are audited.** Mutating API operations produce audit log entries recording before/after state, the actor UUID, and the affected resource.
 
-- **Anti-enumeration responses.** Email-code request and password-reset request endpoints always return `202` regardless of whether the submitted email matches a known account, preventing account existence probing.
+- **Anti-enumeration responses.** Email-code request and password-reset request endpoints always return `204` regardless of whether the submitted email matches a known account, preventing account existence probing.
 
 - **Admin identity is preserved on assume.** Tokens issued by the assume endpoint embed the admin's original UUID so audit log entries under the assumed identity trace back to the acting admin.
 
@@ -257,9 +257,9 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 - [ ] `POST /v1/auth/register` — create account with email, password, given name, family name; returns JWT.
 - [ ] `POST /v1/auth/login` — authenticate with email and password; returns JWT.
 - [ ] `POST /v1/auth/anonymous` — create a guest account (no credentials required); returns JWT with an `is_anonymous: true` claim (written but not currently consulted by any middleware — see [Security requirements](#security-requirements)) and a raw session token for cross-session continuity.
-- [ ] `POST /v1/auth/email-code` — request a one-time login code (always `202`).
+- [ ] `POST /v1/auth/email-code` — request a one-time login code (always `204`).
 - [ ] `POST /v1/auth/email-code/verify` — verify code; returns JWT.
-- [ ] `POST /v1/auth/password-reset` — request password-reset email (always `202`).
+- [ ] `POST /v1/auth/password-reset` — request password-reset email (always `204`).
 - [ ] `POST /v1/auth/password-reset/confirm` — set new password with reset token.
 - [ ] `GET /v1/auth/providers` — list enabled OIDC providers (public metadata only; never returns client secrets).
 - [ ] `GET /v1/auth/oidc/{provider}/start` — begin OIDC authorization-code flow; redirects to provider.
@@ -309,7 +309,7 @@ All six endpoints apply the module's algorithm-acceptance policy, global-uniquen
 
 ### Admin: app membership (admin auth required)
 
-App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served by mod-core, not this module. This module serves only the membership endpoints below, against its own `apps_user_accounts` join table; the `{uuid}` path param is resolved to the app's internal id via mod-core's shared `entityResolver` service.
+App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served by mod-core, not this module. This module serves only the membership endpoints below, against its own `apps_user_accounts` join table; the `{uuid}` path param is resolved to the app's id with mod-core's `GetAppByUUID` query after authorization.
 
 - [ ] `GET /v1/apps/{uuid}/user-accounts` — list an app's user-account members.
 - [ ] `POST /v1/apps/{uuid}/user-accounts` — assign a user account to an app, with optional roles.
@@ -340,7 +340,9 @@ App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served
 
 - **CSRF / state validation:** The OIDC flow uses a signed state token stored in a scoped cookie (`oidc_state`, scoped to `/v1/auth/oidc/`). The callback validates the cookie before processing the authorization code.
 
-- **Anti-enumeration:** Email-code and password-reset request endpoints return `202` unconditionally to prevent account existence probing.
+- **Anti-enumeration:** Email-code and password-reset request endpoints return `204` unconditionally to prevent account existence probing.
+
+- **Request order and existence masking.** Authenticated routes mount `RequireAuth` and answer in this order: 401 (no effective actor, code `unauthenticated`), 400 (stateless shape: path UUIDs, strict JSON body, field checks), 403 (authorization), 404 (lookup), then 409 or 422 (state conflicts). On the identity and ssh-key credential routes the step-up gate (`409 users.step_up_required`) sits after the 400 shape checks and before authorization, so a malformed request never consumes a step-up token. A missing user account on `GET`/`PUT`/`DELETE /v1/user-accounts/{uuid}` and `POST .../assume` is masked as 403 for every caller, admins included, matching the ssh-key routes; the authorizer receives one extra call with target `0` per masked miss and must deny it quietly. Documented exceptions: public and credential routes (`/v1/auth/*`) have no 401 gate; the OIDC config write routes accept a body `setup_token` as a credential, so a caller with no admin session and no `X-Setup-Token` header and a malformed body gets 400 first; and two middleware gates answer before any handler 400 because they depend only on service state or the caller's own account, not on the request: `requireOIDCConfirmed` (503 `users.oidc_not_confirmed`, even ahead of the 401) and `requireVerifiedEmail` (403 `users.email_unverified`). The email-code, password-reset and step-up code requests keep their unconditional `204` (anti-enumeration). Body decoding is strict everywhere: unknown fields, trailing data and an empty body give 400 (`invalid_json_body`); a body over 1 MiB gives `body_too_large` (ssh-key register: 32 KiB). A state conflict is reported after authorization: a duplicate account email gives 409 `users.email_taken` and a membership `user_uuid` naming no account gives 422 `users.user_account_unknown`. Public auth 500s carry a generic message; the cause is logged server-side.
 
 - **Step-up challenge for credential changes:** When `AUTH_REQUIRE_STEP_UP` (`cfg.Auth.RequireStepUpForCredentialChange`) is enabled, linking/unlinking an OIDC identity and setting/removing a local password additionally require a step-up token: a short-lived (5-minute), purpose-scoped, user-account-bound signed token obtained by verifying an emailed one-time code. The token is single-use — its JTI is recorded in a process-lifetime cache on first successful verification, and a background janitor prunes expired entries, so replaying a consumed or expired token is rejected. The step-up code-request endpoint holds its response to a constant ~200ms regardless of outcome, mirroring the anti-enumeration timing pattern above.
 

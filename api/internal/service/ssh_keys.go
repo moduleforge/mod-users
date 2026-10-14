@@ -63,13 +63,21 @@ type SSHKey struct {
 // Every method follows the same order of work, per AGENTS.md's
 // "Authorization is checked first" convention and docs/architecture/
 // ssh-keys.md's D9:
-//  1. load the target user_accounts row by UUID -- a miss returns the
-//     masked apiresp.ErrForbidden, never ErrNotFound (existence masking);
+//  1. load the target user_accounts row by UUID and call Authorize against
+//     its account holder entity (authorizeUserAccount), propagating any
+//     error unchanged -- a miss makes a target-0 Authorize call, discards
+//     it and returns the masked apiresp.ErrForbidden, never ErrNotFound
+//     (existence masking);
 //  2. load the account holder entity via coredb.GetEntityByID -- an
-//     archived holder returns the same masked ErrForbidden;
-//  3. call Authorize against the account holder entity (`assume` for
-//     Register/Revoke, `read` for List), propagating any error unchanged;
-//  4. only then parse input, touch key data, or write.
+//     archived or missing holder returns the same masked ErrForbidden;
+//  3. only then touch key data or write.
+//
+// Authorization is against `assume` for Register/Revoke (sshKeyMutateOp)
+// and `read` for List.
+//
+// The one exception is Register: its stateless key and label validation
+// (sshkey.Parse, sshkey.NormalizeLabel) runs before step 1, so a malformed
+// key is a 400 even for a caller who may not assume the account.
 type SSHKeyService struct {
 	db    txhelper.DB
 	q     db.Querier
@@ -95,31 +103,27 @@ func NewSSHKeyService(
 	}
 }
 
-// loadAuthorizedAccount performs steps 1-3 of every SSHKeyService method's
-// order of work: it loads accountUUID's user_accounts row, loads and checks
-// its account holder entity for archival, and authorizes op against that
-// entity. It returns the loaded row and the account holder entity id
+// loadAuthorizedAccount performs steps 1-2 of every SSHKeyService method's
+// order of work: it loads accountUUID's user_accounts row and authorizes op
+// against its account holder entity (masking a miss), then loads and checks
+// the account holder entity for archival. It returns the loaded row and the account holder entity id
 // (needed by callers for the write/audit steps) on success.
 func (s *SSHKeyService) loadAuthorizedAccount(ctx context.Context, accountUUID uuid.UUID, op string) (db.UserAccount, int64, error) {
-	ua, err := s.q.GetUserAccountByUUID(ctx, accountUUID)
+	ua, err := authorizeUserAccount(ctx, s.q, s.az, op, accountUUID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return db.UserAccount{}, 0, apiresp.ErrForbidden
-		}
-		return db.UserAccount{}, 0, fmt.Errorf("ssh_keys: load account: %w", err)
+		return db.UserAccount{}, 0, err
 	}
 
 	accountHolder := ua.AccountHolder
 	entity, err := s.coreQ.GetEntityByID(ctx, accountHolder)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.UserAccount{}, 0, apiresp.ErrForbidden
+		}
 		return db.UserAccount{}, 0, fmt.Errorf("ssh_keys: load account holder entity: %w", err)
 	}
 	if entity.ArchivedAt != nil {
 		return db.UserAccount{}, 0, apiresp.ErrForbidden
-	}
-
-	if err := s.az.Authorize(ctx, op, &accountHolder); err != nil {
-		return db.UserAccount{}, 0, err
 	}
 
 	return ua, accountHolder, nil
@@ -140,11 +144,8 @@ func (s *SSHKeyService) loadAuthorizedAccount(ctx context.Context, accountUUID u
 // enforced by the schema, not by a Go pre-check, since a pre-check alone
 // would lose a concurrent-registration race.
 func (s *SSHKeyService) Register(ctx context.Context, accountUUID uuid.UUID, publicKeyLine string, label *string, stepUpUsed bool) (SSHKey, error) {
-	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, sshKeyMutateOp)
-	if err != nil {
-		return SSHKey{}, err
-	}
-
+	// Stateless key and label validation runs before authorization (400 ahead
+	// of 403). The duplicate-fingerprint 409 stays after it, in the insert.
 	parsed, err := sshkey.Parse(publicKeyLine)
 	if err != nil {
 		return SSHKey{}, mapSSHKeyParseError(err)
@@ -152,6 +153,11 @@ func (s *SSHKeyService) Register(ctx context.Context, accountUUID uuid.UUID, pub
 	normalizedLabel, err := sshkey.NormalizeLabel(label, parsed.Comment)
 	if err != nil {
 		return SSHKey{}, mapSSHKeyLabelError(err)
+	}
+
+	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, sshKeyMutateOp)
+	if err != nil {
+		return SSHKey{}, err
 	}
 
 	var out SSHKey
@@ -328,42 +334,85 @@ func sshKeyAuditSnapshot(row db.ModUsersSshPublicKey, stepUpUsed bool) map[strin
 	}
 }
 
-// mapSSHKeyParseError maps a sshkey.Parse error to its detail code on
-// field "public_key", per the sentinel-to-detail-code table
-// api/internal/sshkey defines. A sentinel this function does not recognize
-// is wrapped and returned as an internal error rather than silently
-// defaulting to one of the known codes.
-func mapSSHKeyParseError(err error) error {
+// sshKeyParseFieldError maps a sshkey.Parse error to its detail on field
+// "public_key", per the sentinel-to-detail-code table api/internal/sshkey
+// defines. ok is false for a sentinel it does not recognize.
+func sshKeyParseFieldError(err error) (fe apiresp.FieldError, ok bool) {
 	switch {
 	case errors.Is(err, sshkey.ErrTooWeak):
-		return apiresp.InvalidInput(apiresp.FieldError{
+		return apiresp.FieldError{
 			Field: "public_key", Code: "users.ssh_key_too_weak", Message: "key is too weak",
-		})
+		}, true
 	case errors.Is(err, sshkey.ErrUnsupportedType):
-		return apiresp.InvalidInput(apiresp.FieldError{
+		return apiresp.FieldError{
 			Field: "public_key", Code: "users.ssh_key_type_unsupported", Message: "key type is not supported",
-		})
+		}, true
 	case errors.Is(err, sshkey.ErrInvalid):
-		return apiresp.InvalidInput(apiresp.FieldError{
+		return apiresp.FieldError{
 			Field: "public_key", Code: "users.ssh_key_invalid", Message: "key is invalid",
-		})
+		}, true
 	default:
-		return fmt.Errorf("ssh_keys: parse public key: %w", err)
+		return apiresp.FieldError{}, false
 	}
 }
 
-// mapSSHKeyLabelError maps a sshkey.NormalizeLabel error to its detail
-// code on field "label".
-func mapSSHKeyLabelError(err error) error {
-	if errors.Is(err, sshkey.ErrLabelTooLong) {
-		return apiresp.InvalidInput(apiresp.FieldError{
+// sshKeyLabelFieldError maps a sshkey.NormalizeLabel error to its detail on
+// field "label". ok is false for a sentinel it does not recognize.
+func sshKeyLabelFieldError(err error) (fe apiresp.FieldError, ok bool) {
+	switch {
+	case errors.Is(err, sshkey.ErrLabelTooLong):
+		return apiresp.FieldError{
 			Field: "label", Code: "users.ssh_key_label_too_long", Message: "label is too long",
-		})
-	}
-	if errors.Is(err, sshkey.ErrLabelInvalidChars) {
-		return apiresp.InvalidInput(apiresp.FieldError{
+		}, true
+	case errors.Is(err, sshkey.ErrLabelInvalidChars):
+		return apiresp.FieldError{
 			Field: "label", Code: "users.ssh_key_label_invalid", Message: "label contains invalid characters",
-		})
+		}, true
+	default:
+		return apiresp.FieldError{}, false
+	}
+}
+
+// mapSSHKeyParseError maps a sshkey.Parse error to its invalid-input error.
+// A sentinel this function does not recognize is wrapped and returned as an
+// internal error rather than silently defaulting to one of the known codes.
+func mapSSHKeyParseError(err error) error {
+	if fe, ok := sshKeyParseFieldError(err); ok {
+		return apiresp.InvalidInput(fe)
+	}
+	return fmt.Errorf("ssh_keys: parse public key: %w", err)
+}
+
+// mapSSHKeyLabelError maps a sshkey.NormalizeLabel error to its
+// invalid-input error.
+func mapSSHKeyLabelError(err error) error {
+	if fe, ok := sshKeyLabelFieldError(err); ok {
+		return apiresp.InvalidInput(fe)
 	}
 	return fmt.Errorf("ssh_keys: normalize label: %w", err)
+}
+
+// ValidateSSHKeyShape runs the stateless key and label checks Register
+// performs (sshkey.Parse, sshkey.NormalizeLabel) and returns them as field
+// errors with the same detail codes Register produces. It touches no state,
+// so an HTTP handler can call it before any step-up or authorization gate and
+// report a malformed request as 400. publicKeyLine must be non-empty (the
+// caller's required-field check owns that). An unrecognized parser sentinel
+// is reported as users.ssh_key_invalid; Register remains the authoritative
+// check for in-process callers.
+func ValidateSSHKeyShape(publicKeyLine string, label *string) []apiresp.FieldError {
+	parsed, err := sshkey.Parse(publicKeyLine)
+	if err != nil {
+		if fe, ok := sshKeyParseFieldError(err); ok {
+			return []apiresp.FieldError{fe}
+		}
+		return []apiresp.FieldError{{Field: "public_key", Code: "users.ssh_key_invalid", Message: "key is invalid"}}
+	}
+	if _, err := sshkey.NormalizeLabel(label, parsed.Comment); err != nil {
+		if fe, ok := sshKeyLabelFieldError(err); ok {
+			return []apiresp.FieldError{fe}
+		}
+		return []apiresp.FieldError{{Field: "label", Code: "users.ssh_key_label_invalid", Message: "label contains invalid characters"}}
+	}
+	return nil
 }

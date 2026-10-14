@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -93,14 +94,14 @@ type CreateAnonymousUserResult struct {
 	AnonToken   AnonToken
 }
 
-// ErrEmailTaken is returned by Create when the email is already registered.
+// ErrEmailTaken is returned by Create and Update when the email is already registered.
 //
 // Built via apiresp.Conflict, which wraps apiresp.ErrConflict (rather than
 // being an independent sentinel) so errors.Is(err, apiresp.ErrConflict)
 // succeeds and carries the users.email_taken field-level detail directly on
 // the sentinel — apiresp.WriteError(w, r, err) alone classifies it as 409
 // conflict and surfaces the detail, with no local mapping-point special
-// case needed (see writeServiceError in handlers/user_accounts.go). Per the
+// case needed (see the apiresp.WriteError mapping in handlers/user_accounts.go). Per the
 // design doc (docs/mf-standards/architecture/api-response-design.md,
 // "Module-specific extension codes") this is a deliberate plain 409
 // (create-time uniqueness), not a masked 403 — no masking logic applies to
@@ -192,9 +193,11 @@ func authorizeType(ctx context.Context, az coreAuthz.Authorizer, op string, type
 	return az.Authorize(ctx, op, nil)
 }
 
-// AuthorizeCreate performs only the type-level create authorization used by
-// Create. Handlers call it to deny an unauthorized caller before reporting a
-// request-shape error (e.g. an undecodable body).
+// AuthorizeCreate performs only the type-level create authorization that
+// Create runs first, as the service's type-level create gate. It is not the
+// HTTP ordering mechanism: the HTTP handler validates request shape (400)
+// before calling Create, so an undecodable body is reported ahead of this
+// gate.
 func (s *UserAccountService) AuthorizeCreate(ctx context.Context) error {
 	// Create is a type-level operation: a wildcard grant, or a grant on
 	// natural_person's type entity, authorizes it. typeID is a types.id,
@@ -281,7 +284,7 @@ func (s *UserAccountService) Create(ctx context.Context, in CreateUserAccountInp
 		return nil
 	})
 	if err != nil {
-		if isPgUniqueViolation(err) {
+		if isEmailTakenViolation(err) {
 			return UserAccount{}, ErrEmailTaken
 		}
 		return UserAccount{}, err
@@ -467,17 +470,12 @@ func (s *UserAccountService) List(ctx context.Context, in ListUserAccountsInput)
 
 // Get returns the user account identified by UUID. Requires read authorization
 // on the account_holder entity.
+//
+// A missing UUID and an existing-but-forbidden UUID are indistinguishable:
+// both return apiresp.ErrForbidden (see authorizeUserAccount).
 func (s *UserAccountService) Get(ctx context.Context, id uuid.UUID) (UserAccount, error) {
-	ua, err := s.q.GetUserAccountByUUID(ctx, id)
+	ua, err := authorizeUserAccount(ctx, s.q, s.az, "read", id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return UserAccount{}, coreservice.ErrNotFound
-		}
-		return UserAccount{}, fmt.Errorf("user_accounts.Get: %w", err)
-	}
-
-	eid := ua.AccountHolder
-	if err := s.az.Authorize(ctx, "read", &eid); err != nil {
 		return UserAccount{}, err
 	}
 
@@ -495,18 +493,32 @@ func (s *UserAccountService) Get(ctx context.Context, id uuid.UUID) (UserAccount
 
 // Update updates mutable fields on the user account and/or its natural person.
 // Requires update authorization on the account_holder entity.
+// A missing UUID returns apiresp.ErrForbidden, identical to a forbidden one.
 func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in UpdateUserAccountInput) (UserAccount, error) {
-	ua, err := s.q.GetUserAccountByUUID(ctx, id)
+	ua, err := authorizeUserAccount(ctx, s.q, s.az, "update", id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return UserAccount{}, coreservice.ErrNotFound
-		}
-		return UserAccount{}, fmt.Errorf("user_accounts.Update load: %w", err)
-	}
-
-	eid := ua.AccountHolder
-	if err := s.az.Authorize(ctx, "update", &eid); err != nil {
 		return UserAccount{}, err
+	}
+	eid := ua.AccountHolder
+
+	// Reject a present-but-blank field only after authorization, so an
+	// unauthorized caller never learns request-shape rules. The HTTP handler
+	// checks the same rules statelessly before calling here; this covers
+	// in-process callers.
+	if in.Email != nil && strings.TrimSpace(*in.Email) == "" {
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "email", Code: "users.email_required", Message: "email is required",
+		})
+	}
+	if in.GivenName != nil && strings.TrimSpace(*in.GivenName) == "" {
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "given_name", Code: "users.given_name_required", Message: "given_name is required",
+		})
+	}
+	if in.FamilyName != nil && strings.TrimSpace(*in.FamilyName) == "" {
+		return UserAccount{}, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "family_name", Code: "users.family_name_required", Message: "family_name is required",
+		})
 	}
 
 	before := uaSnapshot(ua)
@@ -574,6 +586,12 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 		return s.obs.Observe(ctx, tx, "update", "user_account", &eid, before, after)
 	})
 	if err != nil {
+		// A unique violation on user_accounts.email is a post-authorization
+		// state conflict (409), not a 500. Any other failure, including a
+		// 23505 on a different constraint, stays an internal error.
+		if isEmailTakenViolation(err) {
+			return UserAccount{}, ErrEmailTaken
+		}
 		return UserAccount{}, err
 	}
 
@@ -585,19 +603,13 @@ func (s *UserAccountService) Update(ctx context.Context, id uuid.UUID, in Update
 
 // Delete soft-deletes the user account by archiving its entity.
 // Requires delete authorization on the account_holder entity.
+// A missing UUID returns apiresp.ErrForbidden, identical to a forbidden one.
 func (s *UserAccountService) Delete(ctx context.Context, id uuid.UUID) error {
-	ua, err := s.q.GetUserAccountByUUID(ctx, id)
+	ua, err := authorizeUserAccount(ctx, s.q, s.az, "delete", id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return coreservice.ErrNotFound
-		}
-		return fmt.Errorf("user_accounts.Delete load: %w", err)
-	}
-
-	eid := ua.AccountHolder
-	if err := s.az.Authorize(ctx, "delete", &eid); err != nil {
 		return err
 	}
+	eid := ua.AccountHolder
 
 	before := uaSnapshot(ua)
 
@@ -669,20 +681,23 @@ func (s *UserAccountService) RecordLogin(ctx context.Context, accountID int64, p
 // is mutated; the Observe call participates in a transaction solely for
 // audit-row atomicity.
 //
-// Returns coreservice.ErrNotFound when the target UUID does not exist.
-// Returns an authz error when the actor is not permitted to assume the target.
+// Returns apiresp.ErrUnauthenticated when the context carries no effective
+// actor. Returns apiresp.ErrForbidden when the target UUID does not exist or
+// the actor is not permitted to assume the target; the two cases are
+// indistinguishable to the caller (see authorizeUserAccount).
 func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (sudoUA db.UserAccount, actorUA db.UserAccount, err error) {
-	actorUA, err = s.q.GetUserAccountByUUID(ctx, targetUUID)
+	actorUA, err = authorizeUserAccount(ctx, s.q, s.az, "assume", targetUUID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
-		}
-		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume load target: %w", err)
+		return db.UserAccount{}, db.UserAccount{}, err
 	}
+	targetEntityID := actorUA.AccountHolder
 
-	actorEntityID, ok := opctx.ActorEntityID(ctx)
+	// The admin lookup runs only after authorization. The effective actor is
+	// used (not opctx.ActorEntityID) so a sudo-only identity is not rejected.
+	// RequireAuthenticated inside the helper guarantees one is present.
+	actorEntityID, ok := opctx.EffectiveActorEntityID(ctx)
 	if !ok {
-		return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
+		return db.UserAccount{}, db.UserAccount{}, apiresp.ErrUnauthenticated
 	}
 	sudoUA, err = s.q.GetUserAccountByAccountHolder(ctx, actorEntityID)
 	if err != nil {
@@ -690,11 +705,6 @@ func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (
 			return db.UserAccount{}, db.UserAccount{}, coreservice.ErrNotFound
 		}
 		return db.UserAccount{}, db.UserAccount{}, fmt.Errorf("user_accounts.Assume load admin: %w", err)
-	}
-
-	targetEntityID := actorUA.AccountHolder
-	if err := s.az.Authorize(ctx, "assume", &targetEntityID); err != nil {
-		return db.UserAccount{}, db.UserAccount{}, err
 	}
 
 	detail := map[string]any{
@@ -710,6 +720,43 @@ func (s *UserAccountService) Assume(ctx context.Context, targetUUID uuid.UUID) (
 
 	s.obs.ObserveAfterCommit(ctx, "assume", "user_account", &targetEntityID, detail)
 	return sudoUA, actorUA, nil
+}
+
+// authorizeUserAccount loads the user account identified by its own UUID
+// (user_accounts.uuid, which is not an entities.uuid) and authorizes op against
+// its account holder entity, masking existence. It is the local equivalent of
+// entity.Resolver.AuthorizeResolve for a non-entity UUID. In order:
+//
+//  1. authz.RequireAuthenticated (sudo-aware); failure is ErrUnauthenticated.
+//  2. A nil authorizer fails closed with apiresp.ErrForbidden.
+//  3. The account is looked up.
+//  4. On a miss, az.Authorize(ctx, op, &0) is called, its result discarded,
+//     and apiresp.ErrForbidden returned, so a missing and a forbidden UUID
+//     give the same error. Authorizers must treat target 0 as a denial.
+//  5. Any other lookup error is wrapped, not masked.
+//  6. On a hit, the result of az.Authorize(ctx, op, &accountHolder) is
+//     returned unchanged along with the account.
+func authorizeUserAccount(ctx context.Context, q db.Querier, az coreAuthz.Authorizer, op string, id uuid.UUID) (db.UserAccount, error) {
+	if err := coreAuthz.RequireAuthenticated(ctx); err != nil {
+		return db.UserAccount{}, err
+	}
+	if az == nil {
+		return db.UserAccount{}, apiresp.ErrForbidden
+	}
+	ua, err := q.GetUserAccountByUUID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			var missID int64
+			_ = az.Authorize(ctx, op, &missID)
+			return db.UserAccount{}, apiresp.ErrForbidden
+		}
+		return db.UserAccount{}, fmt.Errorf("user_accounts: load by uuid: %w", err)
+	}
+	holder := ua.AccountHolder
+	if err := az.Authorize(ctx, op, &holder); err != nil {
+		return db.UserAccount{}, err
+	}
+	return ua, nil
 }
 
 // LoadByUUID loads a user account by its public UUID without performing
@@ -757,6 +804,20 @@ func uaSnapshot(ua db.UserAccount) map[string]any {
 func isPgUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return extractPgError(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// userAccountsEmailConstraint is the Postgres name of the inline UNIQUE
+// constraint on user_accounts.email (auto-named by 0100_baseline.sql).
+const userAccountsEmailConstraint = "user_accounts_email_key"
+
+// isEmailTakenViolation reports whether err carries a unique violation (23505)
+// on the user_accounts.email constraint. It matches the constraint name
+// exactly and unwraps with errors.As, because the violation reaches the
+// caller wrapped by the transaction closure; a 23505 on any other constraint
+// raised in the same transaction is not an email conflict and must stay a 500.
+func isEmailTakenViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == userAccountsEmailConstraint
 }
 
 // extractPgError unwraps a *pgconn.PgError from err, if present.

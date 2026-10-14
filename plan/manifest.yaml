@@ -1,9 +1,4 @@
 version: 1
 plans:
-    - slug: users-conformance
-      status: working
-      wave:
-        slug: http-error-precedence-conformance
-        leadProject: core
     - slug: users-security-hardening
       status: working

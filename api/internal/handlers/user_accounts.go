@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -38,18 +37,6 @@ func NewUserAccountsHandler(service *svc.UserAccountService, grantAdmin, revokeA
 	return &UserAccountsHandler{svc: service, grantAdmin: grantAdmin, revokeAdmin: revokeAdmin}
 }
 
-// writeServiceError maps a service error to the appropriate HTTP response.
-//
-// localAuthz.ErrUnauthenticated/ErrForbidden, svc.ErrInvalidInput, and
-// svc.ErrEmailTaken are all promoted aliases of (or, for ErrEmailTaken,
-// built directly via) apiresp's canonical sentinels, so a plain
-// apiresp.WriteError classifies every one of them correctly — including
-// field-level details, e.g. svc.ErrEmailTaken's users.email_taken detail —
-// with no local mapping-point special case.
-func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
-	apiresp.WriteError(w, r, err)
-}
-
 // createUserAccountRequest is the body for POST /v1/user-accounts (admin).
 type createUserAccountRequest struct {
 	Email      string  `json:"email"`
@@ -58,17 +45,39 @@ type createUserAccountRequest struct {
 	FamilyName string  `json:"family_name"`
 }
 
+// Validate runs the stateless shape checks for POST /v1/user-accounts. It
+// runs inside server.Decode, ahead of authorization, and uses the same codes
+// and messages as UserAccountService.Create (which keeps its own checks for
+// in-process callers).
+func (r *createUserAccountRequest) Validate() []apiresp.FieldError {
+	var out []apiresp.FieldError
+	if strings.TrimSpace(strings.ToLower(r.Email)) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "email", Code: "users.email_required", Message: "email is required",
+		})
+	}
+	if strings.TrimSpace(r.GivenName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "given_name", Code: "users.given_name_required", Message: "given_name is required",
+		})
+	}
+	if strings.TrimSpace(r.FamilyName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "family_name", Code: "users.family_name_required", Message: "family_name is required",
+		})
+	}
+	if r.Password != nil && len(*r.Password) < 12 {
+		out = append(out, apiresp.FieldError{
+			Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
+		})
+	}
+	return out
+}
+
 // Create handles POST /v1/user-accounts (admin).
 func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserAccountRequest
-	if err := server.Decode(r, &req); err != nil {
-		// Authorize before reporting a malformed body so an unauthorized
-		// caller gets 403, not a 400 request-shape oracle.
-		if aerr := h.svc.AuthorizeCreate(r.Context()); aerr != nil {
-			writeServiceError(w, r, aerr)
-			return
-		}
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -82,7 +91,7 @@ func (h *UserAccountsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if !errors.Is(err, svc.ErrInvalidInput) {
 			slog.ErrorContext(r.Context(), "user_accounts.create", "error", err)
 		}
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -125,7 +134,7 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.list", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -142,19 +151,16 @@ func (h *UserAccountsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /v1/user-accounts/{uuid} (admin).
 func (h *UserAccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
 	ua, err := h.svc.Get(r.Context(), id)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			apiresp.WriteError(w, r, apiresp.ErrNotFound)
-			return
-		}
 		slog.ErrorContext(r.Context(), "user_accounts.get", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -176,16 +182,38 @@ type updateUserAccountRequest struct {
 	FamilyName *string `json:"family_name"`
 }
 
+// Validate runs the stateless shape checks for PUT /v1/user-accounts/{uuid}:
+// a present field must not be blank after trimming.
+func (r *updateUserAccountRequest) Validate() []apiresp.FieldError {
+	var out []apiresp.FieldError
+	if r.Email != nil && strings.TrimSpace(*r.Email) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "email", Code: "users.email_required", Message: "email is required",
+		})
+	}
+	if r.GivenName != nil && strings.TrimSpace(*r.GivenName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "given_name", Code: "users.given_name_required", Message: "given_name is required",
+		})
+	}
+	if r.FamilyName != nil && strings.TrimSpace(*r.FamilyName) == "" {
+		out = append(out, apiresp.FieldError{
+			Field: "family_name", Code: "users.family_name_required", Message: "family_name is required",
+		})
+	}
+	return out
+}
+
 // Update handles PUT /v1/user-accounts/{uuid} (admin).
 func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
 	var req updateUserAccountRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -196,7 +224,7 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.update", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -205,14 +233,15 @@ func (h *UserAccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /v1/user-accounts/{uuid} (admin) — soft-deletes by archiving the entity.
 func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.delete", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -223,14 +252,15 @@ func (h *UserAccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Delegates to the injected grantAdmin function, which checks authorization and
 // creates a wildcard manage grant for the target user.
 func (h *UserAccountsHandler) GrantAdmin(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
 	if err := h.grantAdmin(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.grant-admin", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
@@ -241,29 +271,19 @@ func (h *UserAccountsHandler) GrantAdmin(w http.ResponseWriter, r *http.Request)
 // Delegates to the injected revokeAdmin function, which checks authorization and
 // deletes the wildcard manage grant for the target user.
 func (h *UserAccountsHandler) RevokeAdmin(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseUUIDParam(w, r)
-	if !ok {
+	id, err := apiresp.ParseUUIDParam("uuid", chi.URLParam(r, "uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
 	if err := h.revokeAdmin(r.Context(), id); err != nil {
 		slog.ErrorContext(r.Context(), "user_accounts.revoke-admin", "error", err)
-		writeServiceError(w, r, err)
+		apiresp.WriteError(w, r, err)
 		return
 	}
 
 	server.JSON(w, http.StatusOK, map[string]any{"uuid": id.String()})
-}
-
-// parseUUIDParam extracts the {uuid} chi URL parameter, writing a 400 on parse failure.
-func parseUUIDParam(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	raw := chi.URLParam(r, "uuid")
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return uuid.UUID{}, false
-	}
-	return id, true
 }
 
 // userAccountResponse builds a public-facing map from a service UserAccount.

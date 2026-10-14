@@ -10,7 +10,7 @@ When `USERS_COOKIE_PATH` is unset, the cookie `Path` is derived from the request
 
 ## When to set USERS_COOKIE_PATH
 
-If a proxy strips the mount prefix, the API sees `/v1/auth/oidc/...` while the browser is at `/manage/v1/auth/oidc/...`. The derived `Path` (`/v1/auth/oidc/`) does not match the browser's URL, the browser never returns the cookie, and the OIDC callback fails with HTTP 400 `missing state cookie`.
+If a proxy strips the mount prefix, the API sees `/v1/auth/oidc/...` while the browser is at `/manage/v1/auth/oidc/...`. The derived `Path` (`/v1/auth/oidc/`) does not match the browser's URL, the browser never returns the cookie, and the OIDC callback fails with HTTP 400 `invalid_input` (detail `users.oidc_state_cookie_required`).
 
 Set `USERS_COOKIE_PATH` to the public base path. The cookie `Path` becomes the base plus `/v1/auth/oidc/`, for example `/manage/v1/auth/oidc/`. The same value is used when the cookie is set (OIDC start, identity link start) and when it is cleared (callback), so the clear always matches.
 
