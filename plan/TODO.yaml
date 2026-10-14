@@ -16,7 +16,8 @@ phases:
           digest: Verified TLS is now the default for OIDC discovery and JWKS fetches; skip-verify is behind explicit WithInsecureSkipTLSVerify opt-in (local dev only), re-exported publicly, four tests cover required cases.
           git:
             branch: plan/users-security-hardening-01-001
-            commit: []
+            commit:
+                - 565df15
             merge: null
         - number: 2
           slug: document-tls-opt-in
