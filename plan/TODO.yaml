@@ -314,6 +314,7 @@ phases:
           path: phase-09-remediation-04/003-reconcile-spec-request-status-codes.md
           done: false
           tier: sonnet-low
+          digest: Replaced 202 with 204 in six places in docs/mod-users-spec.md to match the handlers. No other changes.
           findings:
             - BM3K
           git:
