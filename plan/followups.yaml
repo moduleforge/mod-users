@@ -1408,3 +1408,13 @@ items:
           Project doc is not reachable from README.md; no link in the reachable set points to it.
         recommendation:
           Link it from the appropriate reachable doc (e.g. docs/project-structure.md) or confirm it is intentionally unlinked.
+    - title: The sibling mod-core checkout has model/migra
+      id: miWN
+      date: "2026-10-14"
+      tags:
+        - type:bug
+        - priority:medium
+        - effort:medium
+        - plan/phase:remediation-04
+        - plan/slug:users-security-hardening
+      text: The sibling mod-core checkout has model/migrations/0100_natural_person_owner_invariant.sql, which collides with this repo's 0100_baseline.sql in make -C model compose output. This environment issue blocks the default integration test setup and the migrate targets. Not filed as a finding by the task agent; no followups filed or fixed.
