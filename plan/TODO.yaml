@@ -122,7 +122,7 @@ phases:
             branch: plan/users-security-hardening-06-001
             commit:
                 - "3027763"
-            merge: null
+            merge: 97345cd3200bb38bcec2eda09532dcd2f56d1a5a
         - number: 2
           slug: assert-certificate-error-in-tls-test
           title: Assert Certificate Error In Default TLS Verification Test
