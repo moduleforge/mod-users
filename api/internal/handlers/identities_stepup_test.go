@@ -63,6 +63,7 @@ func (f *stepUpFakeQueries) CreateEmailCode(_ context.Context, arg db.CreateEmai
 		CodeHash:      arg.CodeHash,
 		Purpose:       arg.Purpose,
 		ExpiresAt:     arg.ExpiresAt,
+		CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	f.emailCodes[emailCodeKey(arg.UserAccountID, arg.Purpose)] = code
 	return code, nil
@@ -92,6 +93,40 @@ func (f *stepUpFakeQueries) ConsumeEmailCode(_ context.Context, id int64) error 
 		}
 	}
 	return nil // idempotent
+}
+
+// ClaimEmailCodeAttempt mirrors the SQL: increment failed_attempts, consume
+// (delete, as ConsumeEmailCode does here) when the bound is reached, and return
+// pgx.ErrNoRows when the code is missing or already exhausted.
+func (f *stepUpFakeQueries) ClaimEmailCodeAttempt(_ context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for k, c := range f.emailCodes {
+		if c.ID != arg.ID {
+			continue
+		}
+		if c.FailedAttempts >= arg.MaxAttempts {
+			return db.EmailCode{}, pgx.ErrNoRows
+		}
+		c.FailedAttempts++
+		if c.FailedAttempts >= arg.MaxAttempts {
+			delete(f.emailCodes, k)
+		} else {
+			f.emailCodes[k] = c
+		}
+		return c, nil
+	}
+	return db.EmailCode{}, pgx.ErrNoRows
+}
+
+func (f *stepUpFakeQueries) GetLatestEmailCodeCreatedAt(_ context.Context, arg db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	code, ok := f.emailCodes[emailCodeKey(arg.UserAccountID, arg.Purpose)]
+	if !ok || (code.ExpiresAt.Valid && code.ExpiresAt.Time.Before(time.Now())) {
+		return pgtype.Timestamptz{}, pgx.ErrNoRows
+	}
+	return code.CreatedAt, nil
 }
 
 // fakeSender records sent emails for assertion.

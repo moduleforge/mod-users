@@ -109,6 +109,12 @@ func (s *stubUAQuerier) GetActiveEmailCode(_ context.Context, _ db.GetActiveEmai
 	return db.EmailCode{}, pgx.ErrNoRows
 }
 func (s *stubUAQuerier) ConsumeEmailCode(_ context.Context, _ int64) error { return nil }
+func (s *stubUAQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
+	return db.EmailCode{}, pgx.ErrNoRows
+}
+func (s *stubUAQuerier) GetLatestEmailCodeCreatedAt(_ context.Context, _ db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
+	return pgtype.Timestamptz{}, pgx.ErrNoRows
+}
 func (s *stubUAQuerier) CreatePasswordReset(_ context.Context, _ db.CreatePasswordResetParams) (db.PasswordReset, error) {
 	return db.PasswordReset{}, nil
 }

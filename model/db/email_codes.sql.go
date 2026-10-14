@@ -11,6 +11,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimEmailCodeAttempt = `-- name: ClaimEmailCodeAttempt :one
+UPDATE email_codes
+SET failed_attempts = failed_attempts + 1,
+    consumed_at = CASE WHEN failed_attempts + 1 >= $2::int THEN now() ELSE consumed_at END
+WHERE id = $1
+  AND consumed_at IS NULL
+  AND failed_attempts < $2::int
+RETURNING id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at, failed_attempts
+`
+
+type ClaimEmailCodeAttemptParams struct {
+	ID          int64 `json:"id"`
+	MaxAttempts int32 `json:"max_attempts"`
+}
+
+// Atomically claims one verification attempt (call before comparing the code).
+// $2 is the max attempts. The code is consumed when the bound is reached.
+// No row is returned when the code is already consumed or exhausted.
+func (q *Queries) ClaimEmailCodeAttempt(ctx context.Context, arg ClaimEmailCodeAttemptParams) (EmailCode, error) {
+	row := q.db.QueryRow(ctx, claimEmailCodeAttempt, arg.ID, arg.MaxAttempts)
+	var i EmailCode
+	err := row.Scan(
+		&i.ID,
+		&i.UserAccountID,
+		&i.CodeHash,
+		&i.Purpose,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+		&i.FailedAttempts,
+	)
+	return i, err
+}
+
 const consumeEmailCode = `-- name: ConsumeEmailCode :exec
 UPDATE email_codes
 SET consumed_at = now()
@@ -25,7 +59,7 @@ func (q *Queries) ConsumeEmailCode(ctx context.Context, id int64) error {
 const createEmailCode = `-- name: CreateEmailCode :one
 INSERT INTO email_codes (user_account_id, code_hash, purpose, expires_at)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at
+RETURNING id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at, failed_attempts
 `
 
 type CreateEmailCodeParams struct {
@@ -51,12 +85,13 @@ func (q *Queries) CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams
 		&i.ExpiresAt,
 		&i.ConsumedAt,
 		&i.CreatedAt,
+		&i.FailedAttempts,
 	)
 	return i, err
 }
 
 const getActiveEmailCode = `-- name: GetActiveEmailCode :one
-SELECT id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at
+SELECT id, user_account_id, code_hash, purpose, expires_at, consumed_at, created_at, failed_attempts
 FROM email_codes
 WHERE user_account_id = $1
   AND purpose = $2
@@ -82,6 +117,32 @@ func (q *Queries) GetActiveEmailCode(ctx context.Context, arg GetActiveEmailCode
 		&i.ExpiresAt,
 		&i.ConsumedAt,
 		&i.CreatedAt,
+		&i.FailedAttempts,
 	)
 	return i, err
+}
+
+const getLatestEmailCodeCreatedAt = `-- name: GetLatestEmailCodeCreatedAt :one
+SELECT created_at
+FROM email_codes
+WHERE user_account_id = $1
+  AND purpose = $2
+  AND consumed_at IS NULL
+  AND expires_at > now()
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetLatestEmailCodeCreatedAtParams struct {
+	UserAccountID int64  `json:"user_account_id"`
+	Purpose       string `json:"purpose"`
+}
+
+// Creation time of the newest unconsumed, unexpired code for the request
+// cooldown check. No row when there is none.
+func (q *Queries) GetLatestEmailCodeCreatedAt(ctx context.Context, arg GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getLatestEmailCodeCreatedAt, arg.UserAccountID, arg.Purpose)
+	var created_at pgtype.Timestamptz
+	err := row.Scan(&created_at)
+	return created_at, err
 }

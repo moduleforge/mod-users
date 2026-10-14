@@ -30,3 +30,11 @@ architectural_impact: false
 - After the migration
 - After queries and regeneration
 - After updating fakes
+
+## Status
+
+Outcome: succeeded (2026-10-14).
+
+- Added `model/migrations/sql/0102_email_codes_failed_attempts.sql`; added `ClaimEmailCodeAttempt` (param `max_attempts`) and `GetLatestEmailCodeCreatedAt` to `model/queries/email_codes.sql`; existing email_codes queries now also select `failed_attempts` so they still return `db.EmailCode`. Regenerated `model/db`.
+- Fakes updated: `api/internal/handlers/identities_stepup_test.go` (real increment/exhaustion semantics), `api/internal/handlers/auth/guards_test.go`, `api/internal/service/user_accounts_upgrade_test.go`.
+- Validation: model and api build, vet, `go test ./...` pass; sqlc regen yields no further diff. DB check on throwaway postgres:16: 0102 up/down round-trips, claim increments, exhausts at bound, returns no row afterward. The full baseline needs external mod-core tables, so verification used the email_codes table definition plus 0101 and 0102 on a stub user_accounts table.

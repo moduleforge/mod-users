@@ -77,6 +77,14 @@ func (s *stubAuthQuerier) ConsumeEmailCode(_ context.Context, _ int64) error {
 	return nil
 }
 
+func (s *stubAuthQuerier) ClaimEmailCodeAttempt(_ context.Context, _ db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
+	return db.EmailCode{}, pgx.ErrNoRows
+}
+
+func (s *stubAuthQuerier) GetLatestEmailCodeCreatedAt(_ context.Context, _ db.GetLatestEmailCodeCreatedAtParams) (pgtype.Timestamptz, error) {
+	return pgtype.Timestamptz{}, pgx.ErrNoRows
+}
+
 func (s *stubAuthQuerier) UpdateUserAccount(_ context.Context, _ db.UpdateUserAccountParams) error {
 	return nil
 }
