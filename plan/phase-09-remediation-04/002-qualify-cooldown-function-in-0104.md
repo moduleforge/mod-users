@@ -24,3 +24,7 @@ The work targets the plan branch `plan/users-security-hardening` and lands throu
 ## References
 
 1. Finding `jwyA` in this plan's `plan/findings.yaml`: migration 0104 references the cooldown function by unqualified name in its `ALTER FUNCTION` and Down `RESET search_path`.
+
+## Status
+
+succeeded (2026-10-14). Up `ALTER FUNCTION` and Down `RESET search_path` in `model/migrations/sql/0104_email_codes_cooldown_index.sql` now use `%I.create_email_code_with_cooldown(...)` with `current_schema()` via `DO`/`format`. Validation: throwaway postgres:16 showed `search_path=pg_catalog, public, pg_temp` after Up and empty proconfig after Down; `go test -tags integration ./internal/authz/` ok; `go vet -tags integration ./...` clean. Note: the composed schema dir from sibling mod-core contained a duplicate version 0100 file, so validation used a copy excluding `0100_natural_person_owner_invariant.sql`.

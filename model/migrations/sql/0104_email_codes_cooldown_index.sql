@@ -30,15 +30,22 @@ CREATE INDEX email_codes_cooldown_idx
 DO $do$
 BEGIN
   EXECUTE format(
-    'ALTER FUNCTION create_email_code_with_cooldown(BIGINT, TEXT, TEXT, TIMESTAMPTZ, INT) '
+    'ALTER FUNCTION %I.create_email_code_with_cooldown(BIGINT, TEXT, TEXT, TIMESTAMPTZ, INT) '
     'SET search_path = pg_catalog, %I, pg_temp',
-    current_schema());
+    current_schema(), current_schema());
 END $do$;
 -- +goose StatementEnd
 
 -- +goose Down
 
-ALTER FUNCTION create_email_code_with_cooldown(BIGINT, TEXT, TEXT, TIMESTAMPTZ, INT)
-  RESET search_path;
+-- +goose StatementBegin
+DO $do$
+BEGIN
+  EXECUTE format(
+    'ALTER FUNCTION %I.create_email_code_with_cooldown(BIGINT, TEXT, TEXT, TIMESTAMPTZ, INT) '
+    'RESET search_path',
+    current_schema());
+END $do$;
+-- +goose StatementEnd
 
 DROP INDEX email_codes_cooldown_idx;
