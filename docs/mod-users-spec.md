@@ -250,7 +250,7 @@ The HTTP API is versioned under `/v1/`. The full OpenAPI 3.0 definition is at [`
 ### Health
 
 - [ ] `GET /healthz` — liveness probe (no auth, always `200`).
-- [ ] `GET /readyz` — readiness probe (no auth, `200` when DB is reachable, `503` otherwise).
+- [ ] `GET /readyz` — readiness probe (no auth, `200` when DB is reachable, `503` otherwise, with a fixed body `{"status":"not_ready","db":"unavailable"}` and no error detail).
 
 ### Authentication (no auth required)
 

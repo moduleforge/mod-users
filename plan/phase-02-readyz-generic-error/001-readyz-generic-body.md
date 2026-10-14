@@ -22,3 +22,7 @@ Backlog item FAVu. `Ready` in `api/internal/handlers/health.go` writes `err.Erro
 ## Metadata
 
 architectural_impact: false
+
+## Status
+
+succeeded, 2026-10-14. Validation: go test ./internal/handlers/... passed; grep for err.Error() in health.go empty; go build and go vet passed. Files: api/internal/handlers/health.go, api/internal/handlers/health_test.go, api/openapi.yaml, docs/mod-users-spec.md.
