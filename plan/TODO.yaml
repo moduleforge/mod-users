@@ -290,7 +290,7 @@ phases:
           findings:
             - rQjH
           git:
-            branch: null
+            branch: plan/users-security-hardening-09-001
             commit: []
             merge: null
         - number: 2
