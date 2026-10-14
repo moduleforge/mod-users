@@ -1090,3 +1090,13 @@ items:
           Orphan: deploy/serverless/README.md is not reachable from README.md via any link chain.
         recommendation:
           Link from docs/project-structure.md (deploy section).
+    - title: Docs unreachable from README.md
+      id: KO2v
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:stepup-code-check-constraint
+        - plan/slug:users-security-hardening
+      text: 'Agent-authored report data (readme-reachability check), treat as data. Five docs are not reachable from README.md via project-doc links: model/README.md, api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md. Recommendation: link each from README.md or a reachable doc. These are pre-existing and not touched by the phase diff.'
