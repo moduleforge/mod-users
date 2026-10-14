@@ -15,7 +15,7 @@ phases:
           tier: sonnet-med
           digest: Verified TLS is now the default for OIDC discovery and JWKS fetches; skip-verify is behind explicit WithInsecureSkipTLSVerify opt-in (local dev only), re-exported publicly, four tests cover required cases.
           git:
-            branch: null
+            branch: plan/users-security-hardening-01-001
             commit: []
             merge: null
         - number: 2
