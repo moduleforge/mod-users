@@ -975,11 +975,15 @@ paths:
               $ref: "#/components/schemas/EmailCodeVerify"
       responses:
         "200":
-          description: Code valid; JWT returned.
+          description: Code valid for the `login` purpose; JWT returned.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
+        "204":
+          description: Code valid for the `verify_email` purpose; email marked verified (no content).
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -999,7 +1003,7 @@ paths:
               $ref: "#/components/schemas/PasswordResetRequest"
       responses:
         "204":
-          description: Reset email sent (if account exists).
+          description: Reset email sent (if account exists). Always 204 (no content) to prevent enumeration.
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
