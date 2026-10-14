@@ -214,5 +214,6 @@ phases:
             - R7WT
           git:
             branch: plan/users-security-hardening-07-004
-            commit: []
+            commit:
+                - 30c3bbf
             merge: null
