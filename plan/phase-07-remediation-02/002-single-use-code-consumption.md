@@ -28,3 +28,10 @@ architectural_impact: false
 
 - finding `1Ki1`
 - finding `CR1R`
+
+## Status
+
+- Outcome: succeeded (2026-10-14).
+- `ConsumeEmailCode` is now `:execrows` (`model/queries/email_codes.sql`, regenerated `model/db`). `EmailCodeVerify` (`api/internal/handlers/auth/emailcode.go`) and `StepUpVerify` (`api/internal/handlers/identities.go`) grant success only if the claim itself consumed the code (`claimed.ConsumedAt != nil`) or the consume affected one row; zero rows answers the existing 401. A consume error now fails closed with a 500 instead of being logged and ignored.
+- Fakes updated with matching semantics; new tests cover concurrent single-success, final-attempt success then 401, and consume-no-row 401 for both endpoints.
+- Validation: `go test -race ./...`, `go vet`, `make lint` pass; sqlc rerun yields no further diff.

@@ -80,16 +80,19 @@ func (q *attemptQuerier) CreateEmailCodeWithCooldown(_ context.Context, arg db.C
 	return c, nil
 }
 
-func (q *attemptQuerier) ConsumeEmailCode(_ context.Context, id int64) error {
+// ConsumeEmailCode mirrors the SQL :execrows: 1 when it consumed a live code,
+// 0 when the code was already consumed.
+func (q *attemptQuerier) ConsumeEmailCode(_ context.Context, id int64) (int64, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	for i := range q.codes {
 		if q.codes[i].ID == id && q.codes[i].ConsumedAt == nil {
 			now := time.Now()
 			q.codes[i].ConsumedAt = &now
+			return 1, nil
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 func (q *attemptQuerier) ClaimEmailCodeAttempt(_ context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
@@ -408,4 +411,73 @@ func TestSendEmailCode_ConcurrentRequestsMintOnce(t *testing.T) {
 	if sender.callCount() != 1 {
 		t.Errorf("emails sent = %d, want exactly 1", sender.callCount())
 	}
+}
+
+func TestEmailCodeVerify_CorrectOnFinalAttemptSucceedsOnceThen401(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newAttemptFixture(t)
+	q.seedCode(t, 42, "login", attemptTestCode, time.Now())
+
+	for i := 0; i < MaxEmailCodeAttempts-1; i++ {
+		if rec := verifyCode(h, "a@example.com", "000000"); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong guess %d: status = %d, want 401", i+1, rec.Code)
+		}
+	}
+	// The claim of the final attempt consumes the code; that claimer still wins.
+	if rec := verifyCode(h, "a@example.com", attemptTestCode); rec.Code != http.StatusOK {
+		t.Fatalf("correct code on final attempt: status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := verifyCode(h, "a@example.com", attemptTestCode); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("submission after final attempt: status = %d, want 401", rec.Code)
+	}
+}
+
+func TestEmailCodeVerify_ConcurrentCorrectSubmissionsYieldOneSuccess(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newAttemptFixture(t)
+	q.seedCode(t, 42, "login", attemptTestCode, time.Now())
+
+	const n = 4
+	var wg sync.WaitGroup
+	var ok, unauthorized atomic.Int32
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			switch verifyCode(h, "a@example.com", attemptTestCode).Code {
+			case http.StatusOK:
+				ok.Add(1)
+			case http.StatusUnauthorized:
+				unauthorized.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if ok.Load() != 1 || unauthorized.Load() != n-1 {
+		t.Fatalf("200s = %d, 401s = %d; want exactly 1 and %d", ok.Load(), unauthorized.Load(), n-1)
+	}
+}
+
+// A claimer that matched but whose consume affected no row (a concurrent
+// request consumed the code between claim and consume) must not succeed.
+func TestEmailCodeVerify_ConsumeNoRowIs401(t *testing.T) {
+	t.Parallel()
+	_, q, _ := newAttemptFixture(t)
+	q.seedCode(t, 42, "login", attemptTestCode, time.Now())
+	hook := &consumeRaceQuerier{attemptQuerier: q}
+	h := newGuardTestHandler(hook, &recordingSender{})
+	if rec := verifyCode(h, "a@example.com", attemptTestCode); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+// consumeRaceQuerier reports that the consume affected no row.
+type consumeRaceQuerier struct{ *attemptQuerier }
+
+func (c *consumeRaceQuerier) ConsumeEmailCode(_ context.Context, _ int64) (int64, error) {
+	return 0, nil
 }

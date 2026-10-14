@@ -13,7 +13,7 @@ WHERE user_account_id = $1
 ORDER BY created_at DESC
 LIMIT 1;
 
--- name: ConsumeEmailCode :exec
+-- name: ConsumeEmailCode :execrows
 UPDATE email_codes
 SET consumed_at = now()
 WHERE id = $1 AND consumed_at IS NULL;

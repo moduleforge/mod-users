@@ -45,15 +45,18 @@ func (q *Queries) ClaimEmailCodeAttempt(ctx context.Context, arg ClaimEmailCodeA
 	return i, err
 }
 
-const consumeEmailCode = `-- name: ConsumeEmailCode :exec
+const consumeEmailCode = `-- name: ConsumeEmailCode :execrows
 UPDATE email_codes
 SET consumed_at = now()
 WHERE id = $1 AND consumed_at IS NULL
 `
 
-func (q *Queries) ConsumeEmailCode(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, consumeEmailCode, id)
-	return err
+func (q *Queries) ConsumeEmailCode(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, consumeEmailCode, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createEmailCode = `-- name: CreateEmailCode :one

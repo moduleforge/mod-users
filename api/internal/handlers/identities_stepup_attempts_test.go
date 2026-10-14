@@ -286,3 +286,69 @@ func TestSendStepUpCode_ConcurrentRequestsMintOnce(t *testing.T) {
 		t.Errorf("creates=%d emails=%d, want exactly 1/1", creates, len(sender.sent))
 	}
 }
+
+func TestStepUpVerify_CorrectOnFinalAttemptSucceedsOnceThen401(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newStepUpAttemptHandler(t)
+	seedStepUpCode(t, q, stepUpAttemptCode, time.Now())
+
+	for i := 0; i < maxEmailCodeAttempts-1; i++ {
+		if rec := stepUpVerifyCall(h, "000000"); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong guess %d: status = %d, want 401", i+1, rec.Code)
+		}
+	}
+	// The claim of the final attempt consumes the code; that claimer still wins.
+	if rec := stepUpVerifyCall(h, stepUpAttemptCode); rec.Code != http.StatusOK {
+		t.Fatalf("correct code on final attempt: status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := stepUpVerifyCall(h, stepUpAttemptCode); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("submission after final attempt: status = %d, want 401", rec.Code)
+	}
+}
+
+func TestStepUpVerify_ConcurrentCorrectSubmissionsYieldOneSuccess(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newStepUpAttemptHandler(t)
+	seedStepUpCode(t, q, stepUpAttemptCode, time.Now())
+
+	const n = 4
+	var wg sync.WaitGroup
+	var ok, unauthorized atomic.Int32
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			switch stepUpVerifyCall(h, stepUpAttemptCode).Code {
+			case http.StatusOK:
+				ok.Add(1)
+			case http.StatusUnauthorized:
+				unauthorized.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if ok.Load() != 1 || unauthorized.Load() != n-1 {
+		t.Fatalf("200s = %d, 401s = %d; want exactly 1 and %d", ok.Load(), unauthorized.Load(), n-1)
+	}
+}
+
+// consumeNoRowStore reports that the consume affected no row.
+type consumeNoRowStore struct{ *stepUpFakeQueries }
+
+func (c *consumeNoRowStore) ConsumeEmailCode(_ context.Context, _ int64) (int64, error) {
+	return 0, nil
+}
+
+func TestStepUpVerify_ConsumeNoRowIs401(t *testing.T) {
+	t.Parallel()
+	h, q, _ := newStepUpAttemptHandler(t)
+	seedStepUpCode(t, q, stepUpAttemptCode, time.Now())
+	h.codes = &consumeNoRowStore{stepUpFakeQueries: q}
+	if rec := stepUpVerifyCall(h, stepUpAttemptCode); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
