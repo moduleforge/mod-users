@@ -790,7 +790,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
         "503":
-          description: Service is not ready.
+          description: Service is not ready. The `db` field is the fixed value `unavailable`; failure detail is logged server-side only.
           content:
             application/json:
               schema:
