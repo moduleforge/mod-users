@@ -42,10 +42,10 @@ items:
       id: miWN
       date: "2026-10-14"
       tags:
-        - type:ambiguity
+        - type:bug
         - plan/phase:remediation-04
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:medium
       text: The sibling mod-core checkout has model/migrations/0100_natural_person_owner_invariant.sql, which collides with this repo's 0100_baseline.sql in make -C model compose output. This environment issue blocks the default integration test setup and the migrate targets. Not filed as a finding by the task agent; no followups filed or fixed.
     - title: The spec now states 204 for the email-code a…
       id: yOBc
