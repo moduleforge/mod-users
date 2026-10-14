@@ -43,11 +43,13 @@ phases:
           slug: readyz-generic-body
           title: Return Generic Readyz Body And Log Detail
           path: phase-02-readyz-generic-error/001-readyz-generic-body.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Ready now logs the ping error with slog.ErrorContext and returns the fixed body {"status":"not_ready","db":"unavailable"}. The pool is accepted through a small Pinger interface. Tests, OpenAPI description and spec line updated.
           git:
-            branch: null
-            commit: []
+            branch: plan/users-security-hardening-02-001
+            commit:
+                - 083b0f4
             merge: null
     - number: 3
       slug: stepup-code-check-constraint
