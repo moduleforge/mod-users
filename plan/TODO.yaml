@@ -169,7 +169,7 @@ phases:
             - 9NPY
             - uFx5
           git:
-            branch: null
+            branch: plan/users-security-hardening-07-001
             commit: []
             merge: null
         - number: 2
