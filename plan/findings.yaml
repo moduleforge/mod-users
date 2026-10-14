@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'Environmental issue, not a finding: make -C m'
-      id: kh4F
-      date: "2026-10-14"
-      tags:
-        - type:bug
-        - plan/phase:remediation-03
-        - priority:medium
-        - effort:small
-      text: 'Environmental issue, not a finding: make -C model compose copies sibling mod-core migration 0100_natural_person_owner_invariant.sql next to mod-users 0100_baseline.sql; goose panics ''duplicate version 100''. Needs a decision: followup against mod-core or the compose step.'
     - title: The spec's anti-enumeration bullet (and line…
       id: BM3K
       date: "2026-10-14"
@@ -571,4 +562,9 @@ closed:
       title: When two verifies race on the final attempts…
       disposition: fixed
       ref: phase-08-remediation-03/003-document-email-code-limiting.md
+      date: "2026-10-14"
+    - id: kh4F
+      title: 'Environmental issue, not a finding: make -C m'
+      disposition: promoted
+      ref: kh4F
       date: "2026-10-14"
