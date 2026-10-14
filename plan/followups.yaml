@@ -420,16 +420,6 @@ items:
         - priority:low
         - effort:small
       text: '[phase-01 gate, documentation-004/005/006, minor, pre-existing — not caused by this phase''s diff] deploy/k8s/README.md and deploy/serverless/README.md (one-line "Populated in Phase 8" stubs) and api/server/CLAUDE.md (an empty claude-mem-context stub, not covered by the .claude/ exemption since it lives outside that directory) are all unreachable from README.md. Link the two deploy READMEs from docs/project-structure.md''s deploy/ section; either populate api/server/CLAUDE.md with real guidance and link it, or remove it if committed unintentionally.'
-    - title: Ownership arm extends SSH access to owners
-      id: WHKp
-      date: "2026-09-28"
-      tags:
-        - type:security
-        - plan/phase:phase-01-ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:medium
-        - effort:small
-      text: 'The Authorizer''s ownership arm means any entity that owns another natural_person entity (owner_id not self) can register SSH keys on that person''s account and thus authenticate as them over git. Type grants add a second route to the same capability: ''update'' or ''manage'' on the natural_person type entity reaches every natural_person instance (docs/architecture.md D13) and so the operator SSH-key routes, which authorize ''update'' on the account holder (api/internal/service/ssh_keys.go). Confirm whether non-self ownership relationships occur in practice for natural_person entities, and whether either route is intended for SSH-key registration specifically.'
     - title: Integration suite (ssh_keys_integration_test.
       id: trmJ
       date: "2026-09-28"
