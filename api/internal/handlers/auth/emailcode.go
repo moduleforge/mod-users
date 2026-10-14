@@ -49,6 +49,13 @@ func burnCodeCompare(code string) {
 	_ = dummyCodeCompare(dummyCodeHash, []byte(code))
 }
 
+// publicEmailCodePurpose reports whether purpose may be used on the
+// unauthenticated email-code endpoints. credential_change codes are issued and
+// verified only through the authenticated step-up endpoints.
+func publicEmailCodePurpose(purpose string) bool {
+	return purpose == "login" || purpose == "verify_email"
+}
+
 // emailCodeRequestBody is the body for POST /v1/auth/email-code/request.
 type emailCodeRequestBody struct {
 	Email   string `json:"email"`
@@ -98,6 +105,12 @@ func (h *Handler) EmailCodeRequest(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 	ctx := r.Context()
+
+	// Refuse silently (the caller still answers 204) so a disallowed purpose
+	// is indistinguishable from an unknown email and never mints a code.
+	if !publicEmailCodePurpose(purpose) {
+		return
+	}
 
 	ua, err := h.queries.GetUserAccountByEmail(ctx, email)
 	if err == pgx.ErrNoRows {
@@ -173,6 +186,10 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Purpose == "" {
 		req.Purpose = "login"
+	}
+	if !publicEmailCodePurpose(req.Purpose) {
+		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid purpose")
+		return
 	}
 
 	ua, err := h.queries.GetUserAccountByEmail(r.Context(), req.Email)

@@ -481,3 +481,70 @@ type consumeRaceQuerier struct{ *attemptQuerier }
 func (c *consumeRaceQuerier) ConsumeEmailCode(_ context.Context, _ int64) (int64, error) {
 	return 0, nil
 }
+
+// purposeCountingQuerier counts the DB calls a refused purpose must not make.
+type purposeCountingQuerier struct {
+	attemptQuerier
+	gets, claims int
+}
+
+func (q *purposeCountingQuerier) GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error) {
+	q.gets++
+	return q.attemptQuerier.GetActiveEmailCode(ctx, arg)
+}
+
+func (q *purposeCountingQuerier) ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error) {
+	q.claims++
+	return q.attemptQuerier.ClaimEmailCodeAttempt(ctx, arg)
+}
+
+func TestEmailCodeRequest_DisallowedPurposeMintsNothing(t *testing.T) {
+	t.Parallel()
+	for _, purpose := range []string{"credential_change", "bogus"} {
+		h, q, sender := newAttemptFixture(t)
+		body := `{"email":"a@example.com","purpose":"` + purpose + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/email-code/request", bytes.NewBufferString(body))
+		rec := httptest.NewRecorder()
+		h.EmailCodeRequest(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("%s: status = %d, want 204", purpose, rec.Code)
+		}
+		if q.creates != 0 || sender.callCount() != 0 {
+			t.Errorf("%s: creates=%d emails=%d, want 0/0", purpose, q.creates, sender.callCount())
+		}
+	}
+}
+
+func TestSendEmailCode_AllowedPurposesStillMint(t *testing.T) {
+	t.Parallel()
+	for _, purpose := range []string{"login", "verify_email"} {
+		h, q, sender := newAttemptFixture(t)
+		h.sendEmailCode(httptest.NewRequest(http.MethodPost, "/", nil), "a@example.com", purpose)
+		if q.creates != 1 || sender.callCount() != 1 {
+			t.Errorf("%s: creates=%d emails=%d, want 1/1", purpose, q.creates, sender.callCount())
+		}
+	}
+}
+
+func TestEmailCodeVerify_DisallowedPurposeNeverTouchesCodes(t *testing.T) {
+	t.Parallel()
+	ua := verifiedAccount("a@example.com", nil)
+	q := &purposeCountingQuerier{attemptQuerier: attemptQuerier{stubAuthQuerier: stubAuthQuerier{accountByEmail: &ua}}}
+	c := q.seedCode(t, ua.ID, "credential_change", attemptTestCode, time.Now())
+	h := newGuardTestHandler(q, &recordingSender{})
+	for _, purpose := range []string{"credential_change", "bogus"} {
+		body := `{"email":"a@example.com","code":"` + attemptTestCode + `","purpose":"` + purpose + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/email-code/verify", bytes.NewBufferString(body))
+		rec := httptest.NewRecorder()
+		h.EmailCodeVerify(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", purpose, rec.Code)
+		}
+	}
+	if q.gets != 0 || q.claims != 0 {
+		t.Errorf("gets=%d claims=%d, want 0/0", q.gets, q.claims)
+	}
+	if got := q.attempts(c.ID); got != 0 {
+		t.Errorf("step-up code attempts = %d, want 0", got)
+	}
+}
