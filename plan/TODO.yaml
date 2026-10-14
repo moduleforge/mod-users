@@ -206,7 +206,7 @@ phases:
           slug: email-code-db-integration-tests
           title: Add Postgres-Backed Integration Tests For Email Code Limiting
           path: phase-07-remediation-02/004-email-code-db-integration-tests.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Added Postgres-backed integration tests (TestInteg_EmailCode_*) covering atomic attempt claims, single-use consumption, atomic cooldown insert, and handler-level exhaust/cooldown/replay flows; all pass against real postgres:16.
           findings:
