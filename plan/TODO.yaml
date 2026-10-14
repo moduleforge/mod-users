@@ -177,7 +177,7 @@ phases:
           slug: single-use-code-consumption
           title: Enforce Single-Use Consumption On Email Code Success
           path: phase-07-remediation-02/002-single-use-code-consumption.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: ConsumeEmailCode is now :execrows (sqlc regenerated). EmailCodeVerify and StepUpVerify grant success only to the request that consumed the code, or to the claimer whose claim hit the 5th-attempt bound. A consume that affects no row returns the existing 401. Status codes, bodies and routes unchanged. Added tests for concurrent single-success, final-attempt success then 401, and consume-no-row 401 on both endpoints.
           findings:
