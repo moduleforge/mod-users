@@ -185,7 +185,8 @@ phases:
             - CR1R
           git:
             branch: plan/users-security-hardening-07-002
-            commit: []
+            commit:
+                - 314ade4
             merge: null
         - number: 3
           slug: allowlist-public-email-code-purpose
