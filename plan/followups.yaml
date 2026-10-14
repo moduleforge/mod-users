@@ -1298,3 +1298,13 @@ items:
           Consider counting failed attempts across all live codes for the (user, purpose) (or invalidating older live codes when a new one is minted), and add per-IP throttling on the public verify endpoint. Accept the lockout window as a documented tradeoff.
 
         Open question (quoted, unresolved): is the residual budget (about 5 guesses per account per minute plus an attacker-driven 60 s lockout) acceptable as a documented trade-off, or should a per-(user, purpose) failed-attempt window be added? Options: (a) accept and document in durable docs plus a code comment (recommended; no behavior change); (b) per-(user, purpose) failed-attempt counter over a longer window (bounds guessing but lengthens the targeted lockout; needs migration, query and handler changes); (c) per-IP throttling on the public verify endpoint (needs a scope decision; the plan overview puts a global/IP rate limiter out of scope).
+    - title: 'Environmental issue, not a finding: make -C m'
+      id: kh4F
+      date: "2026-10-14"
+      tags:
+        - type:bug
+        - priority:medium
+        - effort:small
+        - plan/phase:remediation-03
+        - plan/slug:users-security-hardening
+      text: 'Environmental issue, not a finding: make -C model compose copies sibling mod-core migration 0100_natural_person_owner_invariant.sql next to mod-users 0100_baseline.sql; goose panics ''duplicate version 100''. Needs a decision: followup against mod-core or the compose step.'
