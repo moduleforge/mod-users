@@ -305,7 +305,8 @@ phases:
             - jwyA
           git:
             branch: plan/users-security-hardening-09-002
-            commit: []
+            commit:
+                - 15b0ad7
             merge: null
         - number: 3
           slug: reconcile-spec-request-status-codes
