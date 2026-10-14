@@ -260,12 +260,14 @@ phases:
           slug: document-email-code-limiting
           title: Document Email Code Attempt Limit, Cooldown, And Exhaustion-Boundary Behavior
           path: phase-08-remediation-03/003-document-email-code-limiting.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: 'Documentation and comment-only change: email code 5-attempt limit and 60 s any-state cooldown, single-use consumption, purpose allow-list, fail-closed exhaustion boundary; migration list 0101-0104 corrected in AGENTS.md and architecture doc; design note updated; fail-closed comments at consume steps. Validated by grep for stale references and go vet.'
           findings:
             - y3s6
             - 33Bo
           git:
-            branch: null
-            commit: []
+            branch: plan/users-security-hardening-08-003
+            commit:
+                - 0ee3895
             merge: null
