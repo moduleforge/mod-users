@@ -65,7 +65,8 @@ phases:
           digest: Added the additive migration 0101 that widens the email_codes purpose CHECK to include credential_change. Verified live on postgres:16, including upgrade from 0100 and a Down/Up round-trip. No code changes were needed.
           git:
             branch: plan/users-security-hardening-03-001
-            commit: []
+            commit:
+                - b230cac
             merge: null
     - number: 4
       slug: email-code-attempt-limiting
