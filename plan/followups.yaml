@@ -1360,9 +1360,6 @@ items:
         - type:bug
         - priority:medium
         - effort:medium
-        - plan/phase:remediation-04
-        - plan/slug:users-security-hardening
-        - resolution/branch:a3475d2
       text: The sibling mod-core checkout has model/migrations/0100_natural_person_owner_invariant.sql, which collides with this repo's 0100_baseline.sql in make -C model compose output. This environment issue blocks the default integration test setup and the migrate targets. Not filed as a finding by the task agent; no followups filed or fixed.
     - title: The semaphore is global per Handler (default…
       id: x5YS
