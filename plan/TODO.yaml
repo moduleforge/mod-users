@@ -232,6 +232,7 @@ phases:
           path: phase-08-remediation-03/001-email-code-cooldown-migration-hardening.md
           done: false
           tier: sonnet-med
+          digest: 'Added migration 0104: non-partial cooldown index and pinned cooldown function search_path; down migration reverses both. Validated by EXPLAIN, proconfig check, and integration suite (74 PASS).'
           findings:
             - f7fc
             - 6DKr
