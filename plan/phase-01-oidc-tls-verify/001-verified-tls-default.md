@@ -35,3 +35,7 @@ architectural_impact: true
 - After the internal option and `newVerifier` change
 - After the public re-export
 - After the tests
+
+## Status
+
+Outcome: succeeded (2026-10-14). Go tests, go vet, and make lint pass; InsecureSkipVerify appears only in the opt-in branch of `api/internal/auth/jwt.go`. Changed: `api/internal/auth/jwt.go`, `api/auth/auth.go`, new `api/internal/auth/jwt_tls_test.go`. The default-fails test would fail against the old code, which always skipped verification for https issuers.
