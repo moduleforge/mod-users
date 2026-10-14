@@ -31,3 +31,7 @@ The work targets the plan branch `plan/users-security-hardening` and lands throu
 
 - Finding `y3s6` in this plan's `plan/findings.yaml` (durable docs omit email code attempt limit and cooldown behavior).
 - Finding `33Bo` in this plan's `plan/findings.yaml` (exhaustion-boundary fail-closed behavior is undocumented at the consume step).
+
+## Status
+
+Outcome: succeeded (2026-10-14). Validation: grep for `GetLatestEmailCodeCreatedAt` / `single migration` in `docs/` and `AGENTS.md` returns nothing; `go vet ./...` from `api/` passes. Changed: `AGENTS.md`, `docs/architecture.md`, `docs/mod-users-spec.md`, `plan/notes/attempt-limiting-design.md`, and comment-only edits in `api/internal/handlers/auth/emailcode.go` and `api/internal/handlers/identities.go`.
