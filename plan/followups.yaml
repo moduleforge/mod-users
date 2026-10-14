@@ -1368,3 +1368,23 @@ items:
           Project doc is not reachable from README.md; no link in the reachable set points to it.
         recommendation:
           Link it from the appropriate reachable doc or confirm it is intentionally unlinked.
+    - title: Project doc is not reachable from README.md;…
+      id: 8e6f
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-03
+        - plan/slug:users-security-hardening
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: deploy/serverless/README.md
+        lines: 1
+        severity: minor
+        confidence: high
+        concerns: documentation
+        description:
+          Project doc is not reachable from README.md; no link in the reachable set points to it.
+        recommendation:
+          Link it from the appropriate reachable doc or confirm it is intentionally unlinked.
