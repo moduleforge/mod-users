@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: The semaphore is global per Handler (default…
-      id: x5YS
-      date: "2026-10-14"
-      tags:
-        - type:security
-        - plan/phase:remediation-04
-        - priority:high
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/handlers/auth/emailcode.go
-        lines: 121-142
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          The semaphore is global per Handler (default 16 slots) and silently drops the send when full, while still answering 204. An unauthenticated caller who keeps all slots busy (for example by requesting codes for many existing accounts while the SMTP or DB path is slow, each holding a slot up to 20s) can suppress code emails for legitimate users. The drop is only logged as a warning, with no metric. Whether an upstream per-IP or per-email rate limit exists is not visible in this diff, so confidence is medium. This is still strictly better than the previous unbounded goroutine growth.
-        recommendation:
-          Confirm a per-IP or per-email rate limit fronts this endpoint. Optionally add a drop counter or alert, and consider a short bounded wait or a per-email key so one flood cannot starve all users.
     - title: The goroutine captures the original *http.Re…
       id: 1hwx
       date: "2026-10-14"
@@ -456,4 +437,9 @@ closed:
       title: The search_path pin is correct (pg_catalog f…
       disposition: promoted
       ref: jwyA
+      date: "2026-10-14"
+    - id: x5YS
+      title: The semaphore is global per Handler (default…
+      disposition: promoted
+      ref: x5YS
       date: "2026-10-14"
