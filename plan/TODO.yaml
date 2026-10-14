@@ -90,6 +90,7 @@ phases:
           path: phase-04-email-code-attempt-limiting/002-limit-attempts-in-handlers.md
           done: false
           tier: sonnet-high
+          digest: Both verify endpoints claim an attempt atomically before the bcrypt compare; lockout is indistinguishable from a wrong code in status, body and timing. Both request paths skip minting inside the 60s cooldown; unknown-email and no-active-code paths run a dummy bcrypt compare. Fakes cover everything including the race test.
           git:
             branch: null
             commit: []
