@@ -47,7 +47,7 @@ phases:
           tier: sonnet-low
           digest: Ready now logs the ping error with slog.ErrorContext and returns the fixed body {"status":"not_ready","db":"unavailable"}. The pool is accepted through a small Pinger interface. Tests, OpenAPI description and spec line updated.
           git:
-            branch: null
+            branch: plan/users-security-hardening-02-001
             commit: []
             merge: null
     - number: 3
