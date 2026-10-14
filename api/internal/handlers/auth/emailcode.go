@@ -291,6 +291,11 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	// Claim an attempt atomically before comparing, so concurrent guesses can
 	// never exceed MaxEmailCodeAttempts. No row means the code is exhausted or
 	// was consumed concurrently; answer exactly like a wrong code.
+	// Accepted trade-off (see docs/mod-users-spec.md, "Email one-time code
+	// limits"): the 5-attempt budget is per code, not per (user, purpose), and
+	// there is no per-IP throttle, so several live codes multiply the guess rate,
+	// and 5 wrong guesses exhaust the newest code and hold off a fresh one for the
+	// 60 s cooldown.
 	claimed, err := h.queries.ClaimEmailCodeAttempt(r.Context(), db.ClaimEmailCodeAttemptParams{
 		ID:          emailCode.ID,
 		MaxAttempts: MaxEmailCodeAttempts,
