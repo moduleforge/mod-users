@@ -76,25 +76,6 @@ items:
           The cooldown NOT EXISTS probe now considers codes of any state (including consumed), but the only email_codes index (email_codes_user_account_purpose_idx) is partial on consumed_at IS NULL, so the planner cannot use it for this predicate and will scan the table (or another index on user_account_id if any) on every code request, an unauthenticated path. Old query was covered by the partial index. Cost grows with email_codes size; expired/consumed rows are not shown to be purged.
         recommendation:
           Add a non-partial index on email_codes(user_account_id, purpose, created_at DESC) in a migration (or extend 0103) so the probe is an index lookup.
-    - title: The function is SECURITY INVOKER (not DEFINE…
-      id: f7fc
-      date: "2026-10-14"
-      tags:
-        - type:security
-        - plan/phase:remediation-02
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0103_email_code_cooldown_function.sql
-        lines: 17-43
-        severity: suggestion
-        confidence: medium
-        concerns: security
-        description:
-          The function is SECURITY INVOKER (not DEFINER) so there is no privilege-escalation or search_path hijack risk, and it uses unqualified table names only. However it has no pinned search_path and keeps default PUBLIC EXECUTE, so any DB role can mint email_codes rows for arbitrary user ids through it. CREATE FUNCTION (not OR REPLACE) is non-idempotent outside goose's version tracking, which is acceptable for a goose migration.
-        recommendation:
-          Optionally add SET search_path = public, pg_catalog to the function and REVOKE EXECUTE ... FROM PUBLIC, granting only to the app role.
     - title: 'Pre-existing, not changed by this diff: the…'
       id: QGTV
       date: "2026-10-14"
@@ -655,4 +636,9 @@ closed:
       title: Residual online guessing budget and targeted…
       disposition: promoted
       ref: tCe6
+      date: "2026-10-14"
+    - id: f7fc
+      title: The function is SECURITY INVOKER (not DEFINE…
+      disposition: fixed
+      ref: phase-08-remediation-03/001-email-code-cooldown-migration-hardening.md
       date: "2026-10-14"
