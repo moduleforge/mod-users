@@ -43,6 +43,6 @@ host:  github.com
 owner: moduleforge
 
 pins:
-  mod-core:  2ea072daf5ed13c8c1563b66159285e17692c924  # 2026-10-10 Merge branch 'task/bump-mf-standards-submodule-pi'
+  mod-core:  0c1719af14ae4742239a89346e95b66d95fd0cc3  # 2026-10-14 plan: add followup [LPd3]
   mod-audit: e9913faa9938a4dbbc7eb5d98bf27c1723d9e6b1  # 2026-10-04 chore(mf-standards): bump submodule to 362374e (Merge branch 'task/propagate-prune-and-per-consum')
   mod-authz: 48e0e66b9b05aabcbcd1123540a71cf8b8342425  # 2026-10-10 Merge branch 'task/regen-models-and-hhkb-docs'
