@@ -198,7 +198,7 @@ phases:
           findings:
             - 8iUq
           git:
-            branch: null
+            branch: plan/users-security-hardening-07-003
             commit: []
             merge: null
         - number: 4
