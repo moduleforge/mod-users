@@ -120,7 +120,8 @@ phases:
             - eyu1
           git:
             branch: plan/users-security-hardening-06-001
-            commit: []
+            commit:
+                - "3027763"
             merge: null
         - number: 2
           slug: assert-certificate-error-in-tls-test
