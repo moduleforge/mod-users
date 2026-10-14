@@ -115,6 +115,7 @@ phases:
           path: phase-06-remediation-01/001-qualify-ssl-cert-file-advice.md
           done: false
           tier: haiku-med
+          digest: 'Qualified the self-signed issuer certificate remedy in docs/oidc-troubleshooting.md: SSL_CERT_FILE applies on Linux and BSD only, and macOS developers are directed to the keychain. The WithInsecureSkipTLSVerify() local-development-only option is unchanged and remains last. Single-section change; no other files touched.'
           findings:
             - eyu1
           git:
