@@ -28,6 +28,7 @@ import (
 	"github.com/moduleforge/core-api/apiresp"
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
+	"github.com/moduleforge/core-api/opctx"
 	coredb "github.com/moduleforge/core-model/db"
 	db "github.com/moduleforge/mod-users/model/db"
 )
@@ -43,15 +44,46 @@ type recordingAuthorizer struct {
 	called   bool
 	lastOp   string
 	decision error
+
+	calls   int
+	targets []int64 // dereferenced target of each call; -1 for a nil target
 }
 
-func (a *recordingAuthorizer) Authorize(_ context.Context, op string, _ *int64) error {
+func (a *recordingAuthorizer) Authorize(_ context.Context, op string, target *int64) error {
 	a.called = true
 	a.lastOp = op
+	a.calls++
+	if target == nil {
+		a.targets = append(a.targets, -1)
+	} else {
+		a.targets = append(a.targets, *target)
+	}
 	return a.decision
 }
 
+// authedCtx returns a context carrying an authenticated actor, as the
+// authorize-resolve helper requires (RequireAuthenticated).
+func authedCtx() context.Context {
+	return opctx.WithActor(context.Background(), 1)
+}
+
 var _ coreAuthz.Authorizer = (*recordingAuthorizer)(nil)
+
+// opSetAuthorizer allows only the listed operations and denies every other
+// with apiresp.ErrForbidden, modelling a holder whose grants cover just those
+// operations (for example `update` alone, which does not imply `assume`).
+type opSetAuthorizer struct {
+	allowed map[string]bool
+}
+
+func (a *opSetAuthorizer) Authorize(_ context.Context, op string, _ *int64) error {
+	if a.allowed[op] {
+		return nil
+	}
+	return apiresp.ErrForbidden
+}
+
+var _ coreAuthz.Authorizer = (*opSetAuthorizer)(nil)
 
 // ---------------------------------------------------------------------------
 // stubCoreQuerier -- coredb.Querier, only GetEntityByID overridden
@@ -348,13 +380,13 @@ func TestSSHKeyService_Register_AuthorizeCalledBeforeAnyKeyQuery_DenialPropagate
 	az := &recordingAuthorizer{decision: denyErr}
 	svc := newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{}}, q, coreQ, az)
 
-	_, err := svc.Register(context.Background(), accountUUID, genEd25519Line(t, ""), nil, false)
+	_, err := svc.Register(authedCtx(), accountUUID, genEd25519Line(t, ""), nil, false)
 
 	if !az.called {
 		t.Fatal("Authorize was never called")
 	}
-	if az.lastOp != "update" {
-		t.Errorf("Authorize op: got %q, want %q", az.lastOp, "update")
+	if az.lastOp != "assume" {
+		t.Errorf("Authorize op: got %q, want %q", az.lastOp, "assume")
 	}
 	if err != denyErr {
 		t.Errorf("Register error: got %v, want the authorizer's error unchanged (%v)", err, denyErr)
@@ -377,7 +409,7 @@ func TestSSHKeyService_List_AuthorizeCalledBeforeAnyKeyQuery_DenialPropagatesUnc
 	az := &recordingAuthorizer{decision: denyErr}
 	svc := newTestSSHKeyService(&fakeSSHDB{}, q, coreQ, az)
 
-	_, _, err := svc.List(context.Background(), accountUUID, 0, 0)
+	_, _, err := svc.List(authedCtx(), accountUUID, 0, 0)
 
 	if !az.called {
 		t.Fatal("Authorize was never called")
@@ -404,13 +436,13 @@ func TestSSHKeyService_Revoke_AuthorizeCalledBeforeAnyKeyQuery_DenialPropagatesU
 	az := &recordingAuthorizer{decision: denyErr}
 	svc := newTestSSHKeyService(&fakeSSHDB{}, q, coreQ, az)
 
-	err := svc.Revoke(context.Background(), accountUUID, keyUUID, false)
+	err := svc.Revoke(authedCtx(), accountUUID, keyUUID, false)
 
 	if !az.called {
 		t.Fatal("Authorize was never called")
 	}
-	if az.lastOp != "update" {
-		t.Errorf("Authorize op: got %q, want %q", az.lastOp, "update")
+	if az.lastOp != "assume" {
+		t.Errorf("Authorize op: got %q, want %q", az.lastOp, "assume")
 	}
 	if err != denyErr {
 		t.Errorf("Revoke error: got %v, want the authorizer's error unchanged (%v)", err, denyErr)
@@ -432,13 +464,13 @@ func TestSSHKeyService_Register_MissingAccountReturnsMaskedForbidden(t *testing.
 	az := &recordingAuthorizer{}
 	svc := newTestSSHKeyService(&fakeSSHDB{}, q, coreQ, az)
 
-	_, err := svc.Register(context.Background(), uuid.New(), genEd25519Line(t, ""), nil, false)
+	_, err := svc.Register(authedCtx(), uuid.New(), genEd25519Line(t, ""), nil, false)
 
 	if !errors.Is(err, apiresp.ErrForbidden) {
 		t.Errorf("Register error: got %v, want apiresp.ErrForbidden", err)
 	}
-	if az.called {
-		t.Error("Authorize was called for a missing account; must fail before Authorize")
+	if az.calls != 1 || az.targets[0] != 0 || az.lastOp != "assume" {
+		t.Errorf("Authorize calls=%d targets=%v op=%q, want exactly one target-0 call for op assume", az.calls, az.targets, az.lastOp)
 	}
 }
 
@@ -453,13 +485,45 @@ func TestSSHKeyService_Register_ArchivedHolderReturnsMaskedForbidden(t *testing.
 	az := &recordingAuthorizer{}
 	svc := newTestSSHKeyService(&fakeSSHDB{}, q, coreQ, az)
 
-	_, err := svc.Register(context.Background(), accountUUID, genEd25519Line(t, ""), nil, false)
+	_, err := svc.Register(authedCtx(), accountUUID, genEd25519Line(t, ""), nil, false)
 
 	if !errors.Is(err, apiresp.ErrForbidden) {
 		t.Errorf("Register error: got %v, want apiresp.ErrForbidden", err)
 	}
+}
+
+func TestSSHKeyService_Register_MissingHolderEntityReturnsMaskedForbidden(t *testing.T) {
+	t.Parallel()
+
+	accountUUID := uuid.New()
+	ua := db.UserAccount{ID: 1, Uuid: accountUUID, AccountHolder: 100}
+
+	q := newStubSSHQuerier(ua)
+	coreQ := &stubCoreQuerier{entityErr: pgx.ErrNoRows}
+	az := &recordingAuthorizer{}
+	svc := newTestSSHKeyService(&fakeSSHDB{}, q, coreQ, az)
+
+	_, err := svc.Register(authedCtx(), accountUUID, genEd25519Line(t, ""), nil, false)
+
+	if !errors.Is(err, apiresp.ErrForbidden) {
+		t.Errorf("Register error: got %v, want apiresp.ErrForbidden", err)
+	}
+}
+
+func TestSSHKeyService_Register_NoActorReturnsUnauthenticated(t *testing.T) {
+	t.Parallel()
+
+	q := newStubSSHQuerier()
+	az := &recordingAuthorizer{}
+	svc := newTestSSHKeyService(&fakeSSHDB{}, q, &stubCoreQuerier{}, az)
+
+	_, err := svc.Register(context.Background(), uuid.New(), genEd25519Line(t, ""), nil, false)
+
+	if !errors.Is(err, apiresp.ErrUnauthenticated) {
+		t.Errorf("Register error: got %v, want apiresp.ErrUnauthenticated", err)
+	}
 	if az.called {
-		t.Error("Authorize was called for an archived account holder; must fail before Authorize")
+		t.Error("Authorize must not run for an unauthenticated caller")
 	}
 }
 
@@ -476,7 +540,7 @@ func TestSSHKeyService_Revoke_ZeroRowsAffectedReturnsMaskedForbidden(t *testing.
 	az := &recordingAuthorizer{}
 	svc := newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{archiveRows: 0}}, q, coreQ, az)
 
-	err := svc.Revoke(context.Background(), accountUUID, keyUUID, false)
+	err := svc.Revoke(authedCtx(), accountUUID, keyUUID, false)
 
 	if !errors.Is(err, apiresp.ErrForbidden) {
 		t.Errorf("Revoke error: got %v, want apiresp.ErrForbidden", err)
@@ -495,7 +559,7 @@ func TestSSHKeyService_Revoke_UnknownKeyUUIDReturnsMaskedForbidden(t *testing.T)
 	az := &recordingAuthorizer{}
 	svc := newTestSSHKeyService(&fakeSSHDB{}, q, coreQ, az)
 
-	err := svc.Revoke(context.Background(), accountUUID, uuid.New(), false)
+	err := svc.Revoke(authedCtx(), accountUUID, uuid.New(), false)
 
 	if !errors.Is(err, apiresp.ErrForbidden) {
 		t.Errorf("Revoke error: got %v, want apiresp.ErrForbidden", err)
@@ -534,7 +598,7 @@ func TestSSHKeyService_Register_ParseAndLabelErrorsMapToDetailCodes(t *testing.T
 			az := &recordingAuthorizer{}
 			svc := newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{}}, q, coreQ, az)
 
-			_, err := svc.Register(context.Background(), accountUUID, tc.line, tc.label, false)
+			_, err := svc.Register(authedCtx(), accountUUID, tc.line, tc.label, false)
 
 			assertFieldError(t, err, http.StatusBadRequest, tc.wantField, tc.wantCode)
 		})
@@ -556,7 +620,7 @@ func TestSSHKeyService_Register_UniqueViolationMapsToConflict(t *testing.T) {
 	pgErr := &pgconn.PgError{Code: "23505", ConstraintName: "ssh_public_keys_active_fingerprint_uq"}
 	svc := newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{insertErr: pgErr}}, q, coreQ, az)
 
-	_, err := svc.Register(context.Background(), accountUUID, genEd25519Line(t, ""), nil, false)
+	_, err := svc.Register(authedCtx(), accountUUID, genEd25519Line(t, ""), nil, false)
 
 	assertFieldError(t, err, http.StatusConflict, "public_key", "users.ssh_key_in_use")
 }
@@ -580,7 +644,7 @@ func TestSSHKeyService_Register_Success(t *testing.T) {
 	}
 	svc := newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{insertRow: insertRow}}, q, coreQ, az)
 
-	out, err := svc.Register(context.Background(), accountUUID, genEd25519Line(t, ""), nil, true)
+	out, err := svc.Register(authedCtx(), accountUUID, genEd25519Line(t, ""), nil, true)
 	if err != nil {
 		t.Fatalf("Register returned error: %v", err)
 	}
@@ -590,8 +654,8 @@ func TestSSHKeyService_Register_Success(t *testing.T) {
 	if out.Fingerprint != "SHA256:fp" {
 		t.Errorf("Fingerprint: got %q, want %q", out.Fingerprint, "SHA256:fp")
 	}
-	if !az.called || az.lastOp != "update" {
-		t.Errorf("Authorize: called=%v op=%q, want called=true op=update", az.called, az.lastOp)
+	if !az.called || az.lastOp != "assume" {
+		t.Errorf("Authorize: called=%v op=%q, want called=true op=assume", az.called, az.lastOp)
 	}
 }
 
@@ -614,7 +678,7 @@ func TestSSHKeyService_List_Success(t *testing.T) {
 	az := &recordingAuthorizer{}
 	svc := newTestSSHKeyService(&fakeSSHDB{}, q, coreQ, az)
 
-	keys, total, err := svc.List(context.Background(), accountUUID, 0, 0)
+	keys, total, err := svc.List(authedCtx(), accountUUID, 0, 0)
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -623,5 +687,99 @@ func TestSSHKeyService_List_Success(t *testing.T) {
 	}
 	if len(keys) != 2 {
 		t.Fatalf("keys: got %d, want 2", len(keys))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Operator register/revoke require `assume`, not `update`
+// ---------------------------------------------------------------------------
+
+func TestSSHKeyService_RegisterRevoke_UpdateOnlyHolderForbidden_AssumeHolderAllowed(t *testing.T) {
+	t.Parallel()
+
+	accountUUID := uuid.New()
+	keyUUID := uuid.New()
+	ua := db.UserAccount{ID: 1, Uuid: accountUUID, AccountHolder: 100}
+	row := db.ModUsersSshPublicKey{ID: 5, Uuid: keyUUID, UserAccountID: ua.ID, KeyType: ssh.KeyAlgoED25519, PublicKey: "k", FingerprintSha256: "SHA256:fp", Label: "l"}
+
+	build := func(az coreAuthz.Authorizer) (*SSHKeyService, *stubSSHQuerier) {
+		q := newStubSSHQuerier(ua)
+		q.activeKey = row
+		coreQ := &stubCoreQuerier{entity: activeEntity(ua.AccountHolder)}
+		return newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{insertRow: row, archiveRows: 1}}, q, coreQ, az), q
+	}
+
+	t.Run("update-only holder is forbidden", func(t *testing.T) {
+		t.Parallel()
+		svc, q := build(&opSetAuthorizer{allowed: map[string]bool{"update": true, "read": true}})
+		if _, err := svc.Register(authedCtx(), accountUUID, genEd25519Line(t, ""), nil, false); !errors.Is(err, apiresp.ErrForbidden) {
+			t.Errorf("Register: got %v, want ErrForbidden", err)
+		}
+		if err := svc.Revoke(authedCtx(), accountUUID, keyUUID, false); !errors.Is(err, apiresp.ErrForbidden) {
+			t.Errorf("Revoke: got %v, want ErrForbidden", err)
+		}
+		if q.writeCalled {
+			t.Error("a write happened despite the denial")
+		}
+		// read-level access (List) is unchanged by this decision.
+		if _, _, err := svc.List(authedCtx(), accountUUID, 0, 0); err != nil {
+			t.Errorf("List: got %v, want nil", err)
+		}
+	})
+
+	t.Run("assume holder is allowed", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := build(&opSetAuthorizer{allowed: map[string]bool{"assume": true}})
+		if _, err := svc.Register(authedCtx(), accountUUID, genEd25519Line(t, ""), nil, false); err != nil {
+			t.Errorf("Register: got %v, want nil", err)
+		}
+		if err := svc.Revoke(authedCtx(), accountUUID, keyUUID, false); err != nil {
+			t.Errorf("Revoke: got %v, want nil", err)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Register: stateless key/label validation precedes authorization
+// ---------------------------------------------------------------------------
+
+func TestSSHKeyService_Register_selfsvcMalformedInputIs400BeforeAuthorization(t *testing.T) {
+	t.Parallel()
+
+	nulLabel := "a\x00b"
+	tests := []struct {
+		name      string
+		line      string
+		label     *string
+		wantField string
+		wantCode  string
+	}{
+		{name: "garbage key", line: "not an ssh key", wantField: "public_key", wantCode: "users.ssh_key_invalid"},
+		{name: "unsupported key type", line: dsaFixtureLine, wantField: "public_key", wantCode: "users.ssh_key_type_unsupported"},
+		{name: "invalid label", line: genEd25519Line(t, ""), label: &nulLabel, wantField: "label", wantCode: "users.ssh_key_label_invalid"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			accountUUID := uuid.New()
+			ua := db.UserAccount{ID: 1, Uuid: accountUUID, AccountHolder: 100}
+			q := newStubSSHQuerier(ua)
+			coreQ := &stubCoreQuerier{entity: activeEntity(ua.AccountHolder)}
+			// The caller may not assume the account: a well-formed request
+			// would be 403, a malformed one must be 400 without Authorize.
+			az := &recordingAuthorizer{decision: apiresp.ErrForbidden}
+			svc := newTestSSHKeyService(&fakeSSHDB{tx: &fakeSSHTx{}}, q, coreQ, az)
+
+			_, err := svc.Register(authedCtx(), accountUUID, tc.line, tc.label, false)
+
+			assertFieldError(t, err, http.StatusBadRequest, tc.wantField, tc.wantCode)
+			if az.called {
+				t.Error("Authorize was called before stateless key validation")
+			}
+			if q.writeCalled {
+				t.Error("InsertSSHPublicKey was called for a malformed key")
+			}
+		})
 	}
 }

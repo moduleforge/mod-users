@@ -107,7 +107,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Action:** Calls any of: `GET /v1/users` (list/search), `POST /v1/users` (create), `GET /v1/users/{uuid}` (retrieve), `PUT /v1/users/{uuid}` (update), `DELETE /v1/users/{uuid}` (archive, soft-delete), or `POST /v1/users/{uuid}/grant` (grant or revoke admin privileges).
 
-**Outcome:** User list supports search by email or name with pagination. Create accepts optional password and admin flag. Archive sets `archived_at` on the underlying record (soft-delete; the record is preserved). Admin grants/revocations are reflected immediately on the `user_accounts` record. All mutating operations are audited.
+**Outcome:** User list supports search by email or name with pagination. Create accepts optional password and admin flag. Archive sets `archived_at` on the underlying record (soft-delete; the record is preserved). Admin grants/revocations are reflected immediately on the `user_accounts` record. All mutating operations are audited. An unknown account UUID on `GET`/`PUT`/`DELETE` is a masked `403`, never a `404`, and a duplicate email on create or update is `409` `users.email_taken` (see [Request order and existence masking](#security-requirements)).
 
 ---
 
@@ -125,9 +125,9 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Actor:** Authenticated admin user.
 
-**Action:** Calls the `/v1/apps/{uuid}/user-accounts` membership endpoints: `POST` to assign a user account to an app (with optional roles), `GET` to list an app's members, `DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid}` to remove a member, and `PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles` to update a member's roles. The `{uuid}` path param is resolved to the app's internal id via mod-core's shared `entityResolver` service.
+**Action:** Calls the `/v1/apps/{uuid}/user-accounts` membership endpoints: `POST` to assign a user account to an app (with optional roles), `GET` to list an app's members, `DELETE /v1/apps/{uuid}/user-accounts/{user_account_uuid}` to remove a member, and `PUT /v1/apps/{uuid}/user-accounts/{user_account_uuid}/roles` to update a member's roles. The `{uuid}` path param is resolved to the app's id with mod-core's `GetAppByUUID` query, after the caller is authorized.
 
-**Outcome:** Applications are tenant-like groupings, now owned and CRUD-managed by mod-core (list, create, retrieve, update, archive live there — not in this module). This module retains only the `apps_user_accounts` membership join: users can be assigned to an app with roles, listed, removed, or have their roles updated. Each membership record carries a `roles` array.
+**Outcome:** Applications are tenant-like groupings, now owned and CRUD-managed by mod-core (list, create, retrieve, update, archive live there — not in this module). This module retains only the `apps_user_accounts` membership join: users can be assigned to an app with roles, listed, removed, or have their roles updated. Each membership record carries a `roles` array. Path UUIDs, the body shape and `user_uuid` are validated (`400`) before authorization; a body `user_uuid` naming no account is `422` `users.user_account_unknown`, while an unknown app (the addressed resource) stays `404` for an authorized admin.
 
 ---
 
@@ -191,7 +191,7 @@ When the guest account later provides an email address (via `PUT /v1/self`), the
 
 ### 17. Manage a user's SSH public keys (operator)
 
-**Actor:** Authenticated operator holding a grant that authorizes `update` (or, for listing, `read`) on the target account's account-holder entity — the same authorization every other `/v1/user-accounts/{uuid}` admin operation already requires.
+**Actor:** Authenticated operator holding a grant that authorizes `assume` (or, for listing, `read`) on the target account's account-holder entity. Register and revoke require `assume` because installing a key is impersonation-grade authority; `update` alone does not suffice (`manage` does, as it implies `assume`).
 
 **Action:** Calls the same three operations as use case 16 against `/v1/user-accounts/{uuid}/ssh-keys` (list, register) and `/v1/user-accounts/{uuid}/ssh-keys/{key_uuid}` (revoke) on behalf of another account.
 
@@ -309,7 +309,7 @@ All six endpoints apply the module's algorithm-acceptance policy, global-uniquen
 
 ### Admin: app membership (admin auth required)
 
-App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served by mod-core, not this module. This module serves only the membership endpoints below, against its own `apps_user_accounts` join table; the `{uuid}` path param is resolved to the app's internal id via mod-core's shared `entityResolver` service.
+App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served by mod-core, not this module. This module serves only the membership endpoints below, against its own `apps_user_accounts` join table; the `{uuid}` path param is resolved to the app's id with mod-core's `GetAppByUUID` query after authorization.
 
 - [ ] `GET /v1/apps/{uuid}/user-accounts` — list an app's user-account members.
 - [ ] `POST /v1/apps/{uuid}/user-accounts` — assign a user account to an app, with optional roles.
@@ -341,6 +341,8 @@ App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served
 - **CSRF / state validation:** The OIDC flow uses a signed state token stored in a scoped cookie (`oidc_state`, scoped to `/v1/auth/oidc/`). The callback validates the cookie before processing the authorization code.
 
 - **Anti-enumeration:** Email-code and password-reset request endpoints return `204` unconditionally to prevent account existence probing.
+
+- **Request order and existence masking.** Authenticated routes mount `RequireAuth` and answer in this order: 401 (no effective actor, code `unauthenticated`), 400 (stateless shape: path UUIDs, strict JSON body, field checks), 403 (authorization), 404 (lookup), then 409 or 422 (state conflicts). On the identity and ssh-key credential routes the step-up gate (`409 users.step_up_required`) sits after the 400 shape checks and before authorization, so a malformed request never consumes a step-up token. A missing user account on `GET`/`PUT`/`DELETE /v1/user-accounts/{uuid}` and `POST .../assume` is masked as 403 for every caller, admins included, matching the ssh-key routes; the authorizer receives one extra call with target `0` per masked miss and must deny it quietly. Documented exceptions: public and credential routes (`/v1/auth/*`) have no 401 gate; the OIDC config write routes accept a body `setup_token` as a credential, so a caller with no admin session and no `X-Setup-Token` header and a malformed body gets 400 first; and two middleware gates answer before any handler 400 because they depend only on service state or the caller's own account, not on the request: `requireOIDCConfirmed` (503 `users.oidc_not_confirmed`, even ahead of the 401) and `requireVerifiedEmail` (403 `users.email_unverified`). The email-code, password-reset and step-up code requests keep their unconditional `204` (anti-enumeration). Body decoding is strict everywhere: unknown fields, trailing data and an empty body give 400 (`invalid_json_body`); a body over 1 MiB gives `body_too_large` (ssh-key register: 32 KiB). A state conflict is reported after authorization: a duplicate account email gives 409 `users.email_taken` and a membership `user_uuid` naming no account gives 422 `users.user_account_unknown`. Public auth 500s carry a generic message; the cause is logged server-side.
 
 - **Email one-time code limits:** A code allows at most 5 verification attempts, after which it is exhausted. A new code request is refused within a 60 s cooldown of the newest code for the same user and purpose in any state (live, exhausted, or consumed), enforced atomically by `create_email_code_with_cooldown`. A code is single-use: it is consumed on success, and at the exhaustion boundary the consume fails closed, so a correct guess that holds an earlier attempt is refused when a concurrent final-attempt claim consumes the code. The public email-code endpoints accept only the `login` and `verify_email` purposes (allow-list); `credential_change` codes are issued and verified only through the authenticated step-up endpoints. The code-request endpoint always answers `204` after a ~200 ms floor; the send runs in a detached background goroutine bounded by a concurrency limit (16; excess requests are dropped and logged), a 20 s timeout, and panic recovery.
 

@@ -62,7 +62,7 @@ export function ResetPasswordPage({
 
     setIsSubmitting(true);
     try {
-      await api.auth.resetPassword({ token, new_password: newPassword });
+      await api.auth.resetPassword({ token, password: newPassword });
       onSuccess?.();
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 401) {

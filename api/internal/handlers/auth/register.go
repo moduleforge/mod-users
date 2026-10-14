@@ -4,6 +4,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -165,29 +166,32 @@ type registerRequest struct {
 // Register handles POST /v1/auth/register.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
 	if req.Email == "" {
+		// literal-keep: register-form.tsx displays this message verbatim.
 		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "email is required",
 			[]apiresp.FieldError{{Field: "email", Code: "users.email_required", Message: "email is required"}})
 		return
 	}
 	if len(req.Password) < 12 {
+		// literal-keep: register-form.tsx displays this message verbatim.
 		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "password must be at least 12 characters",
 			[]apiresp.FieldError{{Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters"}})
 		return
 	}
 	if strings.TrimSpace(req.GivenName) == "" {
+		// literal-keep: register-form.tsx displays this message verbatim.
 		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "given_name is required",
 			[]apiresp.FieldError{{Field: "given_name", Code: "users.given_name_required", Message: "given_name is required"}})
 		return
 	}
 	if strings.TrimSpace(req.FamilyName) == "" {
+		// literal-keep: register-form.tsx displays this message verbatim.
 		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "family_name is required",
 			[]apiresp.FieldError{{Field: "family_name", Code: "users.family_name_required", Message: "family_name is required"}})
 		return
@@ -196,14 +200,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	hash, err := localauth.HashPassword(req.Password)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: hash password", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process password")
+		apiresp.WriteError(w, r, fmt.Errorf("register: hash password: %w", err))
 		return
 	}
 
 	tx, err := h.pool.Begin(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: begin tx", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to begin transaction")
+		apiresp.WriteError(w, r, fmt.Errorf("register: begin tx: %w", err))
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -215,7 +219,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var userAccountCount int64
 	if err := tx.QueryRow(r.Context(), "SELECT count(*) FROM user_accounts").Scan(&userAccountCount); err != nil {
 		slog.ErrorContext(r.Context(), "register: count user_accounts", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to check user count")
+		apiresp.WriteError(w, r, fmt.Errorf("register: count user_accounts: %w", err))
 		return
 	}
 	isFirst := userAccountCount == 0
@@ -224,14 +228,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	npType, err := coreQtx.GetTypeBySlug(r.Context(), "natural_person")
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: resolve natural_person type", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve entity type")
+		apiresp.WriteError(w, r, fmt.Errorf("register: resolve natural_person type: %w", err))
 		return
 	}
 
 	entity, err := coreQtx.CreateEntity(r.Context(), npType.ID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: create entity", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create entity")
+		apiresp.WriteError(w, r, fmt.Errorf("register: create entity: %w", err))
 		return
 	}
 
@@ -239,7 +243,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	_, err = coreQtx.CreateLegalEntity(r.Context(), entity.ID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: create legal entity", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create legal entity")
+		apiresp.WriteError(w, r, fmt.Errorf("register: create legal entity: %w", err))
 		return
 	}
 
@@ -250,7 +254,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "register: create natural person", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create natural person")
+		apiresp.WriteError(w, r, fmt.Errorf("register: create natural person: %w", err))
 		return
 	}
 
@@ -264,6 +268,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		// Check for unique violation on email.
 		var pgErr *pgconn.PgError
 		if isPgError(err, &pgErr) && pgErr.Code == "23505" {
+			// literal-keep: register-form.tsx displays this message verbatim.
 			server.ErrorWithDetails(w, http.StatusConflict, "conflict",
 				"an account with that email already exists",
 				[]apiresp.FieldError{
@@ -273,7 +278,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.ErrorContext(r.Context(), "register: create user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to create user account")
+		apiresp.WriteError(w, r, fmt.Errorf("register: create user account: %w", err))
 		return
 	}
 
@@ -282,13 +287,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		PasswordHash:  hash,
 	}); err != nil {
 		slog.ErrorContext(r.Context(), "register: upsert auth_local", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to save credentials")
+		apiresp.WriteError(w, r, fmt.Errorf("register: upsert auth_local: %w", err))
 		return
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
 		slog.ErrorContext(r.Context(), "register: commit", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to commit transaction")
+		apiresp.WriteError(w, r, fmt.Errorf("register: commit: %w", err))
 		return
 	}
 

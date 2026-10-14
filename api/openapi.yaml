@@ -4,6 +4,27 @@ info:
   description: |
     REST API for mod-users. Manages user accounts, authentication,
     authorization, application tenancy, and audit logging.
+
+    ## Error precedence
+
+    Routes that mount `RequireAuth` answer in this order: 401 (no effective
+    actor, code `unauthenticated`), 400 (stateless request shape: path UUIDs,
+    JSON body, field validation, with `details`), 403 (authorization), 404
+    (lookup), then 409 or 422 (state conflicts). Documented exceptions:
+
+    - Public and credential routes (`/v1/auth/*`) have no 401 gate; their
+      credential failures keep their own 401 messages.
+    - The OIDC config write routes accept a body `setup_token` as a
+      credential, so a caller with no admin session and no
+      `X-Setup-Token` header and a malformed body gets 400, not 401.
+    - Step-up (`409 users.step_up_required`) comes after the 400 shape checks
+      and before authorization on the identity and ssh-key credential routes.
+    - A user account that does not exist is masked as 403 for every caller,
+      the same as the ssh-key routes.
+
+    Every JSON body route decodes strictly: unknown fields, trailing data
+    and an empty body give 400 (`invalid_json_body`), and a body over 1 MiB
+    gives 400 (`body_too_large`; ssh-key register caps at 32 KiB).
   version: 0.1.0
   contact:
     email: zane@liquid-labs.com
@@ -656,13 +677,22 @@ components:
 
   responses:
     BadRequest:
-      description: Invalid request.
+      description: |
+        Invalid request (`error.code: invalid_input`), returned for stateless
+        request-shape faults before authorization. `error.details` names each
+        fault: `invalid_json_body` (malformed JSON, unknown field, trailing
+        data, empty body), `body_too_large`, `invalid_uuid` (malformed path or
+        body UUID), or a field code such as `users.email_required`.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     Unauthorized:
-      description: Missing or invalid authentication token.
+      description: |
+        Missing or invalid authentication token. A request with no effective
+        actor on a route that mounts `RequireAuth` gets code `unauthenticated`
+        before any handler code runs; the composed module's token middleware
+        answers code `unauthorized`.
       content:
         application/json:
           schema:
@@ -674,7 +704,28 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
     NotFound:
-      description: Resource not found.
+      description: |
+        Resource not found. User accounts are the exception: a missing
+        account is masked as 403 (`Forbidden`) for every caller.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    Conflict:
+      description: |
+        State conflict (`error.code: conflict`). A duplicate account email
+        gives detail `users.email_taken` on field `email`; an existing OIDC
+        provider id gives `users.oidc_provider_exists` on field `id`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unprocessable:
+      description: |
+        Well-formed request that names a missing referent
+        (`error.code: unprocessable_entity`), for example a body `user_uuid`
+        that names no user account (detail `users.user_account_unknown`).
       content:
         application/json:
           schema:
@@ -885,6 +936,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "503":
@@ -903,8 +956,8 @@ paths:
             schema:
               $ref: "#/components/schemas/EmailCodeRequest"
       responses:
-        "202":
-          description: Code sent (if account exists). Response is always 202 to prevent enumeration.
+        "204":
+          description: Code sent (if account exists). Response is always 204 to prevent enumeration.
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
@@ -945,7 +998,7 @@ paths:
             schema:
               $ref: "#/components/schemas/PasswordResetRequest"
       responses:
-        "202":
+        "204":
           description: Reset email sent (if account exists).
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
@@ -1128,6 +1181,11 @@ paths:
           $ref: "#/components/responses/OIDCNotConfirmed"
     put:
       summary: Update the authenticated user's profile
+      description: |
+        A present-but-blank `given_name` or `family_name` gives 400 with
+        `natural_persons.given_name_required` or
+        `natural_persons.family_name_required` before any lookup. Unknown
+        fields are rejected.
       tags: [Self]
       operationId: updateSelf
       requestBody:
@@ -1391,6 +1449,11 @@ paths:
           $ref: "#/components/responses/OIDCNotConfirmed"
     post:
       summary: Assign a user account to an application (admin)
+      description: |
+        Path UUIDs and the body are checked (400) before authorization (403).
+        Unknown fields are rejected, so send `roles`, not `role`. An unknown
+        app is 404 for an authorized admin; a body `user_uuid` that names no
+        account is 422.
       tags: [Apps]
       operationId: assignAppUserAccount
       parameters:
@@ -1416,6 +1479,8 @@ paths:
           $ref: "#/components/responses/ForbiddenOrEmailUnverified"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
@@ -1583,7 +1648,10 @@ paths:
         `400` / `users.ssh_key_too_weak`, and a `label` over 100 characters
         with `400` / `users.ssh_key_label_too_long`. A supplied `label`
         containing a control or bidi-formatting character is refused with
-        `400` / `users.ssh_key_label_invalid`.
+        `400` / `users.ssh_key_label_invalid`. These shape checks run before
+        the step-up gate and authorization, so a malformed request gets 400
+        (not 409) with or without a step-up token and does not consume one.
+        Unknown body fields and bodies over 32 KiB are refused with `400`.
       tags: [SSH Keys]
       operationId: registerSelfSSHKey
       parameters:
@@ -1651,8 +1719,8 @@ paths:
     get:
       summary: List a user's SSH public keys (operator)
       description: |
-        Lists the target account's active SSH public keys. Requires a
-        verified email on the caller. Uses the `/v1/user-accounts/{uuid}`
+        Lists the target account's active SSH public keys. Requires `read`
+        on the target account's holder and a verified email on the caller. Uses the `/v1/user-accounts/{uuid}`
         prefix, the prefix this module actually serves
         (`api/internal/handlers/account_routes.go`), unlike the older
         `/v1/users/{user_uuid}` admin paths documented elsewhere in this file.
@@ -1681,8 +1749,10 @@ paths:
     post:
       summary: Register an SSH public key for a user (operator)
       description: |
-        Registers a new SSH public key on the target account. Requires a
-        verified email on the caller. Step-up-gated exactly like the
+        Registers a new SSH public key on the target account. Requires the
+        `assume` operation on the target account's holder (`update` alone is
+        not sufficient; `manage` implies `assume`) and a verified email on
+        the caller. Step-up-gated exactly like the
         self-service register endpoint above, but **only when `{uuid}`
         names the caller's own account** — a genuine
         operator-on-behalf-of-a-different-account call is not step-up-gated,
@@ -1738,8 +1808,10 @@ paths:
       summary: Revoke a user's SSH public key (operator)
       description: |
         Archives the key; it stops resolving on the account's next SSH
-        connection (an already-open session is not terminated). Requires a
-        verified email on the caller. Step-up-gated exactly like the
+        connection (an already-open session is not terminated). Requires the
+        `assume` operation on the target account's holder (`update` alone is
+        not sufficient; `manage` implies `assume`) and a verified email on
+        the caller. Step-up-gated exactly like the
         self-service revoke endpoint above, but **only when `{uuid}`
         names the caller's own account** — a genuine
         operator-on-behalf-of-a-different-account call is not step-up-gated,

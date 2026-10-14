@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	db "github.com/moduleforge/mod-users/model/db"
 )
@@ -74,8 +75,7 @@ type emailCodeVerifyBody struct {
 // Always returns 204 within ~200ms to avoid email enumeration.
 func (h *Handler) EmailCodeRequest(w http.ResponseWriter, r *http.Request) {
 	var req emailCodeRequestBody
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
@@ -242,14 +242,13 @@ func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {
 // EmailCodeVerify handles POST /v1/auth/email-code/verify.
 func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	var req emailCodeVerifyBody
-	if err := server.Decode(r, &req); err != nil {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "invalid JSON body")
+	if !server.Decode(w, r, &req) {
 		return
 	}
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	if req.Email == "" || req.Code == "" {
-		server.Error(w, http.StatusBadRequest, "invalid_input", "email and code are required")
+		apiresp.WriteError(w, r, apiresp.InvalidInput(emailCodeRequiredDetails(req.Email, req.Code)...))
 		return
 	}
 	if req.Purpose == "" {
@@ -263,12 +262,13 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	ua, err := h.queries.GetUserAccountByEmail(r.Context(), req.Email)
 	if err == pgx.ErrNoRows {
 		burnCodeCompare(req.Code) // constant time: do not reveal unknown email
+		// literal-keep: credential-failure 401 whose message the GUI tests assert.
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
 	if err != nil {
 		slog.ErrorContext(r.Context(), "email_code_verify: get user account", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to look up user account")
+		apiresp.WriteError(w, r, fmt.Errorf("email_code_verify: get user account: %w", err))
 		return
 	}
 
@@ -278,12 +278,13 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	})
 	if err == pgx.ErrNoRows {
 		burnCodeCompare(req.Code) // constant time: do not reveal missing code
+		// literal-keep: credential-failure 401 whose message the GUI tests assert.
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
 	if err != nil {
 		slog.ErrorContext(r.Context(), "email_code_verify: get code", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to look up code")
+		apiresp.WriteError(w, r, fmt.Errorf("email_code_verify: get code: %w", err))
 		return
 	}
 
@@ -296,6 +297,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	})
 	if err == pgx.ErrNoRows {
 		burnCodeCompare(req.Code)
+		// literal-keep: credential-failure 401 whose message the GUI tests assert.
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
@@ -306,6 +308,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(claimed.CodeHash), []byte(req.Code)); err != nil {
+		// literal-keep: credential-failure 401 whose message the GUI tests assert.
 		server.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid or expired code")
 		return
 	}
@@ -335,7 +338,7 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		token, err := h.issueLocalJWT(ua)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "email_code_verify: issue jwt", "error", err)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to issue token")
+			apiresp.WriteError(w, r, fmt.Errorf("email_code_verify: issue jwt: %w", err))
 			return
 		}
 		server.JSON(w, http.StatusOK, map[string]any{
@@ -353,9 +356,22 @@ func (h *Handler) EmailCodeVerify(w http.ResponseWriter, r *http.Request) {
 		EmailVerifiedAt: &now,
 	}); err != nil {
 		slog.ErrorContext(r.Context(), "email_code_verify: mark verified", "error", err)
-		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to mark email verified")
+		apiresp.WriteError(w, r, fmt.Errorf("email_code_verify: mark verified: %w", err))
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// emailCodeRequiredDetails returns one detail per missing field of an
+// email-code verify request.
+func emailCodeRequiredDetails(email, code string) []apiresp.FieldError {
+	var details []apiresp.FieldError
+	if email == "" {
+		details = append(details, apiresp.FieldError{Field: "email", Code: "users.email_required", Message: "email is required"})
+	}
+	if code == "" {
+		details = append(details, apiresp.FieldError{Field: "code", Code: "users.code_required", Message: "code is required"})
+	}
+	return details
 }

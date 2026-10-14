@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,6 +28,12 @@ import (
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
+// linkAuthorizer is the subset of *localauth.OAuth StartLink calls, declared
+// as an interface so tests can inject sign/random failures.
+type linkAuthorizer interface {
+	LinkAuthorizeURL(providerID, userAccountUUID, returnPath string) (authorizeURL, stateToken string, err error)
+}
+
 // IdentitiesHandler serves identity-management endpoints under /v1/self.
 //
 // All endpoints are gated by RequireAuth + RequireVerifiedEmail in main.go.
@@ -40,7 +45,7 @@ type IdentitiesHandler struct {
 	// codes overrides the email-code store used by the step-up endpoints.
 	// nil (production) means h.queries; tests inject a fake.
 	codes     emailCodeStore
-	oauth     *localauth.OAuth
+	oauth     linkAuthorizer
 	obs       *observer.ObserverGroup
 	sender    emailSender
 	jwtSecret string
@@ -243,11 +248,26 @@ type startLinkResponse struct {
 	State        string `json:"state"`
 }
 
+// errReturnPathInvalid is the 400 for a malformed StartLink return query.
+func errReturnPathInvalid() error {
+	return apiresp.InvalidInput(apiresp.FieldError{
+		Field: "return", Code: "users.return_path_invalid", Message: "return must be a site-relative path",
+	})
+}
+
 // StartLink mints a link-mode OIDC authorize URL for the caller. The returned
 // state token, when presented at /auth/oidc/{provider}/callback, will insert
 // a new identity row instead of resolving/creating a user account.
 func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
+
+	// Stateless shape check runs before the step-up gate so a malformed
+	// return path is a 400 and never consumes a step-up token.
+	returnPath := r.URL.Query().Get("return")
+	if err := localauth.ValidateReturnPath(returnPath); err != nil {
+		apiresp.WriteError(w, r, errReturnPathInvalid())
+		return
+	}
 
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
 		writeStepUpRequired(w, r)
@@ -256,16 +276,19 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 
 	providerID := normalizeIdentityProviderID(r)
 
-	returnPath := r.URL.Query().Get("return")
-
 	authURL, state, err := h.oauth.LinkAuthorizeURL(providerID, uc.UserUUID, returnPath)
 	if err != nil {
-		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
+		switch {
+		case errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable):
 			apiresp.WriteError(w, r, apiresp.ErrNotFound)
-			return
+		case errors.Is(err, localauth.ErrInvalidReturnPath):
+			// Unreachable after the pre-check above; kept so the mapping
+			// stays correct if the two validators ever diverge.
+			apiresp.WriteError(w, r, errReturnPathInvalid())
+		default:
+			// Sign or random-source failure: an internal error, not a client one.
+			apiresp.WriteError(w, r, fmt.Errorf("identities.StartLink: build authorize url: %w", err))
 		}
-		slog.WarnContext(r.Context(), "identities.StartLink: bad request", "error", err, "provider", providerID)
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
 		return
 	}
 
@@ -284,18 +307,19 @@ func (h *IdentitiesHandler) StartLink(w http.ResponseWriter, r *http.Request) {
 func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 
+	// Stateless shape checks run before the step-up gate so a malformed
+	// request is a 400 and never consumes a step-up token.
+	identUUID, err := apiresp.ParseUUIDParam("identity_uuid", chi.URLParam(r, "identity_uuid"))
+	if err != nil {
+		apiresp.WriteError(w, r, err)
+		return
+	}
+
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
 		writeStepUpRequired(w, r)
 		return
 	}
 	stepUpUsed := h.stepUpRequired
-
-	rawUUID := chi.URLParam(r, "identity_uuid")
-	identUUID, err := uuid.Parse(rawUUID)
-	if err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
 
 	entityID := uc.EntityID
 
@@ -355,7 +379,7 @@ func (h *IdentitiesHandler) Unlink(w http.ResponseWriter, r *http.Request) {
 			// detail-carrying constructor for not_found (only InvalidInput), so
 			// the users.identity_not_found field detail cannot be attached via
 			// apiresp.WriteError. Kept as the literal call below, mirroring the
-			// writeServiceError/svc.ErrEmailTaken precedent (user_accounts.go);
+			// svc.ErrEmailTaken precedent (service-error mapping in user_accounts.go);
 			// collapse once mod-core adds a detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusNotFound, "not_found", "identity not found", []apiresp.FieldError{
 				{Code: "users.identity_not_found", Message: "identity not found"},
@@ -384,6 +408,22 @@ type setPasswordRequest struct {
 	NewPassword     string  `json:"new_password"`
 }
 
+// Validate implements apiresp.Validator: new_password is required and must be
+// at least 12 characters. Stateless only.
+func (r *setPasswordRequest) Validate() []apiresp.FieldError {
+	if r.NewPassword == "" {
+		return []apiresp.FieldError{{
+			Field: "new_password", Code: "users.new_password_required", Message: "new_password is required",
+		}}
+	}
+	if len(r.NewPassword) < 12 {
+		return []apiresp.FieldError{{
+			Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
+		}}
+	}
+	return nil
+}
+
 // SetPassword sets or changes the caller's local password.
 // If the account already has an auth_local row, current_password is required
 // and verified before proceeding. If no row exists, this is a first-time attach
@@ -391,28 +431,18 @@ type setPasswordRequest struct {
 func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) {
 	uc := localauth.MustFromContext(r.Context())
 
+	// Decode and Validate (stateless) run before the step-up gate so a
+	// malformed request is a 400 and never consumes a step-up token.
+	var req setPasswordRequest
+	if !server.Decode(w, r, &req) {
+		return
+	}
+
 	if err := h.requireStepUp(r, uc.UserAccountID); err != nil {
 		writeStepUpRequired(w, r)
 		return
 	}
 	stepUpUsed := h.stepUpRequired
-
-	var req setPasswordRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
-
-	if req.NewPassword == "" {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
-		return
-	}
-	if len(req.NewPassword) < 12 {
-		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
-			Field: "new_password", Code: "users.password_too_short", Message: "password must be at least 12 characters",
-		}))
-		return
-	}
 
 	entityID := uc.EntityID
 
@@ -433,8 +463,8 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 			// detail-carrying constructor for unauthenticated (only
 			// InvalidInput), so the users.bad_credentials field detail cannot
 			// be attached via apiresp.WriteError. Kept as the literal call
-			// below, mirroring the writeServiceError/svc.ErrEmailTaken
-			// precedent (user_accounts.go); collapse once mod-core adds a
+			// below, mirroring the svc.ErrEmailTaken
+			// precedent (service-error mapping in user_accounts.go); collapse once mod-core adds a
 			// detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
 				{Field: "current_password", Code: "users.bad_credentials", Message: "current_password is required to change an existing password"},
@@ -451,8 +481,8 @@ func (h *IdentitiesHandler) SetPassword(w http.ResponseWriter, r *http.Request) 
 			// detail-carrying constructor for unauthenticated (only
 			// InvalidInput), so the users.bad_credentials field detail cannot
 			// be attached via apiresp.WriteError. Kept as the literal call
-			// below, mirroring the writeServiceError/svc.ErrEmailTaken
-			// precedent (user_accounts.go); collapse once mod-core adds a
+			// below, mirroring the svc.ErrEmailTaken
+			// precedent (service-error mapping in user_accounts.go); collapse once mod-core adds a
 			// detail-carrying constructor.
 			server.ErrorWithDetails(w, http.StatusUnauthorized, "unauthenticated", "authentication is required", []apiresp.FieldError{
 				{Field: "current_password", Code: "users.bad_credentials", Message: "current password is incorrect"},
@@ -655,8 +685,7 @@ func (h *IdentitiesHandler) StepUpVerify(w http.ResponseWriter, r *http.Request)
 	uc := localauth.MustFromContext(r.Context())
 
 	var req stepUpVerifyRequest
-	if err := server.Decode(r, &req); err != nil {
-		apiresp.WriteError(w, r, apiresp.ErrInvalidInput)
+	if !server.Decode(w, r, &req) {
 		return
 	}
 	if req.Code == "" {
