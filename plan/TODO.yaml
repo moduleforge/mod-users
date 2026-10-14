@@ -68,6 +68,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: limit-attempts-in-handlers
+          title: Enforce Attempt Limit, Cooldown, And Constant-Time Verify
+          path: phase-04-email-code-attempt-limiting/002-limit-attempts-in-handlers.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 5
       slug: doc-updates
       title: Documentation Updates
