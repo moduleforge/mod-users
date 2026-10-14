@@ -11,7 +11,7 @@ phases:
           slug: verified-tls-default
           title: Verify TLS By Default With Explicit Dev Opt-In
           path: phase-01-oidc-tls-verify/001-verified-tls-default.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Verified TLS is now the default for OIDC discovery and JWKS fetches; skip-verify is behind explicit WithInsecureSkipTLSVerify opt-in (local dev only), re-exported publicly, four tests cover required cases.
           git:
