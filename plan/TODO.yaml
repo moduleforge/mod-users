@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 4
-    tasks_added: 9
+    tasks_added: 10
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -275,5 +275,19 @@ phases:
       slug: remediation-04
       title: Remediation Round 4
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 4
-      tasks: []
+      tasks:
+        - number: 1
+          slug: bound-email-code-background-work
+          title: Bound And Recover The Detached Email Code Background Work
+          path: phase-09-remediation-04/001-bound-email-code-background-work.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - rQjH
+          git:
+            branch: null
+            commit: []
+            merge: null
