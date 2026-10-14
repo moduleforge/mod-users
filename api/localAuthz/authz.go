@@ -20,9 +20,9 @@ import (
 // so manage on a type entity is full control of every instance (for
 // natural_person, including assume of every user account). That reaches
 // accounts holding wildcard or admin grants, so manage on natural_person is
-// effectively full admin; update (not only manage) on natural_person likewise
-// lets its holder install an SSH key (git SSH access) for every user account,
-// since the operator SSH-key routes authorize update on the account holder;
+// effectively full admin; installing an SSH key (git SSH access) through the
+// operator routes requires assume on the account holder, so update on
+// natural_person does not confer it (manage does, since it implies assume);
 // manage, grant or update on the type entity of
 // authz_actor_group or authz_target_group likewise confers authority over every
 // group of that kind (adding a member needs grant on the member and, for actor

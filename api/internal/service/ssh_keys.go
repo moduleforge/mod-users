@@ -26,6 +26,16 @@ const (
 	sshKeyListMaxLimit     int32 = 200
 )
 
+// sshKeyMutateOp is the operation Register and Revoke authorize against the
+// account holder entity. Installing or removing a credential that grants
+// git-over-SSH access as the account is impersonation-grade authority, so it
+// requires `assume` (not the generic `update`): a grant of only `update`, on
+// the holder or on the natural_person type entity (architecture.md D13),
+// does not confer it. `manage` still does, because it implies `assume`; the
+// account holder's own ownership arm also satisfies it, which keeps the
+// self-service routes working unchanged. List stays on `read`.
+const sshKeyMutateOp = "assume"
+
 // errSSHKeyNotFoundForAccount is returned inside Revoke's transaction when
 // ArchiveSSHPublicKey affects zero rows: the key UUID does not exist, does
 // not belong to accountUUID, or is already revoked. Revoke maps it to the
@@ -57,8 +67,8 @@ type SSHKey struct {
 //     masked apiresp.ErrForbidden, never ErrNotFound (existence masking);
 //  2. load the account holder entity via coredb.GetEntityByID -- an
 //     archived holder returns the same masked ErrForbidden;
-//  3. call Authorize against the account holder entity, propagating any
-//     error unchanged;
+//  3. call Authorize against the account holder entity (`assume` for
+//     Register/Revoke, `read` for List), propagating any error unchanged;
 //  4. only then parse input, touch key data, or write.
 type SSHKeyService struct {
 	db    txhelper.DB
@@ -130,7 +140,7 @@ func (s *SSHKeyService) loadAuthorizedAccount(ctx context.Context, accountUUID u
 // enforced by the schema, not by a Go pre-check, since a pre-check alone
 // would lose a concurrent-registration race.
 func (s *SSHKeyService) Register(ctx context.Context, accountUUID uuid.UUID, publicKeyLine string, label *string, stepUpUsed bool) (SSHKey, error) {
-	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, "update")
+	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, sshKeyMutateOp)
 	if err != nil {
 		return SSHKey{}, err
 	}
@@ -225,7 +235,7 @@ func (s *SSHKeyService) List(ctx context.Context, accountUUID uuid.UUID, limit, 
 // denial. stepUpUsed records whether the caller completed a step-up
 // challenge for this call, for the audit trail.
 func (s *SSHKeyService) Revoke(ctx context.Context, accountUUID, keyUUID uuid.UUID, stepUpUsed bool) error {
-	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, "update")
+	ua, accountHolder, err := s.loadAuthorizedAccount(ctx, accountUUID, sshKeyMutateOp)
 	if err != nil {
 		return err
 	}
