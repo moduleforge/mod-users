@@ -253,7 +253,8 @@ phases:
             - Wr6I
           git:
             branch: plan/users-security-hardening-08-002
-            commit: []
+            commit:
+                - 0f62eaf
             merge: null
         - number: 3
           slug: document-email-code-limiting
