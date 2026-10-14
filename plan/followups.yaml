@@ -1030,3 +1030,23 @@ items:
           Orphan: api/server/CLAUDE.md is not reachable from README.md. It is agent-config style, so may be intentionally unlinked.
         recommendation:
           Link from docs/project-structure.md or AGENTS.md, or accept as an intentional agent-only file.
+    - title: 'Orphan: deploy/local/README.md is not reacha…'
+      id: a5EH
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:readyz-generic-error
+        - plan/slug:users-security-hardening
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: deploy/local/README.md
+        lines: 1
+        severity: minor
+        confidence: high
+        concerns: documentation
+        description:
+          Orphan: deploy/local/README.md is not reachable by markdown link from README.md. docs/architecture.md:179 mentions it only as plain code text.
+        recommendation:
+          Convert the mention in docs/architecture.md:179 to a link, and/or link from docs/project-structure.md.
