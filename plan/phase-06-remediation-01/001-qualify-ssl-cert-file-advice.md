@@ -22,3 +22,11 @@ Scope: `docs/oidc-troubleshooting.md` only. The work targets the plan branch pla
 ## References
 
 - Finding `eyu1` in this plan's plan/findings.yaml (type:security).
+
+## Status
+
+- **Outcome:** succeeded
+- **Date:** 2026-10-14
+- **Validation:** check 1 passed (section read; platform qualification and keychain guidance present). Check 2 passed (no `plan/` links added; bullet style matches surrounding entries). Log: `.flow/validation-logs/01-02-oidc-section-and-links.log`.
+- **Affected files:** `docs/oidc-troubleshooting.md`
+- **Assumptions/decisions:** none beyond the Requirements. The macOS keychain step is phrased as "set it to trust for SSL", the standard Keychain Access trust setting.

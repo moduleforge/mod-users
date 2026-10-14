@@ -80,8 +80,12 @@ and personal Microsoft accounts" → Save. Then verify the manifest's
 
 OIDC issuer discovery and JWKS fetches verify TLS by default. Remedies:
 
-- Trust the issuer's CA: add it to the system trust store, or point
-  `SSL_CERT_FILE` at a PEM bundle that includes it.
+- Trust the issuer's CA. `SSL_CERT_FILE` applies on Linux and BSD only;
+  Go's certificate verification on macOS does not honor it.
+  - **Linux and BSD:** point `SSL_CERT_FILE` at a PEM bundle that
+    includes the issuer CA, or add the CA to the system trust store.
+  - **macOS:** add the issuer CA to the macOS keychain (system trust)
+    and set it to trust for SSL. Do not rely on `SSL_CERT_FILE`.
 - Local development only: build the verifier with
   `WithInsecureSkipTLSVerify()` alongside `WithOIDC`. It disables
   verification for an `https://` issuer and logs a warning.
