@@ -68,8 +68,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:oidc-tls-verify
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'Agent-authored report data (readme-reachability, suggestion severity, pre-existing): api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md and model/README.md are not reachable from README.md. Link them from README.md or a reachable doc.'
 closed:
     - id: 0G9p
