@@ -298,13 +298,15 @@ phases:
           slug: qualify-cooldown-function-in-0104
           title: Schema-Qualify The Cooldown Function In The 0104 Migration
           path: phase-09-remediation-04/002-qualify-cooldown-function-in-0104.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Schema-qualified the cooldown function in the Up ALTER FUNCTION and the Down RESET search_path of migration 0104 via current_schema(), with no hardcoded public schema. Migrations 0100 through 0103 are untouched. All validation passed.
           findings:
             - jwyA
           git:
-            branch: null
-            commit: []
+            branch: plan/users-security-hardening-09-002
+            commit:
+                - 15b0ad7
             merge: null
         - number: 3
           slug: reconcile-spec-request-status-codes

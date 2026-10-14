@@ -57,6 +57,15 @@ items:
           The search_path pin is correct (pg_catalog first, real schema, pg_temp last; every function the body calls is in pg_catalog). Residual: the ALTER FUNCTION target is unqualified, so it resolves through the migrating session's search_path. If that differs from where 0103 created the function, the ALTER could hit a different function or fail. The same applies to the Down. Low risk since 0103 used the same session conventions.
         recommendation:
           Optionally qualify the function with current_schema() in the dynamic SQL (%I.create_email_code_with_cooldown) so the pin always targets the function created in that schema.
+    - title: The sibling mod-core checkout has model/migra
+      id: miWN
+      date: "2026-10-14"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: The sibling mod-core checkout has model/migrations/0100_natural_person_owner_invariant.sql, which collides with this repo's 0100_baseline.sql in make -C model compose output. This environment issue blocks the default integration test setup and the migrate targets. Not filed as a finding by the task agent; no followups filed or fixed.
 closed:
     - id: 0G9p
       title: Architecture doc silent on OIDC TLS default
