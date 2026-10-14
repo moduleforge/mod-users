@@ -1000,11 +1000,3 @@ items:
         recommendation:
           Optionally restrict to loopback/private hosts or require an additional env guard; the intent does not require this.
         Open question (evaluator, quoted data): Should the WithInsecureSkipTLSVerify opt-in be further restricted beyond being explicit and off by default? Options: (1) leave as is - explicit option, doc comment, warning log; no code change (recommended); (2) restrict to loopback/private-network issuer hosts - stronger, but may reject Docker Compose service hostnames used in dev; (3) require an additional environment guard - defense in depth, adds a second knob to the public contract.
-    - title: 'P3rk: SSH-key ops assume (pending merge)'
-      id: bF8S
-      date: "2026-10-14"
-      tags:
-        - type:security
-        - priority:low
-        - effort:small
-      text: 'Re-filed (original P3rk was removed prematurely). Operator SSH-key Register/Revoke now require `assume` on the account holder (branch task/ssh-key-ops-assume, commit e385476; D9/D13 docs updated) — NOT YET MERGED to main: the pull-forward merge hit conflicts in api/internal/service/ssh_keys.go and ssh_keys_test.go (main changed concurrently via users-security-hardening / users-conformance); a resolution agent is working in worktrees/task/ssh-key-ops-assume. Close this item once the branch is merged. Note: `manage` implies `assume` in mod-authz''s seed, so `manage` (instance, type-level or wildcard) still confers credential-install; only `update` stopped doing so. Making `manage` stop conferring it would need a new non-implied operation. Operators in deployed apps holding only `update` lose the ability to install keys and need an `assume` grant.'
