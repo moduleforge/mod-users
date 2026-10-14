@@ -22,3 +22,9 @@ The work targets the plan branch `plan/users-security-hardening` and lands throu
 ## References
 
 1. Finding `BM3K` in this plan's `plan/findings.yaml`: the spec states 202 for the email-code and password-reset request endpoints, while the handlers answer 204.
+
+## Status
+
+- Outcome: succeeded (2026-10-14).
+- Changed `202` to `204` at lines 50, 60, 216, 260, 262, and 343 of `docs/mod-users-spec.md`.
+- Validation: no `202` remains in the spec; handlers `emailcode.go` and `reset.go` still write `http.StatusNoContent`; no handler or test changes.
