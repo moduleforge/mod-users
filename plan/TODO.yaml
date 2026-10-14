@@ -160,7 +160,7 @@ phases:
           slug: cooldown-covers-exhausted-codes
           title: Base Email Code Cooldown On Any Recent Code And Make It Atomic
           path: phase-07-remediation-02/001-cooldown-covers-exhausted-codes.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Cooldown uses newest code of any state; check and insert atomic via advisory-locked plpgsql function in additive migration 0103. Both endpoints use it. Tests cover exhausted-code case and concurrent mint-once; SQL checked against Postgres 16.
           findings:
