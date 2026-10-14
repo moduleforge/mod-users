@@ -845,6 +845,9 @@ items:
         - priority:low
         - effort:small
         - cross-repo/origin:core
+        - resolution/task:phase-03-decode-and-shape/001-remove-pass-through-wrappers.md
+        - resolution/plan:users-conformance
+        - resolution/commit:48b87236d324b1608e29189baf5658b07b37faa8
       text: 'Origin: wave program http-error-precedence-conformance, core-handler-conformance analysis. The wave manifest assigns deletion of writeCoreServiceErr pass-throughs to the mod-core share, but the function lives in mod-users api/internal/handlers/self.go (line ~150, called ~86), not in mod-core (no pass-through writers exist in mod-core httpapi). Fold into the users-conformance plan: delete writeCoreServiceErr and route its callers straight to apiresp.WriteError once core service errors are already apiresp sentinels, alongside the writeAuthzError/writeServiceError wrapper removal.'
     - title: OIDC verifier skips TLS check for https
       id: 8chg
@@ -873,3 +876,149 @@ items:
         - priority:low
         - effort:unspecified
       text: mod-users/gui/src/lib/api.ts (~332-335, 615-624) types the apps create/update body as {name, description?} with no slug. mod-core's strict DecodeJSON (plan core-handler-conformance) now rejects the unknown member 'description' and core requires 'slug'. No caller of apps.create/update exists in the mod-users GUI today, so nothing breaks now, but the wrapper is wrong; align it with the core apps contract.
+    - title: App member list leaks internal ids
+      id: ZJ5N
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:small
+      text: 'GET /v1/apps/{uuid}/user-accounts (api/internal/handlers/apps.go ListAppUsers, ~line 160) returns each member as {user_account_id: <internal BIGINT>, roles}, violating the AGENTS.md convention that internal IDs are never exposed in HTTP responses (only uuid fields). The GUI type gui/src/lib/api.ts AppMembersResponse/AppMember ({members: [{user_uuid, email, given_name, family_name, role, added_at}]}) does not match the server shape ({user_accounts: [{user_account_id, roles}]}) either. Fix: return the member''s user account uuid (join user_accounts in model/queries/apps_user_accounts.sql ListAppUserAccounts) and align the GUI response type; record the wire change for consumers.'
+    - title: OpenAPI user-account paths are stale
+      id: fs0H
+      date: "2026-10-11"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:medium
+      text: api/openapi.yaml (AGENTS.md calls it the authoritative REST spec) documents /v1/users, /v1/users/{user_uuid}, /v1/users/{user_uuid}/grant, /v1/users/{user_uuid}/assume and /v1/users/{user_uuid}/audit, but the served routes (api/internal/handlers/account_routes.go RegisterAccountRoutes) are /v1/user-accounts, /v1/user-accounts/{uuid}, /grant-admin, /revoke-admin and /assume; the audit route moved to /v1/audit (mod-audit). docs/architecture.md's API-surface table repeats the /v1/users names. Separate from followup biJk (identities surface missing). Rewrite these paths and their request/response/error schemas to match the handlers.
+    - title: PUT /self names 403 in assume session
+      id: 7kHY
+      date: "2026-10-11"
+      tags:
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+      text: In an assume session the token subject is the admin and sudo_user_uuid is the assumed user, so buildUserContext sets uc to the admin's account and the effective actor (opctx.EffectiveActorEntityID) is the assumed user. PUT /self loads uc.UserAccountID (the admin's own account), so a body containing names is now authorized as the assumed user against the admin's entity and gets 403 unless the assumed user holds update on it; before mod-core's AuthorizeResolve it silently wrote the admin's own names. A body without names is unaffected, and a non-admin updating their own names works (the entity owns itself). Decide whether PUT /self in an assume session should target the effective actor's (assumed user's) account, be forbidden explicitly, or keep acting on the admin; the users-conformance inventory's D5 assume-session reading was the reverse of the code and is corrected in the wire-risk note.
+    - title: /readyz returns raw DB error unauthenticated
+      id: FAVu
+      date: "2026-10-11"
+      tags:
+        - type:security
+        - priority:high
+        - effort:unspecified
+        - plan/phase:authenticate-routes
+        - plan/slug:users-conformance
+      text: 'api/internal/handlers/health.go Ready writes err.Error() from pool.Ping into the 503 body ("db": ...) on the unauthenticated GET /readyz route. Driver errors can include host, port, user and database names. Log the error server-side and return a fixed value such as "unavailable".'
+    - title: credential_change code violates CHECK
+      id: bc1h
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:high
+        - effort:unspecified
+        - plan/phase:authenticate-routes
+        - plan/slug:users-conformance
+      text: api/internal/handlers/identities.go sendStepUpCode inserts an email_codes row with purpose "credential_change", but model/migrations/sql/0100_baseline.sql defines CHECK (purpose IN ('login', 'verify_email')) on email_codes and no later migration changes it. By reading the source (not run against a database) the insert fails, is only logged, and POST /v1/self/credential/step-up answers 204 without ever creating or sending a code, which would leave step-up verification unusable when AUTH_REQUIRE_STEP_UP is on. Verify against a live database and either widen the CHECK or change the purpose.
+    - title: Fire-and-forget email sends use dead ctx
+      id: 1KXD
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:authenticate-routes
+        - plan/slug:users-conformance
+      text: api/internal/handlers/auth/reset.go PasswordResetRequest and api/internal/handlers/auth/register.go Register (the verify_email send) start a goroutine that uses r.Context() and the handler then returns immediately. net/http cancels the request context when ServeHTTP returns, so the goroutine's DB and send calls run on a canceled context and most likely fail (errors are only logged). EmailCodeRequest avoids this by waiting for the goroutine. Detach with context.WithoutCancel (plus a timeout) or wait for completion.
+    - title: GUI admin/audit paths do not match server
+      id: bxIA
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:authenticate-routes
+        - plan/slug:users-conformance
+      text: 'gui/src/lib/api.ts: userAccounts.grantAdmin and revokeAdmin call POST/DELETE /v1/user-accounts/{uuid}/admin, but the server routes (api/internal/handlers/account_routes.go) are POST /user-accounts/{uuid}/grant-admin and /revoke-admin. userAccounts.audit calls GET /v1/user-accounts/{uuid}/audit, which no longer exists (api/cmd/server/main.go documents the audit routes as /v1/audit/by-actor/{uuid} and /v1/audit/by-entity/{entity_uuid}); audit.byEntity sends ?entity_uuid= to /v1/audit. These client methods would 404 or hit the wrong route.'
+    - title: oidc confirm drops unknown provider ids
+      id: jQbw
+      date: "2026-10-11"
+      tags:
+        - type:ambiguity
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:decode-and-shape
+        - plan/slug:users-conformance
+      text: POST /v1/oidc-config/confirm (api/internal/handlers/oidc_config.go, OIDCConfigHandler.Confirm) passes enabled_providers through normalizeEnabledSet, which lowercases, dedupes and silently DROPS ids that are not in the env registry; the request still succeeds with 200 and the response gives no hint that an id was ignored. The HTTP error-precedence rule would classify a referenced value outside a registry as 422 after authorization, but that would be a new behavior for the config page and its status semantics, so no status was chosen and the current behavior is kept (pinned by TestNormalizeEnabledSet_DropsUnknown). Decide whether unknown ids should become 422 (with a details entry per id), stay silently ignored (document it), or be echoed back in the response.
+    - title: 'Unlink: 409 precedes identity 404'
+      id: v2BM
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:conflicts-and-order-tests
+        - plan/slug:users-conformance
+      text: IdentitiesHandler.Unlink in api/internal/handlers/identities.go runs the last-identity count (errLastIdentity, 409 users.last_identity) before DeleteOIDCIdentityByUUID reports whether the caller's identity exists. A caller with exactly one OIDC identity and no password who sends an identity_uuid that does not exist therefore gets 409 instead of the 404 users.identity_not_found. The scope is the caller's own account, so there is no cross-user leak; the status is only misleading. Fix would be to check existence (or the delete row count) first and apply the last-identity rule only to an identity that exists. Left unchanged and pinned as the current behavior.
+    - title: OIDC link insert race gives 500
+      id: 8VhV
+      date: "2026-10-11"
+      tags:
+        - type:bug
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:conflicts-and-order-tests
+        - plan/slug:users-conformance
+      text: OIDCHandler.handleLinkMode in api/internal/handlers/auth/oidc.go checks GetOIDCIdentityByIssuerSubject and redirects with identity_in_use when the (issuer, subject) pair belongs to another account, but the later insert in the same function is not guarded against the UNIQUE (issuer, subject) constraint. Two concurrent link callbacks for the same pair make the loser hit a 23505 and answer a JSON 500 internal_error instead of the identity_in_use redirect. Fix would be to match the unique violation on that constraint name (errors.As plus ConstraintName) and take the same redirect path. Not changed here.
+    - title: Re-bump mod-core pin after mod-core push
+      id: nKYg
+      date: "2026-10-12"
+      tags:
+        - type:enhancement
+        - priority:high
+        - plan/slug:users-conformance
+        - effort:unspecified
+      text: The users-conformance work (and the other http-error-precedence wave-2 plans) relies on mod-core local main, which is far ahead of origin/main and contains the core-handler-conformance merges and wave-1 helpers (apiresp.DecodeJSON/ParseUUIDParam, authz.RequireAuth, ordertest). After the user pushes mod-core, run `MODULEFORGE_SIBLINGS_DIR=/Users/zane/playground/moduleforge make pins.update REPOS="mod-core"` in mod-users (never edit SHAs by hand; do not bump mod-audit or mod-authz), confirm `make pins.check`, build and test, and commit versions.lock.yaml locally. Pushing mod-users and downstream app pin bumps are further consent-gated steps. The removed plan task was phase-07 001-rebump-mod-core-pin (see the users-conformance plan summary).
+      scope_rationale: 'Consent-gated release step that cannot run inside the plan: requires pushing mod-core, a user decision.'
+    - title: Dangling mf-standards doc links
+      id: FcGl
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:medium
+        - plan/phase:oidc-tls-verify
+        - plan/slug:users-security-hardening
+      text: 'Agent-authored report data (readme-reachability, minor severity, not introduced by this phase''s diff): 10 links into the absent docs/mf-standards directory dangle from README.md:33, AGENTS.md:156, docs/mod-users-spec.md (lines 7, 161, 206, 354) and docs/architecture.md (lines 5, 42, 198, 255). Restore or sync the standards copy, or repoint the links.'
+    - title: Docs unreachable from README
+      id: 695p
+      date: "2026-10-14"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:oidc-tls-verify
+        - plan/slug:users-security-hardening
+      text: 'Agent-authored report data (readme-reachability, suggestion severity, pre-existing): api/server/CLAUDE.md, deploy/k8s/README.md, deploy/local/README.md, deploy/serverless/README.md and model/README.md are not reachable from README.md. Link them from README.md or a reachable doc.'
+    - title: 'Hardening only: the opt-in applies to any ht…'
+      id: ASqb
+      date: "2026-10-14"
+      tags:
+        - type:security
+        - priority:low
+        - effort:medium
+        - plan/phase:oidc-tls-verify
+        - plan/slug:users-security-hardening
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/auth/jwt.go
+        lines: 236-248
+        severity: suggestion
+        confidence: medium
+        concerns: security
+        description:
+          Hardening only: the opt-in applies to any https issuer host, not just loopback or known dev hosts, and the
+          warning is logged once at construction. A misconfigured production consumer that enables it gets only a log line.
+        recommendation:
+          Optionally restrict to loopback/private hosts or require an additional env guard; the intent does not require this.
+        Open question (evaluator, quoted data): Should the WithInsecureSkipTLSVerify opt-in be further restricted beyond being explicit and off by default? Options: (1) leave as is - explicit option, doc comment, warning log; no code change (recommended); (2) restrict to loopback/private-network issuer hosts - stronger, but may reject Docker Compose service hostnames used in dev; (3) require an additional environment guard - defense in depth, adds a second knob to the public contract.
