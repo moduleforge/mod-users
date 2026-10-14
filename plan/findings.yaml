@@ -4,10 +4,10 @@ items:
       id: R7WT
       date: "2026-10-14"
       tags:
-        - type:ambiguity
+        - type:bug
         - plan/phase:email-code-attempt-limiting
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:medium
       text: 'Task 002 Requirement 6 (end-to-end run against a throwaway Postgres 16) was not performed: no handler-level DB integration harness exists, and claim and latest-created queries were covered by task 001 SQL checks. Needs its own task or explicit manager instruction if an end-to-end check is wanted.'
     - title: The cooldown query GetLatestEmailCodeCreated…
       id: kcCG
