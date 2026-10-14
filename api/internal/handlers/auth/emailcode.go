@@ -89,8 +89,7 @@ func (h *Handler) EmailCodeRequest(w http.ResponseWriter, r *http.Request) {
 	// work has finished. Waiting for the work would make latency reveal whether
 	// the email exists or is inside its cooldown; the detached context lets the
 	// email still be sent after the response.
-	bg := r.WithContext(context.WithoutCancel(r.Context()))
-	go h.sendEmailCode(bg, req.Email, req.Purpose)
+	h.dispatchEmailCode(r, req.Email, req.Purpose)
 
 	timer := time.NewTimer(200 * time.Millisecond)
 	defer timer.Stop()
@@ -101,6 +100,60 @@ func (h *Handler) EmailCodeRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// emailCodeSendTimeout bounds one detached background send (lookup, hash,
+// insert, and email delivery).
+const emailCodeSendTimeout = 20 * time.Second
+
+// defaultEmailCodeConcurrency bounds concurrent detached sends per Handler.
+const defaultEmailCodeConcurrency = 16
+
+// emailCodeSlotChan returns the per-Handler semaphore, creating it on first
+// use so zero-value Handlers (tests) work. emailCodeConcurrency <= 0 selects
+// the default.
+func (h *Handler) emailCodeSlotChan() chan struct{} {
+	h.emailCodeSlotsOnce.Do(func() {
+		n := h.emailCodeConcurrency
+		if n <= 0 {
+			n = defaultEmailCodeConcurrency
+		}
+		h.emailCodeSlots = make(chan struct{}, n)
+	})
+	return h.emailCodeSlots
+}
+
+// dispatchEmailCode starts the detached background send when a slot is free,
+// and otherwise drops it (logged) so the caller's response is unaffected.
+func (h *Handler) dispatchEmailCode(r *http.Request, email, purpose string) {
+	slots := h.emailCodeSlotChan()
+	select {
+	case slots <- struct{}{}:
+	default:
+		slog.WarnContext(r.Context(), "email_code: background send capacity saturated, dropping request")
+		return
+	}
+	parent := context.WithoutCancel(r.Context())
+	go func() {
+		defer func() { <-slots }()
+		runBoundedEmailWork(parent, emailCodeSendTimeout, func(ctx context.Context) {
+			h.sendEmailCode(r.WithContext(ctx), email, purpose)
+		})
+	}()
+}
+
+// runBoundedEmailWork runs work under a deadline and recovers from a panic,
+// logging only the panic type (never its value, which could carry the code or
+// address) so the process survives.
+func runBoundedEmailWork(parent context.Context, timeout time.Duration, work func(context.Context)) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	defer func() {
+		if rec := recover(); rec != nil {
+			slog.ErrorContext(ctx, "email_code: recovered panic in background send", "panic_type", fmt.Sprintf("%T", rec))
+		}
+	}()
+	work(ctx)
 }
 
 func (h *Handler) sendEmailCode(r *http.Request, email, purpose string) {

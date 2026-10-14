@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -71,6 +72,12 @@ type Handler struct {
 	guiBase       string
 	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
 	userSvc       anonUserCreator // nil until SetUserSvc is called
+
+	// Bound on detached email-code sends; see dispatchEmailCode. The zero
+	// value selects the default concurrency.
+	emailCodeConcurrency int
+	emailCodeSlotsOnce   sync.Once
+	emailCodeSlots       chan struct{}
 }
 
 // New constructs a Handler.
