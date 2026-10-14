@@ -1719,8 +1719,8 @@ paths:
     get:
       summary: List a user's SSH public keys (operator)
       description: |
-        Lists the target account's active SSH public keys. Requires a
-        verified email on the caller. Uses the `/v1/user-accounts/{uuid}`
+        Lists the target account's active SSH public keys. Requires `read`
+        on the target account's holder and a verified email on the caller. Uses the `/v1/user-accounts/{uuid}`
         prefix, the prefix this module actually serves
         (`api/internal/handlers/account_routes.go`), unlike the older
         `/v1/users/{user_uuid}` admin paths documented elsewhere in this file.
@@ -1749,8 +1749,10 @@ paths:
     post:
       summary: Register an SSH public key for a user (operator)
       description: |
-        Registers a new SSH public key on the target account. Requires a
-        verified email on the caller. Step-up-gated exactly like the
+        Registers a new SSH public key on the target account. Requires the
+        `assume` operation on the target account's holder (`update` alone is
+        not sufficient; `manage` implies `assume`) and a verified email on
+        the caller. Step-up-gated exactly like the
         self-service register endpoint above, but **only when `{uuid}`
         names the caller's own account** — a genuine
         operator-on-behalf-of-a-different-account call is not step-up-gated,
@@ -1806,8 +1808,10 @@ paths:
       summary: Revoke a user's SSH public key (operator)
       description: |
         Archives the key; it stops resolving on the account's next SSH
-        connection (an already-open session is not terminated). Requires a
-        verified email on the caller. Step-up-gated exactly like the
+        connection (an already-open session is not terminated). Requires the
+        `assume` operation on the target account's holder (`update` alone is
+        not sufficient; `manage` implies `assume`) and a verified email on
+        the caller. Step-up-gated exactly like the
         self-service revoke endpoint above, but **only when `{uuid}`
         names the caller's own account** — a genuine
         operator-on-behalf-of-a-different-account call is not step-up-gated,

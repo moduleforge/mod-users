@@ -191,7 +191,7 @@ When the guest account later provides an email address (via `PUT /v1/self`), the
 
 ### 17. Manage a user's SSH public keys (operator)
 
-**Actor:** Authenticated operator holding a grant that authorizes `update` (or, for listing, `read`) on the target account's account-holder entity — the same authorization every other `/v1/user-accounts/{uuid}` admin operation already requires.
+**Actor:** Authenticated operator holding a grant that authorizes `assume` (or, for listing, `read`) on the target account's account-holder entity. Register and revoke require `assume` because installing a key is impersonation-grade authority; `update` alone does not suffice (`manage` does, as it implies `assume`).
 
 **Action:** Calls the same three operations as use case 16 against `/v1/user-accounts/{uuid}/ssh-keys` (list, register) and `/v1/user-accounts/{uuid}/ssh-keys/{key_uuid}` (revoke) on behalf of another account.
 

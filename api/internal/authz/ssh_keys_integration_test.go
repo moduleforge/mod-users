@@ -25,6 +25,8 @@ package authz_test
 //     internally), ResolveActor returns ErrUnknownSSHKey.
 //  5. A non-admin user cannot List, Register, or Revoke for another
 //     account (masked ErrForbidden); a wildcard-manage user can.
+//  5b. Operator register/revoke require `assume`; `update` (instance or
+//     natural_person type entity) is forbidden; self-service unchanged.
 //  6. An unknown key returns ErrUnknownSSHKey.
 //  7. Audit rows are written for both register and revoke, via a
 //     recording observer.
@@ -373,6 +375,96 @@ func TestInteg_SSHKeys_OperatorAuthorization(t *testing.T) {
 	if err := svc.Revoke(actorCtx(adminID), targetUUID, key.UUID, false); err != nil {
 		t.Errorf("admin Revoke: got %v, want nil", err)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 5b: operator register/revoke require `assume`, not `update`
+// ---------------------------------------------------------------------------
+
+// TestInteg_SSHKeys_OperatorRegisterRevoke_RequireAssume proves that
+// credential-install needs impersonation-grade authority: `update` (on the
+// account holder instance or on the natural_person type entity, D13) does not
+// confer register/revoke, `assume` does (instance or type entity), and the
+// owner's self-service path is unchanged.
+func TestInteg_SSHKeys_OperatorRegisterRevoke_RequireAssume(t *testing.T) {
+	svc := newIntegSSHKeyService(observer.NewObserverGroup())
+	npTE := typeEntityIDForSlug(t, "natural_person")
+
+	targetID := seedUser(t, "ssh-assume-target@example.com", false)
+	targetUUID := accountUUIDForEntity(t, targetID)
+
+	// A key the admin installs so revoke can be exercised by the others.
+	adminID := seedUser(t, "ssh-assume-admin@example.com", true)
+	_, adminLine := genIntegKey(t)
+	installed, err := svc.Register(actorCtx(adminID), targetUUID, adminLine, nil, false)
+	if err != nil {
+		t.Fatalf("admin Register: %v", err)
+	}
+
+	denied := []struct {
+		name  string
+		setup func(actor int64)
+	}{
+		{"update on the account holder instance", func(a int64) { targetedGrant(t, a, targetID, "update") }},
+		{"update on the natural_person type entity", func(a int64) { targetedGrant(t, a, npTE, "update") }},
+		{"wildcard update", func(a int64) { seedWildcardGrant(t, a, "update") }},
+	}
+	for _, tc := range denied {
+		t.Run("denied/"+tc.name, func(t *testing.T) {
+			actor := seedUser(t, "ssh-assume-denied-"+uuid.NewString()+"@example.com", false)
+			tc.setup(actor)
+			_, line := genIntegKey(t)
+			if _, err := svc.Register(actorCtx(actor), targetUUID, line, nil, false); !errors.Is(err, apiresp.ErrForbidden) {
+				t.Errorf("Register: got %v, want ErrForbidden", err)
+			}
+			if err := svc.Revoke(actorCtx(actor), targetUUID, installed.UUID, false); !errors.Is(err, apiresp.ErrForbidden) {
+				t.Errorf("Revoke: got %v, want ErrForbidden", err)
+			}
+			// update implies read, so listing is unchanged.
+			if _, _, err := svc.List(actorCtx(actor), targetUUID, 0, 0); err != nil {
+				t.Errorf("List: got %v, want nil", err)
+			}
+		})
+	}
+
+	allowed := []struct {
+		name  string
+		setup func(actor int64)
+	}{
+		{"assume on the account holder instance", func(a int64) { targetedGrant(t, a, targetID, "assume") }},
+		{"assume on the natural_person type entity", func(a int64) { targetedGrant(t, a, npTE, "assume") }},
+		{"wildcard assume", func(a int64) { seedWildcardGrant(t, a, "assume") }},
+	}
+	for _, tc := range allowed {
+		t.Run("allowed/"+tc.name, func(t *testing.T) {
+			actor := seedUser(t, "ssh-assume-allowed-"+uuid.NewString()+"@example.com", false)
+			tc.setup(actor)
+			_, line := genIntegKey(t)
+			key, err := svc.Register(actorCtx(actor), targetUUID, line, nil, false)
+			if err != nil {
+				t.Fatalf("Register: got %v, want nil", err)
+			}
+			if err := svc.Revoke(actorCtx(actor), targetUUID, key.UUID, false); err != nil {
+				t.Errorf("Revoke: got %v, want nil", err)
+			}
+		})
+	}
+
+	t.Run("self-service unchanged", func(t *testing.T) {
+		self := seedUser(t, "ssh-assume-self@example.com", false) // no grants at all
+		selfUUID := accountUUIDForEntity(t, self)
+		_, line := genIntegKey(t)
+		key, err := svc.Register(actorCtx(self), selfUUID, line, nil, false)
+		if err != nil {
+			t.Fatalf("self Register: got %v, want nil", err)
+		}
+		if _, _, err := svc.List(actorCtx(self), selfUUID, 0, 0); err != nil {
+			t.Errorf("self List: got %v, want nil", err)
+		}
+		if err := svc.Revoke(actorCtx(self), selfUUID, key.UUID, false); err != nil {
+			t.Errorf("self Revoke: got %v, want nil", err)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
