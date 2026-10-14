@@ -113,23 +113,27 @@ phases:
           slug: qualify-ssl-cert-file-advice
           title: Qualify SSL_CERT_FILE Advice For macOS In OIDC Troubleshooting
           path: phase-06-remediation-01/001-qualify-ssl-cert-file-advice.md
-          done: false
+          done: true
           tier: haiku-med
+          digest: 'Qualified the self-signed issuer certificate remedy in docs/oidc-troubleshooting.md: SSL_CERT_FILE applies on Linux and BSD only, and macOS developers are directed to the keychain. The WithInsecureSkipTLSVerify() local-development-only option is unchanged and remains last. Single-section change; no other files touched.'
           findings:
             - eyu1
           git:
-            branch: null
-            commit: []
-            merge: null
+            branch: plan/users-security-hardening-06-001
+            commit:
+                - "3027763"
+            merge: 97345cd3200bb38bcec2eda09532dcd2f56d1a5a
         - number: 2
           slug: assert-certificate-error-in-tls-test
           title: Assert Certificate Error In Default TLS Verification Test
           path: phase-06-remediation-01/002-assert-certificate-error-in-tls-test.md
-          done: false
+          done: true
           tier: haiku-med
+          digest: Added a third assertion to TestNewVerifierWithOptions_TLSVerifiedByDefault requiring the discovery error to contain 'x509' or 'certificate', so an unrelated discovery failure no longer passes the test. Test passes against the current error text. No other behavior changed.
           findings:
             - J4N9
           git:
-            branch: null
-            commit: []
+            branch: plan/users-security-hardening-06-002
+            commit:
+                - 41d847b
             merge: null
