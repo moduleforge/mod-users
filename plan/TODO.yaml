@@ -1,0 +1,8 @@
+slug: users-security-hardening
+version: 1
+title: ""
+phases:
+    - number: 1
+      slug: oidc-tls-verify
+      title: Verified TLS For OIDC Issuer Discovery
+      tasks: []
