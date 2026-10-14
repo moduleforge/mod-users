@@ -77,7 +77,7 @@ phases:
           slug: attempts-column-and-queries
           title: Add Failed-Attempt Tracking Column And Queries
           path: phase-04-email-code-attempt-limiting/001-attempts-column-and-queries.md
-          done: false
+          done: true
           tier: sonnet-med
           git:
             branch: plan/users-security-hardening-04-001
