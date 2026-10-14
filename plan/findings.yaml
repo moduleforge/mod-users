@@ -39,25 +39,6 @@ items:
         recommendation:
           Wrap the background work in a bounded context (context.WithTimeout over context.WithoutCancel), add a deferred recover that logs, and optionally bound concurrency with a semaphore or worker pool; drop work when saturated, which is acceptable under the anti-enumeration contract.
     - title: Project doc is not reachable from README.md;…
-      id: jOmc
-      date: "2026-10-14"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-03
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/server/CLAUDE.md
-        lines: 1
-        severity: minor
-        confidence: high
-        concerns: documentation
-        description:
-          Project doc is not reachable from README.md; no link in the reachable set points to it.
-        recommendation:
-          Link it from the appropriate reachable doc (e.g. AGENTS.md or docs/project-structure.md) or confirm it is intentionally unlinked.
-    - title: Project doc is not reachable from README.md;…
       id: iB8Z
       date: "2026-10-14"
       tags:
@@ -522,4 +503,9 @@ closed:
         the uninitialized docs/mf-standards submodule. In the main checkout
         architecture.md, architecture/entity-typing.md and
         architecture/db-considerations.md all exist. Links are correct.
+      date: "2026-10-14"
+    - id: jOmc
+      title: Project doc is not reachable from README.md;…
+      disposition: promoted
+      ref: jOmc
       date: "2026-10-14"
