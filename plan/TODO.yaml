@@ -29,7 +29,17 @@ phases:
     - number: 2
       slug: readyz-generic-error
       title: Generic Readiness Probe Error Body
-      tasks: []
+      tasks:
+        - number: 1
+          slug: readyz-generic-body
+          title: Return Generic Readyz Body And Log Detail
+          path: phase-02-readyz-generic-error/001-readyz-generic-body.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 3
       slug: stepup-code-check-constraint
       title: Fix credential_change Email Code CHECK Constraint
