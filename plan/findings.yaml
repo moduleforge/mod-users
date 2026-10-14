@@ -1,17 +1,5 @@
 version: 2
 items:
-    - title: Composed migrations collide at version 0100
-      id: xw9l
-      date: "2026-10-14"
-      tags:
-        - type:conflict
-        - plan/phase:remediation-02
-        - priority:medium
-        - effort:small
-      text: |-
-        `make -C model compose` copies mod-core's `model/migrations/0100_natural_person_owner_invariant.sql` and mod-users' `model/migrations/sql/0100_baseline.sql` into `model/schema/migrations`, so goose panics with "duplicate version 100" and the `api/internal/authz` integration suite cannot migrate against the sibling mod-core checkout. Worked around locally by composing into a scratch dir with the core file renumbered to 0104 and pointing `AUTHZ_INTEG_MIGRATIONS_DIR` at it. A permanent fix needs a non-colliding version number in one of the two migration sets.
-
-        Open question (quoted, unresolved): how should the duplicate goose version 0100 be resolved? Options: (a) renumber mod-core's migration into core's own range via a cross-repo followup (recommended; keeps the mod-users baseline untouched, needs a mod-core change and pin bump); (b) keep per-module migration dirs and run goose once per module version table instead of merging files (touches model/Makefile and consumers of schema/migrations); (c) renumber the mod-users baseline (breaks the no-edit constraint and existing databases); (d) accept the local workaround and file only a cross-repo followup. Context: model/Makefile compose target lines 26-32; AGENTS.md per-module ranges (mod-users 100-199).
     - title: When two verifies race on the final attempts…
       id: 33Bo
       date: "2026-10-14"
@@ -403,4 +391,9 @@ closed:
       title: Task 002 Requirement 6 (end-to-end run agains
       disposition: fixed
       ref: phase-07-remediation-02/004-email-code-db-integration-tests.md
+      date: "2026-10-14"
+    - id: xw9l
+      title: Composed migrations collide at version 0100
+      disposition: promoted
+      ref: xw9l
       date: "2026-10-14"
