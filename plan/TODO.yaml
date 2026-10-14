@@ -30,7 +30,7 @@ phases:
             branch: plan/users-security-hardening-01-002
             commit:
                 - "0484496"
-            merge: null
+            merge: da1397642558df9b2fe6f5102da38de03ce2234f
     - number: 2
       slug: readyz-generic-error
       title: Generic Readiness Probe Error Body
