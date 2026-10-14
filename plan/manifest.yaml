@@ -5,3 +5,5 @@ plans:
       wave:
         slug: http-error-precedence-conformance
         leadProject: core
+    - slug: users-security-hardening
+      status: working
