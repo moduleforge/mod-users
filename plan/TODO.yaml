@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 2
-    tasks_added: 4
+    tasks_added: 5
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -152,7 +152,7 @@ phases:
       title: Remediation Round 2
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 4
       tasks:
         - number: 1
@@ -179,6 +179,18 @@ phases:
           findings:
             - 1Ki1
             - CR1R
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: allowlist-public-email-code-purpose
+          title: Allow-List Purposes On Public Email Code Endpoints
+          path: phase-07-remediation-02/003-allowlist-public-email-code-purpose.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - 8iUq
           git:
             branch: null
             commit: []
