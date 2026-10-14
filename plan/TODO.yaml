@@ -112,7 +112,7 @@ phases:
             branch: plan/users-security-hardening-05-001
             commit:
                 - 42e3976
-            merge: null
+            merge: c3af9c12b62d7e8d3b3652195a6dcc6c7fb29749
     - number: 6
       slug: remediation-01
       title: Remediation Round 1
