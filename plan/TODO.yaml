@@ -192,13 +192,15 @@ phases:
           slug: allowlist-public-email-code-purpose
           title: Allow-List Purposes On Public Email Code Endpoints
           path: phase-07-remediation-02/003-allowlist-public-email-code-purpose.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Allow-listed purposes on public email-code request and verify endpoints. Disallowed purposes mint nothing on request and cannot touch or burn step-up codes on verify.
           findings:
             - 8iUq
           git:
-            branch: null
-            commit: []
+            branch: plan/users-security-hardening-07-003
+            commit:
+                - ddc0175
             merge: null
         - number: 4
           slug: email-code-db-integration-tests
