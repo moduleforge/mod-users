@@ -1,6 +1,9 @@
 slug: users-security-hardening
 version: 1
 title: ""
+remediation:
+    rounds: 1
+    tasks_added: 0
 phases:
     - number: 1
       slug: oidc-tls-verify
@@ -97,3 +100,9 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 6
+      slug: remediation-01
+      title: Remediation Round 1
+      kind: remediation
+      remediates_phase: 1
+      tasks: []
