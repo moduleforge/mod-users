@@ -172,7 +172,7 @@ phases:
             branch: plan/users-security-hardening-07-001
             commit:
                 - d387208
-            merge: null
+            merge: ff186e2063e6d9a48c3fa56fc6c9e0c82a3416cb
         - number: 2
           slug: single-use-code-consumption
           title: Enforce Single-Use Consumption On Email Code Success
