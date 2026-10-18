@@ -54,6 +54,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: personal-party
+          title: Personal Party
+          path: phase-08-users-authorization-engine/005-personal-party.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
