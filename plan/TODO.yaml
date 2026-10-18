@@ -110,6 +110,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 6
+          slug: party-flows-integration-tests
+          title: Party Flows Integration Tests
+          path: phase-07-parties-profiles-and-bootstrap/006-party-flows-integration-tests.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
