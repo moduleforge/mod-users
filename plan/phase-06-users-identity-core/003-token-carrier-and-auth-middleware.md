@@ -67,7 +67,11 @@ to 007 and 009 depend on this task.
    through `public.profile_own_subject` without `ownership_confers`; wildcard, entity and type arms
    otherwise unchanged; `AuthorizeTypeIn` falls back as mod-core's helper does (U20). The full engine
    comes in phase `users-authorization-engine`. Keep `authz_test.go` and `export_test.go` compiling
-   and green for the ported behavior.
+   and green for the ported behavior. Once mod-authz phase 13 has merged (it must before this
+   phase closes, decision U27), the wildcard and entity arms read only `scope = 'entity'` grants,
+   so an owned-scope grant never acts as an entity grant on its target. If phase 13 has merged
+   when this task runs, add the filter here. Otherwise leave it to task 010 and say so in the
+   report.
 10. `api/auth/auth.go` re-exports the section 6.1 facade exactly; any change to a binding name is
     recorded here and flagged in the report.
 11. Update the `AGENTS.md` and `README.md` rows that describe the token, signing key and
@@ -91,6 +95,7 @@ architectural_impact: true
 
 - mod-core's `opctx.AuthContext` and `coredb.GetSystemActorBySlug` are available through the
   sibling link to the mod-core plan worktree.
+- mod-authz phase 13 may or may not have merged when this task runs (requirement 9).
 
 ## References
 

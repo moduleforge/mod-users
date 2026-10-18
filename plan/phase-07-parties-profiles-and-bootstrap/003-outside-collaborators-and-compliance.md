@@ -15,6 +15,14 @@ Roles: `plugins/flow/roles/developer-go.md` (primary), `plugins/flow/roles/devel
 Depends on tasks 001 (invite seam) and 002 (policy administration and the availability helpers it
 adds).
 
+**Hard cross-project dependency (decision U26, mod-authz constraint H5).** This task starts only
+after mod-authz phase 14 task 004 (`collaborator-gate-and-group-rules`) has merged on mod-authz's
+plan branch. That task delivers the `authzservice.CollaboratorGate` interface, `Deps.CollaboratorGate`,
+the trailing variadic `gates` parameter of `NewFromArgs` and the manifest's
+`optionalService:collaboratorGate`. No later mod-users task wires the gate. **If the hook is absent
+from mod-authz's plan worktree when this task is dispatched, halt and report** (status blocked,
+naming mod-authz 14/004) without implementing a partial. Do not defer the wiring to a later task.
+
 ## Requirements
 
 1. **Mismatch detection on invite.** Replace task 001's no-op seam. A mismatch exists when the
@@ -44,9 +52,13 @@ adds).
    `profile_policy_confirmations(memberProfileID, owningPartyID, <acting profile>)` idempotently.
    Same-party members pass without a write. Register `collaboratorGate` in
    `moduleforge.module.yaml` and the dev server.
-   - If mod-authz's injectable hook (API surface section 9, item 6) exists in its plan worktree,
-     wire the gate into it in `api/cmd/server/main.go`. If it does not, implement and test the
-     mod-users side only and state in the report that wiring waits on mod-authz.
+   - Wire the gate into mod-authz's injectable hook (API surface section 9, items 6 and 9) in
+     `api/cmd/server/main.go`, as the trailing argument of `authzservice.NewFromArgs`. Confirm that
+     `*usersservice.CollaboratorGate` satisfies `authzservice.CollaboratorGate` structurally with a
+     compile-time assertion in a test file, because mod-authz must not import mod-users. The
+     refusal is an `apiresp.Conflict` with code `users.policy_mismatch_confirmation_required` and
+     details, which mod-authz returns unchanged (mod-authz API surface 4.4 and 8). The hook's
+     presence is a precondition (see the dependency above), never a branch in this task.
 3. **Continuous compliance** (ADR "Outside collaborators"): verify, with tests, and fix if missing:
    - revoking a credential revokes every session holding it as a factor (phase 6
      `RevokeInTx`);
@@ -66,6 +78,10 @@ adds).
   `min_acr`; `CollaboratorGate` same-party pass, outside-party refusal, confirmed record,
   idempotent re-confirmation; the three compliance behaviors of requirement 3.
 - `grep -rn "checkInvitePolicyMismatch" api/internal/service` shows the seam is no longer a no-op.
+- `grep -n 'collaboratorGate\|CollaboratorGate' api/cmd/server/main.go moduleforge.module.yaml`
+  shows the gate constructed and passed to `authzservice.NewFromArgs`. An HTTP test adds an
+  outside-party profile to a party-owned actor group through mod-authz's route and gets 409
+  `users.policy_mismatch_confirmation_required` without confirmation, then success with it.
 
 ## Metadata
 
@@ -75,11 +91,15 @@ architectural_impact: true
 
 - mod-core's `profile_policy_confirmations` table exists in its plan worktree; read its migration
   for the exact column names.
-- mod-authz's `CollaboratorGate` hook may not have landed yet (phase inputs).
+- mod-authz phase 14 task 004 has merged, so the `CollaboratorGate` hook exists in mod-authz's
+  plan worktree. If it has not, halt (see the dependency above).
 
 ## References
 
 - [API surface](../notes/mod-users-api-surface.md) sections 3, 6.3, 7, 9 item 6.
-- [Decisions](../notes/decisions-and-resolutions.md) resolution (a).
+- [Decisions](../notes/decisions-and-resolutions.md) resolution (a), U26.
+- mod-authz plan worktree, `plan/notes/mod-authz-api-surface.md` sections 4.4, 6 and 8, and
+  `plan/phase-14-authz-scoped-grants-and-gates/004-collaborator-gate-and-group-rules.md`: the hook
+  this task wires.
 - [Work packages](../notes/work-packages.md), phase `parties-profiles-and-bootstrap`, package 3.
 - mod-core ADR `docs/architecture/identity-model.md`, "Outside collaborators".

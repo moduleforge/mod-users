@@ -22,9 +22,11 @@ Suggested role doc: `plugins/flow/roles/tech-writer.md`.
      `usersdb.UserAccount`, `users.NewFirstUserHook`, `FirstUserHookFn`, `SetFirstUserHook`,
      `ResolveActor`, and their replacements (`auth.Identity`, `auth.Authenticator`,
      `ResolveCredential`, `AuthContextForOwner`, `CredentialService.IssueAPIKeyInTx`,
-     `ProfileService.InviteInTx`, `ProfileLifecycleObserver`,
-     `PersonalPartyService.EnsurePersonalParty`, `DirectoryService.PrincipalSummaries` and
-     `ProfileSummaries`, `auth.IssueAudienceToken`).
+     `ProfileService.InviteInTx`, `ProfileService.AdmitInTx`, `ProfileLifecycleObserver`,
+     `PersonalPartyService.EnsurePersonalParty` (with its commit-first visibility rule, decision
+     U28), `DirectoryService.PrincipalSummaries` and `ProfileSummaries`,
+     `usersservice.ReadPrincipalSummaries`, `CredentialService.LinkOIDCInTx`,
+     `auth.IssueAudienceToken`), and the binding `mod_users.user_identifiers` read surface.
    - **HTTP route**: removed `/v1/self*`, `/v1/user-accounts*`, `/v1/assume`, `grant-admin`/
      `revoke-admin`, `/v1/apps/{uuid}/user-accounts*`; added `/v1/me*`, `/v1/session*`,
      `/v1/principals*`, `/v1/parties/{uuid}/*`, `/v1/profiles/{uuid}`, `/v1/impersonations*`,

@@ -13,16 +13,22 @@ phase gate.
 
 Roles: `plugins/flow/roles/developer-go.md`.
 
-Depends on tasks 001, 002 and 003. Run it after task 004 and 005 have merged too, since it owns
-the phase-closing gate.
+Depends on tasks 001, 002 and 003. Run it after tasks 004, 005 and 007 have merged too, since it
+owns the phase-closing gate. Task 007 (`trusted-profile-admission`) is listed after this task but
+executes before it.
 
 ## Requirements
 
 1. **ADR worked example**, end to end through the routes (one test, steps as subtests):
    1. John signs up with a personal OIDC login (use the phase-6 fake-IdP test harness): user,
       OIDC credential C1, personal profile PR1, own person record owned by the user.
-   2. Acme (organization, `credential_rule = 'authorized'`); Acme admin Alice (Acme profile with a
-      wildcard or type grant, per U20) invites John; John accepts from a C1 session; PR2 active.
+   2. Acme (organization, `credential_rule = 'authorized'`); Acme admin Alice invites John; John
+      accepts from a C1 session; PR2 active. Until the engine phase, the invite's
+      `AuthorizeTypeIn` falls back to wildcard and type grants (U20), and with mod-authz phase 13
+      merged those go only to operator actors (U27). So in this phase Acme is the bootstrapped
+      operator party and Alice its admin with the bootstrap wildcard grant. Beta stays a
+      non-operator party. Phase 8 task 005 re-runs the scenario with a non-operator Acme and
+      Alice holding an owned-scope grant.
    3. John adds a password C2 bound to `john@acme.example`; Alice authorizes C2 for Acme; John sets
       C2's `default_profile_id` to PR2.
    4. Login with C1 lands on PR1, lists PR2 locked with reason `credential_not_authorized` and a
@@ -45,30 +51,34 @@ the phase-closing gate.
    factor never lists the personal profile as available.
 5. **Collaborator compliance**: an outside collaborator invited with confirmation reaches the
    profile despite the credential rule; raising the party's `min_acr` locks it on the next request;
-   revoking the authorizing factor revokes the session and the next login lands elsewhere.
-6. **Phase gate**: `make build`, `make test`, `make lint`, `cd model && make verify` and every
-   integration suite green; fix small defects found in tasks 001 to 005 code and report each fix;
+   revoking the authorizing factor revokes the session and the next login lands elsewhere. The
+   wired gate refuses an outside profile added to a party-owned actor group through mod-authz's
+   route without `confirm_policy_mismatch`, and admits it with confirmation (decision U26).
+6. **Trusted admission** (task 007): an invited profile admitted through `AdmitInTx` becomes
+   active and is reachable through the routes; a suspended one is refused.
+7. **Phase gate**: `make build`, `make test`, `make lint`, `cd model && make verify` and every
+   integration suite green; fix small defects found in tasks 001 to 005 and 007 code and report each fix;
    report larger defects instead of fixing them.
 
 ## Validation
 
 - The new test files exist under `api/internal/handlers/` or `api/internal/service/` (implementer's
   choice, matching phase-6 conventions) and pass in the throwaway-Postgres recipe of `AGENTS.md`.
-- Every scenario of requirements 1 to 5 maps to a named test or subtest; list them in the report.
+- Every scenario of requirements 1 to 6 maps to a named test or subtest; list them in the report.
 - `make build`, `make test`, `make lint`, `cd model && make verify` pass.
 
 ## Assumptions
 
 - `scripts/link-siblings.sh` points `mod-core` and `mod-authz` at their plan worktrees.
-- If mod-authz's `CollaboratorGate` hook has not landed, group-membership collaborator scenarios
-  are covered at the `CollaboratorGate` unit level in task 003 only; say so in the report.
+- mod-authz phase 14 task 004 (the `CollaboratorGate` hook) merged before task 003 started, and
+  task 003 wired the gate (decision U26). There is no unit-level-only fallback.
 
 ## References
 
 - [Work packages](../notes/work-packages.md), phase `parties-profiles-and-bootstrap`, package 6, and
   the throwaway-Postgres note in its purpose section.
 - [API surface](../notes/mod-users-api-surface.md) sections 3, 7.
-- [Decisions](../notes/decisions-and-resolutions.md) resolution (a), U20.
+- [Decisions](../notes/decisions-and-resolutions.md) resolution (a), U20, U22, U26, U27.
 - mod-core ADR `docs/architecture/identity-model.md`, "Party profiles" (worked example),
   "Outside collaborators".
 

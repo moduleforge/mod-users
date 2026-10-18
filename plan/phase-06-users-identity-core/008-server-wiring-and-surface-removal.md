@@ -35,7 +35,9 @@ Dependencies within the phase: hard on 005, 006 and 007. Task 010 depends on thi
    `AssumeHandler`, `AppsHandler`, `GrantAdminFn`, `SelfHandler`, `IdentitiesHandler`,
    `SSHKeysHandler`. `api/usersservice/` exposes the phase-6 services (`UserService`,
    `CredentialService`, `SessionService`, `DirectoryService`, `SSHKeyResolver`) and SQLSTATE
-   helpers; remove `ResolveActor`, `UserAccountService`, `NewUserAccountService`, `SSHKeyService`,
+   helpers. It also exposes the consumer-requested binding additions: `CredentialService.LinkOIDCInTx`
+   with `LinkOIDCInput` and `LinkedCredential` (decision U24, from task 004), and the package-level
+   `ReadPrincipalSummaries` (decision U23, from task 007). Remove `ResolveActor`, `UserAccountService`, `NewUserAccountService`, `SSHKeyService`,
    `SSHKey`. Party, impersonation and bootstrap facades come in later phases.
 4. **`api/cmd/server/main.go`**: new services, middleware and handlers; slug list per U18
    (`user`, `profile`, `organization` join `authzSlugs`; `corporation` leaves); no first-user hook;
@@ -52,12 +54,17 @@ Dependencies within the phase: hard on 005, 006 and 007. Task 010 depends on thi
    schemas, the new error codes; removed routes deleted; Bearer as the only security scheme.
 7. Update the `README.md` and `AGENTS.md` rows that describe the removed routes, facades, manifest
    entries and the first-user hook.
-8. If mod-authz's or mod-audit's `api/service` `AuthContext` adoption has not merged, only
-   `api/cmd/server` may stay red; say so in the report.
+8. If mod-authz phase 12's or mod-audit phase 20's `AuthContext` adoption has not merged, only
+   `api/cmd/server` may stay red; say so in the report. This is a task-level allowance only. Phase
+   6 cannot close until both have merged (mod-authz H2, mod-audit E2), and mod-authz phase 13 must
+   merge as well (decision U27). Until phase 13 merges, the dev server's `setup.ApplyFuncs` fails
+   at startup, because the generated functions read the new grant columns. Report which of the
+   three have merged.
 
 ## Validation
 
 - `make build` passes (or only `api/cmd/server` is red for the reason in requirement 8).
+- `grep -n 'LinkOIDCInTx\|ReadPrincipalSummaries' api/usersservice/*.go` shows both re-exports.
 - `cd api && go vet $(go list ./... | grep -v /cmd/server)` may report test-file errors only;
   task 010 migrates those tests. Non-test code is clean.
 - `make lint` reports no finding in non-test code (findings in `_test.go` files that task 010

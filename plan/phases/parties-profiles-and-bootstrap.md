@@ -20,9 +20,14 @@ wildcard and type grants (U20).
 - The `users-identity-core` phase's schema, services, availability function and routes.
 - mod-core `profiles` (status transitions, MF004), `profile_policy_confirmations`,
   `platform_settings`, `core_claim_operator_party`, `core_is_operator_profile`.
-- mod-authz's current grants table (a wildcard grant to a profile is accepted as is); mod-authz's
-  `CollaboratorGate` hook when it lands (API surface section 9 item 6) — the mod-users side is
-  implemented here either way.
+- mod-authz phase 13's grants schema, merged before phase 6 closed (decision U27). Wildcard and
+  type-entity grants go only to operator actors, so this phase's `AuthorizeTypeIn`-gated
+  administration fixtures use operator-party administrators until the engine phase.
+- mod-authz phase 14 task 004's `CollaboratorGate` hook (API surface section 9 items 6 and 9),
+  merged before task 003 starts. Task 003 halts if it is absent (decision U26).
+- mod-billing's request for a trusted admission, `ProfileService.AdmitInTx` (decision U22, task
+  007).
+- mod-audit's op vocabulary as mapped in API surface section 10.1 (decision U21).
 - The ADR sections "Party profiles", "Credential gating and profile availability", "Platform
   administration and bootstrap", "Outside collaborators"; resolutions (a) and (d).
 - [The API surface](../notes/mod-users-api-surface.md) sections 6.3, 7 and 9;
@@ -34,8 +39,9 @@ wildcard and type grants (U20).
 ## Outputs
 
 - `ProfileService` (invite, accept, decline, leave, suspend, resume, end with departure cleanup,
-  managed users, lifecycle observers) and its routes under `/v1/parties/{uuid}`, `/v1/profiles`,
-  `/v1/me/profiles`.
+  managed users, lifecycle observers, trusted `AdmitInTx`) and its routes under
+  `/v1/parties/{uuid}`, `/v1/profiles`, `/v1/me/profiles`.
+- `usersservice.CollaboratorGate` wired into mod-authz's hook in the dev server.
 - `PartyPolicyService` (authn policy, credential authorizations, confinements) and routes.
 - Outside-collaborator mismatch detection with recorded confirmations; `usersservice.CollaboratorGate`.
 - `BootstrapService` and `/v1/bootstrap`; the setup-token lifecycle of U9; the bootstrap

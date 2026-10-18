@@ -39,9 +39,10 @@ Dependency: requires task 001, because the `impersonate` operation is authorized
      - `acr` and `amr` copied from the parent
      - `auth_time = now()`
      - `expires_at = now() + AUTH_IMPERSONATION_TTL`
-   - Start returns the token response without a refresh token, with `expires_in <= AUTH_IMPERSONATION_TTL`. It emits an `impersonation` observer event.
-   - **Renew** (`POST /v1/impersonations/current/renew`) extends `expires_at` by `AUTH_IMPERSONATION_TTL`, capped at `AUTH_IMPERSONATION_MAX` from the session's `created_at`. It refuses outside an impersonation session.
-   - **End** (`DELETE /v1/impersonations/current`) revokes the child session with `revoke_reason = 'impersonation_ended'` and returns 204.
+   - Start returns the token response without a refresh token, with `expires_in <= AUTH_IMPERSONATION_TTL`. It emits an observer event with op **`impersonate`**, resource `impersonation`, target the impersonated profile, and `after` carrying the child session uuid and the reason (decision U21; mod-audit API surface section 2.2). The op is `impersonate`, never `assume`: mod-audit removed `assume` with no alias, and its CHECK rejects unknown ops. Under the `propagate` policy that rejection would roll back the start. The start request runs in the administrator's own session, so the row's actor is the administrator's profile, with no impersonator.
+   - **Renew** (`POST /v1/impersonations/current/renew`) extends `expires_at` by `AUTH_IMPERSONATION_TTL`, capped at `AUTH_IMPERSONATION_MAX` from the session's `created_at`. It refuses outside an impersonation session. It emits op `update`, resource `impersonation`, target the impersonated profile.
+   - **End** (`DELETE /v1/impersonations/current`) revokes the child session with `revoke_reason = 'impersonation_ended'` and returns 204. It emits op `revoke`, resource `impersonation`, target the impersonated profile. Renew and end run inside the child session, so their rows carry the impersonator principal and the child session id.
+   - No other op is used for impersonation events ([API surface section 10.1](../notes/mod-users-api-surface.md)).
 2. **No switching inside.** `POST /v1/session/switch` and `/v1/session/fork` refuse inside an impersonation session with `users.impersonation_not_allowed`. The impersonation session's only profile is `impersonated_profile_id`. Parent liveness is enforced by `session_liveness`: revoking or expiring the parent ends the child on the next request.
 3. **Audit fields.** On every request inside an impersonation session, `AuthContext.ImpersonatorPrincipalID` is the parent session's own principal, and the token's `act.sub` is that principal's uuid. Verify this end to end rather than re-implementing it.
 4. **Handler and wiring.**
@@ -62,6 +63,10 @@ Dependency: requires task 001, because the `impersonate` operation is authorized
    - Ending the parent session ends the child (`parent_session_ended`).
    - Switch and fork inside an impersonation session are refused.
    - No refresh token is returned.
+   - With a recording observer, start, renew and end emit exactly `impersonate`, `update` and
+     `revoke` on resource `impersonation`. With mod-audit phase 20 merged, the three rows are
+     accepted by mod-audit's real observer and `audit_log` schema. The renew and end rows carry
+     `impersonator_principal_id` = the administrator's principal and a non-null `session_id`.
    - Route order tests use mod-core's impersonating `AuthContext` identity.
 6. Update the `AGENTS.md` and `README.md` rows that describe impersonation or the removed `/v1/assume`, where those rows describe code this task changes.
 
@@ -89,6 +94,9 @@ architectural_impact: true
 - [API surface section 5](../notes/mod-users-api-surface.md#5-token-carrier-binding-for-offline-verifiers): the `act` claim.
 - [API surface section 7](../notes/mod-users-api-surface.md#7-http-api): `/v1/impersonations` and the error codes.
 - [API surface section 8](../notes/mod-users-api-surface.md#8-configuration): configuration.
+- [API surface section 10.1](../notes/mod-users-api-surface.md): the audit op table (decision U21).
+- mod-audit plan worktree, `plan/notes/mod-audit-api-surface.md` sections 2 (schema, CHECKs, op
+  vocabulary), 5.1 (observer mapping) and 7 (notes for mod-users).
 - [Work packages](../notes/work-packages.md#phase-users-authorization-engine): package 3.
 - mod-core ADR `docs/architecture/identity-model.md`, section "Impersonation".
 

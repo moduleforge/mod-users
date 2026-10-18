@@ -93,7 +93,13 @@ architectural_impact: true
 ## Assumptions
 
 - mod-core's phase 1 to 3 schema is merged on the mod-core plan worktree and reachable through the
-  sibling link; mod-authz's migrations compose unchanged.
+  sibling link.
+- mod-authz's migrations do **not** compose unchanged. mod-authz phase 13
+  (`authz-identity-schema`) rewrites `0500` to `0505` and must merge before this phase closes
+  (decision U27, mod-authz H3). Compose mod-authz from its plan worktree. This task's SQL
+  references no mod-authz object, so it must be valid against both the pre- and post-phase-13
+  mod-authz schema. If phase 13 has not merged yet, say so in the report; task 010 re-runs
+  `make verify` against it.
 - No data migration or backward compatibility is needed (pre-release); existing dev databases are
   dropped (`make clean.data`).
 

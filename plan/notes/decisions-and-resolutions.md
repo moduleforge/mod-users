@@ -24,7 +24,7 @@ implements them as follows.
 | Point | mod-users implementation | Notes |
 |---|---|---|
 | (a) Outside-collaborator enforcement | The per-request availability check evaluates the policy of the **acting** profile's party only. `profile_policy_confirmations` exempts the profile from that party's `credential_rule` (`authorized`/`provider`) and never from `min_acr`. Group or grant membership never changes which policy applies. | Implemented once, in the `mod_users.profile_availability` SQL function (API surface section 3), used by login landing, profile switch, refresh, per-request liveness and the profile list. |
-| (b) Personal team plans | `PersonalPartyService.EnsurePersonalParty(ctx, tx)` (API surface section 6.4): idempotently creates the creator's `natural_person` party when `users.person_id` is NULL, links it, and creates the creator's owned-scope grant, all in the caller's transaction. Refused for guests (upgrade first) and for managed users (no personal profile). | Two refinements, decisions U1 and U2 below. mod-billing calls it. |
+| (b) Personal team plans | `PersonalPartyService.EnsurePersonalParty(ctx, tx)` (API surface section 6.4): idempotently creates the creator's `natural_person` party when `users.person_id` is NULL, links it, and creates the creator's owned-scope grant, all in the caller's transaction. Refused for guests (upgrade first) and for managed users (no personal profile). | Two refinements, decisions U1 and U2 below (accepted by the manager, unchanged). mod-billing calls it, but **outside** its purchase transaction (mod-billing decision B6, recorded as U28 below). |
 | (c) Several sessions in one browser | No authentication cookie anywhere in mod-users. The API accepts only `Authorization: Bearer`. Access tokens and refresh tokens are returned in JSON bodies and held per tab by the client. | The only remaining cookie is the short-lived OIDC `oidc_state` CSRF cookie, which carries no authentication. Refresh design is decision U6. |
 | (d) Party-level `invite_only` | Not implemented. `party_authn_policies` has no `invite_only` column. Only `apps.invite_only` (mod-core column) gates session start, through a `login` grant on the app entity. | A party restricts its members to specific apps through group grants of `login`. |
 
@@ -74,7 +74,46 @@ There is a clear best answer, so no user question is raised.
 | U17 | The first-user hook (`users.NewFirstUserHook`, `FirstUserHookFn`, `SetFirstUserHook`, the manifest `hooks.firstUserGrant`) is deleted. | The ADR's setup-token bootstrap replaces it (closes the `count(*)` race and followup `sxjM`). |
 | U18 | `user` gets an `accessible_user_ids_for_actor` stub in mod-users' baseline and `user`/`profile`/`organization` join the access-function slug list in the dev server (`authzSlugs`); `corporation` leaves it. | The principal admin list is a row-scoped list path; mod-core's generator is slug-generic and mod-core ships no `user` stub (it does not own the `users` table). |
 | U19 | Display renderers for `user` (person name, else primary email, else "Guest") and `profile` ("<holder name> (Personal)" or "<holder name> @ <party name>") are registered by mod-users. | mod-core assigns the profile renderer to mod-users (it needs the holder's name). |
-| U20 | Phases are ordered so mod-users' identity core lands first, party administration second, and everything that needs mod-authz's new schema (owned scope, `ownership_confers`, `impersonate`, `credentials`) third. Each service calls `authz.AuthorizeTypeIn` from the start; until the engine phase lands, mod-core's helper falls back to `AuthorizeType` (wildcard and type grants only). | Keeps phases green against mod-authz's current schema for as long as possible; the engine phase adds the owned-scope test matrix for the earlier services. |
+| U20 | Phases are ordered so mod-users' identity core lands first, party administration second, and everything that needs mod-authz's new schema (owned scope, `ownership_confers`, `impersonate`, `credentials`) third. Each service calls `authz.AuthorizeTypeIn` from the start; until the engine phase lands, mod-core's helper falls back to `AuthorizeType` (wildcard and type grants only). | Keeps phases green against mod-authz's current schema for as long as possible; the engine phase adds the owned-scope test matrix for the earlier services. Refined by U27: mod-authz's schema now lands before phase 6 closes. |
+
+### Decisions from the cross-plan reconciliation
+
+The ten later planning passes placed requirements on mod-users. These decisions record how the
+committed plan absorbs them. U1 and U2 stay as decided.
+
+| ID | Decision | Reason |
+|---|---|---|
+| U21 | **Audit op vocabulary.** Every mod-users observation uses an op from mod-audit's closed set (`create`, `update`, `delete`, `impersonate`, `login`, `grant`, `revoke`), per the event table in [API surface section 10.1](./mod-users-api-surface.md). Session start is `login` and session revocation is `revoke` (resource `session`, target the principal). Impersonation start is `impersonate`, renew is `update` and end is `revoke` (resource `impersonation`, target the impersonated profile). `assume` is not used anywhere. Unauthenticated flows install an `AuthContext` for their observations built by the section 10.1 rule. Phase 6 task 005, phase 8 task 003 and every other emitting task name their rows. | mod-audit rejects unknown ops with a CHECK. Under the `propagate` observer policy, a rejected audit write rolls back the whole operation, so an invented verb would break sign-in. mod-audit's observer also refuses a context without an acting profile (`ErrNoActor`), which every pre-authentication flow would otherwise hit. |
+| U22 | **`ProfileService.AdmitInTx`** (mod-billing request, its B9) is added as binding: a trusted, in-transaction admission that reuses an active profile, activates an invited one, or creates an active one, firing lifecycle observers. It is a new phase 7 task, 007 (`trusted-profile-admission`), not folded into task 001. | Profile lifecycle belongs to mod-users' service layer, and mod-billing's fallback would bypass observers and audit. A separate task keeps the already large task 001 unchanged. 007 depends only on 001, runs in parallel with 002 to 005, and merges before task 006 so the phase gate covers it. Errors `users.profile_suspended` and `users.holder_not_admissible` are new. The second is shared with invite's MF103 mapping in task 001. |
+| U23 | **`usersservice.ReadPrincipalSummaries(ctx, db usersdb.DBTX, ids)`** (mod-tokens request, its T16) is added as binding and folded into phase 6 task 007. `DirectoryService.PrincipalSummaries` delegates to it. Task 008 re-exports it. | It is the same query as the directory lookup, run on the caller's connection, so it belongs with the `DirectoryService` work. mod-tokens' mint path holds a transaction, and a pool-based read there needs a second connection per mint. |
+| U24 | **`CredentialService.LinkOIDCInTx`** (app-mfmanager request, its M8) is added as binding and folded into phase 6 task 004. It becomes the `oidc` creation primitive task 006's JIT and link paths use. It is trusted (no authorization), refuses an identity already active elsewhere (`users.oidc_identity_in_use`) and never links by email. | Task 004 already owns an `oidc` creation primitive. Making that primitive the public trusted helper adds one facade method instead of a second code path, and keeps `MF102` and the active-uniqueness index as the only rules. app-mfmanager then needs no hand-written `usersdb` inserts. |
+| U25 | **`mod_users.user_identifiers (user_id, kind, value_canon, verified_at, is_primary)` is a binding read surface** (mod-billing request, its B20). It is read-only for other projects. A rename or change of meaning is flagged to mod-billing and mod-tokens. | mod-billing matches invitations against verified emails in SQL, as it did against `user_accounts`. mod-tokens' T16 fallback reads the primary email. Marking the columns binding makes such a change a flagged contract change rather than a silent break. |
+| U26 | **Collaborator gate wiring: hard dependency, not a later wiring task.** Phase 7 task 003 starts only after mod-authz phase 14 task 004 (`collaborator-gate-and-group-rules`) has merged. If the hook is absent at dispatch, the task halts and reports. It does not defer the wiring. Phase 7 task 006 drops its "hook not landed" fallback. | mod-authz's own execution order already puts its phase 14 before mod-users phase 7 (its H5 and interleaving step 4), so the dependency costs no schedule in the planned order. The alternative, a separate wiring task after mod-authz 14, would leave mod-users' dev server with no gate in the meantime. mod-authz fails closed without a gate, refusing every outside profile with `collaborator_gate_unavailable`. It would also leave task 006's group-membership collaborator scenarios untestable inside the phase. A silent defer is the failure mode mod-authz's coordination risk 3 names. |
+| U27 | **mod-authz phase 13 (`authz-identity-schema`) merges before mod-users phase 6 closes** (mod-authz H3), in addition to mod-authz phase 12 and mod-audit phase 20. Phase 6 task docs no longer say mod-authz's migrations compose unchanged. There are three consequences before the engine phase. (1) The minimal `authz.go` port's entity arm reads only `scope = 'entity'` grants, so an owned-scope grant never acts as an entity grant on its target. (2) Phase 6 and 7 fixtures satisfy mod-authz's grant triggers: actors are profiles, and wildcard and type-entity grants go only to operator profiles. (3) Until phase 8, `AuthorizeTypeIn`-gated party administration (invite, managed users) is reachable only by operator-party administrators. Phase 7 tests use an operator-party administrator for those flows, and phase 8 task 005 re-tests them with owned-scope grants held by a non-operator party administrator. | After mod-core phase 3, the generated `accessible_*` functions read the new grant columns. Every `setup.ApplyFuncs` run against the old mod-authz schema fails, including mod-users' dev server and integration suites. mod-authz's operator-actor trigger then rejects the non-operator wildcard and type grants that U20's fallback relied on. |
+| U28 | **`EnsurePersonalParty` and mod-billing's B6.** mod-billing deviates from resolution (b)'s "in the plan-creation transaction". It calls `EnsurePersonalParty` in its own committed transaction, then authorizes, then runs the purchase transaction. The production `Authorizer` reads grants through its own pool, so a grant in the caller's uncommitted transaction is invisible to it. U1 and U2 are unchanged. The binding comment on `EnsurePersonalParty` (API surface 6.3) now documents the visibility rule and the commit-first pattern. Phase 8 task 005 adds a test proving the B6 sequence through the production `Authorizer`. The open question below asks whether a committed variant should also be offered. | The method is idempotent and serialized on the user row, so committing first only leaves a person and a grant that the next attempt reuses. The deviation is correct and needs no mod-users change beyond documentation and a test. |
+
+### Open question for the manager: a committed `EnsurePersonalParty` variant
+
+**Question.** Should `PersonalPartyService` also offer a variant for callers that must authorize
+against the new grant? A candidate is `EnsurePersonalPartyCommitted(ctx) (PersonalParty, error)`,
+which opens, runs and commits its own transaction from the service's pool. mod-billing's B6
+pattern would then be a mod-users API rather than consumer-side code.
+
+**Recommended answer: no.** Document the pattern instead (done in U28 and API surface 6.3) and
+prove it with a test (phase 8 task 005). Reasons:
+
+- The only consumer has already planned B6 with its own transaction. A variant would add a
+  binding method that no planned task calls.
+- The variant would hide the actual constraint without removing it. The `Authorizer` interface
+  (mod-core) has no transaction parameter, so any in-transaction grant is invisible to it. A
+  committed variant solves this for one method, not for the next trusted grant writer, such as
+  bootstrap.
+- `pgx.BeginFunc` around `EnsurePersonalParty` is three lines for the caller. It keeps the caller
+  in control of retries and of the context it passes.
+
+If the manager prefers the variant, phase 8 task 005 adds it next to `EnsurePersonalParty`, with
+the same errors, and the API surface lists it as binding. No other task changes. Either way, a
+transaction-aware `Authorizer` stays out of scope, because it is a mod-core contract question.
 
 ## Boundary confirmation: mod-users versus mod-authz and mod-core
 
@@ -106,16 +145,26 @@ Confirmed against the ADR and the code.
 
 ## Cross-project ordering and coordination risks
 
-- **mod-users cannot be green before two sibling adaptations.** mod-users' dev server
-  (`api/cmd/server/main.go`) imports `authz-api/service` and `audit-api/service`; both stop
-  compiling when mod-core removes the `opctx` actor accessors (mod-core D8). The `AuthContext`
-  adoption in mod-authz's and mod-audit's service packages must merge before mod-users' first
-  phase closes, or that phase's `make build` is red in `cmd/server` only. Requested of the manager.
-- **mod-authz's schema phase must run before mod-users' authorization-engine phase.** mod-users'
-  integration tests compose mod-authz's migrations (`model/Makefile` `compose`), and the engine
-  phase needs `grants.scope`, `ownership_confers`, `impersonate`, `credentials`, and profiles
-  admitted as actor-group members. Execution order is therefore not phase-number order: mod-authz's
-  schema phase (numbered after mod-users') executes between mod-users' party phase and engine phase.
+- **mod-users phase 6 cannot close before three sibling phases merge.** mod-users' dev server
+  (`api/cmd/server/main.go`) imports `authz-api/service`, `audit-api/service` and
+  `audit-api/httpapi`. All of them stop compiling when mod-core removes the `opctx` actor
+  accessors (mod-core D8). The `AuthContext` adoption phases, mod-authz 12 and mod-audit 20, must
+  therefore merge before phase 6 closes. A task may report `cmd/server` red only while they are
+  pending.
+- **mod-authz's schema phase (13) must merge before phase 6 closes, not only before phase 8**
+  (U27, mod-authz H3). mod-users' integration tests compose mod-authz's migrations
+  (`model/Makefile` `compose`). After mod-core phase 3, the generated `accessible_*` functions
+  read the new grant columns, so any `setup.ApplyFuncs` run against the old schema fails. The
+  engine phase additionally needs `ownership_confers`, `impersonate`, `credentials` and profiles
+  admitted as actor-group members.
+- **mod-authz phase 14 task 004 (the collaborator gate hook) must merge before phase 7 task 003
+  starts** (U26, mod-authz H5).
+- **Downstream participants wait on mod-users' new surfaces.**
+  - mod-tokens phase 30 uses `ReadPrincipalSummaries` (phase 6 task 007).
+  - app-mfmanager phase 80 uses `LinkOIDCInTx` (phase 6 task 004).
+  - mod-billing phase 41 uses `AdmitInTx` (phase 7 task 007) and the phase 8 engine.
+
+  The full order is in [the overview](../overview.md#execution-order).
 - **Sibling builds resolve mod-core and mod-authz to their main checkouts** through
   `scripts/link-siblings.sh` symlinks (mod-core's coordination risk applies to mod-users too):
   tasks must point those links at the plan worktrees while the plan runs.

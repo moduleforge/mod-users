@@ -22,8 +22,11 @@ the task that changes the described code; the doc-updates phase reviews them.
 
 ## Phase `users-identity-core`
 
-Prerequisites: mod-core phases 1 to 3 merged; mod-authz's and mod-audit's `api/service`
-`AuthContext` adoption merged (otherwise only `api/cmd/server` stays red; say so in the report).
+Prerequisites: mod-core phases 1 to 3 merged. Before the phase closes, mod-authz phase 12 and
+mod-audit phase 20 (`AuthContext` adoption; until then only `api/cmd/server` stays red) and
+mod-authz phase 13 (the grant columns the generated functions read) must have merged (decision
+U27). Consumer-requested additions folded into this phase: `LinkOIDCInTx` in package 4 (U24) and
+`ReadPrincipalSummaries` in package 7 (U23). Audit ops follow API surface section 10.1 (U21).
 
 1. **Baseline schema rewrite** (`model/migrations/sql/0100_baseline.sql`; delete `0101` to `0104`;
    `model/sqlc.yaml` renames): every table, trigger, function and stub in API surface sections 2
@@ -121,6 +124,9 @@ Prerequisites: mod-core phases 1 to 3 merged; mod-authz's and mod-audit's `api/s
    profile, departure ends access on the next request); collaborator compliance; bootstrap
    concurrency (two concurrent bootstraps, exactly one wins; no `count(*)` path remains), token
    lifecycle per U9. Suggested tier: `sonnet-high`.
+7. **Trusted admission** (added by the cross-plan reconciliation, U22; task 007, listed after
+   the tests package but merged before it): `ProfileService.AdmitInTx` for mod-billing seats.
+   Package 3 starts only after mod-authz phase 14 task 004 (U26). Suggested tier: `sonnet-med`.
 
 ## Phase `users-authorization-engine`
 

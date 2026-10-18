@@ -38,7 +38,13 @@ Dependency: requires task 001, because owned-scope grants only authorize once th
      - `target_type_id` NULL
      - `include_subtypes` false
    - Reuse an equal existing grant. `Created` is true only when the person or the grant was created.
-   - Emit observer events per the existing style.
+   - Emit observer events with only the ops of [API surface section 10.1](../notes/mod-users-api-surface.md) (decision U21):
+     - `grant` on resource `grant` (target = the person party) for the trusted grant insert;
+     - `create` for the person record, unless mod-core's entity helper already observes it;
+     - `update` on `user` for the `person_id` link.
+
+     A reused person or grant emits nothing.
+   - Document in the method's doc comment the visibility rule of decision U28. The grant is invisible to the production `Authorizer`, which reads through its own pool, until the caller's transaction commits. A caller that must authorize against the grant commits this call first, as mod-billing's B6 does.
 4. **Idempotency under concurrency.** Two concurrent calls for the same user produce one person and one grant. Use a row lock on `mod_users.users` (`SELECT ... FOR UPDATE`) or an equivalent. Document the choice in a code comment.
 5. **Wiring.**
    - Add the `usersservice.PersonalPartyService` facade and constructor in the existing style.
@@ -51,7 +57,14 @@ Dependency: requires task 001, because owned-scope grants only authorize once th
    - Guest, managed-user, party-profile and person-not-owned refusals.
    - The resulting grant reaches a profile owned by the person party, for example a seat created through `ProfileService.InviteInTx` after `EnsurePersonalParty`.
    - The resulting grant does not reach the person record itself (mod-core D7).
-7. **Owned-scope re-test of phase 7 flows.** Re-run phase 7's party-admin integration tests with the admin holding an owned-scope `manage` grant on the party instead of a wildcard. This applies to invitation, suspend/resume/end, managed-user creation, authn-policy and credential-authorization administration. You can parameterize the existing tests or add a parallel suite. Also add one negative case per flow: an owned-scope grant on another party is refused.
+   - **mod-billing's B6 sequence** (decision U28), through the production `Authorizer` built by `localAuthz.New` on a real pool:
+     1. call `EnsurePersonalParty` in its own transaction and commit;
+     2. in a fresh context, `authz.AuthorizeTypeIn(create, <a type>, &personParty)` succeeds for the personal profile;
+     3. a repeated sequence is a no-op.
+
+     A companion test documents the limitation. Inside the still-open transaction, the same authorization is refused, because the grant is not yet visible to the pool.
+   - If the manager accepts the committed-variant option in the decisions note's open question (U28; recommended answer: no), add `EnsurePersonalPartyCommitted(ctx) (PersonalParty, error)` with the same errors, and list it as binding in API surface 6.3. Otherwise add nothing.
+7. **Owned-scope re-test of phase 7 flows.** Re-run phase 7's party-admin integration tests with the admin holding an owned-scope `manage` grant on the party instead of a wildcard. The party is a non-operator party. Phase 7 used the operator party for these flows, because mod-authz's trigger allows wildcard and type-entity grants only for operator actors (decision U27). This includes the ADR worked example (phase 7 task 006 requirement 1) with a non-operator Acme. This applies to invitation, suspend/resume/end, managed-user creation, authn-policy and credential-authorization administration. You can parameterize the existing tests or add a parallel suite. Also add one negative case per flow: an owned-scope grant on another party is refused.
 
 ## Validation
 
@@ -76,6 +89,11 @@ Dependency: requires task 001, because owned-scope grants only authorize once th
   - U1: the user owns their self-created person
   - U2: the owned-scope `manage` grant with `target_type_id` NULL, flagged as a deliberate widening
   - U11
+  - U21: audit ops
+  - U27: phase 7 fixtures used operator-party administrators, which requirement 7 replaces with non-operator owned-scope administrators
+  - U28: mod-billing's B6 deviation, and the open question on a committed variant
+- mod-billing plan worktree, `plan/notes/decisions-and-resolutions.md` B6 and
+  `plan/notes/mod-billing-api-surface.md` section 4.2: how mod-billing calls the method.
 - [Work packages](../notes/work-packages.md#phase-users-authorization-engine): package 5.
 - mod-core ADR `docs/architecture/identity-model.md`, section "Billing" (personal team plans).
 

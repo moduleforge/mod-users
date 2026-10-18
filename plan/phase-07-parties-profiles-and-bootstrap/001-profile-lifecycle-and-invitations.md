@@ -7,8 +7,8 @@
 Implement `ProfileService` (party profile lifecycle, invitations, managed users, lifecycle
 observers) and its HTTP routes, and create the `PartiesHandler` that the other tasks in this phase
 extend. This is the first task of the phase: tasks 002 (party gating), 003 (outside
-collaborators) and 004 (bootstrap) build on the service and handler skeleton it delivers. Task 005
-(SSH derivation) does not depend on it.
+collaborators), 004 (bootstrap) and 007 (trusted admission, `AdmitInTx`) build on the service and
+handler skeleton it delivers. Task 005 (SSH derivation) does not depend on it.
 
 Roles: `plugins/flow/roles/developer-go.md` (primary), `plugins/flow/roles/developer-sql.md` (for
 any query changes). No standard skill covers this task.
@@ -36,10 +36,17 @@ policy and credential-authorization routes (task 002), bootstrap (task 004), own
      = the party, `invited_by_profile_id` = the acting profile (mod-core column). A second open row
      for the same (holder, party) maps `profiles_one_open_per_holder_party` to 409
      `users.profile_exists`. The mod-users trigger on `public.profiles` (phase 6) already rejects
-     guests and managed users of another party; map its `MF103` to a 409/422 domain error.
+     guests and managed users of another party. Check these cases in Go first and map the trigger's
+     `MF103` to the binding errors of API surface 6.3: `ErrGuestMustUpgrade` (409
+     `users.guest_upgrade_required`) for a guest, and `ErrHolderNotAdmissible` (409
+     `users.holder_not_admissible`) for a managed user of another party or a non-user holder.
+     Task 007's `AdmitInTx` reuses both errors (decision U22).
    - Authorization: `authz.AuthorizeTypeIn(ctx, "create", <profile type id>, partyID)` for invite.
      Until the engine phase, mod-core's helper falls back to wildcard and type grants (U20); do not
-     add any other fallback.
+     add any other fallback. mod-authz phase 13 has merged by now (decision U27), so its trigger
+     admits wildcard and type-entity grants only for operator actors. This task's tests therefore
+     authorize invites and managed-user creation with an operator-party administrator. Phase 8
+     task 005 re-tests the flows with a non-operator party's owned-scope grant.
    - `ConfirmPolicyMismatch` is accepted and carried through `InviteInTx` to a single, clearly named
      internal seam (for example `checkInvitePolicyMismatch(ctx, tx, in) error`) that this task
      implements as a no-op returning nil, with a comment naming task 003 as its owner.
@@ -69,8 +76,17 @@ policy and credential-authorization routes (task 002), bootstrap (task 004), own
      has none).
    - **Lifecycle observers**: every status change (including creation as `invited` or `active`)
      calls each registered `ProfileLifecycleObserver.ProfileStatusChanged` inside the transaction;
-     an observer error aborts the transaction. Emit `profile` observer events for mod-audit per API
-     surface section 10.
+     an observer error aborts the transaction. Emit `profile` observer events for mod-audit with
+     only the ops of [API surface section 10.1](../notes/mod-users-api-surface.md) (decision U21):
+     - `create` for a new profile (invite, managed user);
+     - `update` for every status change (accept, decline, leave, suspend, resume, end);
+     - departure cleanup's credential revocations emit `revoke` on `credential` (through
+       `RevokeInTx`);
+     - deleted credential authorizations emit `delete` on `credential_party_authorization`;
+     - a managed user's disable emits `update` on `user`.
+
+     No other verb is allowed. Keep the internal creation and status-change paths reusable,
+     because task 007's `AdmitInTx` calls them.
 2. **Routes** (API surface section 7), mounted behind `requireAuth`:
    - `PartiesHandler` with `RegisterPartyRoutes` (binding names, section 6.4):
      `GET /v1/parties/{party_uuid}/profiles` (authorize as `AuthorizeTypeIn(read, profile, party)`
@@ -122,7 +138,7 @@ architectural_impact: true
 ## References
 
 - [API surface](../notes/mod-users-api-surface.md) sections 2.1, 6.3, 6.4, 7, 10, 11.
-- [Decisions](../notes/decisions-and-resolutions.md) U11, U16, U19, U20.
+- [Decisions](../notes/decisions-and-resolutions.md) U11, U16, U19, U20, U21, U22, U27.
 - [Work packages](../notes/work-packages.md), phase `parties-profiles-and-bootstrap`, package 1.
 - mod-core ADR `docs/architecture/identity-model.md`, sections "Party profiles" and "Credential
   gating and profile availability" (departure row).

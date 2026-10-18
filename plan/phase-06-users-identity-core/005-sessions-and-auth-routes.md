@@ -57,8 +57,30 @@ depends on its session list and revocation. Task 008 mounts the routes.
 8. Expose `SessionService` methods task 007 needs: list a principal's sessions and revoke one
    session; and the revocation helper task 007's principal disable uses (`principal_disabled`).
 9. Error order 401, 400, 403, 404/409 unchanged; error codes of section 7
-   (`users.invalid_credentials`, `users.session_revoked`, `users.profile_unavailable`, ...). Emit
-   the `session` observer resource.
+   (`users.invalid_credentials`, `users.session_revoked`, `users.profile_unavailable`, ...).
+
+   **Audit events (decision U21).** Emit the `session` observer resource with exactly the ops of
+   [API surface section 10.1](../notes/mod-users-api-surface.md), which follow mod-audit's API
+   surface section 2.2. Target is the principal in every case.
+   - `login` when a sign-in creates a session: register, login, email-code verify, anonymous, and
+     the session task 006's OIDC callback creates through this service.
+   - `update` on step-up.
+   - `revoke` on logout, refresh-reuse revocation and any other session revocation, including the
+     principal-disable helper of requirement 8.
+   - No event on refresh rotation, fork or switch.
+
+   No other verb is allowed. `assume` does not exist any more, and mod-audit's CHECK rejects
+   unknown ops. Under the `propagate` policy that rejection rolls back the sign-in itself. The
+   `/v1/auth` routes (including the refresh-reuse revocation) run before any `AuthContext` exists,
+   so for their observations install the
+   `AuthContext` that section 10.1 prescribes for unauthenticated flows:
+   - `ProfileID`: the landed profile, else the personal profile, else the oldest non-ended
+     profile, including when landing returns `selection_required`;
+   - `PrincipalID`: that profile's holder;
+   - `SessionID`: the new session, with `CredentialID` 0.
+
+   A failed sign-in writes no observation. Client-credentials token issue creates no session and
+   writes no `login` event.
 10. Export the handler constructor and registration function names task 008 needs
     (`SessionHandler`, `RegisterSessionRoutes`, `authhandlers.Handler`, `authhandlers.RegisterRoutes`).
 
@@ -70,6 +92,9 @@ depends on its session list and revocation. Task 008 mounts the routes.
   shows only the `oidc_state` cookie code owned by task 006 (none in the files this task wrote).
 - `grep -rnE 'first.?user|FirstUserHook' api/internal/handlers/auth --include='*.go' | grep -v _test.go`
   returns nothing.
+- `grep -rnE '"assume"' api/internal/service api/internal/handlers --include='*.go' | grep -v _test.go`
+  returns nothing in the files this task wrote, and every `Observe` op they use is `login`,
+  `update` or `revoke`.
 - Behavior is tested in task 010; the report lists the cases task 010 must cover beyond its
   document.
 
@@ -80,7 +105,11 @@ architectural_impact: true
 ## References
 
 - [API surface sections 2.5, 2.9, 3, 5, 7, 8, 12](../notes/mod-users-api-surface.md).
-- [Decisions U5, U6, U7, U8, U15](../notes/decisions-and-resolutions.md), resolution (c).
+- [Decisions U5, U6, U7, U8, U15, U21](../notes/decisions-and-resolutions.md), resolution (c).
+- [API surface section 10.1](../notes/mod-users-api-surface.md): the audit op table and the
+  acting-profile rule for unauthenticated flows.
+- mod-audit plan worktree, `plan/notes/mod-audit-api-surface.md` sections 2.2 (op vocabulary),
+  5.1 (observer field mapping, `ErrNoActor`) and 7 (notes for mod-users).
 - [Work packages, package 5](../notes/work-packages.md).
 
 ## Checkpoint hints

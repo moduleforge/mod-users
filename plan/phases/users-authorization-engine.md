@@ -17,7 +17,8 @@ mod-authz's schema phase, which it depends on.
 
 ## Inputs
 
-- mod-authz's schema phase (API surface section 9 items 1 to 4): `ownership_confers`, `min_acr`,
+- mod-authz's schema phase 13 (API surface section 9 items 1 to 4), already merged before phase 6
+  closed (decision U27): `ownership_confers`, `min_acr`,
   `max_auth_age`, `impersonate`, `credentials`, grant `scope`/`target_type_id`/`include_subtypes`,
   `is_profile` triggers, the operator-actor trigger, `OperationRegistry.Policy`, the extended
   `CreateGrantParams`.
@@ -39,5 +40,8 @@ mod-authz's schema phase, which it depends on.
   fields, scope of an organization admin, operator authority for personal profiles).
 - `/v1/principals/{uuid}/credentials*` under the `credentials` operation; owner key rotation for
   self-owned service accounts; the invite-only app gate.
-- `PersonalPartyService.EnsurePersonalParty` with idempotency and refusal tests; the party phase's
-  admin flows re-tested with owned-scope grants.
+- `PersonalPartyService.EnsurePersonalParty` with idempotency and refusal tests, and the
+  commit-first visibility rule mod-billing's B6 relies on proven (U28); the party phase's admin
+  flows re-tested with owned-scope grants held by a non-operator party administrator.
+- Impersonation and credential events emitted with mod-audit's op vocabulary (`impersonate`,
+  `update`, `revoke`, `create`), never `assume` (U21).

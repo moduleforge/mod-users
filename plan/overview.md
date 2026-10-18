@@ -80,7 +80,8 @@ consumer side.
   participants (schema, SQL functions, SQLSTATE codes, token claims, Go packages, HTTP routes,
   configuration, manifest, frontend contract, requirements placed on mod-authz).
 - [Decisions and resolutions](./notes/decisions-and-resolutions.md): how resolutions (a) to (d) are
-  implemented, the person-record ownership choice (U1), decisions U2 to U20, the mod-users versus
+  implemented, the person-record ownership choice (U1), decisions U2 to U20, the cross-plan
+  reconciliation decisions U21 to U28 with one open question for the manager, the mod-users versus
   mod-authz boundary confirmation with flagged mismatches, cross-project ordering risks, and the
   mapping of ADR impact notes to phases.
 - [Work packages](./notes/work-packages.md): files, tests, suggested task boundaries and tiers for
@@ -91,17 +92,6 @@ consumer side.
 Planning. No phase has started. Phases 6 to 11 are registered; task breakdown is pending phase
 decomposition. mod-core holds phases 1 to 5.
 
-Execution order is **not** the global phase-number order:
-
-1. mod-core phases 1 to 3 (and its doc phase 4) run first.
-2. mod-authz's and mod-audit's `opctx.AuthContext` adoption in their `api/service` packages must
-   merge before phase 6 closes (mod-users' dev server imports both).
-3. Phases 6 (`users-identity-core`) and 7 (`parties-profiles-and-bootstrap`) run next.
-4. **mod-authz's schema phase** (registered later, with a higher number) must run before phase 8
-   (`users-authorization-engine`).
-5. Phase 9 (GUI) follows phase 8; phase 10 (`doc-updates`) follows the code phases; phase 11
-   (`users-identity-final`) runs after phase 10 and before mod-core's final coordination phase 5.
-
 Pre-condition for cross-project work: sibling projects resolve `../../mod-core` and
 `../../mod-authz` through `scripts/link-siblings.sh` symlinks to their main checkouts; tasks must
 point them at the plan worktrees while the plan runs (see the coordination risks in
@@ -111,13 +101,58 @@ The architectural-implications `doc-updates` phase is already registered as phas
 final phase. A re-invocation of the planning procedure must add its `update-architecture-docs` task
 to that phase rather than registering a second, trailing `doc-updates` phase.
 
+### Execution order
+
+**Phase numbers do not reflect execution order across the federation.** Global blocks: mod-core
+1 to 5, mod-users 6 to 11, mod-authz 12 to 16, mod-audit 20 to 22, mod-tokens 30 to 33,
+mod-billing 40 to 43, mod-workflows 50 to 52, mod-tasks 60 to 62, mod-repos 70 to 73,
+app-mfmanager 80 to 84. Each participant's own overview states its constraints. The table below
+lists every constraint that touches a mod-users phase, with the participant's own constraint id.
+
+| # | Constraint | Source |
+|---|---|---|
+| U-X1 | mod-users 6 starts only after mod-core 1 to 3 have merged. | mod-core overview |
+| U-X2 | **mod-authz 12 (`authz-auth-context-adoption`) merges before mod-users 6 closes.** | mod-authz H2 |
+| U-X3 | **mod-audit 20 (`audit-auth-context-adoption`) merges before mod-users 6 closes.** | mod-audit E2 |
+| U-X4 | **mod-authz 13 (`authz-identity-schema`) merges before mod-users 6 closes**, and so before mod-users 7 and 8 (decision U27). | mod-authz H3 |
+| U-X5 | **mod-authz 14 task 004 (collaborator gate hook) merges before mod-users 7 task 003 starts.** That task halts if the hook is absent (decision U26). | mod-authz H5 |
+| U-X6 | mod-users 6 task 005 and 8 task 003, and every other emitting task, use mod-audit's op vocabulary ([API surface 10.1](./notes/mod-users-api-surface.md)). | mod-audit E4 |
+| U-X7 | mod-billing 40 starts after mod-users 6 (and mod-authz 13). mod-billing 41 starts after mod-users 7 (including task 007, `AdmitInTx`) and 8, and mod-authz 14. | mod-billing E1, E2 |
+| U-X8 | mod-tokens 30 starts after mod-users 6 (its task 004 uses `ReadPrincipalSummaries` from 6/007) and mod-billing's identity phases. mod-tokens 31 starts after mod-users 6 to 8 and mod-audit 20. | mod-tokens E1 to E3 |
+| U-X9 | mod-repos 70 starts after mod-users 6 to 8 and mod-authz 12 to 14. Its phase 71 relies on mod-users 7 task 005. | mod-repos H1, H3 |
+| U-X10 | app-mfmanager 80 starts after mod-users 6 to 8 (it uses `LinkOIDCInTx` from 6/004), mod-authz 12 to 14 and mod-audit 20. app-mfmanager 81 starts after mod-users 9. | app-mfmanager E1, E3 |
+| U-X11 | mod-authz 16, mod-audit 22 and mod-workflows 52 start after mod-users 8. | mod-authz H7, mod-audit E6, mod-workflows H4 |
+| U-X12 | mod-users 9 follows 8. 10 follows the code phases. 11 follows 10 and merges before mod-core 5, which runs last, after every participant's final phase. | this plan, mod-core overview |
+
+Recommended global interleaving (it satisfies every constraint above and those in the other
+participants' overviews):
+
+1. mod-core 1, 2, 3. mod-core 4 may run alongside what follows.
+2. mod-authz 12 and mod-audit 20, in parallel. Both are small and unblock mod-users' build.
+   mod-workflows 50 may start here; it needs only mod-core.
+3. mod-authz 13, in parallel with the start of mod-users 6.
+4. The rest of mod-users 6, with mod-authz 14 in parallel. mod-users 6 closes only once
+   mod-authz 12 and 13 and mod-audit 20 have merged. mod-authz 14 task 004 merges before mod-users
+   7 task 003.
+5. mod-users 7, then mod-users 8. mod-billing 40 may run alongside them.
+6. The downstream consumers run in parallel, each after its own prerequisites:
+   - mod-billing 41, then mod-tokens 30 and 31;
+   - mod-tasks 60 (soft: after mod-authz 14), then mod-repos 70 and 71 (mod-repos 70 tasks 003
+     and 007 need mod-tasks' and mod-audit's schema phases);
+   - app-mfmanager 80.
+
+   mod-users 9 runs alongside them, and app-mfmanager 81 follows it.
+7. Documentation and final phases: mod-users 10 and 11, mod-authz 15 and 16, mod-audit 21 and 22,
+   and the other participants' doc and final phases.
+8. mod-core 5 last.
+
 ## Overview
 
 | # | Phase | Summary | Depends on |
 |---|---|---|---|
-| 6 | [Users Identity Core](./phases/users-identity-core.md) | Schema rewrite into `mod_users`; users, identifiers, credentials, challenges, sessions, refresh lineages; EdDSA carrier and per-request liveness populating `AuthContext`; `/v1/auth`, `/v1/session`, `/v1/me`, `/v1/principals`; OIDC resolver without email auto-link; old surfaces removed; invariant and session tests. | mod-core 1 to 3; mod-authz and mod-audit `AuthContext` adoption |
-| 7 | [Parties, Profiles and Bootstrap](./phases/parties-profiles-and-bootstrap.md) | Party profile lifecycle and invitations, managed users, party authn policies, credential authorizations and confinement, outside-collaborator confirmations and compliance, setup-token bootstrap, party-aware SSH profile derivation. | 6 |
-| 8 | [Users Authorization Engine](./phases/users-authorization-engine.md) | `authz.go` engine (assurance gate, owned scope, per-operation own arm, `AuthorizeTypeIn`) with parity tests; impersonation sessions; `credentials` operation; invite-only app gate; `EnsurePersonalParty`. | 7; mod-authz schema phase |
+| 6 | [Users Identity Core](./phases/users-identity-core.md) | Schema rewrite into `mod_users`; users, identifiers, credentials (including the trusted `LinkOIDCInTx`), challenges, sessions, refresh lineages; EdDSA carrier and per-request liveness populating `AuthContext`; `/v1/auth`, `/v1/session`, `/v1/me`, `/v1/principals`; `DirectoryService` and the transaction-scoped `ReadPrincipalSummaries`; OIDC resolver without email auto-link; old surfaces removed; invariant and session tests. | mod-core 1 to 3; before closing: mod-authz 12 and 13, mod-audit 20 |
+| 7 | [Parties, Profiles and Bootstrap](./phases/parties-profiles-and-bootstrap.md) | Party profile lifecycle and invitations, managed users, trusted admission (`AdmitInTx`), party authn policies, credential authorizations and confinement, outside-collaborator confirmations and compliance, setup-token bootstrap, party-aware SSH profile derivation. | 6; mod-authz 14 task 004 before task 003 |
+| 8 | [Users Authorization Engine](./phases/users-authorization-engine.md) | `authz.go` engine (assurance gate, owned scope, per-operation own arm, `AuthorizeTypeIn`) with parity tests; impersonation sessions; `credentials` operation; invite-only app gate; `EnsurePersonalParty`. | 7; mod-authz 13 (already required by 6) |
 | 9 | [Users GUI and Frontend Contract](./phases/users-gui-and-frontend-contract.md) | Per-tab tokens, refresh lineages, handoff, profile chrome, self-service panels, bootstrap and OIDC pages. | 8 |
 | 10 | [Documentation Updates](./phases/doc-updates.md) | Architecture and spec documents; repository documents review. | 6 to 9 |
 | 11 | [Users Identity Final](./phases/users-identity-final.md) | mod-users drift-scan slice; superseded-followup reconciliation. | 10; precedes mod-core phase 5 |
@@ -125,7 +160,9 @@ to that phase rather than registering a second, trailing `doc-updates` phase.
 Within phase 6, the schema task comes first and the queries task second; the token/middleware task
 precedes the credentials, sessions, OIDC and wiring tasks, which can then largely run in parallel;
 the two test suites close the phase. Within phase 7, the profile, policy, bootstrap and SSH tasks are
-parallel after the profile service exists; the collaborator task follows the policy task. Within
+parallel after the profile service exists; the collaborator task (003) follows the policy task and
+mod-authz 14 task 004. The trusted-admission task (007, listed last) depends only on task 001,
+runs in parallel with 002 to 005, and merges before the closing integration task 006. Within
 phase 8, the engine task comes first; impersonation, `credentials` and personal-party tasks are
 parallel after it. Phase 9's client task precedes its UI tasks. Phase 10's two tasks are parallel.
 Phase 11's scan precedes the reconciliation. The [work packages](./notes/work-packages.md) note gives

@@ -49,12 +49,21 @@ unit tests must compile). Parallel-eligible with tasks 004 to 008.
    `instance_semantics_integration_test.go` to create actors as profiles of `mod_users.users`
    (the engine phase extends them further). `api/internal/config/jwtsecret_bootstrap_integration_test.go`
    belongs to task 010 (its package's unit tests must compile first).
+8. **Fixtures satisfy mod-authz phase 13's grant triggers** (decision U27). Phase 13 must merge
+   before this phase closes. Once it has, the following rules apply, so write fixtures that hold
+   under them from the start:
+   - grant actors are profiles or actor groups (`MF501`);
+   - wildcard and type-entity grants go only to operator actors, meaning profiles of the party
+     claimed with `core_claim_operator_party`, or system actors' profiles;
+   - the anonymous system actor's profile holds no grant.
 
 ## Validation
 
 - Run the authz integration suite per `AGENTS.md` "Authz integration tests against a throwaway
   Postgres" (`go test -tags=integration -p 1 -count=1 ./internal/authz/...`), with mod-core and
-  mod-authz linked to their plan worktrees: all green.
+  mod-authz linked to their plan worktrees: all green. The report states whether mod-authz phase
+  13 had merged on mod-authz's plan branch at the time of the run. If it had not, task 010
+  re-runs the suite after it merges.
 - `ls api/internal/authz/ | grep -E 'displaced_guard|user_account_'` returns nothing.
 - Each rule in requirements 1 to 6 maps to at least one named test; list the mapping in the report.
 
@@ -66,7 +75,9 @@ unit tests must compile). Parallel-eligible with tasks 004 to 008.
 ## References
 
 - [API surface sections 2 to 4](../notes/mod-users-api-surface.md).
-- [Decisions U3, U13](../notes/decisions-and-resolutions.md), resolution (a).
+- [Decisions U3, U13, U27](../notes/decisions-and-resolutions.md), resolution (a).
+- mod-authz plan worktree, `plan/notes/mod-authz-api-surface.md` sections 2.3 and 2.6: the grant
+  triggers and the operator-actor definition.
 - [Work packages, package 8](../notes/work-packages.md).
 - `api/internal/authz/authz_integration_test.go` header — harness detail.
 

@@ -34,10 +34,12 @@ directly (trusted flow), not through `PartyPolicyService`.
       `409 users.already_bootstrapped`;
    4. the admin party profile (holder = the first user, party = the operator party, `active`,
       `source = 'manual'`);
-   5. a wildcard `manage` grant (`scope = 'entity'` if the column exists yet, `target_id` NULL)
-      held by the admin profile, inserted in the same transaction through mod-authz's generated
-      `authzdb` create-grant query (API surface section 9 item 3); a wildcard grant to a profile is
-      accepted by mod-authz's current schema;
+   5. a wildcard `manage` grant (entity scope, `target_id` NULL) held by the admin profile,
+      inserted in the same transaction through mod-authz's generated `authzdb` create-grant query
+      (API surface section 9 item 3). mod-authz phase 13 has merged by now (decision U27), so
+      `CreateGrantParams` carries `Scope` (leave it NULL; the query coalesces it to `'entity'`),
+      `TargetTypeID` and `IncludeSubtypes`. Its operator-actor trigger accepts the grant only
+      because step 3 already claimed the operator party; keep this order;
    6. `party_authn_policies(operator party, credential_rule = 'authorized')`;
    7. `credential_party_authorizations(bootstrap password, operator party, authorized_by = admin
       profile)`;
@@ -51,7 +53,19 @@ directly (trusted flow), not through `PartyPolicyService`.
      section 7. Missing or wrong token: 401 `users.setup_token_invalid` (constant-time compare via
      `auth.VerifySetupToken`). Already bootstrapped: 409 `users.already_bootstrapped`. Success:
      201 with the standard token response, a new session with the password factor, landing on the
-     admin profile. Emit a `bootstrap` observer event.
+     admin profile. Emit a `bootstrap` observer event. The events of the bootstrap transaction use
+     only the ops of [API surface section 10.1](../notes/mod-users-api-surface.md) (decision
+     U21):
+     - `create` on `bootstrap` (target the operator party);
+     - `create` on `user`, `credential` and `profile` from the shared primitives;
+     - `grant` on `grant` for the trusted wildcard insert;
+     - `login` on `session` for the new session.
+
+     The request is unauthenticated (setup token only), so install the unauthenticated-flow
+     `AuthContext` of section 10.1 for these observations: the new admin profile, its holder and
+     the new session. Writes made before the admin profile exists are observed once it exists,
+     still inside the transaction. Alternatively, they can be observed under the first user's
+     personal profile, which step 1 creates. Choose one approach and record it in this document.
    - Error order: the token header is evaluated before the body (credential-in-header route, as
      `/v1/oidc-config/confirm` does today).
 3. **Setup-token lifecycle (U9)** in `api/internal/handlers/oidc_config.go`,
@@ -102,13 +116,14 @@ architectural_impact: true
 - Phase 6 removed the first-user hook (U17) and provides the registration, session and landing
   machinery reused here.
 - mod-core's `core_claim_operator_party`, `core_is_operator_profile` and `platform_settings` exist
-  in its plan worktree; mod-authz's grants table accepts a wildcard grant held by a profile.
+  in its plan worktree. mod-authz phase 13's grants schema and triggers are merged (decision U27):
+  a wildcard grant is accepted for a profile of the claimed operator party.
 - The bootstrap GUI page arrives in the GUI phase; this task is API only.
 
 ## References
 
 - [API surface](../notes/mod-users-api-surface.md) sections 6.3, 6.4, 7, 9 item 3, 10, 11.
-- [Decisions](../notes/decisions-and-resolutions.md) U1, U9, U10, U11, U12, U17.
+- [Decisions](../notes/decisions-and-resolutions.md) U1, U9, U10, U11, U12, U17, U21, U27.
 - [Work packages](../notes/work-packages.md), phase `parties-profiles-and-bootstrap`, package 4.
 - mod-core ADR `docs/architecture/identity-model.md`, "Platform administration and bootstrap".
 - Existing code: `api/internal/handlers/oidc_config.go`, `api/handlers/onboarding_boot.go`,

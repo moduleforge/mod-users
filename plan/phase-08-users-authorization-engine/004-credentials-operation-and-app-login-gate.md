@@ -49,6 +49,7 @@ Dependency: requires task 001. It can run in parallel with tasks 002, 003 and 00
    - Add the routes to `api/openapi.yaml`.
    - Wire `api/handlers/handlers.go` re-exports and `moduleforge.module.yaml` if the principals handler gains dependencies.
    - Update the `AGENTS.md` and `README.md` rows that describe SSH-key administration or `assume`, where those rows describe code this task changes.
+   - **Audit ops** (decision U21, [API surface section 10.1](../notes/mod-users-api-surface.md)): issued API keys and installed SSH keys emit `create` on `credential`, and revocations emit `revoke` on `credential`, through the phase 6 primitives. Today's SSH-key path observes with op `assume` (`sshKeyMutateOp`); that op must not survive anywhere.
 7. **Tests.**
    - Operator with a wildcard grant: lists, issues and revokes credentials for a service account and installs an SSH key for a user.
    - Party admin with an owned-scope grant: manages credentials of a party-owned service account, and is refused for a personal user's credentials.

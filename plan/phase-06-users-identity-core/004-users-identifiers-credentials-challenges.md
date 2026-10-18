@@ -33,8 +33,7 @@ Tasks 005, 006 and 007 depend on this task.
 3. **Credentials.** `CredentialService` with password (argon2id via the existing hashing; at most
    one active password per identifier and one unbound per user, U12), `email_otp`, `ssh_key`
    (reusing `api/internal/sshkey/` parsing and label rules; `cred_ssh_key_active_fingerprint_uq`
-   maps to `users.ssh_key_in_use`), `oidc` creation primitive used by task 006
-   (`cred_oidc_active_issuer_subject_uq` maps to `users.oidc_identity_in_use`), guest `anon`
+   maps to `users.ssh_key_in_use`), the `oidc` creation primitive (requirement 4a), guest `anon`
    credential, list, label and `default_profile_id` update, and `RevokeInTx` (binding signature,
    API surface 6.3) that revokes every session holding the credential as a factor with
    `revoke_reason = 'credential_revoked'`. Refuse removing the last interactive credential
@@ -43,6 +42,18 @@ Tasks 005, 006 and 007 depend on this task.
    `credentials` operation on the principal entity. Until mod-authz seeds that slug, the prelude's
    unknown-slug fallback admits only wildcard `manage` holders; that is sufficient for this phase.
    The HTTP routes and the owner path come in the engine phase.
+
+   4a. **`LinkOIDCInTx`** (binding, API surface 6.3, decision U24; app-mfmanager request M8):
+   `CredentialService.LinkOIDCInTx(ctx, tx, LinkOIDCInput) (LinkedCredential, error)` with the
+   input and result types exactly as in section 6.3. It is the trusted `oidc` creation primitive.
+   It does no authorization (document this in its doc comment) and creates an active `oidc`
+   credential plus its `cred_oidc` row. Task 006's JIT (`byo`, and `managed` with
+   `ConfinedToPartyID`) and session-link paths call it rather than a second insert path. app-mfmanager
+   calls it to pre-create a managed-app owner's link. A clash on
+   `cred_oidc_active_issuer_subject_uq` maps to `ErrOIDCIdentityInUse` (409
+   `users.oidc_identity_in_use`). An MF102 refusal surfaces as an internal error. It never matches
+   or links by email. Re-export it from `api/usersservice` (task 008 owns the facade file; add the
+   re-export here if the facade already builds, otherwise list it for task 008).
 5. **Challenges.** Create through `mod_users.create_challenge_with_cooldown`, verify with the
    failed-attempt counter and bound, consume once; kinds `email_code`, `verify_identifier`,
    `password_reset`, `step_up`, `login_handoff` (single use, 60 s, U7). Reuse the existing email
@@ -54,13 +65,27 @@ Tasks 005, 006 and 007 depend on this task.
    `SSHKeyResolver.ResolveCredential` resolves an active `ssh_key` credential (API surface 6.3);
    `AuthContextForOwner` returns the personal-profile context (or `ErrSSHKeyNotAuthorized` for a
    confined credential) until the party-aware rules land in phase `parties-profiles-and-bootstrap`.
-8. Emit observer resources `user`, `user_identifier`, `credential` (API surface 10, mod-audit).
+8. Emit observer resources `user`, `user_identifier`, `credential` with exactly the ops of
+   [API surface section 10.1](../notes/mod-users-api-surface.md) (decision U21):
+   - user created: `create`;
+   - identifier added, verified or made primary, removed: `create`, `update`, `delete`;
+   - credential created, including `LinkOIDCInTx`, API keys and `anon`: `create`;
+   - credential revoked, including by `RevokeInTx`: `revoke` (never `delete`).
+
+   mod-audit rejects any other verb, and under the `propagate` policy the rejection rolls back the
+   operation. `assume` is never used. The primitives that run before an `AuthContext` exists
+   (user creation at registration, guest sign-in, JIT) take the acting profile from the section
+   10.1 rule for unauthenticated flows. Their callers (tasks 005 and 006) install it.
 
 ## Validation
 
 - `cd api && go build ./internal/service/... ./internal/sshkey/...` passes.
 - `grep -rnE 'UserAccount|user_accounts|SSHKeyService' api/internal/service --include='*.go' | grep -v _test.go`
   returns nothing.
+- `grep -rn 'LinkOIDCInTx' api/internal/service --include='*.go'` shows the method and its use as
+  the only `cred_oidc` insert path.
+- `grep -rnE 'Observe(AfterCommit)?\([^)]*"assume"' api/internal/service --include='*.go'` returns
+  nothing. Every `Observe` op in the files this task wrote is one of the section 10.1 ops.
 - Behavior tests for these services are written in tasks 009 (DB invariants) and 010 (service and
   route); the report names any behavior those tasks must cover beyond their documents.
 
@@ -72,7 +97,10 @@ Tasks 005, 006 and 007 depend on this task.
 ## References
 
 - [API surface sections 2.1 to 2.5, 4, 6.3, 7](../notes/mod-users-api-surface.md).
-- [Decisions U1, U7, U11, U12, U13](../notes/decisions-and-resolutions.md).
+- [Decisions U1, U7, U11, U12, U13, U21, U24](../notes/decisions-and-resolutions.md).
+- app-mfmanager plan worktree, `plan/notes/app-mfmanager-surface.md` section 3.5 and
+  `plan/notes/decisions-and-resolutions.md` M8: how `LinkOIDCInTx` is consumed.
+- mod-audit plan worktree, `plan/notes/mod-audit-api-surface.md` section 2.2: the op vocabulary.
 - [Work packages, package 4](../notes/work-packages.md).
 
 ## Checkpoint hints

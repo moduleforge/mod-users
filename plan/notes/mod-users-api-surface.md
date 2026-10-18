@@ -15,7 +15,8 @@ removes. It builds on mod-core's binding note (mod-core plan worktree,
 `profile_ownership_subject`, `profile_own_subject`, `core_is_operator_profile`,
 `core_claim_operator_party`, `core_ensure_system_actor`, MF003 to MF005) is referenced, never
 redefined. Reasons for each choice are in [decisions and resolutions](./decisions-and-resolutions.md)
-(decision ids U1 to U20).
+(decision ids U1 to U28; U21 to U28 come from the cross-plan reconciliation with the later
+participants' planning passes).
 
 **Binding levels.** Items marked **(binding)** are consumed by other projects or by mfgen-generated
 composition roots; a task that must change one records the change in its task document and flags it.
@@ -74,7 +75,7 @@ DB invariants (SQLSTATE `MF103` unless stated):
 6. Deferred constraint trigger (commit time) on `users`: a bring-your-own user has exactly one
    personal profile; a managed user has none.
 
-### 2.2 `mod_users.user_identifiers`
+### 2.2 `mod_users.user_identifiers` (binding read surface)
 
 `id BIGSERIAL PK`, `uuid UUID UNIQUE`, `user_id BIGINT NOT NULL REFERENCES mod_users.users(entity_id)`,
 `kind TEXT NOT NULL CHECK (kind IN ('email','phone','username'))`, `value_canon TEXT NOT NULL`
@@ -82,6 +83,13 @@ DB invariants (SQLSTATE `MF103` unless stated):
 `created_at`. `UNIQUE (kind, value_canon)` (index `user_identifiers_kind_value_uq`);
 `UNIQUE (user_id) WHERE is_primary AND kind = 'email'`. Only users have identifiers (the foreign
 key excludes service accounts and system actors).
+
+The table name and the columns `user_id`, `kind`, `value_canon`, `verified_at` and `is_primary`,
+with the meanings above, are a **binding read surface** (decision U25). mod-billing's SQL reads
+them for invitation matching, trial claims and the Paddle customer email. mod-tokens' documented
+fallback (its decision T16) reads the primary email from them. Other projects only read; every
+write goes through mod-users' services. A rename, a type change or a change of meaning (for
+example of the email canonical form) is flagged to mod-billing and mod-tokens.
 
 ### 2.3 `mod_users.credential_kinds` (seeded registry)
 
@@ -338,7 +346,8 @@ Constructors take `(pool *pgxpool.Pool, q usersdb.Querier, coreQ coredb.Querier,
 obs *observer.ObserverGroup, ...)` in the existing style; exact parameter lists are the implementer's
 except where marked binding. Services: `UserService`, `CredentialService`, `SessionService`,
 `ProfileService`, `PartyPolicyService`, `PersonalPartyService`, `ImpersonationService`,
-`BootstrapService`, `DirectoryService`, `SSHKeyResolver`, `CollaboratorGate`.
+`BootstrapService`, `DirectoryService`, `SSHKeyResolver`, `CollaboratorGate`, plus the
+package-level `ReadPrincipalSummaries`.
 
 Binding methods and types:
 
@@ -350,6 +359,27 @@ func (s *CredentialService) IssueAPIKeyInTx(ctx context.Context, tx pgx.Tx, in I
 // Authorizes "credentials" on the principal entity; the principal must be a service account.
 func (s *CredentialService) RevokeInTx(ctx context.Context, tx pgx.Tx, credentialID int64, reason string) error
 // Revokes every session holding the credential as a factor (revoke_reason 'credential_revoked').
+
+// Trusted OIDC link (app-mfmanager managed-app owner provisioning, decision U24; also the oidc
+// creation primitive the resolver's JIT and link paths use).
+type LinkOIDCInput struct {
+    PrincipalID       int64
+    ProviderID        string // cred_oidc.provider_id (a configured or env provider id)
+    Issuer            string
+    Subject           string
+    EmailAtLink       string // "" stores NULL
+    Label             string
+    ConfinedToPartyID *int64
+}
+type LinkedCredential struct { CredentialID int64; CredentialUUID uuid.UUID }
+func (s *CredentialService) LinkOIDCInTx(ctx context.Context, tx pgx.Tx, in LinkOIDCInput) (LinkedCredential, error)
+// No authorization: the caller authorizes. Creates an active `oidc` credential, so the
+// (issuer, subject) pair logs the principal in on the known-identity path; it never links by
+// email. Errors: ErrOIDCIdentityInUse (409 users.oidc_identity_in_use) when an active credential
+// already holds (issuer, subject). The principal must be a non-guest user; an MF102 refusal
+// (guest, service account, system actor) is a caller bug and surfaces as an internal error, as
+// for every unmapped invariant. Writes a `credential` `create` observation, so ctx must carry an
+// AuthContext with an acting profile.
 
 // Profiles (mod-billing seats)
 type InviteInput struct { PartyID int64; HolderUserID int64; HolderEmail string; ConfirmPolicyMismatch bool } // one of HolderUserID/HolderEmail
@@ -365,6 +395,25 @@ type ProfileLifecycleObserver interface {
     ProfileStatusChanged(ctx context.Context, tx pgx.Tx, ch ProfileStatusChange) error // in-transaction
 }
 func (s *ProfileService) AddLifecycleObserver(o ProfileLifecycleObserver)
+// Invite and admission refusals for a guest, a managed user of another party or a non-user holder
+// (the MF103 profiles trigger, checked in Go first): ErrGuestMustUpgrade (409
+// users.guest_upgrade_required) and ErrHolderNotAdmissible (409 users.holder_not_admissible).
+
+// Trusted admission into a party (mod-billing seats S3 and S7, decision U22; phase 7 task 007)
+type AdmitInput struct {
+    PartyID            int64
+    HolderUserID       int64
+    InvitedByProfileID int64 // 0 when none
+}
+func (s *ProfileService) AdmitInTx(ctx context.Context, tx pgx.Tx, in AdmitInput) (Profile, error)
+// Returns the holder's active profile in the party: an active one as is (no write), an invited
+// one made active, a missing one (none or only ended) created active (source 'manual', owner =
+// the party, invited_by_profile_id set, created_by_profile_id = the acting profile). No
+// authorization (the caller has the holder's and the party's consent) and no policy-mismatch
+// check (an unqualified holder's profile is simply locked by profile_availability). Lifecycle
+// observers and `profile` observations fire for every status change. Serialized per holder.
+// Errors: ErrProfileSuspended (409 users.profile_suspended), ErrGuestMustUpgrade,
+// ErrHolderNotAdmissible.
 
 // Personal team plans (resolution (b), U1, U2)
 type PersonalParty struct { PartyID int64; PartyUUID uuid.UUID; GrantID int64; Created bool }
@@ -372,6 +421,10 @@ func (s *PersonalPartyService) EnsurePersonalParty(ctx context.Context, tx pgx.T
 // Acting profile must be a user's personal profile. Errors: ErrGuestMustUpgrade (409
 // users.guest_upgrade_required), ErrPersonalProfileRequired (403), ErrPersonalPartyNotOwned
 // (409 users.person_not_owned: users.person_id links a person the user does not own).
+// The grant it creates is invisible to the production Authorizer until tx commits (the
+// Authorizer reads through its own pool). A caller that must authorize against that grant
+// commits this call's transaction first; the call is idempotent, so a later failure leaves
+// only a person and a grant that the next attempt reuses (mod-billing B6, decision U28).
 
 // Batch directory lookups (resolves followup bHKv). No authorization: callers authorize first.
 type PrincipalSummary struct { PrincipalID int64; PrincipalUUID uuid.UUID; Kind string; DisplayName string; PrimaryEmail string; Disabled bool; IsGuest bool }
@@ -379,6 +432,11 @@ type ProfileSummary struct { ProfileID int64; ProfileUUID uuid.UUID; HolderPrinc
     PartyID int64; PartyUUID uuid.UUID; Status string; DisplayName string; HolderDisplayName string; HolderPrimaryEmail string }
 func (d *DirectoryService) PrincipalSummaries(ctx context.Context, principalIDs []int64) (map[int64]PrincipalSummary, error)
 func (d *DirectoryService) ProfileSummaries(ctx context.Context, profileIDs []int64) (map[int64]ProfileSummary, error)
+// Transaction-scoped form (mod-tokens mint path, decision U23): a package-level function in
+// usersservice that runs on the caller's connection or transaction (usersdb.DBTX), so a caller
+// holding a transaction needs no second pool connection. DirectoryService.PrincipalSummaries
+// delegates to it. Same semantics, no authorization; unknown ids are absent from the map.
+func ReadPrincipalSummaries(ctx context.Context, db usersdb.DBTX, principalIDs []int64) (map[int64]PrincipalSummary, error)
 
 // SSH (mod-repos). Read-only: no writes, no cache, no key-material logging.
 type SSHCredential struct { CredentialID int64; CredentialUUID uuid.UUID; PrincipalID int64; PrincipalUUID uuid.UUID; ConfinedToPartyID int64 }
@@ -473,6 +531,7 @@ New error and action codes: `users.invalid_credentials` (401), `users.session_re
 `users.step_up_required` (409 action, existing), `users.email_unverified` (403 action, existing),
 `users.app_login_not_granted` (403), `users.byo_identity_disabled` (403),
 `users.guest_upgrade_required` (409), `users.person_not_owned` (409),
+`users.holder_not_admissible` (409), `users.profile_suspended` (409, `AdmitInTx`),
 `users.policy_mismatch_confirmation_required` (409, mismatch details),
 `users.impersonation_not_allowed` (403, including nesting), `users.already_bootstrapped` (409),
 `users.setup_token_invalid` (401), `users.last_credential` (409), plus the index-mapped 409s in
@@ -516,31 +575,52 @@ variables, `USERS_COOKIE_PATH` (the `oidc_state` cookie only). Added, with defau
    `usersservice.CollaboratorGate` implements it and the composition root wires it.
 7. The `AuthContext` adoption in `api/service` must merge before mod-users' first phase closes
    (mod-users' dev server imports it).
+8. Items 1 to 4 (mod-authz phase 13, `authz-identity-schema`) must **also** merge before mod-users
+   phase 6 closes, not only before phase 8 (mod-authz constraint H3, decision U27). After mod-core
+   phase 3, the generated `accessible_*` functions read `grants.scope`, `target_type_id`,
+   `include_subtypes` and `authz_operations.ownership_confers`. Every `setup.ApplyFuncs` run
+   against the old mod-authz schema fails, including mod-users' dev server, its principal-list
+   path and its integration suites.
+9. Item 6 (mod-authz phase 14 task 004) must merge before mod-users phase 7 task 003 starts
+   (mod-authz constraint H5). That task halts rather than defers when the hook is absent
+   (decision U26).
 
 ## 10. Notes for specific consumers
 
 - **mod-audit:** every request `AuthContext` from mod-users carries `ProfileID` (actor),
   `PrincipalID`, `ImpersonatorPrincipalID`, `SessionID` (`mod_users.sessions.id`) and
-  `CredentialID` (`mod_users.credentials.id`); recommend no foreign keys from `audit_log` to
+  `CredentialID` (`mod_users.credentials.id`), never both `SessionID` and `CredentialID` (mod-audit
+  CHECK `audit_log_session_or_credential`); recommend no foreign keys from `audit_log` to
   mod-users tables (append-only history). Observer resources emitted by mod-users: `user`,
   `user_identifier`, `credential`, `session`, `profile`, `party_authn_policy`,
-  `credential_party_authorization`, `impersonation`, `bootstrap`.
+  `credential_party_authorization`, `impersonation`, `bootstrap`, and `grant` for mod-users'
+  trusted grant inserts. Ops are only those of section 10.1. mod-audit phase 20
+  (`audit-auth-context-adoption`) merges before mod-users phase 6 closes (mod-audit constraint
+  E2).
 - **mod-tokens:** `usersdb.UserAccount` lookups become principal ids (`public.principals`) plus
-  `DirectoryService.PrincipalSummaries` for display; refuse refresh when
-  `public.principals.disabled_at` is set; the device approval route sits behind `NewRequireAuth`
+  `DirectoryService.PrincipalSummaries` for display. On a path that already holds a transaction
+  (the mint path), use `usersservice.ReadPrincipalSummaries(ctx, tx, ids)` on that transaction
+  (decision U23, delivered in phase 6 task 007). Refuse refresh when
+  `public.principals.disabled_at` is set. The device approval route sits behind `NewRequireAuth`
   and reads `opctx.Auth(ctx).PrincipalID`.
 - **mod-billing:** system actor `billing.paddle_sync` via mod-core `core_ensure_system_actor`
-  (closes mod-users followup `WZTj`); seats hold profile ids, created with
-  `ProfileService.InviteInTx` and released through a `ProfileLifecycleObserver`; personal team plans
-  call `PersonalPartyService.EnsurePersonalParty` in the plan-creation transaction; holder display
-  via `DirectoryService.ProfileSummaries`.
+  (closes mod-users followup `WZTj`). Seats hold profile ids. The holder is admitted with
+  `ProfileService.AdmitInTx` (decision U22, phase 7 task 007), an invitation is authorized with
+  `AuthorizeTypeIn(create, profile, party)` on mod-billing's side, and seats are released through
+  a `ProfileLifecycleObserver`. Personal team plans call `PersonalPartyService.EnsurePersonalParty`
+  in **their own committed transaction before authorizing** (mod-billing decision B6, decision
+  U28), not in the plan-creation transaction. Holder display goes through
+  `DirectoryService.ProfileSummaries`. mod-billing reads `mod_users.users (entity_id, person_id,
+  is_guest)` and the section 2.2 read surface of `mod_users.user_identifiers` directly.
 - **mod-workflows, mod-tasks:** no direct mod-users API; actors come from `opctx.AuthContext`;
   test seeds create users through mod-users' services or SQL that satisfies section 2's
   invariants (a bring-your-own user needs its personal profile in the same transaction).
 - **mod-repos:** replace `ResolveActor` with `ResolveCredential` plus `AuthContextForOwner`
   (repository owner id), and install the returned `AuthContext`; anonymous HTTP reads keep using
   `NewResolveOrAnonymous`.
-- **app-mfmanager:** `app_service_identity` provisioning creates the service account with mod-core's
+- **app-mfmanager:** managed-app owner provisioning pre-creates the owner's `cred_oidc` link with
+  `CredentialService.LinkOIDCInTx` (decision U24, delivered in phase 6 task 004) instead of
+  generated `usersdb` inserts. `app_service_identity` provisioning creates the service account with mod-core's
   `CreateServiceAccountInTx` and its API key with `CredentialService.IssueAPIKeyInTx`; runtime login
   is `POST /v1/auth/token` (`client_credentials`) with `MFSVC_ACCOUNT_EMAIL` replaced by a client
   id; managed-app owner tokens use `auth.IssueAudienceToken` with `sub` = principal uuid;
@@ -548,6 +628,52 @@ variables, `USERS_COOKIE_PATH` (the `oidc_state` cookie only). Added, with defau
   `auth.Identity`, `auth.Authenticator` and principal ids.
 - **Non-federated host apps (app-mftodo, app-mfgit, app-mfdemo) and mfgen:** the manifest service,
   middleware and route names in section 11 replace today's; followups are filed.
+
+### 10.1 Audit op vocabulary per event (binding)
+
+mod-audit's `audit_log.op` accepts only `create`, `update`, `delete`, `impersonate`, `login`,
+`grant` and `revoke` (mod-audit API surface section 2.2). `assume` is gone with no alias. Any
+other verb fails the in-transaction `Observe` call, and under the `propagate` policy the whole
+operation rolls back. Every mod-users observation uses the op this table names (decision U21).
+A task that needs an event not listed here picks the closest row's op, and never a new verb. It
+records the choice in its task document.
+
+| Event | op | resource | target | Task |
+|---|---|---|---|---|
+| User created (registration, guest sign-in, OIDC JIT, managed user, bootstrap) | `create` | `user` | the user | 6/004, 6/006, 7/001, 7/004 |
+| User updated (name, defaults, guest upgrade, disable, enable) | `update` | `user` | the user | 6/007, 7/001 |
+| Identifier added / verified or made primary / removed | `create` / `update` / `delete` | `user_identifier` | the user | 6/004, 6/007 |
+| Credential created (password, email OTP, SSH key, API key, OIDC link incl. `LinkOIDCInTx`, `anon`) | `create` | `credential` | the principal | 6/004, 6/006, 6/007, 8/004 |
+| Credential label, default profile or confinement changed | `update` | `credential` | the principal | 6/007, 7/002 |
+| Credential revoked (any `revoke_reason`) | `revoke` | `credential` | the principal | 6/004, 7/001, 8/004 |
+| Sign-in creating a session (registration, password, email code, anonymous, OIDC callback, bootstrap) | `login` | `session` | the principal | 6/005, 6/006, 7/004 |
+| Step-up adding or re-verifying a factor | `update` | `session` | the principal | 6/005, 6/006 |
+| Sign-out or session revocation (logout, refresh reuse, credential revoked, principal disabled, admin) | `revoke` | `session` | the principal | 6/005, 6/007 |
+| Refresh rotation, fork, profile switch | none | | | 6/005 |
+| Profile created (invite, managed user, bootstrap admin, `AdmitInTx`) | `create` | `profile` | the profile | 7/001, 7/004, 7/007 |
+| Profile status changed (accept, decline, leave, suspend, resume, end, admission) | `update` | `profile` | the profile | 7/001, 7/007 |
+| Party authn policy created / changed / removed | `create` / `update` / `delete` | `party_authn_policy` | the party | 7/002 |
+| Credential authorized for / removed from a party | `create` / `delete` | `credential_party_authorization` | the party | 7/002 |
+| Bootstrap completed | `create` | `bootstrap` | the operator party | 7/004 |
+| Trusted grant insert (bootstrap wildcard, `EnsurePersonalParty` owned-scope grant) | `grant` | `grant` | the grant's target, none for a wildcard | 7/004, 8/005 |
+| Person record created by `EnsurePersonalParty` (only if mod-core's entity helper does not already observe it) | `create` | `natural_person` | the person | 8/005 |
+| Impersonation start | `impersonate` | `impersonation` | the impersonated profile; `after` carries the child session uuid and the reason | 8/003 |
+| Impersonation renew / end | `update` / `revoke` | `impersonation` | the impersonated profile | 8/003 |
+
+**Acting profile for unauthenticated flows.** mod-audit's observer refuses an observation without
+`AuthContext.ProfileID` (`ErrNoActor`), and its trigger requires `principal_id` to be that
+profile's holder (`MF401`). Several flows run before any `AuthContext` exists: registration,
+login, anonymous sign-in, the email-code and password-reset flows, the OIDC callback and JIT,
+refresh reuse and bootstrap. Each of them installs, for its observations, an
+`AuthContext` built as follows:
+
+- `ProfileID` is the profile the flow lands on or creates. Otherwise it is the principal's
+  personal profile. Otherwise (a managed user) it is the principal's oldest non-ended profile.
+- `PrincipalID` is that profile's holder.
+- `SessionID` is the new or affected session when there is one.
+- `CredentialID` stays 0 whenever `SessionID` is set.
+
+A failed sign-in writes no observation.
 
 ## 11. Module manifest (`moduleforge.module.yaml`) (binding)
 

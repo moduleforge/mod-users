@@ -48,10 +48,17 @@ tasks 004 and 005. Task 003 depends on this task.
 5. **JIT confinement default.** Confirm that the phase-6 OIDC resolver confines credentials JIT-created
    from a party-bound provider (`jit_mode = 'managed'`, and `byo` with a `party_id`) to that party;
    fix it here if it does not, and add a test.
-6. **Wiring and docs**: `partyPolicyService` in `moduleforge.module.yaml`, `api/cmd/server/main.go`,
+6. **Audit ops** (decision U21): only the ops of
+   [API surface section 10.1](../notes/mod-users-api-surface.md):
+   - `party_authn_policy`: `create`, `update`, `delete`;
+   - `credential_party_authorization`: `create`, `delete`;
+   - confinement set or cleared: `update` on `credential`.
+
+   No other verb is allowed.
+7. **Wiring and docs**: `partyPolicyService` in `moduleforge.module.yaml`, `api/cmd/server/main.go`,
    `api/usersservice`; routes added to `RegisterPartyRoutes`; `api/openapi.yaml`;
    `AGENTS.md`/`README.md` rows.
-7. **Tests**: policy CRUD and check violations; admin path; self-authorization through another
+8. **Tests**: policy CRUD and check violations; admin path; self-authorization through another
    factor succeeds; self-authorization using only the credential being authorized fails; a
    personal-only session cannot authorize a credential for a party with `authorized` policy;
    confinement set/clear/conflict; availability changes take effect on the next request (a
@@ -75,12 +82,14 @@ architectural_impact: true
   `credentials.confined_to_party_id`, `profile_availability`, the `party_policies.sql` queries
   and the OIDC resolver.
 - Until the engine phase, `AuthorizeTypeIn` and `Authorize` admit only wildcard, type and entity
-  grants (U20); tests use those.
+  grants (U20); tests use those. mod-authz phase 13 has merged (decision U27), so wildcard and
+  type-entity grants are held only by operator-party profiles. A non-operator party admin is
+  modeled with an entity-scope `update` grant on the party entity.
 
 ## References
 
 - [API surface](../notes/mod-users-api-surface.md) sections 2.7, 2.8, 3, 7, 10.
-- [Decisions](../notes/decisions-and-resolutions.md) resolution (a), U5, U20.
+- [Decisions](../notes/decisions-and-resolutions.md) resolution (a), U5, U20, U21, U27.
 - [Work packages](../notes/work-packages.md), phase `parties-profiles-and-bootstrap`, package 2.
 - mod-core ADR `docs/architecture/identity-model.md`, "Credential gating and profile availability".
 

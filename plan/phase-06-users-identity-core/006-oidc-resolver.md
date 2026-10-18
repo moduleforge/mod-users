@@ -28,7 +28,10 @@ Dependencies within the phase: hard on 003, 004 and 005 (session creation and th
    (task 004 primitives); `managed` creates a managed user of the provider's `party_id`, an active
    `idp_jit` party profile and an `oidc` credential confined to the party; `none` refuses
    (`no_account`). Env-only providers act as `party_id NULL`, `jit_mode 'byo'` (`'none'` with
-   `NO_OIDC_ACCOUNTS`), `trust_acr false`.
+   `NO_OIDC_ACCOUNTS`), `trust_acr false`. Every `oidc` credential this task creates (JIT and
+   link) goes through task 004's trusted `CredentialService.LinkOIDCInTx` (decision U24), which
+   is also app-mfmanager's pre-provisioning path. The authenticated-session check of requirement 3
+   stays in this task, because `LinkOIDCInTx` itself does no authorization.
 2. **Never link by email.** An unknown identity whose email matches an existing identifier yields
    `account_exists_sign_in_and_link`; never link to managed or service principals.
 3. **Link and step-up modes** only from an authenticated session: the OAuth state carries the
@@ -46,6 +49,16 @@ Dependencies within the phase: hard on 003, 004 and 005 (session creation and th
    `trust_acr` (`managed` requires a party). The OIDC-config ambient admin check stays as is until
    phase `parties-profiles-and-bootstrap` (U9).
 7. Delete the email auto-link code paths and their configuration, if any.
+8. **Audit events (decision U21).** Use only the ops of
+   [API surface section 10.1](../notes/mod-users-api-surface.md):
+   - `create` with resource `user` for JIT users;
+   - `create` with resource `credential` for every new `oidc` credential;
+   - `login` with resource `session` for the callback's new session;
+   - `update` with resource `session` for an OIDC step-up.
+
+   Today's resolver emits `create`/`update` on `user_account` and `auth_oidc_identity`. Those
+   resources disappear. The callback runs before any `AuthContext` exists, so install the
+   unauthenticated-flow `AuthContext` of section 10.1 for its observations.
 
 ## Validation
 
@@ -60,7 +73,7 @@ Dependencies within the phase: hard on 003, 004 and 005 (session creation and th
 ## References
 
 - [API surface sections 2.4, 2.6, 7](../notes/mod-users-api-surface.md).
-- [Decisions U7, U8](../notes/decisions-and-resolutions.md).
+- [Decisions U7, U8, U21, U24](../notes/decisions-and-resolutions.md).
 - [Work packages, package 6](../notes/work-packages.md).
 - `docs/oidc-troubleshooting.md` — current behavior (reviewed in the doc-updates phase).
 

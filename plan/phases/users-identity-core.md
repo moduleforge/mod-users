@@ -20,8 +20,13 @@ principal, profile and session identities it establishes.
   `principals`, `profiles`, `system_actors` (with the seeded anonymous actor), `platform_settings`,
   `profile_policy_confirmations`, `apps.invite_only`, the SQL functions and MF003 to MF005, and the
   `ordertest` `AuthContext` identities (mod-core plan notes `mod-core-api-surface.md`).
-- mod-authz's and mod-audit's `api/service` adoption of `opctx.AuthContext` (needed for
-  `api/cmd/server` to compile).
+- Merged before this phase closes (decision U27, overview execution order U-X2 to U-X4):
+  - mod-authz phase 12 and mod-audit phase 20, which adopt `opctx.AuthContext` (needed for
+    `api/cmd/server` to compile);
+  - mod-authz phase 13 (`authz-identity-schema`), because the generated `accessible_*` functions
+    read its new grant columns.
+- mod-audit's op vocabulary (mod-audit API surface section 2.2), mapped per event in
+  [the API surface](../notes/mod-users-api-surface.md) section 10.1.
 - The ADR sections "Principals, users and the personal profile", "Credential gating and profile
   availability", "Sessions, tokens and the active profile", "Credentials", "Machine principals,
   system actors, guests and apps", "Assurance" and "Invariants: database versus service layer".
@@ -51,6 +56,8 @@ principal, profile and session identities it establishes.
   link and step-up only from authenticated sessions.
 - `authz.go` ported to the profile actor (full engine arms come in `users-authorization-engine`).
 - Display renderers for `user` and `profile`; facades, manifest and OpenAPI current.
+- Consumer-requested binding additions: `CredentialService.LinkOIDCInTx` (app-mfmanager) and
+  `usersservice.ReadPrincipalSummaries` (mod-tokens).
 - DB-invariant, session, liveness, revocation, credential and route tests green.
 
 ## Notes

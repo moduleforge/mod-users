@@ -43,12 +43,25 @@ list, revoke, `auth_time`). Parallel-eligible with task 006. Task 008 mounts the
    Masked lookups (404 for unauthorized reads) as today. The credential sub-routes come in the
    engine phase.
 5. **`DirectoryService`** `PrincipalSummaries` and `ProfileSummaries` (binding, API surface 6.3;
-   resolves followup `bHKv`), with no authorization inside.
+   resolves followup `bHKv`), with no authorization inside. Add the package-level, transaction-scoped
+   `usersservice.ReadPrincipalSummaries(ctx context.Context, db usersdb.DBTX, principalIDs []int64) (map[int64]PrincipalSummary, error)`
+   (binding, decision U23; mod-tokens request). It runs its queries on `db`, the caller's
+   connection or transaction, never on a pool. `DirectoryService.PrincipalSummaries` delegates to
+   it with the service's pool. It has the same semantics and no authorization, and unknown ids are
+   absent from the map. Add any query it needs to `model/queries/` and regenerate. mod-tokens'
+   phase 30 tasks consume it.
 6. **Display renderers (U19)**: `user` (person name, else primary email, else "Guest") and
    `profile` ("<holder name> (Personal)" or "<holder name> @ <party name>"), registered through
    mod-core's renderer registry.
 7. Export `MeHandler`, `PrincipalsHandler`, `RegisterMeRoutes`, `RegisterPrincipalRoutes` for
-   task 008. Emit `user`, `user_identifier`, `credential` observer events from the writes.
+   task 008. Emit `user`, `user_identifier`, `credential` observer events from the writes, with
+   only the ops of [API surface section 10.1](../notes/mod-users-api-surface.md) (decision U21):
+   - `update` on `user` for name, defaults, guest upgrade, disable and enable;
+   - `create`, `update` and `delete` on `user_identifier`;
+   - `create`, `update` (label, default profile) and `revoke` on `credential`.
+
+   Session revocations from `DELETE /v1/me/sessions/{uuid}` and principal disable go through task
+   005's helpers, which emit `revoke` on `session`. No other verb is allowed.
 
 ## Validation
 
@@ -57,12 +70,16 @@ list, revoke, `auth_time`). Parallel-eligible with task 006. Task 008 mounts the
   report).
 - `grep -rnE '/v1/self|SelfHandler|IdentitiesHandler' api/internal/handlers --include='*.go' | grep -v _test.go`
   matches only files task 008 deletes.
+- `grep -rn 'func ReadPrincipalSummaries' api/` shows the package-level function, and
+  `DirectoryService.PrincipalSummaries` calls it.
 - Behavior tests are task 010.
 
 ## References
 
 - [API surface sections 6.3, 7, 11](../notes/mod-users-api-surface.md).
-- [Decisions U1, U8, U11, U16, U19](../notes/decisions-and-resolutions.md).
+- [Decisions U1, U8, U11, U16, U19, U21, U23](../notes/decisions-and-resolutions.md).
+- mod-tokens plan worktree, `plan/notes/mod-tokens-api-surface.md` section 7 (U-a) and
+  `plan/notes/decisions-and-resolutions.md` T16: why the read must run on the caller's transaction.
 - [Work packages, package 7](../notes/work-packages.md).
 
 ## Checkpoint hints
