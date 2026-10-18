@@ -6,3 +6,7 @@ phases:
       slug: users-identity-core
       title: Users Identity Core
       tasks: []
+    - number: 7
+      slug: parties-profiles-and-bootstrap
+      title: Parties, Profiles and Bootstrap
+      tasks: []
