@@ -18,3 +18,7 @@ phases:
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
       tasks: []
+    - number: 10
+      slug: doc-updates
+      title: Documentation Updates
+      tasks: []
