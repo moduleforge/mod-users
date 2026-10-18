@@ -44,6 +44,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: credentials-operation-and-app-login-gate
+          title: Credentials Operation and App Login Gate
+          path: phase-08-users-authorization-engine/004-credentials-operation-and-app-login-gate.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
