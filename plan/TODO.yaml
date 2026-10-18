@@ -170,6 +170,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 7
+          slug: trusted-profile-admission
+          title: Trusted Profile Admission
+          path: phase-07-parties-profiles-and-bootstrap/007-trusted-profile-admission.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
