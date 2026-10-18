@@ -71,7 +71,17 @@ phases:
     - number: 10
       slug: doc-updates
       title: Documentation Updates
-      tasks: []
+      tasks:
+        - number: 1
+          slug: update-architecture-docs
+          title: Update Architecture Docs
+          path: phase-10-doc-updates/001-update-architecture-docs.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 11
       slug: users-identity-final
       title: Users Identity Final
