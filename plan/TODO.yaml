@@ -26,6 +26,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: token-carrier-and-auth-middleware
+          title: Token Carrier And Auth Middleware
+          path: phase-06-users-identity-core/003-token-carrier-and-auth-middleware.md
+          done: false
+          tier: opus-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
