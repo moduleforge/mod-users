@@ -258,6 +258,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: build-self-service-panels
+          title: Build Self Service Panels
+          path: phase-09-users-gui-and-frontend-contract/004-build-self-service-panels.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 10
       slug: doc-updates
       title: Documentation Updates
