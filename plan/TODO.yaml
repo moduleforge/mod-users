@@ -14,3 +14,7 @@ phases:
       slug: users-authorization-engine
       title: Users Authorization Engine
       tasks: []
+    - number: 9
+      slug: users-gui-and-frontend-contract
+      title: Users GUI and Frontend Contract
+      tasks: []
