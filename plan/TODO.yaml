@@ -34,6 +34,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: impersonation-sessions
+          title: Impersonation Sessions
+          path: phase-08-users-authorization-engine/003-impersonation-sessions.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
