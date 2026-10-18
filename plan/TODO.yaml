@@ -70,6 +70,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: outside-collaborators-and-compliance
+          title: Outside Collaborators and Continuous Compliance
+          path: phase-07-parties-profiles-and-bootstrap/003-outside-collaborators-and-compliance.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
