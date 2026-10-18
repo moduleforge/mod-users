@@ -82,6 +82,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: write-consumer-upgrade-notes
+          title: Write Consumer Upgrade Notes
+          path: phase-10-doc-updates/002-write-consumer-upgrade-notes.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 11
       slug: users-identity-final
       title: Users Identity Final
