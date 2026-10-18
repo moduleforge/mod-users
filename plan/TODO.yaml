@@ -10,3 +10,7 @@ phases:
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
       tasks: []
+    - number: 8
+      slug: users-authorization-engine
+      title: Users Authorization Engine
+      tasks: []
