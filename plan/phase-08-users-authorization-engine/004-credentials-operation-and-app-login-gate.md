@@ -54,7 +54,7 @@ Dependency: requires task 001. It can run in parallel with tasks 002, 003 and 00
    - Operator with a wildcard grant: lists, issues and revokes credentials for a service account and installs an SSH key for a user.
    - Party admin with an owned-scope grant: manages credentials of a party-owned service account, and is refused for a personal user's credentials.
    - Personal-profile owner: rotates its self-owned service account's API key; another user is refused.
-   - Stale `auth_time` yields `users.step_up_required`.
+   - Stale `auth_time` yields `users.step_up_required` as the shared mod-core `apiresp` action-required error (not a local rendering).
    - Revocation ends dependent sessions on the next request.
    - `invite_only` app: a profile without a `login` grant is locked with `users.app_login_not_granted`. A `login` grant through an actor group admits it, and so does a wildcard holder. A non-invite-only app is unaffected.
    - Route order tests use mod-core's `AuthContext` identities.

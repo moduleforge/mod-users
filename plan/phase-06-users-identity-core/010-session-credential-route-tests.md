@@ -41,7 +41,7 @@ and fixtures in place, so phase-exit checks can run together).
 4. **Credentials**: password, email OTP (created on identifier verification), SSH key and API key
    flows; `PUT /v1/me` update shape (successor of the deleted
    `shape_self_update_integration_test.go`); `users.last_credential`; self-service writes refused past
-   `AUTH_SELF_SERVICE_MAX_AUTH_AGE` with `users.step_up_required`; guest upgrade.
+   `AUTH_SELF_SERVICE_MAX_AUTH_AGE` with `users.step_up_required`, asserting the response is the shared mod-core `apiresp` action-required error as rendered by `WriteError` (status 409, action code and details); guest upgrade.
 5. **OIDC**: no email link (`account_exists_sign_in_and_link`); JIT `byo`, `managed` (confined
    credential, `idp_jit` profile), `none`; link and step-up refused without an authenticated
    session; never linking to managed or service principals.

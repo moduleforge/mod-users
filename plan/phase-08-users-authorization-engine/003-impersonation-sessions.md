@@ -58,7 +58,7 @@ Dependency: requires task 001, because the `impersonate` operation is authorized
    - An Acme party admin with an owned-scope `manage` grant on Acme can impersonate an Acme party profile. The same admin cannot impersonate a personal profile or a profile of another party (403).
    - Impersonating a personal profile requires operator authority: an operator-party profile with a wildcard `impersonate` or `manage` grant.
    - The own arm never confers `impersonate`.
-   - Stale `auth_time` yields 409 `users.step_up_required`.
+   - Stale `auth_time` yields 409 `users.step_up_required`, the shared mod-core `apiresp` action-required error rendered by `WriteError`.
    - The TTL and renewal cap are enforced.
    - Ending the parent session ends the child (`parent_session_ended`).
    - Switch and fork inside an impersonation session are refused.

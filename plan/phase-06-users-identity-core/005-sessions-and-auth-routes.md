@@ -53,6 +53,7 @@ depends on its session list and revocation. Task 008 mounts the routes.
    write), `POST /fork`, `POST /step-up/password`, `POST /step-up/email-code/request`, `POST
    /step-up/email-code/verify`, `POST /logout` (revokes with `logout`). Step-up (U8) adds or
    re-verifies a factor, recomputes `acr`, sets `auth_time = now()`, returns a fresh access token.
+   Any step-up refusal on these routes uses the shared `apiresp` action-required error added in mod-core phase 1 (followup `Uure`), not a local response shape.
    `POST /step-up/oidc/{provider}/start` is provided by task 006; task 008 mounts it here.
 8. Expose `SessionService` methods task 007 needs: list a principal's sessions and revoke one
    session; and the revocation helper task 007's principal disable uses (`principal_disabled`).

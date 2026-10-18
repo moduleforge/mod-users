@@ -327,7 +327,7 @@ and `coreAuthz.OwnerScopedTypeAuthorizer`. Semantics after the engine phase:
 
 1. Actor = `opctx.ProfileID`; none: `ErrUnauthenticated`.
 2. Assurance gate when `SessionID != 0 || CredentialID != 0` (U14): `ACR >= op.MinACR`, and
-   `now - AuthTime <= op.MaxAuthAge` when set (else action-required `users.step_up_required`).
+   `now - AuthTime <= op.MaxAuthAge` when set (else action-required `users.step_up_required`, returned as the shared `apiresp` action-required error added in mod-core phase 1 (followup `Uure`); wrap or construct that type, never a mod-users-local rendering).
 3. Wildcard arm: actor chain holds a grant with `scope = 'entity' AND target_id IS NULL`.
 4. Entity and type-entity arm (instance semantics unchanged), `scope = 'entity'` only.
 5. Owned-scope arm: `scope = 'owned' AND target_id = target.owner_id` and type match
@@ -528,7 +528,7 @@ Removed routes: `/v1/self`, `/v1/self/identities*`, `/v1/self/credential*`, `/v1
 
 New error and action codes: `users.invalid_credentials` (401), `users.session_revoked` (401),
 `users.profile_unavailable` (401, lock reason in details), `users.refresh_reuse` (401),
-`users.step_up_required` (409 action, existing), `users.email_unverified` (403 action, existing),
+`users.step_up_required` (409 action; built on the shared mod-core `apiresp` action-required error, so `WriteError` renders it uniformly, including party `min_acr` refusals and impersonation/credentials `max_auth_age` refusals), `users.email_unverified` (403 action, existing),
 `users.app_login_not_granted` (403), `users.byo_identity_disabled` (403),
 `users.guest_upgrade_required` (409), `users.person_not_owned` (409),
 `users.holder_not_admissible` (409), `users.profile_suspended` (409, `AdmitInTx`),

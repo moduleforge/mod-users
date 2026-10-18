@@ -48,6 +48,7 @@ Dependency: requires task 001. It can run in parallel with tasks 003, 004 and 00
    - `impersonate` is never conferred on an entity the personal profile owns.
 4. **Assurance gate.**
    - `ACR` below `min_acr` yields `users.step_up_required`.
+   - The refusal satisfies the shared mod-core `apiresp` action-required type (`errors.As`), including when wrapped, and `apiresp.WriteError` renders it as 409 with action `users.step_up_required`.
    - `AuthTime` older than `max_auth_age` on `impersonate` and `credentials` yields the same error, and fresh `AuthTime` passes.
    - The system-actor context (`opctx.WithSystemActor`) and the anonymous context skip the gate.
    - A client-credentials context (`CredentialID != 0`, `SessionID == 0`) is gated.

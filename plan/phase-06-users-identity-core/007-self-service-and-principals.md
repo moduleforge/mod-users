@@ -32,8 +32,9 @@ list, revoke, `auth_time`). Parallel-eligible with task 006. Task 008 mounts the
    /profiles/{uuid}/accept`, `/decline`, `/leave` are phase `parties-profiles-and-bootstrap`;
    `POST /credentials/oidc/{provider}/start` is task 006's handler, mounted by task 008.
 2. **Self-service authority**: authorize on `session.principal = target`, not grants. Every
-   self-service write requires `auth_time` within `AUTH_SELF_SERVICE_MAX_AUTH_AGE`, else 409
-   action `users.step_up_required` (U8).
+   self-service write requires `auth_time` within `AUTH_SELF_SERVICE_MAX_AUTH_AGE`, else the
+   action `users.step_up_required` (U8), returned as the shared `apiresp` action-required error added in mod-core phase 1 (followup `Uure`) so `apiresp.WriteError`
+   renders it (409); no mod-users-local rendering.
 3. **Guest upgrade** (moved here from work package 5 because its route is `/v1/me/upgrade`): in one
    transaction, clear `is_guest`, create the user's person and personal profile (U11), add the email
    identifier and password, revoke the `anon` credential with `guest_upgraded`.

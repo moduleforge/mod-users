@@ -33,7 +33,7 @@ This task runs first in the phase. Tasks 002 to 005 depend on it and can run in 
    - `ACR >= MinACR`
    - `now - AuthTime <= MaxAuthAge`, when `MaxAuthAge` is non-zero
 
-   A failure returns the existing action-required error `users.step_up_required` (409). System-actor contexts and the anonymous context skip the gate. The gate runs before any grant arm. Keep the existing prelude behavior for unknown slugs.
+   A failure returns the action `users.step_up_required` as the shared `apiresp` action-required error added in mod-core phase 1 (followup `Uure`) (renders 409 through `apiresp.WriteError`), constructed or wrapped in the engine; the engine defines no mod-users-local rendering. Because `WriteError` renders it uniformly, the refusal also reaches clients correctly when raised inside another module's service. System-actor contexts and the anonymous context skip the gate. The gate runs before any grant arm. Keep the existing prelude behavior for unknown slugs.
 4. **Wildcard arm.** The actor chain (the profile and its actor groups) holds a grant with `scope = 'entity' AND target_id IS NULL`.
 5. **Entity and type-entity arm.** Instance semantics stay as they are: a grant on the type entity confers authority over its instances. This arm only considers grants with `scope = 'entity'`.
 6. **Owned-scope arm.** Matches a grant held by the actor chain with:
@@ -79,7 +79,7 @@ architectural_impact: true
 
 ## Assumptions
 
-- Phases 6 and 7 are complete. Phase 6 added the minimal engine port, `opctx.AuthContext` population (`SessionID`, `CredentialID`, `ACR`, `AuthTime`) and the `users.step_up_required` action error.
+- Phases 6 and 7 are complete. Phase 6 added the minimal engine port, `opctx.AuthContext` population (`SessionID`, `CredentialID`, `ACR`, `AuthTime`) and the `users.step_up_required` action, built on the shared mod-core action-required error.
 - mod-core's `coreAuthz.OwnerScopedTypeAuthorizer` interface and the `authz.AuthorizeTypeIn` helper exist. Until this task lands, the helper falls back to `AuthorizeType` (U20).
 - Integration tests compose mod-core, mod-authz and mod-users migrations (`make -C model compose`).
 

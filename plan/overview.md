@@ -123,6 +123,7 @@ lists every constraint that touches a mod-users phase, with the participant's ow
 | U-X10 | app-mfmanager 80 starts after mod-users 6 to 8 (it uses `LinkOIDCInTx` from 6/004), mod-authz 12 to 14 and mod-audit 20. app-mfmanager 81 starts after mod-users 9. | app-mfmanager E1, E3 |
 | U-X11 | mod-authz 16, mod-audit 22 and mod-workflows 52 start after mod-users 8. | mod-authz H7, mod-audit E6, mod-workflows H4 |
 | U-X12 | mod-users 9 follows 8. 10 follows the code phases. 11 follows 10 and merges before mod-core 5, which runs last, after every participant's final phase. | this plan, mod-core overview |
+| U-X13 | **The mod-core phase 1 task adding the shared `apiresp` action-required error (followup `Uure`) merges before mod-users 6 task 005 and 007 start.** Phases 6 and 8 return or wrap it for every `users.step_up_required` refusal (U8, U14); it replaces any mod-users-local rendering and lifts the earlier plain 409/500 limitation for step-up refusals raised inside other modules' services. | mod-core 1 (`Uure`) |
 
 Recommended global interleaving (it satisfies every constraint above and those in the other
 participants' overviews):
