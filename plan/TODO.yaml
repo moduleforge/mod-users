@@ -76,6 +76,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 8
+          slug: server-wiring-and-surface-removal
+          title: Server Wiring And Surface Removal
+          path: phase-06-users-identity-core/008-server-wiring-and-surface-removal.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
