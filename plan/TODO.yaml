@@ -24,6 +24,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: authorization-engine-tests
+          title: Authorization Engine Tests
+          path: phase-08-users-authorization-engine/002-authorization-engine-tests.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
