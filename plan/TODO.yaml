@@ -16,6 +16,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: rewrite-queries-and-generated-code
+          title: Rewrite Queries And Generated Code
+          path: phase-06-users-identity-core/002-rewrite-queries-and-generated-code.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
