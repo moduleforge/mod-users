@@ -90,6 +90,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: party-aware-ssh-profile-derivation
+          title: Party-Aware SSH Profile Derivation
+          path: phase-07-parties-profiles-and-bootstrap/005-party-aware-ssh-profile-derivation.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
