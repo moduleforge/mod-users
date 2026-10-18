@@ -80,6 +80,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: setup-token-bootstrap
+          title: Setup-Token Bootstrap
+          path: phase-07-parties-profiles-and-bootstrap/004-setup-token-bootstrap.md
+          done: false
+          tier: opus-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
