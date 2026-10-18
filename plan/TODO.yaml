@@ -268,6 +268,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: build-bootstrap-and-oidc-config-pages
+          title: Build Bootstrap and OIDC Config Pages
+          path: phase-09-users-gui-and-frontend-contract/005-build-bootstrap-and-oidc-config-pages.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 10
       slug: doc-updates
       title: Documentation Updates
