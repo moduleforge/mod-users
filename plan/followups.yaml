@@ -1382,3 +1382,11 @@ items:
           The goroutine captures the original *http.Request and calls r.WithContext(ctx) after the handler has returned. Only the context is used in sendEmailCode (verified: r is read for r.Context() only), so there is no body-use-after-close issue today, but a future edit that reads r.Body or headers in the background path would race with server teardown.
         recommendation:
           Pass the detached context directly to sendEmailCode (change its signature to take ctx) so the request object cannot escape the handler.
+    - title: 'GUI: party admin and start-impersonation UI'
+      id: wzck
+      date: "2026-10-18"
+      tags:
+        - type:enhancement
+        - priority:medium
+        - effort:large
+      text: 'Identity-model plan scoping gap: mod-users phase 9 builds the profile chrome and self-service panels but no party-administration screens (invite members, party authn policies, credential authorizations, confinements, outside-collaborator confirmations) and no UI to start an impersonation (only the active-impersonation banner: renew/end). The client methods for /v1/impersonations are added in phase 9 task 001. Plan and build these screens after the identity-model plan lands. See docs/architecture/identity-model.md.'
