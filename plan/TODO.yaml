@@ -86,6 +86,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 9
+          slug: db-invariant-integration-tests
+          title: DB Invariant Integration Tests
+          path: phase-06-users-identity-core/009-db-invariant-integration-tests.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
