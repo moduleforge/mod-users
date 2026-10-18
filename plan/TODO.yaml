@@ -13,7 +13,17 @@ phases:
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
-      tasks: []
+      tasks:
+        - number: 1
+          slug: rewrite-authorization-engine
+          title: Rewrite Authorization Engine
+          path: phase-08-users-authorization-engine/001-rewrite-authorization-engine.md
+          done: false
+          tier: opus-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
