@@ -29,7 +29,17 @@ phases:
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
-      tasks: []
+      tasks:
+        - number: 1
+          slug: profile-lifecycle-and-invitations
+          title: Profile Lifecycle and Invitations
+          path: phase-07-parties-profiles-and-bootstrap/001-profile-lifecycle-and-invitations.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
