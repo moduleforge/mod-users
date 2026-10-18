@@ -46,6 +46,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 5
+          slug: sessions-and-auth-routes
+          title: Sessions And Auth Routes
+          path: phase-06-users-identity-core/005-sessions-and-auth-routes.md
+          done: false
+          tier: opus-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
