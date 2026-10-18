@@ -1390,3 +1390,12 @@ items:
         - priority:medium
         - effort:large
       text: 'Identity-model plan scoping gap: mod-users phase 9 builds the profile chrome and self-service panels but no party-administration screens (invite members, party authn policies, credential authorizations, confinements, outside-collaborator confirmations) and no UI to start an impersonation (only the active-impersonation banner: renew/end). The client methods for /v1/impersonations are added in phase 9 task 001. Plan and build these screens after the identity-model plan lands. See docs/architecture/identity-model.md.'
+    - title: Sign-up email code lost on first send
+      id: DJ7U
+      date: "2026-10-18"
+      tags:
+        - type:bug
+        - priority:medium
+        - effort:small
+        - cross-repo/origin:flow-accounts
+      text: 'Observed from a flow-accounts local sign-up on mod-users commit e107d087 (the commit flow-accounts pins). After POST /v1/auth/register the server logs `email_code: get user account error="context canceled"` (api/internal/handlers/auth/emailcode.go, sendEmailCode) and no verification mail reaches the local mail sink, so the verify-email page has no code to enter. The send runs with the request context, which the browser cancels as soon as the registration response navigates the page. Workaround that works every time: "Send a new code" on the verify-email page. Later commits appear to detach the send (dispatchEmailCode uses context.WithoutCancel), so a pin bump likely resolves it; not verified against a build of the newer commit. Expected: the first verification mail arrives after sign-up. Consumer-side follow-up: bump the mod-users pin in flow-accounts versions.lock.yaml once a fixed commit is confirmed.'
