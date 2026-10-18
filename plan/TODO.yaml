@@ -278,6 +278,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 6
+          slug: review-gui-exports-and-contract-docs
+          title: Review GUI Exports and Contract Docs
+          path: phase-09-users-gui-and-frontend-contract/006-review-gui-exports-and-contract-docs.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 10
       slug: doc-updates
       title: Documentation Updates
