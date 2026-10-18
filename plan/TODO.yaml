@@ -96,6 +96,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 10
+          slug: session-credential-route-tests
+          title: Session Credential Route Tests
+          path: phase-06-users-identity-core/010-session-credential-route-tests.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
