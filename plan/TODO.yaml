@@ -56,6 +56,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 6
+          slug: oidc-resolver
+          title: OIDC Resolver
+          path: phase-06-users-identity-core/006-oidc-resolver.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
