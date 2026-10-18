@@ -147,7 +147,17 @@ phases:
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
-      tasks: []
+      tasks:
+        - number: 1
+          slug: rebuild-api-client-and-auth-context
+          title: Rebuild API Client and Auth Context
+          path: phase-09-users-gui-and-frontend-contract/001-rebuild-api-client-and-auth-context.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 10
       slug: doc-updates
       title: Documentation Updates
