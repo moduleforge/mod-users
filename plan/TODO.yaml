@@ -66,6 +66,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 7
+          slug: self-service-and-principals
+          title: Self Service And Principals
+          path: phase-06-users-identity-core/007-self-service-and-principals.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
