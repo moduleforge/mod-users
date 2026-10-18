@@ -238,6 +238,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: build-profile-chrome
+          title: Build Profile Chrome
+          path: phase-09-users-gui-and-frontend-contract/002-build-profile-chrome.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 10
       slug: doc-updates
       title: Documentation Updates
