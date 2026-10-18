@@ -248,6 +248,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: port-auth-pages-to-session-api
+          title: Port Auth Pages to Session API
+          path: phase-09-users-gui-and-frontend-contract/003-port-auth-pages-to-session-api.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 10
       slug: doc-updates
       title: Documentation Updates
