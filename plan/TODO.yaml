@@ -36,6 +36,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 4
+          slug: users-identifiers-credentials-challenges
+          title: Users Identifiers Credentials Challenges
+          path: phase-06-users-identity-core/004-users-identifiers-credentials-challenges.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
