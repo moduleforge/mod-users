@@ -50,6 +50,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: party-gating-administration
+          title: Party Gating Administration
+          path: phase-07-parties-profiles-and-bootstrap/002-party-gating-administration.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
