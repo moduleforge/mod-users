@@ -92,6 +92,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: review-repository-docs
+          title: Review Repository Docs
+          path: phase-10-doc-updates/003-review-repository-docs.md
+          done: false
+          tier: sonnet-low
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 11
       slug: users-identity-final
       title: Users Identity Final
