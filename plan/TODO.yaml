@@ -136,3 +136,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: reconcile-superseded-followups
+          title: Reconcile Superseded Mod-Users Followups
+          path: phase-11-users-identity-final/002-reconcile-superseded-followups.md
+          done: false
+          tier: haiku-med
+          git:
+            branch: null
+            commit: []
+            merge: null
