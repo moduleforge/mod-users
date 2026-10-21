@@ -1399,3 +1399,12 @@ items:
         - effort:small
         - cross-repo/origin:flow-accounts
       text: 'Observed from a flow-accounts local sign-up on mod-users commit e107d087 (the commit flow-accounts pins). After POST /v1/auth/register the server logs `email_code: get user account error="context canceled"` (api/internal/handlers/auth/emailcode.go, sendEmailCode) and no verification mail reaches the local mail sink, so the verify-email page has no code to enter. The send runs with the request context, which the browser cancels as soon as the registration response navigates the page. Workaround that works every time: "Send a new code" on the verify-email page. Later commits appear to detach the send (dispatchEmailCode uses context.WithoutCancel), so a pin bump likely resolves it; not verified against a build of the newer commit. Expected: the first verification mail arrives after sign-up. Consumer-side follow-up: bump the mod-users pin in flow-accounts versions.lock.yaml once a fixed commit is confirmed.'
+    - title: Owned-scope arm must exclude owner row
+      id: Rx8b
+      date: "2026-10-21"
+      tags:
+        - type:bug
+        - priority:medium
+        - cross-repo/origin:core
+        - effort:unspecified
+      text: 'mod-core identity-model-impl (phase 10 task 001, finding KUfk) fixed an authorization bypass in the generated owned-scope arm: an owned-scope grant on a self-owned entity (for example a user whose owner_id is itself) reached the owner''s own row. mod-core now adds `e.id <> e.owner_id` to the owned-scope arm of the generator output and to the authztest EntitySemantic.Authorize single-row query. mod-users'' production Authorizer (checkGrantOrOwn and the owned-scope query it uses) must apply the same exclusion, with an integration test granting owned-scope on a self-owned user and asserting the user''s own row is denied. mod-users plan identity-model-impl phase 08 task 001 should absorb this; if that task is already written, add it to its requirements.'
