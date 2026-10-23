@@ -95,7 +95,7 @@ phases:
           slug: server-wiring-and-surface-removal
           title: Server Wiring And Surface Removal
           path: phase-06-users-identity-core/008-server-wiring-and-surface-removal.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Deleted superseded self, identities, user_accounts, assume, apps, ssh_keys handlers and services, api/internal/users, api/users. Ported oidc_config.go. Facades in api/handlers/handlers.go and usersservice re-exports; cmd/server wired; moduleforge.module.yaml rewritten; api/openapi.yaml rewritten. make build.api passes; test-file vet errors remain for task 010.
           git:
