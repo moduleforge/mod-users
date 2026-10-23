@@ -90,7 +90,7 @@ phases:
             branch: plan/identity-model-impl-06-007
             commit:
                 - b7addc9
-            merge: null
+            merge: bf4704575cff17caf3d7c2e382e6ab2a9b1c94f4
         - number: 8
           slug: server-wiring-and-surface-removal
           title: Server Wiring And Surface Removal
