@@ -108,3 +108,28 @@ Tasks 005, 006 and 007 depend on this task.
 - After `UserService` creation primitives.
 - After identifiers and credentials (including `RevokeInTx` and `IssueAPIKeyInTx`).
 - After challenges and the old-service deletions.
+
+## Status
+
+Outcome: succeeded (2026-10-23). `cd api && go build ./internal/service/... ./internal/sshkey/...` passes; the old-name grep and the `assume` grep return nothing; `cred_oidc` is inserted only by `CredentialService.LinkOIDCInTx`.
+
+Validation: build passed (siblings resolved through a staging directory of symlinks under `.flow/siblings`, `MODULEFORGE_SIBLINGS_DIR` set); grep for `UserAccount|user_accounts|SSHKeyService` in non-test code: no matches; grep for `Observe(AfterCommit)?(... "assume")`: no matches. Every observation op in the new files is one of `create`, `update`, `delete`, `revoke` on resources `user`, `user_identifier`, `credential`, `session`.
+
+Files (all under `api/internal/service/`): `errors.go`, `helpers.go`, `user_service.go` (creation primitives and identifiers), `credential_service.go`, `challenge_service.go`, `ssh_key_resolver.go` (rewritten); deleted `user_accounts.go`, `ssh_keys.go`, `identities.go`. New unit tests with fakes: `helpers_test.go`, `identity_fakes_test.go`, `user_service_test.go`, `credential_service_test.go`, `challenge_service_test.go`, `ssh_key_resolver_credential_test.go` (all pass with the stale test files below moved aside).
+
+Decisions and notes for later tasks:
+
+- Stale tests left for task 010: `identities_test.go`, `ssh_key_resolver_test.go`, `ssh_keys_test.go`, `user_accounts_*_test.go` still reference deleted symbols, so `go test ./internal/service` does not compile until 010 removes or rewrites them. `sqlstate_test.go` is unaffected.
+- Facade: `api/usersservice/service.go` still re-exports the deleted types, so it does not build. Task 008 owns it and must re-export `LinkOIDCInTx`, `LinkOIDCInput`, `LinkedCredential`, `IssueAPIKeyInput`, `IssuedAPIKey`, `ErrOIDCIdentityInUse` and the new services (`UserService`, `CredentialService`, `ChallengeService`, plus `ErrUnknownSSHKey`, `ErrSSHKeyNotAuthorized`, `SSHCredential`).
+- Constructors (all take the querier(s) directly; there is no pool parameter because every write method takes the caller's transaction): `NewCredentialService(q, coreQ, az, obs, hashPassword)`, `NewUserService(q, coreQ, az, obs, naturalPersonServicer, credentialService)`, `NewChallengeService(q, emailSender)` (q must be pool-backed), `NewSSHKeyResolver(q, coreQ)`. `ChallengeService` is new and not in the API surface 6.3 service list; the manifest needs a `challengeService` entry.
+- All write methods are `...InTx` and emit in-transaction observations only; no `ObserveAfterCommit` is called, since the caller owns the commit.
+- Unauthenticated sign-up: `CreateBYOUserInTx` and `CreateGuestUserInTx` stamp `created_by_profile_id` from the acting profile on ctx and fall back to NULL when ctx has none (the profile does not exist yet). Their observations, and the person record's, run as the new personal profile (`CreatedUser.ActingContext(ctx)` gives callers the same context).
+- `CreateManagedUserInTx` authorizes `create` on the `user` type within the party (fails closed with no authorizer); BYO and guest creation do not authorize.
+- API key secrets are stored as `HashToken` (SHA-256 hex) and verified with `TokenMatchesHash`; client ids are `mfk_` + 32 hex, secrets `mfs_` + 64 hex. Task 005's client-credentials grant must use `TokenMatchesHash`. Anon device tokens use the same hash.
+- Numeric codes (`email_code`, `verify_identifier`, `step_up`) are bcrypt-hashed and attempt-bounded (`VerifyCode`, bound 5, counter and consumption commit on the pool outside any caller transaction); `password_reset` and `login_handoff` are 256-bit tokens hashed with `HashToken` and consumed with `ConsumeTokenInTx` (handoff TTL fixed at 60 s).
+- `RevokeInTx` also writes `revoke` `session` observations for the sessions it ends; `RemoveInTx` is the self-service form with the last-interactive-credential guard (`ErrLastCredential`); `RevokeInTx` itself has no guard (guest upgrade and departure revoke the last credential legitimately).
+- `AuthContextForOwner` ignores `ownerID` until the parties phase; it returns the personal-profile context, refusing a confined credential or a profile that `credential_profile_availability` does not call `available` with `ErrSSHKeyNotAuthorized` (`*SSHKeyNotAuthorizedError` carries the party uuid).
+- Identifier removal is blocked by the schema once an identifier ever had a bound credential: filed as a finding (RemoveIdentifierInTx returns `ErrIdentifierInUse`, 409 `users.identifier_in_use`, not in API surface section 7).
+- New codes beyond section 7: `users.password_exists`, `users.identifier_in_use`, `users.principal_not_service_account`, `users.email_invalid`, `users.credential_label_*`.
+
+Behavior beyond these documents that tasks 009 and 010 must cover with a real database: the deferred personal-profile check passing for BYO and guest creation and failing for a managed user given a profile; `CreateBYOUserInTx` end to end with mod-core's `NaturalPersonService.CreateInTx` and mod-audit's `MF401` check under the new profile; `LinkOIDCInTx` clash on `cred_oidc_active_issuer_subject_uq`; `RevokeInTx` ending sessions that hold the credential as a factor; `RemoveIdentifierInTx` savepoint behavior against the real FK; `VerifyCode` attempt counting under concurrent guesses.
