@@ -11,7 +11,7 @@ phases:
           slug: rewrite-baseline-schema
           title: Rewrite Baseline Schema
           path: phase-06-users-identity-core/001-rewrite-baseline-schema.md
-          done: false
+          done: true
           tier: opus-high
           digest: 'Rewrote 0100_baseline.sql so everything in API surface sections 2 and 3 lives in the mod_users schema (tables, invariant triggers incl. two on public.profiles, availability, liveness and ACR functions, challenge cooldown). Folded and deleted 0101-0104; added sqlc renames. make verify + lint pass against mod-core, mod-authz (phase 13 merged), mod-audit plan worktrees; 84-check smoke suite passes. Judgment calls beyond the sketch: trigger-maintained active/principal mirrors on more subtables; session_factors.asserted_acr column; OUT-parameter liveness functions for sqlc. Obsolete query files deleted early and oidc queries schema-qualified; model/db left stale for task 002. Two findings filed (2yby identifier deletion vs bound credentials; tC3F sqlc schema scope).'
           git:
