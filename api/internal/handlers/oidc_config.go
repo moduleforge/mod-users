@@ -32,7 +32,7 @@ import (
 // in-memory fake without importing pgx; production wires *db.Queries,
 // which satisfies this interface by virtue of sqlc's emit_interface.
 type OIDCConfigQuerier interface {
-	GetOIDCConfig(ctx context.Context) (db.OidcConfig, error)
+	GetOIDCConfig(ctx context.Context) (db.GetOIDCConfigRow, error)
 	// UpdateOIDCConfig persists the singleton's opt-out flag. The
 	// per-provider enabled JSONB that used to live here was removed in
 	// 9.16 — see SetOIDCProviderEnabled on the providers querier.
@@ -49,7 +49,7 @@ type OIDCConfigQuerier interface {
 	// build the merged registry read by buildProviderViews and
 	// buildStatusProviders (since 9.16 the enabled flag lives on each
 	// row, so status needs per-row visibility).
-	ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error)
+	ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error)
 }
 
 // OIDCConfigDeps is the set of collaborators the OIDC config handler
@@ -82,7 +82,7 @@ type OIDCConfigHandler struct {
 	deps OIDCConfigDeps
 
 	mu           sync.RWMutex
-	cachedDB     db.OidcConfig
+	cachedDB     db.GetOIDCConfigRow
 	cachedBoot   config.BootStateResult
 	currentPlain string // plaintext setup token kept in-memory for /setup-token; cleared on confirm.
 }

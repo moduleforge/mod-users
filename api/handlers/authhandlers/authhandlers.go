@@ -14,64 +14,61 @@ import (
 
 	"github.com/moduleforge/mod-users/api/auth"
 	"github.com/moduleforge/mod-users/api/config"
-	"github.com/moduleforge/mod-users/api/email"
 	inner "github.com/moduleforge/mod-users/api/internal/handlers/auth"
-	innersvc "github.com/moduleforge/mod-users/api/internal/service"
+	"github.com/moduleforge/mod-users/api/usersservice"
 )
 
-// Handler is the local-auth and OIDC-callback request handler.
+// Handler is the local-auth request handler (the /v1/auth routes).
 type Handler = inner.Handler
 
-// OIDCHandler is the OIDC-flow handler (start, callback, list providers).
+// OIDCHandler is the OIDC-flow handler: start and callback of the /v1/auth
+// sign-in, plus the link-credential and step-up starts.
 type OIDCHandler = inner.OIDCHandler
 
-// FirstUserHookFn is the type for the first-user registration hook.
-type FirstUserHookFn = inner.FirstUserHookFn
+// Sender delivers the password-reset links; email.Sender satisfies it.
+type Sender = inner.Sender
 
-// New constructs a Handler for the /v1/auth route group.
+// OIDCRoutes is what RegisterRoutes needs from the OIDC handler.
+// *OIDCHandler satisfies it.
+type OIDCRoutes = inner.OIDCRoutes
+
+// New constructs a Handler for the /v1/auth route group. oauth lists the
+// enabled OIDC providers for GET /providers and may be nil.
 func New(
 	pool *pgxpool.Pool,
 	queries *usersdb.Queries,
 	coreQ *coredb.Queries,
-	jwtSecret, issuer string,
-	sender email.Sender,
+	users *usersservice.UserService,
+	creds *usersservice.CredentialService,
+	challenges *usersservice.ChallengeService,
+	sessions *usersservice.SessionService,
+	oauth *auth.OAuth,
+	sender Sender,
 	guiBase string,
 ) *Handler {
-	return inner.New(pool, queries, coreQ, jwtSecret, issuer, sender, guiBase)
+	return inner.New(pool, queries, coreQ, users, creds, challenges, sessions, oauth, sender, guiBase)
 }
 
-// NewWithSigner constructs a Handler that always signs local tokens with
-// signer (see auth.NewSigner). Prefer it over New for any app that may run with
-// JWT_ALG=EdDSA; a nil signer is an error.
-func NewWithSigner(
-	pool *pgxpool.Pool,
-	queries *usersdb.Queries,
-	coreQ *coredb.Queries,
-	signer *auth.Signer,
-	issuer string,
-	sender email.Sender,
-	guiBase string,
-) (*Handler, error) {
-	return inner.NewWithSigner(pool, queries, coreQ, signer, issuer, sender, guiBase)
-}
-
-// RegisterRoutes mounts /v1/auth/* routes on r. oidc may be nil when OIDC
-// is not configured (routes that need an OIDCHandler are skipped).
-func RegisterRoutes(r chi.Router, h *Handler, oidc *OIDCHandler) {
+// RegisterRoutes mounts /v1/auth/* routes on r. oidc may be nil (an untyped
+// nil) when OIDC is not configured (the two OIDC routes are then skipped).
+func RegisterRoutes(r chi.Router, h *Handler, oidc OIDCRoutes) {
 	inner.RegisterRoutes(r, h, oidc)
 }
 
-// NewOIDCHandler constructs an OIDCHandler with a connection pool and observer
-// group for production use. It delegates to the internal constructor that
-// supports the link-mode callback path.
+// NewOIDCHandler constructs the OIDCHandler. resolver is normally
+// auth.NewOIDCResolver over the module's queries; obs may be nil.
 func NewOIDCHandler(
 	pool *pgxpool.Pool,
 	queries *usersdb.Queries,
+	coreQ *coredb.Queries,
 	oauth *auth.OAuth,
-	resolver *auth.UserResolver,
-	userSvc *innersvc.UserAccountService,
-	cfg *config.Config,
+	resolver *auth.OIDCResolver,
+	users *usersservice.UserService,
+	creds *usersservice.CredentialService,
+	challenges *usersservice.ChallengeService,
+	sessions *usersservice.SessionService,
 	obs *observer.ObserverGroup,
+	cfg *config.Config,
 ) *OIDCHandler {
-	return inner.NewOIDCHandlerWithPool(pool, queries, oauth, resolver, userSvc, cfg, obs)
+	return inner.NewOIDCHandler(pool, queries, coreQ, oauth, resolver, users, creds, challenges, sessions, obs, cfg)
 }

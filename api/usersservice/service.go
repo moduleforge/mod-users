@@ -1,51 +1,162 @@
-// Package usersservice is the public facade for the users-module UserAccountService.
-// It re-exports the service type and constructor from internal/service.
+// Package usersservice is the public facade for the users-module services.
+// It re-exports the service types and constructors from internal/service.
 package usersservice
 
 import (
 	"context"
+	"time"
 
-	coreAuthz "github.com/moduleforge/core-api/authz"
-	"github.com/moduleforge/core-api/observer"
-	coreservice "github.com/moduleforge/core-api/service"
-	"github.com/moduleforge/core-api/txhelper"
-	"github.com/moduleforge/core-api/types"
-	coredb "github.com/moduleforge/core-model/db"
-	usersdb "github.com/moduleforge/mod-users/model/db"
+	"github.com/jackc/pgx/v5/pgxpool"
 	gossh "golang.org/x/crypto/ssh"
 
+	coreAuthz "github.com/moduleforge/core-api/authz"
+	"github.com/moduleforge/core-api/display"
+	"github.com/moduleforge/core-api/observer"
+	coreservice "github.com/moduleforge/core-api/service"
+	coredb "github.com/moduleforge/core-model/db"
+	usersdb "github.com/moduleforge/mod-users/model/db"
+
+	"github.com/moduleforge/mod-users/api/auth"
+	"github.com/moduleforge/mod-users/api/config"
+	"github.com/moduleforge/mod-users/api/email"
 	inner "github.com/moduleforge/mod-users/api/internal/service"
 )
 
-// UserAccountService manages user account CRUD.
-type UserAccountService = inner.UserAccountService
+// UserService creates users and serves the /v1/me and /v1/principals
+// operations. Wire the self-service dependencies with WithSelfService.
+type UserService = inner.UserService
 
-// NewUserAccountService constructs a UserAccountService.
-func NewUserAccountService(
-	pool txhelper.DB,
+// NewUserService constructs a UserService. np creates the user's own
+// natural_person; creds creates the guest anon and email_otp credentials. az
+// guards only CreateManagedUserInTx. Call WithSelfService on the result before
+// serving /v1/me or /v1/principals.
+func NewUserService(
 	q usersdb.Querier,
 	coreQ coredb.Querier,
 	az coreAuthz.Authorizer,
 	obs *observer.ObserverGroup,
-	npService coreservice.NaturalPersonServicer,
-	typeRes *types.Resolver,
-	hashPassword func(plain string) (string, error),
-) *UserAccountService {
-	return inner.NewUserAccountService(pool, q, coreQ, az, obs, npService, typeRes, hashPassword)
+	np coreservice.NaturalPersonServicer,
+	creds *CredentialService,
+) *UserService {
+	return inner.NewUserService(q, coreQ, az, obs, np, creds)
 }
 
-// SSHKeyService manages SSH public-key registration, listing, and
-// revocation. See docs/architecture/ssh-keys.md for the design rationale.
-type SSHKeyService = inner.SSHKeyService
+// NewUserServiceWithSelfService constructs a UserService wired for the /v1/me
+// and /v1/principals operations: NewUserService followed by
+// UserService.WithSelfService. pool serves the self-service transactions;
+// sessions and challenges serve session listing/revocation and the identifier
+// verification codes; ops resolves operation names to the op ids the principal
+// list passes to the accessible_*_ids_for_actor functions; maxAuthAge is
+// AUTH_SELF_SERVICE_MAX_AUTH_AGE (zero or negative selects the default).
+func NewUserServiceWithSelfService(
+	pool *pgxpool.Pool,
+	q usersdb.Querier,
+	coreQ coredb.Querier,
+	az coreAuthz.Authorizer,
+	obs *observer.ObserverGroup,
+	np coreservice.NaturalPersonServicer,
+	creds *CredentialService,
+	sessions *SessionService,
+	challenges *ChallengeService,
+	ops coreAuthz.OpResolver,
+	maxAuthAge time.Duration,
+) *UserService {
+	return inner.NewUserService(q, coreQ, az, obs, np, creds).
+		WithSelfService(pool, sessions, challenges, ops, maxAuthAge)
+}
 
-// SSHKey is the public view of one registered SSH public key.
-type SSHKey = inner.SSHKey
+// CredentialService manages credentials: password, SSH key, OIDC, API key,
+// email code and anonymous.
+type CredentialService = inner.CredentialService
 
-// SSHKeyResolver resolves a candidate SSH public key to the entity id of
-// the account that registered it. See inner.SSHKeyResolver's doc comment
-// for the hard constraints it upholds: no authorization, no writes, no
-// caching, no key-material logging.
+// LinkOIDCInput is the input of CredentialService.LinkOIDCInTx.
+type LinkOIDCInput = inner.LinkOIDCInput
+
+// LinkedCredential is the result of CredentialService.LinkOIDCInTx.
+type LinkedCredential = inner.LinkedCredential
+
+// NewCredentialService constructs a CredentialService. hashPassword is
+// typically auth.HashPassword.
+func NewCredentialService(
+	q usersdb.Querier,
+	coreQ coredb.Querier,
+	az coreAuthz.Authorizer,
+	obs *observer.ObserverGroup,
+	hashPassword func(plain string) (string, error),
+) *CredentialService {
+	return inner.NewCredentialService(q, coreQ, az, obs, hashPassword)
+}
+
+// ChallengeService issues and verifies the email one-time codes and the
+// one-time login handoffs.
+type ChallengeService = inner.ChallengeService
+
+// NewChallengeService constructs a ChallengeService; sender delivers the
+// emailed codes.
+func NewChallengeService(q usersdb.Querier, sender email.Sender) *ChallengeService {
+	return inner.NewChallengeService(q, sender)
+}
+
+// SessionService creates, refreshes, switches and revokes sessions and issues
+// their tokens.
+type SessionService = inner.SessionService
+
+// SessionConfig holds the token and session lifetimes.
+type SessionConfig = inner.SessionConfig
+
+// SessionConfigFrom builds a SessionConfig from the loaded configuration.
+func SessionConfigFrom(cfg *config.Config) SessionConfig {
+	return inner.SessionConfigFrom(cfg)
+}
+
+// NewSessionService constructs a SessionService. q and coreQ must be backed by
+// pool. az runs the invite-only app gate.
+func NewSessionService(
+	pool *pgxpool.Pool,
+	q usersdb.Querier,
+	coreQ coredb.Querier,
+	az coreAuthz.Authorizer,
+	obs *observer.ObserverGroup,
+	signer *auth.Signer,
+	challenges *ChallengeService,
+	cfg SessionConfig,
+) *SessionService {
+	return inner.NewSessionService(pool, q, coreQ, az, obs, signer, challenges, cfg)
+}
+
+// DirectoryService answers batch display lookups for other modules. It does no
+// authorization: callers authorize first.
+type DirectoryService = inner.DirectoryService
+
+// PrincipalSummary is the display summary of a principal.
+type PrincipalSummary = inner.PrincipalSummary
+
+// NewDirectoryService constructs a DirectoryService over the pool.
+func NewDirectoryService(pool *pgxpool.Pool) *DirectoryService {
+	return inner.NewDirectoryService(pool)
+}
+
+// ReadPrincipalSummaries returns the summaries of principalIDs keyed by id,
+// reading through db (a pool or a transaction). Unknown ids are absent from
+// the map. It does no authorization.
+func ReadPrincipalSummaries(ctx context.Context, db usersdb.DBTX, principalIDs []int64) (map[int64]PrincipalSummary, error) {
+	return inner.ReadPrincipalSummaries(ctx, db, principalIDs)
+}
+
+// RegisterDisplayRenderers registers the user and profile display renderers
+// on reg. Call it once at startup, after display.NewRegistry.
+func RegisterDisplayRenderers(reg *display.Registry, db usersdb.DBTX) {
+	inner.RegisterDisplayRenderers(reg, db)
+}
+
+// SSHKeyResolver resolves a candidate SSH public key to the credential that
+// registered it. See inner.SSHKeyResolver's doc comment for the hard
+// constraints it upholds: no authorization, no writes, no caching, no
+// key-material logging.
 type SSHKeyResolver = inner.SSHKeyResolver
+
+// SSHCredential is the result of SSHKeyResolver.ResolveCredential.
+type SSHCredential = inner.SSHCredential
 
 // ErrUnknownSSHKey is re-exported as the same value as
 // inner.ErrUnknownSSHKey (not copied into a new sentinel) so
@@ -53,28 +164,16 @@ type SSHKeyResolver = inner.SSHKeyResolver
 // boundary for a caller that only imports this package.
 var ErrUnknownSSHKey = inner.ErrUnknownSSHKey
 
-// NewSSHKeyService constructs an SSHKeyService.
-func NewSSHKeyService(
-	pool txhelper.DB,
-	q usersdb.Querier,
-	coreQ coredb.Querier,
-	az coreAuthz.Authorizer,
-	obs *observer.ObserverGroup,
-) *SSHKeyService {
-	return inner.NewSSHKeyService(pool, q, coreQ, az, obs)
-}
-
 // NewSSHKeyResolver constructs an SSHKeyResolver.
 func NewSSHKeyResolver(q usersdb.Querier, coreQ coredb.Querier) *SSHKeyResolver {
 	return inner.NewSSHKeyResolver(q, coreQ)
 }
 
-// sshKeyResolverActor is a local, one-method interface used only as a
-// compile-time assertion that *SSHKeyResolver exposes the exact method
-// shape mod-repos' transport.KeyResolver requires (docs/architecture/ssh-keys.md D11) --
-// without this package importing mod-repos, which mod-users must not do.
-type sshKeyResolverActor interface {
-	ResolveActor(context.Context, gossh.PublicKey) (int64, error)
+// sshKeyResolverCredential is a compile-time assertion that *SSHKeyResolver
+// exposes the method shape mod-repos' transport needs, without this package
+// importing mod-repos, which mod-users must not do.
+type sshKeyResolverCredential interface {
+	ResolveCredential(context.Context, gossh.PublicKey) (SSHCredential, error)
 }
 
-var _ sshKeyResolverActor = (*SSHKeyResolver)(nil)
+var _ sshKeyResolverCredential = (*SSHKeyResolver)(nil)
