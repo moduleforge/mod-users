@@ -72,4 +72,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: api/internal/handlers/auth/oidc_flows.go createManagedUser re-implements the entity, principal, users-row and party-profile steps of service.UserService.CreateManagedUserInTx because that primitive authorizes `create user` as an acting profile, and the OIDC callback has no actor before the new idp_jit profile exists. Add a trusted service primitive (for example CreateManagedJITUserInTx on UserService) that creates the managed user with its active idp_jit party profile and observes `create user` as that profile, then switch createManagedUser to it so the invariants live in one place. The managed path was written without a live database to exercise it.
+    - title: Server-error literal check has stale count
+      id: EyHp
+      date: "2026-10-23"
+      tags:
+        - type:bug
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: api/scripts/check-server-error-literals.sh (run by `make lint` in api/) fails with "expected 11 marked carve-outs in handlers/auth/, found 0" because the rewritten /v1/auth handlers no longer contain any literal-keep server.Error calls. Update the expected count (and the script header prose) to 0, or drop the handlers/auth check, once the handler set is final.
 closed: []
