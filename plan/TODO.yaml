@@ -88,7 +88,8 @@ phases:
           digest: Added /v1/me and /v1/principals handlers with UserService self-service and principal-administration methods, DirectoryService, ReadPrincipalSummaries and user/profile display renderers. Authority derives from AuthContext; step-up gate cannot be skipped. Throwaway Postgres run exercised all new SQL and routes.
           git:
             branch: plan/identity-model-impl-06-007
-            commit: []
+            commit:
+                - b7addc9
             merge: null
         - number: 8
           slug: server-wiring-and-surface-removal
