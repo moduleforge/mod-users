@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moduleforge/core-api/apiresp"
 	coreAuthz "github.com/moduleforge/core-api/authz"
@@ -48,6 +49,15 @@ type UserService struct {
 	newQ     func(pgx.Tx) usersdb.Querier
 	newCoreQ func(pgx.Tx) coredb.Querier
 	now      func() time.Time
+
+	// Set by WithSelfService; the creation and identifier primitives do not
+	// need them.
+	pool       *pgxpool.Pool
+	db         usersdb.DBTX
+	sessions   *SessionService
+	challenges *ChallengeService
+	ops        coreAuthz.OpResolver
+	maxAuthAge time.Duration
 }
 
 // NewUserService constructs a UserService. np creates the user's own
