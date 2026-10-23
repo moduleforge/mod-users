@@ -1,14 +1,16 @@
 -- name: GetOIDCProvider :one
 -- Fetch one provider override row by id.
 SELECT id, display_name, issuer_url, client_id, client_secret,
-       claim_style, scopes, enabled, created_at, updated_at
+       claim_style, scopes, enabled, party_id, jit_mode, trust_acr,
+       created_at, updated_at
 FROM mod_users.oidc_providers
 WHERE id = $1;
 
 -- name: ListOIDCProviders :many
 -- Return every provider override row, sorted by id for stable output.
 SELECT id, display_name, issuer_url, client_id, client_secret,
-       claim_style, scopes, enabled, created_at, updated_at
+       claim_style, scopes, enabled, party_id, jit_mode, trust_acr,
+       created_at, updated_at
 FROM mod_users.oidc_providers
 ORDER BY id;
 
@@ -24,9 +26,9 @@ ORDER BY id;
 -- keeps the query trivial and the semantics readable.
 INSERT INTO mod_users.oidc_providers (
     id, display_name, issuer_url, client_id, client_secret,
-    claim_style, scopes, enabled
+    claim_style, scopes, enabled, party_id, jit_mode, trust_acr
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 ON CONFLICT (id) DO UPDATE SET
     display_name  = EXCLUDED.display_name,
@@ -35,9 +37,13 @@ ON CONFLICT (id) DO UPDATE SET
     client_secret = EXCLUDED.client_secret,
     claim_style   = EXCLUDED.claim_style,
     scopes        = EXCLUDED.scopes,
-    enabled       = EXCLUDED.enabled
+    enabled       = EXCLUDED.enabled,
+    party_id      = EXCLUDED.party_id,
+    jit_mode      = EXCLUDED.jit_mode,
+    trust_acr     = EXCLUDED.trust_acr
 RETURNING id, display_name, issuer_url, client_id, client_secret,
-          claim_style, scopes, enabled, created_at, updated_at;
+          claim_style, scopes, enabled, party_id, jit_mode, trust_acr,
+          created_at, updated_at;
 
 -- name: DeleteOIDCProvider :execrows
 -- Remove a provider override row. Used by the "revert" endpoint — after

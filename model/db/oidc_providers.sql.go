@@ -12,7 +12,7 @@ import (
 )
 
 const deleteOIDCProvider = `-- name: DeleteOIDCProvider :execrows
-DELETE FROM oidc_providers WHERE id = $1
+DELETE FROM mod_users.oidc_providers WHERE id = $1
 `
 
 // Remove a provider override row. Used by the "revert" endpoint — after
@@ -29,15 +29,32 @@ func (q *Queries) DeleteOIDCProvider(ctx context.Context, id string) (int64, err
 
 const getOIDCProvider = `-- name: GetOIDCProvider :one
 SELECT id, display_name, issuer_url, client_id, client_secret,
-       claim_style, scopes, enabled, created_at, updated_at
-FROM oidc_providers
+       claim_style, scopes, enabled, party_id, jit_mode, trust_acr,
+       created_at, updated_at
+FROM mod_users.oidc_providers
 WHERE id = $1
 `
 
+type GetOIDCProviderRow struct {
+	ID           string             `json:"id"`
+	DisplayName  pgtype.Text        `json:"display_name"`
+	IssuerUrl    pgtype.Text        `json:"issuer_url"`
+	ClientID     pgtype.Text        `json:"client_id"`
+	ClientSecret pgtype.Text        `json:"client_secret"`
+	ClaimStyle   pgtype.Text        `json:"claim_style"`
+	Scopes       []string           `json:"scopes"`
+	Enabled      bool               `json:"enabled"`
+	PartyID      pgtype.Int8        `json:"party_id"`
+	JitMode      string             `json:"jit_mode"`
+	TrustAcr     bool               `json:"trust_acr"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Fetch one provider override row by id.
-func (q *Queries) GetOIDCProvider(ctx context.Context, id string) (OidcProvider, error) {
+func (q *Queries) GetOIDCProvider(ctx context.Context, id string) (GetOIDCProviderRow, error) {
 	row := q.db.QueryRow(ctx, getOIDCProvider, id)
-	var i OidcProvider
+	var i GetOIDCProviderRow
 	err := row.Scan(
 		&i.ID,
 		&i.DisplayName,
@@ -47,6 +64,9 @@ func (q *Queries) GetOIDCProvider(ctx context.Context, id string) (OidcProvider,
 		&i.ClaimStyle,
 		&i.Scopes,
 		&i.Enabled,
+		&i.PartyID,
+		&i.JitMode,
+		&i.TrustAcr,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -55,21 +75,38 @@ func (q *Queries) GetOIDCProvider(ctx context.Context, id string) (OidcProvider,
 
 const listOIDCProviders = `-- name: ListOIDCProviders :many
 SELECT id, display_name, issuer_url, client_id, client_secret,
-       claim_style, scopes, enabled, created_at, updated_at
-FROM oidc_providers
+       claim_style, scopes, enabled, party_id, jit_mode, trust_acr,
+       created_at, updated_at
+FROM mod_users.oidc_providers
 ORDER BY id
 `
 
+type ListOIDCProvidersRow struct {
+	ID           string             `json:"id"`
+	DisplayName  pgtype.Text        `json:"display_name"`
+	IssuerUrl    pgtype.Text        `json:"issuer_url"`
+	ClientID     pgtype.Text        `json:"client_id"`
+	ClientSecret pgtype.Text        `json:"client_secret"`
+	ClaimStyle   pgtype.Text        `json:"claim_style"`
+	Scopes       []string           `json:"scopes"`
+	Enabled      bool               `json:"enabled"`
+	PartyID      pgtype.Int8        `json:"party_id"`
+	JitMode      string             `json:"jit_mode"`
+	TrustAcr     bool               `json:"trust_acr"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Return every provider override row, sorted by id for stable output.
-func (q *Queries) ListOIDCProviders(ctx context.Context) ([]OidcProvider, error) {
+func (q *Queries) ListOIDCProviders(ctx context.Context) ([]ListOIDCProvidersRow, error) {
 	rows, err := q.db.Query(ctx, listOIDCProviders)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []OidcProvider
+	var items []ListOIDCProvidersRow
 	for rows.Next() {
-		var i OidcProvider
+		var i ListOIDCProvidersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.DisplayName,
@@ -79,6 +116,9 @@ func (q *Queries) ListOIDCProviders(ctx context.Context) ([]OidcProvider, error)
 			&i.ClaimStyle,
 			&i.Scopes,
 			&i.Enabled,
+			&i.PartyID,
+			&i.JitMode,
+			&i.TrustAcr,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -93,7 +133,7 @@ func (q *Queries) ListOIDCProviders(ctx context.Context) ([]OidcProvider, error)
 }
 
 const setOIDCProviderEnabled = `-- name: SetOIDCProviderEnabled :exec
-INSERT INTO oidc_providers (id, enabled)
+INSERT INTO mod_users.oidc_providers (id, enabled)
 VALUES ($1, $2)
 ON CONFLICT (id) DO UPDATE SET enabled = EXCLUDED.enabled
 `
@@ -114,11 +154,11 @@ func (q *Queries) SetOIDCProviderEnabled(ctx context.Context, arg SetOIDCProvide
 }
 
 const upsertOIDCProvider = `-- name: UpsertOIDCProvider :one
-INSERT INTO oidc_providers (
+INSERT INTO mod_users.oidc_providers (
     id, display_name, issuer_url, client_id, client_secret,
-    claim_style, scopes, enabled
+    claim_style, scopes, enabled, party_id, jit_mode, trust_acr
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 ON CONFLICT (id) DO UPDATE SET
     display_name  = EXCLUDED.display_name,
@@ -127,9 +167,13 @@ ON CONFLICT (id) DO UPDATE SET
     client_secret = EXCLUDED.client_secret,
     claim_style   = EXCLUDED.claim_style,
     scopes        = EXCLUDED.scopes,
-    enabled       = EXCLUDED.enabled
+    enabled       = EXCLUDED.enabled,
+    party_id      = EXCLUDED.party_id,
+    jit_mode      = EXCLUDED.jit_mode,
+    trust_acr     = EXCLUDED.trust_acr
 RETURNING id, display_name, issuer_url, client_id, client_secret,
-          claim_style, scopes, enabled, created_at, updated_at
+          claim_style, scopes, enabled, party_id, jit_mode, trust_acr,
+          created_at, updated_at
 `
 
 type UpsertOIDCProviderParams struct {
@@ -141,6 +185,25 @@ type UpsertOIDCProviderParams struct {
 	ClaimStyle   pgtype.Text `json:"claim_style"`
 	Scopes       []string    `json:"scopes"`
 	Enabled      bool        `json:"enabled"`
+	PartyID      pgtype.Int8 `json:"party_id"`
+	JitMode      string      `json:"jit_mode"`
+	TrustAcr     bool        `json:"trust_acr"`
+}
+
+type UpsertOIDCProviderRow struct {
+	ID           string             `json:"id"`
+	DisplayName  pgtype.Text        `json:"display_name"`
+	IssuerUrl    pgtype.Text        `json:"issuer_url"`
+	ClientID     pgtype.Text        `json:"client_id"`
+	ClientSecret pgtype.Text        `json:"client_secret"`
+	ClaimStyle   pgtype.Text        `json:"claim_style"`
+	Scopes       []string           `json:"scopes"`
+	Enabled      bool               `json:"enabled"`
+	PartyID      pgtype.Int8        `json:"party_id"`
+	JitMode      string             `json:"jit_mode"`
+	TrustAcr     bool               `json:"trust_acr"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Insert or replace a provider override row. NULL override fields mean
@@ -152,7 +215,7 @@ type UpsertOIDCProviderParams struct {
 // when field is omitted") must be resolved in Go code, because SQL
 // NULL doesn't distinguish "field absent" from "explicit null". This
 // keeps the query trivial and the semantics readable.
-func (q *Queries) UpsertOIDCProvider(ctx context.Context, arg UpsertOIDCProviderParams) (OidcProvider, error) {
+func (q *Queries) UpsertOIDCProvider(ctx context.Context, arg UpsertOIDCProviderParams) (UpsertOIDCProviderRow, error) {
 	row := q.db.QueryRow(ctx, upsertOIDCProvider,
 		arg.ID,
 		arg.DisplayName,
@@ -162,8 +225,11 @@ func (q *Queries) UpsertOIDCProvider(ctx context.Context, arg UpsertOIDCProvider
 		arg.ClaimStyle,
 		arg.Scopes,
 		arg.Enabled,
+		arg.PartyID,
+		arg.JitMode,
+		arg.TrustAcr,
 	)
-	var i OidcProvider
+	var i UpsertOIDCProviderRow
 	err := row.Scan(
 		&i.ID,
 		&i.DisplayName,
@@ -173,6 +239,9 @@ func (q *Queries) UpsertOIDCProvider(ctx context.Context, arg UpsertOIDCProvider
 		&i.ClaimStyle,
 		&i.Scopes,
 		&i.Enabled,
+		&i.PartyID,
+		&i.JitMode,
+		&i.TrustAcr,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
