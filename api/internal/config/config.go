@@ -133,15 +133,28 @@ func resolveDBURL() string {
 	return ""
 }
 
+// Defaults and bounds for the access-token and session lifetimes (API surface
+// section 8). MaxAccessTokenTTL is a hard ceiling: an access token is only a
+// carrier for a server-side session that is re-checked on every request, so a
+// longer-lived token buys nothing and widens the replay window.
+const (
+	DefaultAccessTokenTTL        = time.Hour
+	MaxAccessTokenTTL            = time.Hour
+	DefaultSessionMaxAge         = 720 * time.Hour
+	DefaultSessionIdleTimeout    = 168 * time.Hour
+	DefaultClientCredentialsTTL  = 15 * time.Minute
+	DefaultImpersonationTTL      = 30 * time.Minute
+	DefaultImpersonationMax      = 60 * time.Minute
+	DefaultSelfServiceMaxAuthAge = 10 * time.Minute
+	// DefaultAudience is the "aud" an access token carries when its session
+	// has no app (AUTH_DEFAULT_AUDIENCE unset).
+	DefaultAudience = "mod-users"
+)
+
 // AuthConfig holds cross-cutting settings for the authentication subsystem.
 // Per-provider settings live in the ProviderRegistry; AuthConfig carries the
 // bits that apply regardless of which provider the user came in on.
 type AuthConfig struct {
-	// AdminRole is the role name (post-normalization, lowercased) that confers
-	// admin privileges when present in a Principal.Roles slice. Defaults to
-	// "admin" when the env var AUTH_ADMIN_ROLE is unset.
-	AdminRole string
-
 	// FrontendReturnURL is the absolute URL of the GUI page that completes the
 	// OAuth callback handoff (e.g. "http://localhost:3000/auth/oidc/return").
 	// Required when any provider is enabled.
@@ -158,15 +171,51 @@ type AuthConfig struct {
 	// oidc_state cookie Path is CookiePath + "/v1/auth/oidc/" instead of being
 	// derived from the request URL. Empty (the default) keeps the
 	// request-derived behaviour. Env var USERS_COOKIE_PATH; validated by
-	// ValidateCookieBasePath at load time.
+	// ValidateCookieBasePath at load time. The oidc_state cookie is the only
+	// cookie this module sets; no route reads an authentication cookie.
 	CookiePath string
 
-	// RequireStepUpForCredentialChange gates every credential-mutating endpoint
-	// (POST/DELETE password, DELETE OIDC identity, POST link-mode start) behind
-	// a short-lived step-up token obtained via POST /v1/self/credential/step-up
-	// + /verify. Default is false (off). Set AUTH_REQUIRE_STEP_UP=true|1|yes
-	// to enable bank-style "prove you still own this email" enforcement.
-	RequireStepUpForCredentialChange bool
+	// AccessTokenTTL is the lifetime of an interactive access token
+	// (AUTH_ACCESS_TOKEN_TTL, default 1h, at most 1h). A token's exp is
+	// min(iat + AccessTokenTTL, sessions.expires_at).
+	AccessTokenTTL time.Duration
+
+	// SessionMaxAge is the absolute lifetime of a session
+	// (AUTH_SESSION_MAX_AGE, default 720h).
+	SessionMaxAge time.Duration
+
+	// SessionIdleTimeout is the refresh-lineage expiry: a session whose
+	// refresh token is not used for this long can no longer be refreshed
+	// (AUTH_SESSION_IDLE_TIMEOUT, default 168h).
+	SessionIdleTimeout time.Duration
+
+	// ClientCredentialsTTL is the lifetime of a client-credentials access
+	// token (AUTH_CLIENT_CREDENTIALS_TTL, default 15m).
+	ClientCredentialsTTL time.Duration
+
+	// ImpersonationTTL is the lifetime of one impersonation token and of each
+	// renewal (AUTH_IMPERSONATION_TTL, default 30m).
+	ImpersonationTTL time.Duration
+
+	// ImpersonationMax bounds an impersonation session's total lifetime from
+	// its start, renewals included (AUTH_IMPERSONATION_MAX, default 60m; at
+	// least ImpersonationTTL).
+	ImpersonationMax time.Duration
+
+	// SelfServiceMaxAuthAge is how recent a session's auth_time must be for
+	// self-service credential and identifier changes
+	// (AUTH_SELF_SERVICE_MAX_AUTH_AGE, default 10m).
+	SelfServiceMaxAuthAge time.Duration
+
+	// DefaultAudience is the "aud" of an access token whose session has no
+	// app, and of client-credentials tokens that request none
+	// (AUTH_DEFAULT_AUDIENCE, default "mod-users").
+	DefaultAudience string
+
+	// AcceptedAudiences is the explicit set of "aud" values bearer tokens may
+	// carry (AUTH_ACCEPTED_AUDIENCES, comma-separated). Empty means the
+	// default audience plus the slug of any registered app.
+	AcceptedAudiences []string
 }
 
 // ServerConfig holds HTTP server settings.
@@ -178,32 +227,21 @@ type ServerConfig struct {
 }
 
 // LocalAuthConfig holds settings for the local (non-OIDC) auth subsystem.
+// Access tokens are EdDSA (Ed25519) JWTs only.
 type LocalAuthConfig struct {
-	// JWTSecret is the HS256 signing secret for locally-issued JWTs. Under
-	// EdDSA it is optional: an explicit value keys the OAuth state signer and
-	// step-up tokens and wins over derivation; an empty value means "derive"
-	// (those keys are then derived from JWTSigningKey, see
-	// internal/auth/derived_keys.go).
-	// Populated from JWT_SECRET when set; under HS256, when the env var is
-	// absent and cfg.DB.URL is non-empty, Load fetches-or-generates-and-
-	// persists a secret in Postgres instead (the DB bootstrap never runs
-	// under EdDSA; see
-	// bootstrapJWTSecretFromDB / fetchOrGeneratePersistedJWTSecret in
-	// jwtsecret_bootstrap.go). A persisted secret that fails the
-	// length check is a fail-loudly error, never silently regenerated.
+	// JWTSecret is the optional explicit HMAC key for the OAuth state signer
+	// (JWT_SECRET). It signs nothing else. An empty value means the OAuth
+	// state key is derived from JWTSigningKey (see
+	// internal/auth/derived_keys.go); an explicit value wins over derivation.
 	JWTSecret string
-	// JWTAlg selects the algorithm used to sign locally-issued JWTs: "HS256"
-	// (default, keyed by JWTSecret) or "EdDSA" (keyed by JWTSigningKey).
-	// Populated from JWT_ALG. JWTSecret is required only under HS256; under
-	// EdDSA an empty JWTSecret means the OAuth state and step-up keys are
-	// derived from JWTSigningKey.
-	JWTAlg string
-	// JWTSigningKey is the parsed Ed25519 private key from JWT_SIGNING_KEY
-	// (PKCS#8 PEM). Non-nil only when JWTAlg is "EdDSA". The raw env value is
-	// never retained, and the key is never logged.
+	// JWTSigningKey is the Ed25519 private key that signs access tokens:
+	// parsed from JWT_SIGNING_KEY (PKCS#8 PEM) when set, otherwise the key
+	// persisted in mod_users.auth_signing_keys (bootstrapped on first boot;
+	// see signing_key_bootstrap.go). Always non-nil after a successful Load.
+	// The raw env value is never retained, and the key is never logged.
 	JWTSigningKey ed25519.PrivateKey
 	// JWTSigningKID is the optional JWT_SIGNING_KID, set as the "kid" header
-	// on locally-issued JWTs when non-empty (any algorithm).
+	// on locally-issued JWTs when non-empty.
 	JWTSigningKID string
 	// JWTVerifyPublicKeys holds the Ed25519 public keys from
 	// JWT_VERIFY_PUBLIC_KEYS (kid -> key; the empty kid is used for tokens
@@ -253,23 +291,24 @@ type Config struct {
 // fallback — both names remain supported indefinitely, not as a
 // deprecation window.
 //
-// JWT_SECRET follows a fetch-or-generate-persist fallback under HS256: the
-// env var always wins when set. When it is absent and the resolved DB URL is
-// present, Load consults Postgres instead of failing boot outright —
-// fetching an already-persisted secret, or generating and durably
-// persisting a new one on first boot (bootstrapJWTSecretFromDB /
-// fetchOrGeneratePersistedJWTSecret in jwtsecret_bootstrap.go). A
-// persisted secret that fails validation (too short — corrupt or
-// truncated) fails loudly rather than being silently regenerated.
+// Access tokens are EdDSA only. JWT_SIGNING_KEY (PKCS#8 PEM Ed25519 private
+// key) is optional: when it is unset and the resolved DB URL is present, Load
+// fetches the key persisted in mod_users.auth_signing_keys, or generates and
+// durably persists one on first boot (bootstrapSigningKeyFromDB /
+// fetchOrGeneratePersistedSigningKey in signing_key_bootstrap.go). A
+// persisted key that fails to parse fails loudly rather than being silently
+// regenerated. JWT_SIGNING_KID (optional "kid" header) and
+// JWT_VERIFY_PUBLIC_KEYS (PEM public key or JSON kid-to-PEM map) are
+// validated too (see jwt_signing.go). JWT_SECRET is optional and only keys
+// the OAuth state signer; when unset that key is derived from the signing
+// key (internal/auth/derived_keys.go).
 //
-// JWT_ALG (HS256 default | EdDSA), JWT_SIGNING_KEY (PKCS#8 PEM Ed25519
-// private key; required for EdDSA), and JWT_SIGNING_KID (optional "kid"
-// header) and JWT_VERIFY_PUBLIC_KEYS (PEM public key or JSON kid-to-PEM map)
-// are validated here too (see jwt_signing.go). Under EdDSA JWT_SECRET is
-// optional and the DB bootstrap is skipped: when unset, the OAuth state and
-// step-up keys are derived from the signing key (internal/auth/derived_keys.go);
-// an explicit value is kept as-is and wins. JWT_SECRET stays required under
-// HS256.
+// The access-token and session lifetimes (AUTH_ACCESS_TOKEN_TTL,
+// AUTH_SESSION_MAX_AGE, AUTH_SESSION_IDLE_TIMEOUT,
+// AUTH_CLIENT_CREDENTIALS_TTL, AUTH_IMPERSONATION_TTL, AUTH_IMPERSONATION_MAX,
+// AUTH_SELF_SERVICE_MAX_AUTH_AGE) must be positive Go durations;
+// AUTH_ACCESS_TOKEN_TTL is capped at MaxAccessTokenTTL and
+// AUTH_IMPERSONATION_MAX may not be shorter than AUTH_IMPERSONATION_TTL.
 func Load() (*Config, error) {
 	// parseErrors accumulates non-fatal parse problems so we can report
 	// them alongside missing-field errors in one shot.
@@ -351,10 +390,13 @@ func Load() (*Config, error) {
 		tokenDisplay = TokenDisplayBoth
 	}
 
-	jwtAlg, jwtSigningKey, jwtSigningKID, jwtSigningProblems := loadJWTSigning()
+	jwtSigningKey, jwtSigningKID, jwtSigningProblems := loadJWTSigning()
 	parseErrors = append(parseErrors, jwtSigningProblems...)
 	jwtVerifyKeys, jwtVerifyProblems := loadJWTVerifyPublicKeys()
 	parseErrors = append(parseErrors, jwtVerifyProblems...)
+
+	authLifetimes, lifetimeProblems := loadAuthLifetimes()
+	parseErrors = append(parseErrors, lifetimeProblems...)
 
 	cookiePath := os.Getenv("USERS_COOKIE_PATH")
 	if err := ValidateCookieBasePath(cookiePath); err != nil {
@@ -371,11 +413,18 @@ func Load() (*Config, error) {
 			MaxConnIdleTime: maxConnIdleTime,
 		},
 		Auth: AuthConfig{
-			AdminRole:                        getEnv("AUTH_ADMIN_ROLE", "admin"),
-			FrontendReturnURL:                os.Getenv("AUTH_FRONTEND_RETURN_URL"),
-			OAuthRedirectBaseURL:             os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
-			CookiePath:                       cookiePath,
-			RequireStepUpForCredentialChange: parseBoolEnv(os.Getenv("AUTH_REQUIRE_STEP_UP")),
+			FrontendReturnURL:     os.Getenv("AUTH_FRONTEND_RETURN_URL"),
+			OAuthRedirectBaseURL:  os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
+			CookiePath:            cookiePath,
+			AccessTokenTTL:        authLifetimes.AccessTokenTTL,
+			SessionMaxAge:         authLifetimes.SessionMaxAge,
+			SessionIdleTimeout:    authLifetimes.SessionIdleTimeout,
+			ClientCredentialsTTL:  authLifetimes.ClientCredentialsTTL,
+			ImpersonationTTL:      authLifetimes.ImpersonationTTL,
+			ImpersonationMax:      authLifetimes.ImpersonationMax,
+			SelfServiceMaxAuthAge: authLifetimes.SelfServiceMaxAuthAge,
+			DefaultAudience:       strings.TrimSpace(getEnv("AUTH_DEFAULT_AUDIENCE", DefaultAudience)),
+			AcceptedAudiences:     parseList(os.Getenv("AUTH_ACCEPTED_AUDIENCES")),
 		},
 		Providers: registry,
 		Server: ServerConfig{
@@ -386,7 +435,6 @@ func Load() (*Config, error) {
 		},
 		LocalAuth: LocalAuthConfig{
 			JWTSecret:     os.Getenv("JWT_SECRET"),
-			JWTAlg:        jwtAlg,
 			JWTSigningKey: jwtSigningKey,
 			JWTSigningKID: jwtSigningKID,
 
@@ -411,21 +459,23 @@ func Load() (*Config, error) {
 		},
 	}
 
-	// Under EdDSA a blank or whitespace-only JWT_SECRET means "derive":
-	// normalize it to "" so LocalAuth.JWTSecret consistently signals that.
-	// Under HS256 it is left as-is so validate still reports it missing.
-	if cfg.LocalAuth.JWTAlg == JWTAlgEdDSA && strings.TrimSpace(cfg.LocalAuth.JWTSecret) == "" {
+	// A blank or whitespace-only JWT_SECRET means "derive the OAuth state
+	// key": normalize it to "" so LocalAuth.JWTSecret consistently signals
+	// that.
+	if strings.TrimSpace(cfg.LocalAuth.JWTSecret) == "" {
 		cfg.LocalAuth.JWTSecret = ""
 	}
 
-	// The DB bootstrap is HS256-only: under EdDSA an empty JWT_SECRET means
-	// "derive", so no secret is fetched or persisted.
-	if cfg.LocalAuth.JWTSecret == "" && cfg.DB.URL != "" && cfg.LocalAuth.JWTAlg != JWTAlgEdDSA {
-		secret, err := bootstrapJWTSecretFromDB(context.Background(), cfg.DB.URL)
+	// Without JWT_SIGNING_KEY, fetch (or generate and persist) the signing
+	// key in Postgres. Skipped when JWT_SIGNING_KEY was set but invalid (its
+	// problem is already reported) and when no DB URL is configured (validate
+	// reports the missing DB URL).
+	if cfg.LocalAuth.JWTSigningKey == nil && cfg.DB.URL != "" && !jwtSigningKeyProblem(jwtSigningProblems) {
+		key, err := bootstrapSigningKeyFromDB(context.Background(), cfg.DB.URL)
 		if err != nil {
-			parseErrors = append(parseErrors, fmt.Sprintf("JWT_SECRET: bootstrap from database failed: %v", err))
+			parseErrors = append(parseErrors, fmt.Sprintf("JWT_SIGNING_KEY: bootstrap from database failed: %v", err))
 		} else {
-			cfg.LocalAuth.JWTSecret = secret
+			cfg.LocalAuth.JWTSigningKey = key
 		}
 	}
 
@@ -455,11 +505,7 @@ func validate(cfg *Config, parseErrors []string) error {
 
 	required := []check{
 		{"MFAPP_DATABASE_URL / DB_URL", cfg.DB.URL},
-	}
-	// JWT_SECRET is required only under HS256; under EdDSA it is optional
-	// (derived from the signing key when unset).
-	if cfg.LocalAuth.JWTAlg != JWTAlgEdDSA {
-		required = append(required, check{"JWT_SECRET", cfg.LocalAuth.JWTSecret})
+		{"AUTH_DEFAULT_AUDIENCE", cfg.Auth.DefaultAudience},
 	}
 
 	// When any OIDC provider is enabled, the OAuth callback plumbing needs
@@ -477,6 +523,14 @@ func validate(cfg *Config, parseErrors []string) error {
 
 	// Collect any parse errors accumulated during Load.
 	problems = append(problems, parseErrors...)
+
+	// The signing key is always required. It is absent here only when
+	// another problem already explains why (an invalid JWT_SIGNING_KEY, a
+	// failed bootstrap, or no DB URL to bootstrap from); report it anyway so
+	// Load can never return a Config without one.
+	if cfg.LocalAuth.JWTSigningKey == nil {
+		problems = append(problems, "JWT_SIGNING_KEY: no signing key (set JWT_SIGNING_KEY or configure the database so one can be bootstrapped)")
+	}
 
 	var missing []string
 	for _, c := range required {
@@ -542,15 +596,79 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// parseBoolEnv accepts "1", "true", "yes" (case-insensitive) as truthy.
-// Anything else — including empty — is false.
-func parseBoolEnv(v string) bool {
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "1", "true", "yes":
-		return true
-	default:
-		return false
+// jwtSigningKeyProblem reports whether problems (from loadJWTSigning) include
+// one about JWT_SIGNING_KEY itself, in which case the operator supplied a key
+// that failed to parse and Load must not silently fall back to the persisted
+// one.
+func jwtSigningKeyProblem(problems []string) bool {
+	for _, p := range problems {
+		if strings.HasPrefix(p, "JWT_SIGNING_KEY:") {
+			return true
+		}
 	}
+	return false
+}
+
+// parseList splits a comma-separated value, trimming whitespace and dropping
+// empty entries. It returns nil for an empty or all-blank value.
+func parseList(v string) []string {
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+// authLifetimes groups the AUTH_* duration settings loadAuthLifetimes reads.
+type authLifetimes struct {
+	AccessTokenTTL        time.Duration
+	SessionMaxAge         time.Duration
+	SessionIdleTimeout    time.Duration
+	ClientCredentialsTTL  time.Duration
+	ImpersonationTTL      time.Duration
+	ImpersonationMax      time.Duration
+	SelfServiceMaxAuthAge time.Duration
+}
+
+// loadAuthLifetimes reads the access-token and session lifetime settings,
+// applying the defaults of API surface section 8. Every value must be a
+// positive duration; AUTH_ACCESS_TOKEN_TTL may not exceed MaxAccessTokenTTL
+// and AUTH_IMPERSONATION_MAX may not be shorter than AUTH_IMPERSONATION_TTL.
+// A rejected value falls back to its default and is reported in problems.
+func loadAuthLifetimes() (authLifetimes, []string) {
+	var problems []string
+	read := func(key string, fallback time.Duration) time.Duration {
+		d, err := parseDuration(key, fallback)
+		if err != nil {
+			problems = append(problems, err.Error())
+			return fallback
+		}
+		if d <= 0 {
+			problems = append(problems, key+": must be a positive duration")
+			return fallback
+		}
+		return d
+	}
+
+	l := authLifetimes{
+		AccessTokenTTL:        read("AUTH_ACCESS_TOKEN_TTL", DefaultAccessTokenTTL),
+		SessionMaxAge:         read("AUTH_SESSION_MAX_AGE", DefaultSessionMaxAge),
+		SessionIdleTimeout:    read("AUTH_SESSION_IDLE_TIMEOUT", DefaultSessionIdleTimeout),
+		ClientCredentialsTTL:  read("AUTH_CLIENT_CREDENTIALS_TTL", DefaultClientCredentialsTTL),
+		ImpersonationTTL:      read("AUTH_IMPERSONATION_TTL", DefaultImpersonationTTL),
+		ImpersonationMax:      read("AUTH_IMPERSONATION_MAX", DefaultImpersonationMax),
+		SelfServiceMaxAuthAge: read("AUTH_SELF_SERVICE_MAX_AUTH_AGE", DefaultSelfServiceMaxAuthAge),
+	}
+	if l.AccessTokenTTL > MaxAccessTokenTTL {
+		problems = append(problems, fmt.Sprintf("AUTH_ACCESS_TOKEN_TTL: must not exceed %s", MaxAccessTokenTTL))
+		l.AccessTokenTTL = MaxAccessTokenTTL
+	}
+	if l.ImpersonationMax < l.ImpersonationTTL {
+		problems = append(problems, "AUTH_IMPERSONATION_MAX: must not be shorter than AUTH_IMPERSONATION_TTL")
+	}
+	return l, problems
 }
 
 // parseDuration reads key from the environment and parses it as a

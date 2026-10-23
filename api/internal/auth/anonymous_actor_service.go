@@ -9,115 +9,96 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	usersdb "github.com/moduleforge/mod-users/model/db"
+	coredb "github.com/moduleforge/core-model/db"
 )
 
-// anonymousActorSlug is the well-known system_actors.slug for the shared,
-// zero-authority anonymous actor. Seeded by mod-users migration
-// 0100_baseline.sql.
+// anonymousActorSlug is the well-known system_actors.slug of the shared,
+// zero-authority anonymous actor seeded by mod-core.
 const anonymousActorSlug = "anonymous"
 
-// AnonymousActor holds the entity id of the seeded, zero-authority anonymous
-// system actor, resolved once at startup.
+// AnonymousActor holds the ids of mod-core's seeded anonymous system actor
+// and its personal profile, resolved once at startup.
 //
-// This is a shared identity, not a per-caller one: every tokenless request
-// that authenticates as the anonymous actor resolves to the same entities.id.
-// It owns nothing: that property is continuously enforced by a database
-// constraint (a Postgres trigger). It holds no grants as of the last boot,
-// verified once by the no-grants boot assertion below (see
-// newAnonymousActor) — that check is not backed by a database constraint, so
-// it does not continuously prevent a grant from being inserted for this
-// actor's entity id after boot. It is distinct from a *guest account* — the
-// per-device, stateful identity produced by POST /v1/auth/anonymous, which
-// does own things and can hold grants. See the anonymous-actor architecture
-// proposal's "Composition with POST /v1/auth/anonymous" section for the full
-// terminology split.
+// It is a shared identity, not a per-caller one: every tokenless request on a
+// route group that opts into NewResolveOrAnonymous acts as the same profile.
+// It owns nothing (system actors never own entities) and held no grants at
+// boot (newAnonymousActor's assertion, which is not a continuous database
+// constraint). It is distinct from a guest user: a real principal with an
+// anon credential and a session.
 type AnonymousActor struct {
-	entityID int64
+	principalID int64
+	profileID   int64
 }
 
-// EntityID returns the anonymous system actor's entities.id.
-func (a *AnonymousActor) EntityID() int64 {
-	return a.entityID
-}
+// PrincipalID returns the anonymous system actor's principal entity id.
+func (a *AnonymousActor) PrincipalID() int64 { return a.principalID }
 
-// lookupSystemActorBySlugFn is the slot used to resolve the anonymous
-// actor's entity id by slug. Extracted as a function-typed field so tests
-// can substitute a stub without needing a running Postgres, mirroring the
-// injectable-function pattern used by UserResolver (see resolver.go's
-// uuidLookupFn and friends).
-type lookupSystemActorBySlugFn func(ctx context.Context, slug string) (usersdb.GetSystemActorBySlugRow, error)
+// ProfileID returns the anonymous system actor's personal profile entity id:
+// the effective actor of the AuthContext{..., Anonymous: true} that
+// NewResolveOrAnonymous installs.
+func (a *AnonymousActor) ProfileID() int64 { return a.profileID }
 
-// hasAnyGrantsFn is the slot used to run the no-grants boot assertion.
-// Extracted as a function-typed field for the same reason as
-// lookupSystemActorBySlugFn — see its doc comment.
-type hasAnyGrantsFn func(ctx context.Context, entityID int64) (bool, error)
+// lookupSystemActorBySlugFn resolves a system actor by slug. A function type
+// so tests can substitute a stub without a running Postgres.
+type lookupSystemActorBySlugFn func(ctx context.Context, slug string) (coredb.GetSystemActorBySlugRow, error)
 
-// NewAnonymousActor resolves the anonymous system actor's entity id by slug
-// and asserts, at boot, that it holds zero grants — refusing to start if it
-// finds any.
+// hasAnyGrantsFn runs the no-grants boot assertion for the given actor ids.
+type hasAnyGrantsFn func(ctx context.Context, actorIDs []int64) (bool, error)
+
+// NewAnonymousActor resolves mod-core's anonymous system actor (principal and
+// personal profile) by slug and asserts, at boot, that neither holds a grant
+// — refusing to start if one does.
 //
-// The constructor signature (context.Context first, *pgxpool.Pool second,
-// returning (*AnonymousActor, error)) matches the manifest wiring the
-// anonymous-actor architecture proposal specifies in its §4:
-// args: [context, infra:pool], returnsError: true.
-//
-// The no-grants assertion lives here, in application startup code, rather
-// than in a mod-users migration trigger, precisely because it must run
-// after *all* migrations have applied — including mod-authz's 500-series
-// migrations that create the grants table itself. A mod-users migration
-// runs before mod-authz's migrations in a typical composition ordering, so
-// it cannot see the grants table reliably; boot-time construction runs
-// after every module's Migrate call, so it can.
+// The assertion lives in startup code rather than a migration trigger because
+// it must run after every module's migrations, including mod-authz's, which
+// create the grants table.
 func NewAnonymousActor(ctx context.Context, pool *pgxpool.Pool) (*AnonymousActor, error) {
-	queries := usersdb.New(pool)
-	lookup := queries.GetSystemActorBySlug
-	hasGrants := func(ctx context.Context, entityID int64) (bool, error) {
+	lookup := coredb.New(pool).GetSystemActorBySlug
+	hasGrants := func(ctx context.Context, actorIDs []int64) (bool, error) {
 		var exists bool
-		// grants is mod-authz's table (mod-authz/model/migrations/0505_grants.sql);
-		// it is not part of mod-users' sqlc schema, so this is a direct
-		// pool.QueryRow rather than a generated query. The entity id is
-		// bound as a parameter, never interpolated into the SQL string.
-		err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM grants WHERE actor_id = $1)", entityID).Scan(&exists)
+		// grants is mod-authz's table, outside mod-users' sqlc schema, so
+		// this is a direct query. The ids are bound, never interpolated.
+		err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM grants WHERE actor_id = ANY($1::bigint[]))", actorIDs).Scan(&exists)
 		if err != nil {
 			return false, err
 		}
 		return exists, nil
 	}
-
 	return newAnonymousActor(ctx, lookup, hasGrants)
 }
 
-// newAnonymousActor contains the actual resolution and assertion logic,
-// factored out of NewAnonymousActor so tests can substitute the two DB
-// operations with stubs, following the injectable function-field pattern
-// established by UserResolver (see resolver.go, resolver_test.go).
+// newAnonymousActor holds the resolution and assertion logic, factored out so
+// tests can substitute both database operations.
 func newAnonymousActor(ctx context.Context, lookup lookupSystemActorBySlugFn, hasGrants hasAnyGrantsFn) (*AnonymousActor, error) {
 	row, err := lookup(ctx, anonymousActorSlug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf(
-				"auth: anonymous system actor not found (slug %q); has mod-users migration 0100_baseline.sql been applied?",
+				"auth: anonymous system actor not found (slug %q); have mod-core's migrations been applied?",
 				anonymousActorSlug,
 			)
 		}
 		return nil, fmt.Errorf("auth: resolve anonymous system actor by slug %q: %w", anonymousActorSlug, err)
 	}
+	if row.EntityID <= 0 || row.PersonalProfileID <= 0 {
+		return nil, fmt.Errorf("auth: anonymous system actor (slug %q) has no personal profile", anonymousActorSlug)
+	}
 
-	// Fail closed: if the assertion query itself errors, do not treat that
-	// as "no grants" — refuse to start rather than risk running with a
-	// possibly-granted anonymous actor.
-	exists, err := hasGrants(ctx, row.EntityID)
+	// Fail closed: an assertion-query error is not "no grants".
+	exists, err := hasGrants(ctx, []int64{row.EntityID, row.PersonalProfileID})
 	if err != nil {
-		return nil, fmt.Errorf("auth: check anonymous actor grants (entity_id=%d): %w", row.EntityID, err)
+		return nil, fmt.Errorf("auth: check anonymous actor grants (principal_id=%d, profile_id=%d): %w",
+			row.EntityID, row.PersonalProfileID, err)
 	}
 	if exists {
 		slog.ErrorContext(ctx, "auth: anonymous system actor holds one or more grants; refusing to start",
-			"entity_id", row.EntityID,
+			"principal_id", row.EntityID,
+			"profile_id", row.PersonalProfileID,
 			"slug", anonymousActorSlug,
 		)
-		return nil, fmt.Errorf("auth: anonymous system actor (entity_id=%d) holds one or more grants; it must remain zero-authority", row.EntityID)
+		return nil, fmt.Errorf("auth: anonymous system actor (principal_id=%d, profile_id=%d) holds one or more grants; it must remain zero-authority",
+			row.EntityID, row.PersonalProfileID)
 	}
 
-	return &AnonymousActor{entityID: row.EntityID}, nil
+	return &AnonymousActor{principalID: row.EntityID, profileID: row.PersonalProfileID}, nil
 }

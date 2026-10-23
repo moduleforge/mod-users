@@ -11,10 +11,10 @@ type firebaseMapper struct {
 	opts MapperOptions
 }
 
-func (m *firebaseMapper) Map(rawClaims map[string]any) (Principal, error) {
+func (m *firebaseMapper) Map(rawClaims map[string]any) (ExternalIdentity, error) {
 	sub, iss, err := extractRequired(rawClaims)
 	if err != nil {
-		return Principal{}, err
+		return ExternalIdentity{}, err
 	}
 
 	roles := lowercaseAll(getStringSlice(rawClaims, "roles"))
@@ -35,7 +35,7 @@ func (m *firebaseMapper) Map(rawClaims map[string]any) (Principal, error) {
 		}
 	}
 
-	return Principal{
+	return ExternalIdentity{
 		Subject:       sub,
 		Issuer:        iss,
 		Email:         getString(rawClaims, "email"),

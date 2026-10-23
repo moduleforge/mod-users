@@ -20,7 +20,7 @@ type StatePayload struct {
 	Expires    int64  `json:"e"` // unix seconds
 	// TestMode is set when the flow was initiated via /start?mode=test.
 	// The callback handler branches on this to skip UserResolver and
-	// IssueLocalJWT — no session is created — and redirect to a
+	// token issuance — no session is created — and redirect to a
 	// test-result URL instead. Zero-value (false) keeps back-compat
 	// with state cookies minted before 9.18.
 	TestMode bool `json:"t,omitempty"`
