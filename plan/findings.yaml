@@ -45,4 +45,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Task 006: remove the build constraint from api/internal/handlers/auth/oidc.go; OIDCHandler must provide Start and Callback to satisfy auth.OIDCRoutes; use CreateSessionInTx, AddFactorInTx, TokenForSessionInTx, UnauthenticatedActingContext.'
+    - title: 'Task 008: wire NewSessionService(pool, q, cor'
+      id: 1Nqm
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Task 008: wire NewSessionService(pool, q, coreQ, az, obs, signer, challenges, SessionConfigFrom(cfg)) and authhandlers.New(pool, q, coreQ, users, creds, challenges, sessions, oauth, sender, guiBase); re-export SessionHandler and RegisterSessionRoutes from internal/handlers/session; mount OIDC step-up start on /v1/session; document device_token, lock remedy kinds and app_login_not_granted lock reason in OpenAPI.'
 closed: []
