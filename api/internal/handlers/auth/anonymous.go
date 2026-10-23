@@ -1,79 +1,85 @@
 package auth
 
 import (
-	"fmt"
-	"log/slog"
 	"net/http"
+	"strings"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	svc "github.com/moduleforge/mod-users/api/internal/service"
-	db "github.com/moduleforge/mod-users/model/db"
 )
 
 // anonymousRequest is the body for POST /v1/auth/anonymous.
 type anonymousRequest struct {
-	DeviceID string `json:"device_id"` // required; stable device fingerprint
+	// DeviceID is a stable device fingerprint; required.
+	DeviceID string `json:"device_id"`
+	// DeviceToken, when set, signs an existing guest back in with the token
+	// its anon credential was issued with, instead of creating a guest.
+	DeviceToken string `json:"device_token"`
+	// App optionally names the app the session signs in to.
+	App string `json:"app"`
 }
 
-// Anonymous handles POST /v1/auth/anonymous.
-// It creates an anonymous user account and returns a JWT plus a session token.
-// The endpoint is unauthenticated.
+// anonymousResponse is the token response plus, for a new guest, the device
+// token of its anon credential. The device token is returned only once and
+// signs the guest back in later (device_token in the request).
+type anonymousResponse struct {
+	svc.TokenResponse
+	DeviceToken string `json:"device_token,omitempty"`
+}
+
+// Anonymous handles POST /v1/auth/anonymous: guest sign-in. Without a
+// device_token it creates a guest user (personal profile, no person, one
+// anon credential) and its session, answering 201 with the token response
+// and the new device_token. With a device_token it signs that guest back in
+// (200); an unknown token, or one registered for another device, is 401
+// users.invalid_credentials.
 func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	var req anonymousRequest
 	if !server.Decode(w, r, &req) {
 		return
 	}
-
-	if req.DeviceID == "" {
-		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "device_id", Code: "users.device_id_required", Message: "device_id is required"}))
+	if strings.TrimSpace(req.DeviceID) == "" {
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
+			Field: "device_id", Code: "users.device_id_required", Message: "device_id is required",
+		}))
 		return
 	}
 
-	result, err := h.userSvc.CreateAnonymousUser(r.Context(), svc.CreateAnonymousUserInput{
-		DeviceID: req.DeviceID,
+	if req.DeviceToken != "" {
+		resp, err := h.sessions.LoginWithDeviceToken(r.Context(), req.DeviceID, req.DeviceToken, req.App)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		apiresp.WriteJSON(w, http.StatusOK, anonymousResponse{TokenResponse: resp})
+		return
+	}
+
+	appID, err := h.sessions.ResolveApp(r.Context(), req.App)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	var out anonymousResponse
+	err = h.inTx(r.Context(), func(tx pgx.Tx) error {
+		guest, err := h.users.CreateGuestUserInTx(r.Context(), tx, svc.CreateGuestUserInput{DeviceID: req.DeviceID})
+		if err != nil {
+			return err
+		}
+		out.DeviceToken = guest.Anon.Token
+		out.TokenResponse, err = h.sessions.StartSessionInTx(r.Context(), tx, svc.StartSessionInput{
+			PrincipalID: guest.User.EntityID,
+			AppID:       appID,
+			Factors:     []svc.Factor{{CredentialID: guest.Anon.Credential.ID}},
+		})
+		return err
 	})
 	if err != nil {
-		slog.ErrorContext(r.Context(), "anonymous: create anonymous user", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("anonymous: create anonymous user: %w", err))
+		writeError(w, r, err)
 		return
 	}
-
-	// Issue a JWT for the new guest account. The token carries is_anonymous=true
-	// for forward-compatibility, but the claim is not read by any middleware
-	// today — RequireVerifiedEmail (and everything else in the claim-mapping /
-	// resolve pipeline) decides purely from the account's EmailVerifiedAt
-	// timestamp, not this claim. This is unrelated to the separate, shared
-	// anonymous system actor (api/internal/auth/anonymous_actor.go), which has
-	// no JWT at all.
-	//
-	// IssueAnonymousJWT only reads ua.Uuid, so we build a minimal db.UserAccount
-	// from the service result UUID — no additional DB round-trip is required.
-	dbUA := db.UserAccount{Uuid: uuid.UUID(result.UserAccount.UUID)}
-
-	token, err := h.issueAnonymousJWT(dbUA)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "anonymous: issue jwt", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("anonymous: issue jwt: %w", err))
-		return
-	}
-
-	slog.InfoContext(r.Context(), "anonymous user created",
-		"user_account_uuid", result.UserAccount.UUID.String(),
-		"device_id", req.DeviceID,
-	)
-
-	server.JSON(w, http.StatusCreated, map[string]any{
-		"token":         token,
-		"session_token": result.AnonToken.SessionToken,
-		"user": map[string]any{
-			"uuid":         result.UserAccount.UUID.String(),
-			"is_anonymous": true,
-			// Guests have no email, so they are never verified: explicit null,
-			// matching GET /v1/self.
-			"email_verified_at": nil,
-		},
-	})
+	apiresp.WriteJSON(w, http.StatusCreated, out)
 }

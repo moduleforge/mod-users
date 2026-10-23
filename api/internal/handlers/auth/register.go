@@ -1,159 +1,18 @@
-// Package auth provides HTTP handlers for local authentication flows.
 package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/moduleforge/core-api/apiresp"
-	coredb "github.com/moduleforge/core-model/db"
-	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/server"
 	svc "github.com/moduleforge/mod-users/api/internal/service"
-	db "github.com/moduleforge/mod-users/model/db"
 )
-
-// Sender is the email-sending interface expected by this package.
-// It matches email.Sender to avoid a concrete import dependency.
-type Sender interface {
-	Send(ctx context.Context, to, subject, textBody string) error
-}
-
-// FirstUserHookFn is called after the first user account is committed to the
-// database. entityID is the entity_id of the newly created natural person.
-// Errors are logged and ignored so that a bootstrap failure does not roll back
-// the registration — the operator can create the grant manually. The hook runs
-// outside the registration transaction.
-type FirstUserHookFn func(ctx context.Context, entityID int64) error
-
-// anonUserCreator is the service interface required by the Anonymous handler.
-// Defined at the point of use so tests can inject a stub.
-type anonUserCreator interface {
-	CreateAnonymousUser(ctx context.Context, in svc.CreateAnonymousUserInput) (svc.CreateAnonymousUserResult, error)
-}
-
-// authQuerier is the narrow db.Querier subset used by the auth handlers (Login,
-// EmailCodeRequest/Verify, PasswordResetRequest/Confirm). Defined at the point
-// of use so tests can inject a stub without implementing the full db.Querier.
-// *db.Queries satisfies this interface; the Register handler uses db.New(tx)
-// directly for transaction-scoped operations.
-type authQuerier interface {
-	GetUserAccountByEmail(ctx context.Context, lower string) (db.UserAccount, error)
-	GetAuthLocal(ctx context.Context, userAccountID int64) (db.AuthLocal, error)
-	CreateEmailCodeWithCooldown(ctx context.Context, arg db.CreateEmailCodeWithCooldownParams) (db.EmailCode, error)
-	HasRecentEmailCode(ctx context.Context, arg db.HasRecentEmailCodeParams) (bool, error)
-	GetActiveEmailCode(ctx context.Context, arg db.GetActiveEmailCodeParams) (db.EmailCode, error)
-	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
-	ClaimEmailCodeAttempt(ctx context.Context, arg db.ClaimEmailCodeAttemptParams) (db.EmailCode, error)
-	UpdateUserAccount(ctx context.Context, arg db.UpdateUserAccountParams) error
-	CreatePasswordReset(ctx context.Context, arg db.CreatePasswordResetParams) (db.PasswordReset, error)
-	GetActivePasswordReset(ctx context.Context, tokenHash string) (db.PasswordReset, error)
-	UpsertAuthLocal(ctx context.Context, arg db.UpsertAuthLocalParams) error
-	ConsumePasswordReset(ctx context.Context, id int64) error
-}
-
-// Handler bundles dependencies for the local auth HTTP handlers.
-type Handler struct {
-	pool          *pgxpool.Pool
-	queries       authQuerier
-	coreQ         *coredb.Queries
-	jwtSecret     string
-	signer        *localauth.Signer // nil => HS256 keyed by jwtSecret
-	issuer        string
-	sender        Sender
-	guiBase       string
-	firstUserHook FirstUserHookFn // nil if no bootstrap hook configured
-	userSvc       anonUserCreator // nil until SetUserSvc is called
-
-	// Bound on detached email-code sends; see dispatchEmailCode. The zero
-	// value selects the default concurrency.
-	emailCodeConcurrency int
-	emailCodeSlotsOnce   sync.Once
-	emailCodeSlots       chan struct{}
-}
-
-// New constructs a Handler.
-func New(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, jwtSecret, issuer string, sender Sender, guiBase string) *Handler {
-	return &Handler{
-		pool:      pool,
-		queries:   queries,
-		coreQ:     coreQ,
-		jwtSecret: jwtSecret,
-		issuer:    issuer,
-		sender:    sender,
-		guiBase:   guiBase,
-	}
-}
-
-// NewWithSigner constructs a Handler that always signs with signer. Prefer it
-// over New in any deployment that may run with JWT_ALG=EdDSA: a nil signer is
-// rejected here instead of silently falling back to HS256.
-func NewWithSigner(pool *pgxpool.Pool, queries *db.Queries, coreQ *coredb.Queries, signer *localauth.Signer, issuer string, sender Sender, guiBase string) (*Handler, error) {
-	if signer == nil {
-		return nil, errors.New("auth: signer must not be nil")
-	}
-	h := New(pool, queries, coreQ, "", issuer, sender, guiBase)
-	h.signer = signer
-	return h, nil
-}
-
-// SetSigner overrides the JWT signer used by login, email-code verification,
-// and anonymous sign-in. A nil signer restores the default (HS256 keyed by the
-// secret passed to New).
-func (h *Handler) SetSigner(s *localauth.Signer) {
-	h.signer = s
-}
-
-// jwtSigner returns the configured signer. With no signer set it falls back to
-// HS256 keyed by jwtSecret, and fails (rather than minting weakly-keyed
-// tokens) when that secret is empty. Apps running JWT_ALG=EdDSA must inject a
-// signer (NewWithSigner or SetSigner).
-func (h *Handler) jwtSigner() (*localauth.Signer, error) {
-	if h.signer != nil {
-		return h.signer, nil
-	}
-	return localauth.NewHS256Signer(h.jwtSecret, "")
-}
-
-// issueLocalJWT mints a login token for ua with the handler's signer.
-func (h *Handler) issueLocalJWT(ua db.UserAccount) (string, error) {
-	signer, err := h.jwtSigner()
-	if err != nil {
-		return "", err
-	}
-	return localauth.IssueLocalJWTWithSigner(ua, signer, h.issuer)
-}
-
-// issueAnonymousJWT mints an anonymous-session token for ua with the handler's signer.
-func (h *Handler) issueAnonymousJWT(ua db.UserAccount) (string, error) {
-	signer, err := h.jwtSigner()
-	if err != nil {
-		return "", err
-	}
-	return localauth.IssueAnonymousJWTWithSigner(ua, signer, h.issuer)
-}
-
-// SetUserSvc wires in the UserAccountService after construction.
-// It must be called before the Anonymous handler is reachable.
-func (h *Handler) SetUserSvc(svc anonUserCreator) {
-	h.userSvc = svc
-}
-
-// SetFirstUserHook registers a hook to be called after the first user account
-// is created and committed. The hook receives the new entity's internal ID.
-// A nil fn is a no-op (clears any previously registered hook).
-func (h *Handler) SetFirstUserHook(fn FirstUserHookFn) {
-	h.firstUserHook = fn
-}
 
 // registerRequest is the body for POST /v1/auth/register.
 type registerRequest struct {
@@ -161,184 +20,112 @@ type registerRequest struct {
 	Password   string `json:"password"`
 	GivenName  string `json:"given_name"`
 	FamilyName string `json:"family_name"`
+	// App optionally names the app the new session signs in to.
+	App string `json:"app"`
 }
 
-// Register handles POST /v1/auth/register.
+// Register handles POST /v1/auth/register: self-registration of a
+// bring-your-own user. In one transaction it creates the user with its own
+// person record and personal profile, the primary email identifier
+// (unverified), the password credential bound to it and the session, and
+// answers 201 with the token response. A verify_identifier code is emailed
+// after commit.
+//
+// Order: 400 for malformed input, then 403 users.byo_identity_disabled when
+// platform_settings.allow_byo_identity is off, then 409
+// users.identifier_taken. NO_OIDC_ACCOUNTS governs OIDC just-in-time accounts
+// (the OIDC resolver), not local registration.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 	if !server.Decode(w, r, &req) {
 		return
 	}
-
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-
-	if req.Email == "" {
-		// literal-keep: register-form.tsx displays this message verbatim.
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "email is required",
-			[]apiresp.FieldError{{Field: "email", Code: "users.email_required", Message: "email is required"}})
+	if details := required(
+		[2]string{"email", strings.TrimSpace(req.Email)},
+		[2]string{"password", req.Password},
+		[2]string{"given_name", strings.TrimSpace(req.GivenName)},
+		[2]string{"family_name", strings.TrimSpace(req.FamilyName)},
+	); len(details) > 0 {
+		apiresp.WriteError(w, r, apiresp.InvalidInput(details...))
 		return
 	}
-	if len(req.Password) < 12 {
-		// literal-keep: register-form.tsx displays this message verbatim.
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "password must be at least 12 characters",
-			[]apiresp.FieldError{{Field: "password", Code: "users.password_too_short", Message: "password must be at least 12 characters"}})
+	if err := svc.ValidateEmail(req.Email); err != nil {
+		writeError(w, r, err)
 		return
 	}
-	if strings.TrimSpace(req.GivenName) == "" {
-		// literal-keep: register-form.tsx displays this message verbatim.
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "given_name is required",
-			[]apiresp.FieldError{{Field: "given_name", Code: "users.given_name_required", Message: "given_name is required"}})
+	if err := svc.ValidatePassword(req.Password); err != nil {
+		writeError(w, r, err)
 		return
 	}
-	if strings.TrimSpace(req.FamilyName) == "" {
-		// literal-keep: register-form.tsx displays this message verbatim.
-		server.ErrorWithDetails(w, http.StatusBadRequest, "invalid_input", "family_name is required",
-			[]apiresp.FieldError{{Field: "family_name", Code: "users.family_name_required", Message: "family_name is required"}})
-		return
-	}
-
-	hash, err := localauth.HashPassword(req.Password)
+	appID, err := h.sessions.ResolveApp(r.Context(), req.App)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "register: hash password", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: hash password: %w", err))
+		writeError(w, r, err)
 		return
 	}
 
-	tx, err := h.pool.Begin(r.Context())
+	settings, err := h.coreQ.GetPlatformSettings(r.Context())
 	if err != nil {
-		slog.ErrorContext(r.Context(), "register: begin tx", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: begin tx: %w", err))
+		writeError(w, r, fmt.Errorf("register: load platform settings: %w", err))
 		return
 	}
-	defer tx.Rollback(r.Context())
-
-	qtx := db.New(tx)
-	coreQtx := h.coreQ.WithTx(tx)
-
-	// Determine first-user bootstrap.
-	var userAccountCount int64
-	if err := tx.QueryRow(r.Context(), "SELECT count(*) FROM user_accounts").Scan(&userAccountCount); err != nil {
-		slog.ErrorContext(r.Context(), "register: count user_accounts", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: count user_accounts: %w", err))
-		return
-	}
-	isFirst := userAccountCount == 0
-
-	// Resolve the natural_person type ID from the types registry.
-	npType, err := coreQtx.GetTypeBySlug(r.Context(), "natural_person")
-	if err != nil {
-		slog.ErrorContext(r.Context(), "register: resolve natural_person type", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: resolve natural_person type: %w", err))
+	if !settings.AllowByoIdentity {
+		writeError(w, r, svc.ErrBYOIdentityDisabled)
 		return
 	}
 
-	entity, err := coreQtx.CreateEntity(r.Context(), npType.ID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "register: create entity", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: create entity: %w", err))
-		return
-	}
-
-	// Create legal entity (pure FK anchor — no kind/display_name).
-	_, err = coreQtx.CreateLegalEntity(r.Context(), entity.ID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "register: create legal entity", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: create legal entity: %w", err))
-		return
-	}
-
-	_, err = coreQtx.CreateNaturalPerson(r.Context(), coredb.CreateNaturalPersonParams{
-		EntityID:   entity.ID,
-		GivenName:  pgtype.Text{String: req.GivenName, Valid: true},
-		FamilyName: pgtype.Text{String: req.FamilyName, Valid: true},
+	var (
+		resp     svc.TokenResponse
+		verify   svc.IssuedChallenge
+		emailTo  string
+		haveCode bool
+	)
+	err = h.inTx(r.Context(), func(tx pgx.Tx) error {
+		user, err := h.users.CreateBYOUserInTx(r.Context(), tx, svc.CreateBYOUserInput{
+			GivenName: req.GivenName, FamilyName: req.FamilyName,
+		})
+		if err != nil {
+			return err
+		}
+		actCtx := user.ActingContext(r.Context())
+		ident, err := h.users.AddIdentifierInTx(actCtx, tx, svc.AddIdentifierInput{
+			UserID: user.User.EntityID, Kind: svc.IdentifierKindEmail, Value: req.Email, Primary: true,
+		})
+		if err != nil {
+			return err
+		}
+		cred, err := h.creds.CreatePasswordInTx(actCtx, tx, svc.CreatePasswordInput{
+			PrincipalID: user.User.EntityID, IdentifierID: &ident.ID, Password: req.Password,
+		})
+		if err != nil {
+			return err
+		}
+		verify, err = h.challenges.IssueCodeInTx(actCtx, tx, svc.IssueCodeInput{
+			Kind:    svc.ChallengeVerifyIdentifier,
+			Subject: svc.Subject{PrincipalID: user.User.EntityID, IdentifierID: ident.ID},
+		})
+		if err != nil {
+			return err
+		}
+		emailTo, haveCode = ident.Value, true
+		resp, err = h.sessions.StartSessionInTx(r.Context(), tx, svc.StartSessionInput{
+			PrincipalID: user.User.EntityID,
+			AppID:       appID,
+			Factors:     []svc.Factor{{CredentialID: cred.ID}},
+		})
+		return err
 	})
 	if err != nil {
-		slog.ErrorContext(r.Context(), "register: create natural person", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: create natural person: %w", err))
+		writeError(w, r, err)
 		return
 	}
 
-	// account_holder references legal_entities(entity_id); entity.ID is valid
-	// because we just created the legal_entity row above.
-	ua, err := qtx.CreateUserAccount(r.Context(), db.CreateUserAccountParams{
-		AccountHolder: entity.ID,
-		Email:         pgtype.Text{String: req.Email, Valid: true},
-	})
-	if err != nil {
-		// Check for unique violation on email.
-		var pgErr *pgconn.PgError
-		if isPgError(err, &pgErr) && pgErr.Code == "23505" {
-			// literal-keep: register-form.tsx displays this message verbatim.
-			server.ErrorWithDetails(w, http.StatusConflict, "conflict",
-				"an account with that email already exists",
-				[]apiresp.FieldError{
-					{Field: "email", Code: "users.email_taken", Message: "email is already registered"},
-				},
-			)
-			return
-		}
-		slog.ErrorContext(r.Context(), "register: create user account", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: create user account: %w", err))
-		return
+	if haveCode {
+		code := verify.Code
+		h.dispatch(r, "verify_identifier", func(ctx context.Context) {
+			if err := h.challenges.DeliverCode(ctx, emailTo, svc.ChallengeVerifyIdentifier, code); err != nil {
+				slog.ErrorContext(ctx, "register: deliver verification code", "error", err)
+			}
+		})
 	}
-
-	if err := qtx.UpsertAuthLocal(r.Context(), db.UpsertAuthLocalParams{
-		UserAccountID: ua.ID,
-		PasswordHash:  hash,
-	}); err != nil {
-		slog.ErrorContext(r.Context(), "register: upsert auth_local", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: upsert auth_local: %w", err))
-		return
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
-		slog.ErrorContext(r.Context(), "register: commit", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("register: commit: %w", err))
-		return
-	}
-
-	// Bootstrap wildcard grant for the first user. The hook runs after commit so
-	// that the entity row is visible to the hook's own transaction. A hook failure
-	// is logged and ignored — the account is already created; an operator can
-	// create the grant manually via POST /v1/authz/grants.
-	if isFirst && h.firstUserHook != nil {
-		if err := h.firstUserHook(r.Context(), entity.ID); err != nil {
-			slog.ErrorContext(r.Context(), "register: first-user hook failed; wildcard grant not created",
-				"entity_id", entity.ID,
-				"error", err,
-			)
-		} else {
-			slog.InfoContext(r.Context(), "register: wildcard manage grant created for first user",
-				"entity_id", entity.ID,
-			)
-		}
-	}
-
-	// Trigger the verify_email flow so the new account has an immediate path to
-	// a verified status. Runs asynchronously (mirroring EmailCodeRequest) so
-	// bcrypt cost is incurred off the request path. sendEmailCode logs and
-	// swallows its own errors — the account is already created and the user
-	// can re-request the code via POST /v1/auth/email-code/request.
-	go func() {
-		if ua.Email.Valid {
-			h.sendEmailCode(r, ua.Email.String, "verify_email")
-		}
-	}()
-
-	slog.InfoContext(r.Context(), "user registered", "user_account_uuid", ua.Uuid.String(), "email", ua.Email.String)
-
-	server.JSON(w, http.StatusCreated, map[string]any{
-		"uuid":                        ua.Uuid.String(),
-		"email":                       ua.Email.String, // always non-null for register
-		"email_verification_required": true,
-	})
-}
-
-// isPgError tests whether err is a *pgconn.PgError and stores it in target.
-func isPgError(err error, target **pgconn.PgError) bool {
-	if pgErr, ok := err.(*pgconn.PgError); ok {
-		*target = pgErr
-		return true
-	}
-	return false
+	apiresp.WriteJSON(w, http.StatusCreated, resp)
 }

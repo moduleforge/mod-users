@@ -1,3 +1,9 @@
+//go:build oidc_resolver_pending
+
+// This file is excluded from the build until phase 6 task 006 (OIDC resolver)
+// rewrites it on credentials and sessions; that task removes this constraint.
+// The /v1/auth handlers of task 005 do not depend on it.
+
 package auth
 
 import (
