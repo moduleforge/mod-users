@@ -51,7 +51,7 @@ phases:
           tier: sonnet-high
           digest: 'Added service layer under api/internal/service: user_service (BYO, guest, managed creation; email identifier add/verify/set-primary/remove), credential_service (password, email_otp, ssh_key, anon, API key; LinkOIDCInTx as sole cred_oidc insert path; RevokeInTx; RemoveInTx with last-credential guard), challenge_service (numeric and opaque tokens, attempt-bounded VerifyCode), ssh_key_resolver rewritten. Deleted user_accounts.go, ssh_keys.go, identities.go. Build of service and sshkey packages passes; stale tests in service left for task 010; usersservice facade re-exports deferred to task 008. Finding oi9B filed (identifier delete vs RESTRICT FK).'
           git:
-            branch: null
+            branch: plan/identity-model-impl-06-004
             commit: []
             merge: null
         - number: 5
