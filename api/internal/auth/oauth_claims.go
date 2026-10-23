@@ -12,6 +12,16 @@ type ExternalIdentity struct {
 	Email         string
 	EmailVerified bool     // true when the IdP asserted email_verified; false is the zero value and means "not asserted"
 	Roles         []string // normalized, lowercased IdP roles; informational only
+
+	// GivenName and FamilyName are the standard given_name and family_name
+	// claims (FamilyName falls back to the tail of name). Either may be empty;
+	// they only seed a just-in-time user's person record.
+	GivenName  string
+	FamilyName string
+	// AssertedACR is the id_token's acr claim when it is a bare 1, 2 or 3 (a
+	// NIST AAL level), else 0. The session counts it only when the provider has
+	// trust_acr.
+	AssertedACR int16
 }
 
 // ClaimMapper translates the raw claims of an external provider's verified

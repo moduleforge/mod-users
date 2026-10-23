@@ -50,6 +50,12 @@ type DBProviderRow struct {
 	Scopes       []string // nil = no override; []string{} = explicit empty override
 	ScopesSet    bool     // true when the DB row provided a non-NULL scopes value
 	Enabled      bool
+	// PartyID is the party the provider is bound to (NULL: unbound).
+	PartyID pgtype.Int8
+	// JITMode is the row's jit_mode (none, byo or managed; the column is NOT NULL).
+	JITMode string
+	// TrustACR is the row's trust_acr.
+	TrustACR bool
 }
 
 // MergedProvider carries the effective Provider plus per-field
@@ -153,6 +159,7 @@ func mergeFields(id string, env *Provider, dbRow *DBProviderRow, defaults *provi
 		Scopes:       pickScopes(dbRow, env, defaultScopes),
 	}
 	effective.MultiTenantIssuer = isMultiTenantIssuer(effective.IssuerURL)
+	effective.PartyID, effective.JITMode, effective.TrustACR = policyFields(env, dbRow)
 
 	return &MergedProvider{
 		ID:                id,
@@ -162,6 +169,25 @@ func mergeFields(id string, env *Provider, dbRow *DBProviderRow, defaults *provi
 		WellKnownDefaults: defaults,
 		HasClientSecret:   effective.ClientSecret != "",
 	}
+}
+
+// policyFields resolves the account-creation policy of a provider. The DB row,
+// when there is one, is authoritative (its columns are never NULL-as-unset: a
+// row always carries a jit_mode and a trust_acr). Without a row an env-only
+// provider acts as party_id NULL, jit_mode as the env loader set it (byo, or
+// none under NO_OIDC_ACCOUNTS), trust_acr false.
+func policyFields(env *Provider, dbRow *DBProviderRow) (partyID int64, jitMode string, trustACR bool) {
+	if dbRow != nil {
+		jitMode = dbRow.JITMode
+		if jitMode == "" {
+			jitMode = JITModeBYO
+		}
+		return dbRow.PartyID.Int64, jitMode, dbRow.TrustACR
+	}
+	if env != nil && env.JITMode != "" {
+		return 0, env.JITMode, false
+	}
+	return 0, JITModeBYO, false
 }
 
 // --- accessors used by mergeFields to pull the right field from each layer ---
@@ -285,6 +311,9 @@ func toDBProviderRow(r db.ListOIDCProvidersRow) DBProviderRow {
 		ClientSecret: r.ClientSecret,
 		ClaimStyle:   r.ClaimStyle,
 		Enabled:      r.Enabled,
+		PartyID:      r.PartyID,
+		JITMode:      r.JitMode,
+		TrustACR:     r.TrustAcr,
 	}
 	if r.Scopes != nil {
 		out.ScopesSet = true
