@@ -88,3 +88,35 @@ list, revoke, `auth_time`). Parallel-eligible with task 006. Task 008 mounts the
 - After the `/v1/me` profile, identifier and credential routes.
 - After sessions and guest upgrade.
 - After `/v1/principals`, `DirectoryService` and the renderers.
+
+## Status
+
+Outcome: succeeded (2026-10-23).
+
+Validation:
+
+- `cd api && go build ./internal/handlers/... ./internal/service/...`: the new packages `internal/service`, `internal/handlers/me` and `internal/handlers/principals` build. The `internal/handlers` package itself stays red only from files task 008 deletes (`apps.go`, `assume.go`, `identities.go`, `self.go`, `ssh_keys.go`, `user_accounts.go`) plus `oidc_config.go` (`db.OidcConfig` and `db.OidcProvider` no longer exist; it is kept and needs its own port).
+- The `/v1/self`, `SelfHandler`, `IdentitiesHandler` grep matches only `assume.go`, `identities.go`, `self_identities_routes.go`, `self_routes.go`, `self.go` and `ssh_keys.go`, all deleted by task 008.
+- `func ReadPrincipalSummaries` appears once, in `api/internal/service/directory_service.go`; `DirectoryService.PrincipalSummaries` calls it with the service pool.
+- A throwaway integration run against Postgres 16 with the composed migrations (mod-core, mod-authz, mod-users) exercised every service method and every handler route below, then was deleted (behavior tests are task 010).
+
+Files:
+
+- `api/internal/service/user_self_service.go`, `user_self_access.go`: `/v1/me` self-service methods and guest upgrade.
+- `api/internal/service/principal_admin.go`: principal list, read, disable, enable.
+- `api/internal/service/directory_service.go`: `DirectoryService`, `ReadPrincipalSummaries`, profile summaries.
+- `api/internal/service/display_renderers.go`: `RegisterDisplayRenderers` for `user` and `profile`.
+- `api/internal/service/session_profiles.go`: `SessionService.Profiles`.
+- `api/internal/service/user_service.go`: self-service wiring fields on `UserService`.
+- `api/internal/handlers/me/`: `MeHandler`, `NewMeHandler`, `RegisterMeRoutes`.
+- `api/internal/handlers/principals/`: `PrincipalsHandler`, `NewPrincipalsHandler`, `RegisterPrincipalRoutes`.
+
+Decisions:
+
+- Self-service authority is structural: every `Self*` method reads the target from the `AuthContext` on ctx and takes no principal argument. Writes are refused (403) while impersonating, and require `auth_time` within `AUTH_SELF_SERVICE_MAX_AUTH_AGE` (409 `users.step_up_required`), checked after input validation.
+- The handlers live in subpackages `handlers/me` and `handlers/principals` (like `handlers/session`) so they build while `internal/handlers` is red. Task 008 re-exports them as `MeHandler`, `PrincipalsHandler`, `RegisterMeRoutes`, `RegisterPrincipalRoutes`.
+- `UserService.WithSelfService(pool, sessions, challenges, ops, maxAuthAge)` wires the self-service dependencies without changing `NewUserService`; task 008 calls it from the facade or manifest.
+- The new queries are raw SQL in the service package, not in `model/queries/`: sqlc compiles `model/queries/` against the mod_users migrations alone and these read `public.*`. No regeneration was needed.
+- Audit: only `create`, `update`, `delete`, `revoke` are used. Disabling or enabling a service account is an `update` on resource `service_account` (section 10.1 lists no resource for it); users use `user`.
+- Guest upgrade revokes the `anon` credential through `CredentialService.RevokeInTx`, which also ends every session holding it, including the requesting one. The response is the user record and the client signs in again with the new password.
+- A wrong or expired identifier verification code is a 400 field error (`users.code_invalid`), not the 401 `ErrInvalidCode`, so a client does not read it as a dead session.
