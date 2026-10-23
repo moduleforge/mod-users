@@ -25,6 +25,7 @@ phases:
           path: phase-06-users-identity-core/002-rewrite-queries-and-generated-code.md
           done: false
           tier: sonnet-med
+          digest: Replaced the query set (users, identifiers, credentials, challenges, sessions, party_policies, signing_keys; oidc queries updated) and regenerated usersdb with make gen; old generated files removed. Added SQLSTATE helpers (MF101-MF103, unique-violation mapping), tests, and usersservice re-exports. api packages stay red until task 008. No findings filed.
           git:
             branch: null
             commit: []
