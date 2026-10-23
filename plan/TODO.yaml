@@ -61,6 +61,7 @@ phases:
           path: phase-06-users-identity-core/005-sessions-and-auth-routes.md
           done: false
           tier: opus-med
+          digest: Added SessionService (creation and landing, refresh lineages with reuse revocation, client credentials, handoff, switch, fork, step-up, logout, revocation helpers). Rewrote /v1/auth handlers on it; added handlers/session package for /v1/session. OIDC handler file fenced with build constraint oidc_resolver_pending until task 006.
           git:
             branch: null
             commit: []
