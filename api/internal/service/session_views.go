@@ -80,7 +80,8 @@ func (v ProfileView) PartyID() int64 { return v.partyID }
 // the list to that profile.
 //
 // The holder's display name is the name of the user's person record, else the
-// primary email, else "Guest" for a guest. A party's display name is the
+// primary email, else "Guest" for a guest; a service account's is its label
+// (client credentials). A party's display name is the
 // organization's legal name or the person party's name.
 const profileViewsSQL = `
 WITH holder AS (
@@ -105,7 +106,9 @@ SELECT p.entity_id,
        COALESCE(org.legal_name,
                 NULLIF(btrim(concat_ws(' ', pnp.given_name, pnp.family_name)), ''),
                 ''),
-       COALESCE((SELECT h.name FROM holder h), ''),
+       COALESCE((SELECT h.name FROM holder h),
+                (SELECT sa.label FROM public.service_accounts sa WHERE sa.entity_id = $1),
+                ''),
        CASE WHEN $2::bigint > 0
             THEN mod_users.profile_availability($2::bigint, p.entity_id)
             ELSE mod_users.credential_profile_availability($3::bigint, p.entity_id)

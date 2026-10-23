@@ -119,3 +119,77 @@ architectural_impact: true
 - After refresh lineages and client credentials.
 - After the `/v1/auth` handlers.
 - After the `/v1/session` handler.
+
+## Status
+
+- **Outcome:** succeeded (2026-10-23).
+- **Validation:** `cd api && go build ./internal/service/... ./internal/handlers/auth/... ./internal/handlers/session/...`
+  passes. The cookie grep shows only `oidc.go` (task 006's `oidc_state` cookie). The first-user grep
+  returns nothing. The `"assume"` grep shows only a comment in `api/internal/service/helpers.go`.
+  The `Observe` ops in the new files are `login`, `update` and `revoke` (resource `session`).
+  Beyond the required checks, `go vet` is clean for the three packages with the stale test files
+  moved aside, and task 004's service unit tests still pass. A temporary smoke test ran against a
+  throwaway Postgres 16 with the mod-core, mod-authz and mod-users migrations and was then
+  deleted. It covered guest sign-in, `GET /v1/session`, refresh rotation, switch, fork, a step-up
+  refusal, refresh reuse revoking the session, device-token sign-in, logout, and the 401/400
+  shapes of login, token, handoff, email-code verify, reset confirm and register. It ran without
+  observers.
+- **Affected sources:** `api/internal/service/session_service.go`, `session_flows.go`,
+  `session_views.go`, `session_errors.go` (new); `helpers.go` (`opLogin`, `ValidateEmail`,
+  `ValidatePassword`); `api/internal/handlers/auth/handler.go`, `token.go` (new), `register.go`,
+  `login.go`, `anonymous.go`, `emailcode.go`, `reset.go`, `routes.go` (rewritten);
+  `api/internal/handlers/session/handler.go` (new package `session`: `SessionHandler`,
+  `NewSessionHandler`, `RegisterSessionRoutes`).
+- **`oidc.go`:** excluded from the build with `//go:build oidc_resolver_pending` so the package
+  builds. Task 006 removes the constraint when it rewrites the file. `RegisterRoutes(r, h, oidc
+  OIDCRoutes)` takes an interface (`Start`, `Callback`) that task 006's `OIDCHandler` satisfies.
+  `nil` skips the two OIDC routes. `GET /providers` moved to `Handler.Providers`.
+- **Decisions:**
+  - Session creation inserts acr 1 as a placeholder, adds the factors, then sets acr from
+    `session_acr` and amr from `ListSessionAMR`.
+  - A disabled principal is refused before any write (401 `users.profile_unavailable`, reason
+    `principal_disabled`). A principal with no non-ended profile is refused with reason
+    `not_held`.
+  - When the requested `profile_uuid` at login is unavailable, the response is
+    `selection_required`. The chain does not fall back to another profile.
+  - App gate stub: an invite-only app admits a profile only when
+    `Authorize(ctx-with-candidate, "login", nil)` succeeds, which needs a wildcard grant. A refused
+    profile gets lock reason `app_login_not_granted`. Sign-in is 403 `users.app_login_not_granted`
+    when no available profile is admitted.
+  - Lock remedies: `sign_in_with_provider` (with `provider_id`), `step_up`,
+    `sign_in_with_authorized_credential`, `accept_invitation`. Otherwise the remedy is null.
+  - Every step-up refusal (wrong password or code, no credential, an impersonation session) is
+    `ErrStepUpRequired`, the shared `apiresp` action-required error (`useraction.StepUpRequired`,
+    409).
+  - `POST /v1/auth/anonymous` returns the token response plus `device_token` once. A later call
+    with `device_id` and `device_token` signs the guest back in (200). This field is an addition
+    to the section 7 shape that task 008's OpenAPI must document.
+  - Refresh tokens are `mfr_` plus 64 hex characters, stored as `HashToken`. Each one expires at
+    `min(now + AUTH_SESSION_IDLE_TIMEOUT, session expiry)`. A refresh against an unavailable
+    profile rolls back, so the token stays usable.
+  - A refresh token that is unknown or expired returns 401 `users.session_revoked`.
+  - Refresh-reuse revocation observes as the personal or oldest profile. If the principal has no
+    non-ended profile, the revocation is logged instead of observed so that it still commits.
+  - Password reset confirm revokes the identifier's password (`superseded`), which also revokes
+    sessions holding it. It then creates a new one that keeps the label, default profile and
+    confinement. The old password's party authorizations are not copied.
+  - Registration emails a `verify_identifier` code. The public email-code routes accept only
+    purpose `login`, and email sign-in needs a verified email (`email_otp` credential, U12).
+  - `NO_OIDC_ACCOUNTS` applies to OIDC just-in-time accounts (task 006), not to local
+    registration.
+- **Requirement 8 API for task 007:** `ListSessions`, `RevokeSessionInTx(principalID,
+  sessionUUID, reason)`, `RevokePrincipalSessionsInTx(principalID, reason)`.
+- **API for task 006:** `CreateSessionInTx`, `ExchangeHandoff`, `AddFactorInTx`,
+  `TokenForSessionInTx`, `UnauthenticatedActingContext`.
+- **Wiring for task 008:** `NewSessionService(pool, q, coreQ, az, obs, signer, challenges,
+  SessionConfigFrom(cfg))`. `authhandlers.New(pool, q, coreQ, users, creds, challenges, sessions,
+  oauth, sender, guiBase)`.
+- **Cases for task 010 beyond its document:** `selection_required` followed by a refresh with a
+  chosen profile; a requested unavailable profile at login; the invite-only gate (admitted,
+  refused, all refused → 403); a refresh against an unavailable profile leaving the token usable;
+  a concurrent double refresh (one succeeds, one is reuse); reuse when the principal has no
+  non-ended profile; registration blocked by `allow_byo_identity`; password reset revoking
+  sessions and keeping the default profile and confinement; device-token sign-in with a
+  mismatched `device_id`; step-up raising acr with a second factor class (password plus
+  `email_otp` → 2); impersonation sessions refused by fork and step-up; `login`, `update` and
+  `revoke` observations under mod-audit (`MF401`, `ErrNoActor`).
