@@ -37,6 +37,7 @@ phases:
           path: phase-06-users-identity-core/003-token-carrier-and-auth-middleware.md
           done: false
           tier: opus-med
+          digest: Replaced HS256 tokens and actor/sudo plumbing with an EdDSA-only carrier (signer and verifier pinned to EdDSA; carrier.go with session, client-credentials and audience-token issuers; auth.Identity; Authenticator with one-statement liveness check; NewRequireAuth, NewResolveOrAnonymous, NewRequireVerifiedEmail install Identity and opctx.AuthContext; persisted Ed25519 signing-key bootstrap; AUTH_* configuration; API surface 6.1 facade). authz.go uses opctx.ProfileID; own arm via profile_own_subject; wildcard and entity grants limited to scope='entity'. Resolver.go and its test deleted (task 006 rewrites). Scoped packages build, vet, and pass unit tests. Finding CLi0 filed (deploy manifests still require JWT_SECRET).
           git:
             branch: null
             commit: []
