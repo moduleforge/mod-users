@@ -2,14 +2,14 @@
 -- Fetch one provider override row by id.
 SELECT id, display_name, issuer_url, client_id, client_secret,
        claim_style, scopes, enabled, created_at, updated_at
-FROM oidc_providers
+FROM mod_users.oidc_providers
 WHERE id = $1;
 
 -- name: ListOIDCProviders :many
 -- Return every provider override row, sorted by id for stable output.
 SELECT id, display_name, issuer_url, client_id, client_secret,
        claim_style, scopes, enabled, created_at, updated_at
-FROM oidc_providers
+FROM mod_users.oidc_providers
 ORDER BY id;
 
 -- name: UpsertOIDCProvider :one
@@ -22,7 +22,7 @@ ORDER BY id;
 -- when field is omitted") must be resolved in Go code, because SQL
 -- NULL doesn't distinguish "field absent" from "explicit null". This
 -- keeps the query trivial and the semantics readable.
-INSERT INTO oidc_providers (
+INSERT INTO mod_users.oidc_providers (
     id, display_name, issuer_url, client_id, client_secret,
     claim_style, scopes, enabled
 ) VALUES (
@@ -44,7 +44,7 @@ RETURNING id, display_name, issuer_url, client_id, client_secret,
 -- deletion the merge layer falls back to env + well-known defaults.
 -- Returns the number of rows deleted so the handler can distinguish
 -- 204 (deleted) from 404 (never existed).
-DELETE FROM oidc_providers WHERE id = $1;
+DELETE FROM mod_users.oidc_providers WHERE id = $1;
 
 -- name: SetOIDCProviderEnabled :exec
 -- Narrow write used by /v1/oidc-config/confirm when the admin toggles a
@@ -52,6 +52,6 @@ DELETE FROM oidc_providers WHERE id = $1;
 -- the enabled flag (all other override fields NULL → pass through to env
 -- / well-known); update leaves all other columns untouched so the row's
 -- existing overrides survive a simple enable/disable.
-INSERT INTO oidc_providers (id, enabled)
+INSERT INTO mod_users.oidc_providers (id, enabled)
 VALUES ($1, $2)
 ON CONFLICT (id) DO UPDATE SET enabled = EXCLUDED.enabled;

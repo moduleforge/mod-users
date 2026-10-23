@@ -120,3 +120,75 @@ architectural_impact: true
 - After the tables, indexes and seeds compile under `make lint`.
 - After the MF101 to MF103 triggers and the `public.profiles` trigger.
 - After the availability, liveness and `session_acr` functions.
+
+## Status
+
+**Outcome: succeeded** (2026-10-23).
+
+Affected files: [`model/migrations/sql/0100_baseline.sql`](../../model/migrations/sql/0100_baseline.sql)
+(rewritten), `model/migrations/sql/0101_*.sql` to `0104_*.sql` (deleted),
+[`model/sqlc.yaml`](../../model/sqlc.yaml) (19 `rename` overrides),
+[`model/queries/oidc_config.sql`](../../model/queries/oidc_config.sql) and
+[`model/queries/oidc_providers.sql`](../../model/queries/oidc_providers.sql) (tables qualified
+`mod_users.`), ten obsolete `model/queries/*.sql` files (deleted), [`AGENTS.md`](../../AGENTS.md)
+(migrations and sqlc paragraphs), [`model/README.md`](../../model/README.md) (layout rows).
+
+Validation summary:
+
+- `cd model && make verify && make lint` pass, with `MODULEFORGE_SIBLINGS_DIR` pointing at a staging
+  directory whose `mod-core`, `mod-authz`, `mod-audit` links resolve to the three
+  `worktrees/plan/identity-model-impl` checkouts (mod-core `1f0a097`, mod-authz `937df24`, mod-audit
+  `c98ec56`). mod-authz phase 13 is merged there (`grants.scope`, `ownership_confers`, `is_profile`
+  triggers), so the baseline was linted against the post-phase-13 mod-authz schema. `sqlc compile`
+  also passes under CI's pinned sqlc 1.28.0 (container image), and the renames yield unprefixed
+  names under 1.28.0 and 1.31.1.
+- `ls model/migrations/sql/` lists only `0100_baseline.sql`; the deleted-names grep returns nothing;
+  every `CREATE TABLE`/`FUNCTION` is `mod_users.`-qualified except the `public.` access stub, and
+  every trigger targets `mod_users.*` or `public.profiles`.
+- Smoke script against a throwaway shadow database (kept out of the diff): a bring-your-own user
+  without a personal profile fails at `COMMIT` with `MF103`; a guest gaining a `password`
+  credential raises `MF102`; a nested impersonation session raises `MF101`. An extended suite (84
+  checks: every MF101 to MF103 rule, the `public.profiles` triggers, the named unique indexes, the
+  `active` mirrors, availability lock reasons, `session_acr`, both liveness functions, the
+  challenge cooldown) passes, and `goose down` then `up` round-trips cleanly.
+- `api/` is not compiled (expected red until task 002 regenerates `model/db/` and task 008 restores
+  the build). `model/db/` was not regenerated, so it is stale against the queries until task 002.
+
+Decisions (none changes a **(binding)** name of the API surface note):
+
+- **Queries touched for `make verify`.** `sqlc compile` cannot pass with queries over deleted tables,
+  so the ten obsolete query files task 002 deletes anyway were deleted here, and the two surviving
+  `oidc_*` files were only schema-qualified. `model/db/` is untouched.
+- **Mirror columns beyond the sketch.** Active-scoped uniqueness needs an `active` mirror on
+  `cred_password` and `cred_email_otp` too (not only `cred_oidc`/`cred_ssh_key`), and "one active
+  unbound password per principal" needs a `principal_id` mirror on `cred_password`. Both are
+  trigger-maintained (`cred_subtable_check`, `credentials_sync_active`), never caller-written. The
+  extra named indexes are `cred_password_active_unbound_uq`, `cred_email_otp_active_identifier_uq`.
+- **`session_factors.asserted_acr`** (nullable, 1 to 3) was added: `session_acr` counts an IdP's
+  asserted acr only with `trust_acr`, and the sketch had no column to hold it.
+- **Liveness functions use OUT parameters**, not `RETURNS TABLE`: identical one-row result for SQL
+  callers, but sqlc only types the OUT form. `credential_liveness` statuses beyond the lock reasons
+  are `credential_revoked` (also for an unknown credential) and `credential_expired`; an unknown
+  session is `session_revoked`, an unknown profile `not_held`. `session_acr` returns NULL for a
+  session with no unrevoked factor.
+- **Availability interpretation.** `profile_availability` and `credential_profile_availability`
+  share one internal function (`mod_users.profile_availability_for`). Party `min_acr` applies to
+  every party profile, including under impersonation and with a policy confirmation ("always");
+  impersonation and confirmations skip only the credential rule.
+- **Additional guards** (all `MF102`/`MF103`): the `users` row must exist before a user's profiles
+  and credentials; a password/email-OTP credential's identifier must belong to its principal; the
+  personal-profile check also re-runs (deferred) when a user's personal profile is deleted.
+  `CHECK`s: email `value_canon` is trimmed and lowercased; `revoked_at`/`revoke_reason` are set
+  together on credentials and sessions; a `service_allowed` kind is non-interactive; a refresh token
+  is replaced only after use.
+- **`auth_signing_keys`** stores the key as `private_key BYTEA` (PKCS#8 DER, at least 48 bytes)
+  and keeps `CREATE TABLE IF NOT EXISTS`, because the config bootstrap may create it before
+  migrations run (the same reason as the deleted `auth_jwt_secrets`).
+- **Challenge cooldown subject** is (kind, principal, identifier, session) with NULLs equal,
+  served by an expression index; the function's parameter list follows the API surface note.
+- **Down migration** drops every object by name, never `CASCADE`, so another module's foreign key
+  into `mod_users` blocks the rollback instead of being dropped silently.
+
+Findings filed: identifier deletion conflicts with never-deleted credentials bound by `RESTRICT`
+foreign keys; sqlc's schema does not include mod-core tables, so queries joining `public.*`
+relations will not compile (affects task 002 and later).
