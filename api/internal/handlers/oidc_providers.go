@@ -9,6 +9,11 @@
 // client_secret is NEVER returned in any response — has_client_secret
 // is surfaced instead. PUT with the field absent keeps the existing
 // secret; PUT with empty string clears it.
+//
+// A provider also carries its account-creation policy: party_uuid (the party
+// it is bound to), jit_mode (none, byo or managed: what an unknown identity
+// creates on first sign-in) and trust_acr (whether the IdP's asserted acr
+// counts toward the session). jit_mode managed requires a party.
 package handlers
 
 import (
@@ -23,10 +28,12 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/moduleforge/core-api/apiresp"
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -42,10 +49,19 @@ var providerIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}[a-z0-9]$`)
 // CRUD path uses. Kept separate from OIDCConfigQuerier so tests for each
 // flow can supply their own fake without bringing in the other's methods.
 type OIDCProvidersQuerier interface {
-	GetOIDCProvider(ctx context.Context, id string) (db.OidcProvider, error)
-	ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error)
-	UpsertOIDCProvider(ctx context.Context, arg db.UpsertOIDCProviderParams) (db.OidcProvider, error)
+	GetOIDCProvider(ctx context.Context, id string) (db.GetOIDCProviderRow, error)
+	ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error)
+	UpsertOIDCProvider(ctx context.Context, arg db.UpsertOIDCProviderParams) (db.UpsertOIDCProviderRow, error)
 	DeleteOIDCProvider(ctx context.Context, id string) (int64, error)
+}
+
+// PartyDirectory resolves the party a provider is bound to between its uuid
+// (the API) and its legal-entity id (oidc_providers.party_id). It is the
+// subset of coredb.Querier the provider CRUD path uses.
+type PartyDirectory interface {
+	GetEntityByUUID(ctx context.Context, argUuid uuid.UUID) (coredb.GetEntityByUUIDRow, error)
+	GetEntityByID(ctx context.Context, id int64) (coredb.GetEntityByIDRow, error)
+	GetLegalEntityByEntityID(ctx context.Context, entityID int64) (int64, error)
 }
 
 // ProvidersDeps bundles the collaborators the provider handlers need.
@@ -56,6 +72,9 @@ type ProvidersDeps struct {
 	EnvRegistry  config.ProviderRegistry
 	OAuth        *auth.OAuth
 	RedirectBase string
+	// Parties resolves party_uuid. When nil, a provider cannot be bound to a
+	// party (a non-null party_uuid is a 400).
+	Parties PartyDirectory
 	// Confirmer wires the existing OIDCConfigHandler so provider writes
 	// can reuse its authorize + refresh-state plumbing. Required.
 	Confirmer *OIDCConfigHandler
@@ -114,6 +133,13 @@ type providerView struct {
 	ScopesSource  string   `json:"scopes_source"`
 
 	Enabled bool `json:"enabled"`
+
+	// PartyUUID is the party the provider is bound to (null: unbound).
+	PartyUUID *string `json:"party_uuid"`
+	// JITMode is the effective jit_mode: none, byo or managed.
+	JITMode string `json:"jit_mode"`
+	// TrustACR is whether the IdP's asserted acr counts toward the session.
+	TrustACR bool `json:"trust_acr"`
 
 	InitOK bool   `json:"init_ok"`
 	Error  string `json:"error,omitempty"`
@@ -262,7 +288,7 @@ func (h *ProvidersHandler) Revert(w http.ResponseWriter, r *http.Request) {
 func (h *ProvidersHandler) upsertAndRespond(w http.ResponseWriter, r *http.Request, id string, raw map[string]json.RawMessage, creating bool) {
 	// Load existing row (if any) so "field absent" means "keep existing"
 	// and client_secret is preserved unless explicitly overwritten.
-	var existing db.OidcProvider
+	var existing db.GetOIDCProviderRow
 	existingLoaded := false
 	if row, err := h.deps.Queries.GetOIDCProvider(r.Context(), id); err == nil {
 		existing = row
@@ -290,6 +316,10 @@ func (h *ProvidersHandler) upsertAndRespond(w http.ResponseWriter, r *http.Reque
 	default:
 		// New row with no explicit enabled → default ON (DB default).
 		params.Enabled = true
+	}
+
+	if !h.mergePolicyFields(w, r, raw, existing, existingLoaded, &params) {
+		return
 	}
 
 	if _, err := h.deps.Queries.UpsertOIDCProvider(r.Context(), params); err != nil {
@@ -362,6 +392,16 @@ func (h *ProvidersHandler) buildView(ctx context.Context, id string) (providerVi
 
 	view.ScopesSource = scopesSource(m)
 
+	view.JITMode = m.Effective.JITMode
+	view.TrustACR = m.Effective.TrustACR
+	if m.Effective.PartyID > 0 {
+		partyUUID, err := h.partyUUID(ctx, m.Effective.PartyID)
+		if err != nil {
+			return providerView{}, false, err
+		}
+		view.PartyUUID = &partyUUID
+	}
+
 	// Per-provider InitOK + Err from OAuth registry. A provider not
 	// present in OAuth (e.g. new DB row not yet rebuilt) reads InitOK
 	// false with empty error — the GUI treats that as "pending reload".
@@ -410,6 +450,117 @@ func (h *ProvidersHandler) authenticateWithBody(w http.ResponseWriter, r *http.R
 	)
 }
 
+// ----- Account-creation policy ----------------------------------------
+
+// mergePolicyFields merges party_uuid, jit_mode and trust_acr into params with
+// the PUT/POST semantics:
+//   - party_uuid absent → keep; null or "" → unbound; a uuid → the legal
+//     entity it names (400 users.party_unknown otherwise);
+//   - jit_mode absent → keep (a new row defaults to byo); null or "" → byo;
+//     none, byo and managed are the only values (400 otherwise);
+//   - trust_acr absent → keep (a new row defaults to false); a bool otherwise
+//     (400 for any other type).
+//
+// jit_mode managed requires a party (400 users.jit_managed_requires_party),
+// mirroring the table's CHECK. It returns false after writing a 400.
+func (h *ProvidersHandler) mergePolicyFields(w http.ResponseWriter, r *http.Request, raw map[string]json.RawMessage, existing db.GetOIDCProviderRow, existingLoaded bool, params *db.UpsertOIDCProviderParams) bool {
+	badField := func(field, code, msg string) bool {
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: field, Code: code, Message: msg}))
+		return false
+	}
+
+	// Defaults of a new row, overridden by the existing row, then the request.
+	params.JitMode = config.JITModeBYO
+	if existingLoaded {
+		params.PartyID, params.JitMode, params.TrustAcr = existing.PartyID, existing.JitMode, existing.TrustAcr
+	}
+
+	if v, present := raw["party_uuid"]; present {
+		params.PartyID = pgtype.Int8{}
+		var s string
+		if !isJSONNull(v) {
+			if err := json.Unmarshal(v, &s); err != nil {
+				return badField("party_uuid", "users.party_uuid_invalid", "party_uuid must be a uuid string or null")
+			}
+		}
+		if s = strings.TrimSpace(s); s != "" {
+			id, ok, err := h.resolveParty(r.Context(), s)
+			if err != nil {
+				apiresp.WriteError(w, r, fmt.Errorf("oidc provider upsert: resolve party: %w", err))
+				return false
+			}
+			if !ok {
+				return badField("party_uuid", "users.party_unknown", "party_uuid does not name a party")
+			}
+			params.PartyID = pgtype.Int8{Int64: id, Valid: true}
+		}
+	}
+
+	if v, present := raw["jit_mode"]; present {
+		params.JitMode = config.JITModeBYO
+		var s string
+		if !isJSONNull(v) {
+			if err := json.Unmarshal(v, &s); err != nil {
+				return badField("jit_mode", "users.jit_mode_invalid", "jit_mode must be none, byo or managed")
+			}
+		}
+		if s = strings.TrimSpace(s); s != "" {
+			if !config.ValidJITMode(s) {
+				return badField("jit_mode", "users.jit_mode_invalid", "jit_mode must be none, byo or managed")
+			}
+			params.JitMode = s
+		}
+	}
+
+	if v, present := raw["trust_acr"]; present {
+		var b bool
+		if err := json.Unmarshal(v, &b); err != nil {
+			return badField("trust_acr", "users.trust_acr_invalid", "trust_acr must be a boolean")
+		}
+		params.TrustAcr = b
+	}
+
+	if params.JitMode == config.JITModeManaged && !params.PartyID.Valid {
+		return badField("jit_mode", "users.jit_managed_requires_party", "jit_mode managed requires a party_uuid")
+	}
+	return true
+}
+
+// resolveParty maps a party uuid to its legal-entity id. ok is false when the
+// uuid names nothing, or an entity that is not a legal entity.
+func (h *ProvidersHandler) resolveParty(ctx context.Context, partyUUID string) (id int64, ok bool, err error) {
+	parsed, perr := uuid.Parse(partyUUID)
+	if perr != nil || h.deps.Parties == nil {
+		return 0, false, nil
+	}
+	ent, err := h.deps.Parties.GetEntityByUUID(ctx, parsed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	if _, err := h.deps.Parties.GetLegalEntityByEntityID(ctx, ent.ID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	return ent.ID, true, nil
+}
+
+// partyUUID maps a legal-entity id to its uuid for the view.
+func (h *ProvidersHandler) partyUUID(ctx context.Context, partyID int64) (string, error) {
+	if h.deps.Parties == nil {
+		return "", fmt.Errorf("provider is bound to a party but no party directory is configured")
+	}
+	ent, err := h.deps.Parties.GetEntityByID(ctx, partyID)
+	if err != nil {
+		return "", fmt.Errorf("load provider party: %w", err)
+	}
+	return ent.Uuid.String(), nil
+}
+
 // ----- Body parsing helpers ------------------------------------------
 
 // providerBodyKeys is the allowlist of top-level keys the provider handlers
@@ -427,6 +578,9 @@ var providerBodyKeys = map[string]struct{}{
 	"claim_style":   {},
 	"scopes":        {},
 	"enabled":       {},
+	"party_uuid":    {},
+	"jit_mode":      {},
+	"trust_acr":     {},
 }
 
 // parseBody reads the request body once into a map so caller helpers can

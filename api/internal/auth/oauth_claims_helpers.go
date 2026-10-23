@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // getString returns the string value at key in claims, or "" if absent or not a string.
@@ -153,4 +154,64 @@ func extractRequired(claims map[string]any) (sub, iss string, err error) {
 		return "", "", fmt.Errorf("auth: missing required claim \"iss\"")
 	}
 	return sub, iss, nil
+}
+
+// maxNameRunes bounds an IdP-supplied name taken into a person record.
+const maxNameRunes = 100
+
+// cleanName trims s, drops control and format characters, and bounds it to
+// maxNameRunes. IdP claims are untrusted text.
+func cleanName(s string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range strings.TrimSpace(s) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			continue
+		}
+		if n == maxNameRunes {
+			break
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// parseAssertedACR reads the id_token acr claim. Only a bare level 1, 2 or 3
+// (as a string or a JSON number) is understood; URN-style acr values are
+// IdP-specific and map to 0 (no assertion).
+func parseAssertedACR(v any) int16 {
+	switch t := v.(type) {
+	case string:
+		switch strings.TrimSpace(t) {
+		case "1":
+			return 1
+		case "2":
+			return 2
+		case "3":
+			return 3
+		}
+	case float64:
+		if t == 1 || t == 2 || t == 3 {
+			return int16(t)
+		}
+	}
+	return 0
+}
+
+// enrichIdentity adds what the per-style mappers do not extract: the name
+// claims and the asserted acr, read from the verified id_token's raw claims.
+func enrichIdentity(id ExternalIdentity, claims map[string]any) ExternalIdentity {
+	id.GivenName = cleanName(getString(claims, "given_name"))
+	id.FamilyName = cleanName(getString(claims, "family_name"))
+	if name := strings.Fields(getString(claims, "name")); len(name) > 0 {
+		if id.GivenName == "" {
+			id.GivenName = cleanName(name[0])
+		}
+		if id.FamilyName == "" && len(name) > 1 {
+			id.FamilyName = cleanName(strings.Join(name[1:], " "))
+		}
+	}
+	id.AssertedACR = parseAssertedACR(claims["acr"])
+	return id
 }

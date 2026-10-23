@@ -82,3 +82,23 @@ Dependencies within the phase: hard on 003, 004 and 005 (session creation and th
 - After the resolver decision table.
 - After link, step-up and handoff in the callback handler.
 - After provider columns in the providers handler and merge.
+
+## Status
+
+Outcome: succeeded (2026-10-23).
+
+Validation: `go build ./internal/auth/... ./internal/config/... ./internal/handlers/auth/...` passes; the auto-link grep and the `access_token`/`#token=` grep over `api/internal/handlers/auth/oidc.go` both return nothing; `go test ./internal/auth/... ./internal/config/...` passes. The `handlers/auth` and `handlers` test packages do not compile (stale pre-rewrite tests, rewritten by task 010); behavior tests are task 010.
+
+Changed: `api/internal/auth/resolver.go` (new: decision table, `ProviderPolicy`, redirect error codes), `api/internal/auth/oauth.go`, `oauth_state.go`, `oauth_claims.go`, `oauth_claims_helpers.go`, `api/internal/handlers/auth/oidc.go` (fence removed, rewritten), `api/internal/handlers/auth/oidc_flows.go` (new: sign-in, JIT, link, step-up, authenticated starts), `api/internal/handlers/oidc_providers.go`, `api/internal/config/provider_merge.go`, `providers.go`, plus unit tests for the resolver, state flows, claim enrichment and provider policy.
+
+Decisions and notes:
+
+- Redirects use the URL fragment throughout: `#handoff=<code>`, `#error=<code>`, `#linked=1`, `#stepped_up=1`, each with `&return=<path>` when a return path was given. The provider's own `error` parameter is mapped to `authentication_failed` (its text is untrusted). Link and step-up success carry no token; after step-up the tab takes a fresh access token from `POST /v1/session/switch`, so `TokenForSessionInTx` is not used here.
+- Extra redirect code `identity_in_use` (kept from the old link flow) for a link whose external identity belongs to another principal; the four codes of the API surface are otherwise unchanged.
+- JIT `byo` also requires `platform_settings.allow_byo_identity` (refusal `no_account`) and a syntactically valid IdP email (`missing_email`); the identifier is verified only when the IdP asserted `email_verified`. Names come from `given_name`/`family_name` (or `name`), falling back to the email local part and `-`.
+- `managed` JIT is a trusted local implementation (entity, principal, `users` row, active `idp_jit` party profile, party-confined `oidc` credential) because `CreateManagedUserInTx` authorizes an acting profile that does not exist yet; its `create user` observation runs as the new profile. No `create profile` observation is written (not in the requirement 8 list).
+- `NO_OIDC_ACCOUNTS` caps a `byo` provider to `none` at resolution time (`OAuth.PolicyFor`), so an enable-only DB row cannot re-open JIT; a `managed` provider is unaffected.
+- IdP `acr` is parsed only when it is a bare 1, 2 or 3, and passed as the asserted factor acr only when the provider has `trust_acr` (the database applies the same rule).
+- Link start enforces `AUTH_SELF_SERVICE_MAX_AUTH_AGE` (409 `users.step_up_required`); link and step-up are refused for impersonation sessions, and link for service accounts, managed users and guests. Link does not confine the new credential to a party-bound provider's party.
+- `OAuth.LinkAuthorizeURL` is replaced by `SessionAuthorizeURL`; `ListProviders` moved out of the OIDC handler (the `/v1/auth` `Handler.Providers` serves it).
+- The managed JIT path and the link/step-up callbacks were not exercised against a live database.

@@ -175,3 +175,46 @@ func flipFirstChar(s string) string {
 	}
 	return string(flipped) + s[1:]
 }
+
+func TestStateSigner_FlowRoundTripAndValidation(t *testing.T) {
+	signer, err := NewStateSigner([]byte("test-secret-key-32-bytes-minimum!"))
+	if err != nil {
+		t.Fatalf("NewStateSigner: %v", err)
+	}
+	exp := time.Now().Add(time.Minute).Unix()
+
+	tests := []struct {
+		name    string
+		payload StatePayload
+		wantErr bool
+	}{
+		{"sign-in", StatePayload{Provider: "g", Nonce: "n", Expires: exp}, false},
+		{"link", StatePayload{Provider: "g", Nonce: "n", Expires: exp, Flow: FlowLink, SessionUUID: "s", PrincipalUUID: "p"}, false},
+		{"step-up", StatePayload{Provider: "g", Nonce: "n", Expires: exp, Flow: FlowStepUp, SessionUUID: "s", PrincipalUUID: "p"}, false},
+		{"link without session", StatePayload{Provider: "g", Nonce: "n", Expires: exp, Flow: FlowLink, PrincipalUUID: "p"}, true},
+		{"step-up without principal", StatePayload{Provider: "g", Nonce: "n", Expires: exp, Flow: FlowStepUp, SessionUUID: "s"}, true},
+		{"sign-in carrying a session", StatePayload{Provider: "g", Nonce: "n", Expires: exp, SessionUUID: "s", PrincipalUUID: "p"}, true},
+		{"unknown flow", StatePayload{Provider: "g", Nonce: "n", Expires: exp, Flow: "admin"}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			token, err := signer.Sign(tc.payload)
+			if err != nil {
+				t.Fatalf("Sign: %v", err)
+			}
+			got, err := signer.Verify(token)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Verify accepted %+v", tc.payload)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Verify: %v", err)
+			}
+			if got != tc.payload {
+				t.Fatalf("round trip = %+v, want %+v", got, tc.payload)
+			}
+		})
+	}
+}

@@ -31,6 +31,37 @@ type Provider struct {
 	// go-oidc's strict issuer check at verification time and validate the
 	// real tenant-specific issuer ourselves after the id_token is decoded.
 	MultiTenantIssuer bool
+
+	// PartyID is the party (legal entity id) the provider is bound to; 0 means
+	// unbound. Only a DB override row can set it.
+	PartyID int64
+	// JITMode is what an unknown identity creates on first sign-in: JITModeNone,
+	// JITModeBYO or JITModeManaged (which requires PartyID). An env-only
+	// provider is JITModeBYO, or JITModeNone when NO_OIDC_ACCOUNTS is set.
+	JITMode string
+	// TrustACR makes the session count the IdP's asserted acr. Env-only
+	// providers never trust it.
+	TrustACR bool
+}
+
+// Just-in-time account modes of a provider (oidc_providers.jit_mode).
+const (
+	// JITModeNone refuses an unknown identity (no_account).
+	JITModeNone = "none"
+	// JITModeBYO creates a bring-your-own user for an unknown identity.
+	JITModeBYO = "byo"
+	// JITModeManaged creates a managed user of the provider's party, with an
+	// active idp_jit party profile.
+	JITModeManaged = "managed"
+)
+
+// ValidJITMode reports whether mode is one of the three jit_mode values.
+func ValidJITMode(mode string) bool {
+	switch mode {
+	case JITModeNone, JITModeBYO, JITModeManaged:
+		return true
+	}
+	return false
 }
 
 // ProviderRegistry maps provider IDs to fully-resolved Provider entries.
@@ -216,6 +247,13 @@ func loadProvider(id string) (*Provider, error) {
 		scopes = append(scopes, defaultScopes...)
 	}
 
+	// An env-only provider acts as party_id NULL, jit_mode byo (none when
+	// NO_OIDC_ACCOUNTS is set), trust_acr false.
+	jitMode := JITModeBYO
+	if envTruthy(os.Getenv("NO_OIDC_ACCOUNTS")) {
+		jitMode = JITModeNone
+	}
+
 	return &Provider{
 		ID:                id,
 		DisplayName:       displayName,
@@ -225,7 +263,18 @@ func loadProvider(id string) (*Provider, error) {
 		ClaimStyle:        claimStyle,
 		Scopes:            scopes,
 		MultiTenantIssuer: isMultiTenantIssuer(issuerURL),
+		JITMode:           jitMode,
 	}, nil
+}
+
+// envTruthy accepts "1", "true" and "yes" (case-insensitive) as true; anything
+// else, including empty, is false.
+func envTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes":
+		return true
+	}
+	return false
 }
 
 // parseScopes splits a comma-separated scope string into a trimmed slice.

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -424,5 +425,39 @@ func TestEmailVerifiedClaim(t *testing.T) {
 				t.Errorf("EmailVerified = %v, want %v", p.EmailVerified, tc.wantVerified)
 			}
 		})
+	}
+}
+
+func TestEnrichIdentity(t *testing.T) {
+	tests := []struct {
+		name   string
+		claims map[string]any
+		want   ExternalIdentity
+	}{
+		{"name claims", map[string]any{"given_name": " Ada ", "family_name": "Lovelace"}, ExternalIdentity{GivenName: "Ada", FamilyName: "Lovelace"}},
+		{"name split", map[string]any{"name": "Ada King Lovelace"}, ExternalIdentity{GivenName: "Ada", FamilyName: "King Lovelace"}},
+		{"explicit claims win over name", map[string]any{"given_name": "A", "family_name": "L", "name": "Other Person"}, ExternalIdentity{GivenName: "A", FamilyName: "L"}},
+		{"single-word name", map[string]any{"name": "Ada"}, ExternalIdentity{GivenName: "Ada"}},
+		{"control characters dropped", map[string]any{"given_name": "A\x00d\na"}, ExternalIdentity{GivenName: "Ada"}},
+		{"acr string", map[string]any{"acr": "2"}, ExternalIdentity{AssertedACR: 2}},
+		{"acr number", map[string]any{"acr": float64(3)}, ExternalIdentity{AssertedACR: 3}},
+		{"acr urn is not understood", map[string]any{"acr": "urn:mace:incommon:iap:silver"}, ExternalIdentity{}},
+		{"acr out of range", map[string]any{"acr": "9"}, ExternalIdentity{}},
+		{"nothing", map[string]any{}, ExternalIdentity{}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := enrichIdentity(ExternalIdentity{}, tc.claims)
+			if got.GivenName != tc.want.GivenName || got.FamilyName != tc.want.FamilyName || got.AssertedACR != tc.want.AssertedACR {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCleanName_Bounded(t *testing.T) {
+	long := strings.Repeat("a", maxNameRunes+50)
+	if got := cleanName(long); len([]rune(got)) != maxNameRunes {
+		t.Fatalf("len = %d, want %d", len([]rune(got)), maxNameRunes)
 	}
 }

@@ -1,9 +1,3 @@
-//go:build oidc_resolver_pending
-
-// This file is excluded from the build until phase 6 task 006 (OIDC resolver)
-// rewrites it on credentials and sessions; that task removes this constraint.
-// The /v1/auth handlers of task 005 do not depend on it.
-
 package auth
 
 import (
@@ -14,20 +8,19 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/observer"
+	coredb "github.com/moduleforge/core-model/db"
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
 	"github.com/moduleforge/mod-users/api/internal/server"
-	db "github.com/moduleforge/mod-users/model/db"
+	svc "github.com/moduleforge/mod-users/api/internal/service"
+	usersdb "github.com/moduleforge/mod-users/model/db"
 )
 
 // normalizeProviderID lowercases the provider URL param so the lookup matches
@@ -38,104 +31,77 @@ func normalizeProviderID(r *http.Request) string {
 }
 
 // stateCookieName is the name of the cookie that carries the signed state
-// token between /start and /callback.
+// token between /start and /callback. It is the only cookie the module sets.
 const stateCookieName = "oidc_state"
 
 // stateCookieMaxAge mirrors the TTL baked into the state token itself.
 const stateCookieMaxAge = 300
 
-// userResolver is the interface the OIDC handler uses to look up or create a
-// user from a verified OIDC principal. Defined here (at the point of use) so
-// tests can inject a stub without importing the concrete resolver type.
-type userResolver interface {
-	Resolve(ctx context.Context, p localauth.Principal) (*localauth.UserContext, error)
-}
-
-// loginRecorder is the interface the OIDC handler uses to emit a login audit
-// row after a successful OIDC authentication. Defined here (at the point of
-// use) so tests can inject a stub without importing the concrete service type.
-type loginRecorder interface {
-	RecordLogin(ctx context.Context, accountID int64, provider string) error
-}
-
-// OIDCHandler serves the provider discovery endpoint and the authorization
-// code start/callback round trip. It holds its own copies of the resolver
-// and the OAuth orchestrator so the main router wiring stays simple.
+// OIDCHandler serves the OIDC authorization-code round trip: the public
+// start and callback of GET /v1/auth/oidc/{provider}/..., and the starts of
+// the two flows that need an authenticated session (link a credential, step
+// up). The callback resolves the verified external identity against
+// credentials (never by email), creates a session and a one-time
+// login_handoff challenge, and redirects with `#handoff=<code>`; it puts no
+// token in the redirect.
 type OIDCHandler struct {
-	pool      *pgxpool.Pool
-	queries   *db.Queries
-	oauth     *localauth.OAuth
-	resolver  userResolver
-	userSvc   loginRecorder
-	cfg       *config.Config
-	obs       *observer.ObserverGroup // nil-safe; may be nil in tests
-	signer    *localauth.Signer       // built once at construction; nil when cfg yields no valid signer
-	signerErr error                   // construction-time signer error, surfaced on first token issuance
+	pool       *pgxpool.Pool
+	q          usersdb.Querier
+	coreQ      coredb.Querier
+	oauth      *localauth.OAuth
+	resolver   *localauth.OIDCResolver
+	users      *svc.UserService
+	creds      *svc.CredentialService
+	challenges *svc.ChallengeService
+	sessions   *svc.SessionService
+	obs        *observer.ObserverGroup // nil-safe; may be nil in tests
+	cfg        *config.Config
 }
 
-// NewOIDCHandler wires up the handler with everything it needs. All fields
-// must be non-nil (except oauth, which may be a shell with zero providers).
-func NewOIDCHandler(queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, userSvc loginRecorder, cfg *config.Config) *OIDCHandler {
-	h := &OIDCHandler{
-		queries:  queries,
-		oauth:    oauth,
-		resolver: resolver,
-		userSvc:  userSvc,
-		cfg:      cfg,
+// OIDCRoutes (declared in routes.go) is satisfied by *OIDCHandler.
+var _ OIDCRoutes = (*OIDCHandler)(nil)
+
+// NewOIDCHandler wires up the handler. pool, q and coreQ are the module's
+// connection pool and its queriers over it; resolver decides what a verified
+// identity maps to; the services create the sessions, users and credentials a
+// decision calls for. obs may be nil.
+func NewOIDCHandler(
+	pool *pgxpool.Pool,
+	q usersdb.Querier,
+	coreQ coredb.Querier,
+	oauth *localauth.OAuth,
+	resolver *localauth.OIDCResolver,
+	users *svc.UserService,
+	creds *svc.CredentialService,
+	challenges *svc.ChallengeService,
+	sessions *svc.SessionService,
+	obs *observer.ObserverGroup,
+	cfg *config.Config,
+) *OIDCHandler {
+	return &OIDCHandler{
+		pool: pool, q: q, coreQ: coreQ, oauth: oauth, resolver: resolver,
+		users: users, creds: creds, challenges: challenges, sessions: sessions,
+		obs: obs, cfg: cfg,
 	}
-	h.signer, h.signerErr = buildOIDCSigner(cfg)
-	return h
 }
 
-// SignerErr reports why the callback's JWT signer could not be built from the
-// configuration (nil when it was). Call it right after construction to fail
-// startup on a bad config rather than on the first login.
-func (h *OIDCHandler) SignerErr() error { return h.signerErr }
-
-// buildOIDCSigner builds the callback's Signer from cfg once, at construction.
-func buildOIDCSigner(cfg *config.Config) (*localauth.Signer, error) {
-	if cfg == nil {
-		return nil, errors.New("oidc: nil config")
+// inTx runs fn in a transaction on the pool and commits when fn succeeds.
+func (h *OIDCHandler) inTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	if h.pool == nil {
+		return errors.New("oidc: no database pool")
 	}
-	return localauth.NewSigner(cfg.LocalAuth)
-}
-
-// NewOIDCHandlerWithPool constructs an OIDCHandler with a pool and observer
-// group for the link-mode callback path. Use this in production; the pool-less
-// NewOIDCHandler is retained for tests that cover paths before link-mode.
-func NewOIDCHandlerWithPool(pool *pgxpool.Pool, queries *db.Queries, oauth *localauth.OAuth, resolver userResolver, userSvc loginRecorder, cfg *config.Config, obs *observer.ObserverGroup) *OIDCHandler {
-	h := &OIDCHandler{
-		pool:     pool,
-		queries:  queries,
-		oauth:    oauth,
-		resolver: resolver,
-		userSvc:  userSvc,
-		cfg:      cfg,
-		obs:      obs,
+	tx, err := h.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("oidc: begin: %w", err)
 	}
-	h.signer, h.signerErr = buildOIDCSigner(cfg)
-	return h
-}
-
-// providerEntry is the browser-safe view of a Provider — only public fields.
-type providerEntry struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-}
-
-// ListProviders handles GET /v1/auth/providers. It is unauthenticated so the
-// login page can render provider buttons before the user has a session.
-// Only successfully-initialized providers are returned; a provider whose
-// discovery document failed at boot is silently omitted so the GUI only
-// offers buttons that actually work. Never include client_secret, issuer_url,
-// or scopes in the response.
-func (h *OIDCHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
-	enabled := h.oauth.EnabledProviders()
-	out := make([]providerEntry, 0, len(enabled))
-	for _, s := range enabled {
-		out = append(out, providerEntry{ID: s.Provider.ID, DisplayName: s.Provider.DisplayName})
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(tx); err != nil {
+		return err
 	}
-	server.JSON(w, http.StatusOK, out)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("oidc: commit: %w", err)
+	}
+	return nil
 }
 
 // Start handles GET /v1/auth/oidc/{provider}/start. It validates the provider
@@ -147,22 +113,14 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 	returnPath := r.URL.Query().Get("return")
 	// ?mode=test is the "Test configuration" affordance from the Edit
 	// modal — the browser runs the full authorize/callback loop but
-	// the callback skips resolver + JWT so the admin's session is
-	// untouched. Any other mode value is ignored (fall through to
+	// the callback skips the resolver and session creation so the admin's
+	// session is untouched. Any other mode value is ignored (fall through to
 	// normal login), matching the "be generous in what you accept"
 	// spirit of OAuth start.
 	testMode := r.URL.Query().Get("mode") == "test"
 	authURL, state, err := h.oauth.AuthorizeURL(providerID, returnPath, testMode)
 	if err != nil {
-		// Unknown IDs and init-failed providers both surface as 404 — an
-		// operator-observable failure (slog.Warn at boot) that the user has
-		// no agency to fix mid-request.
-		if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
-			apiresp.WriteError(w, r, apiresp.ErrNotFound)
-			return
-		}
-		slog.WarnContext(r.Context(), "oidc start: bad request", "error", err, "provider", providerID)
-		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "return", Code: "users.oidc_start_invalid", Message: "the start request is invalid"}))
+		h.writeStartError(w, r, providerID, err)
 		return
 	}
 
@@ -170,10 +128,31 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
+// writeStartError maps an authorize-URL failure to its response. Unknown IDs
+// and init-failed providers both surface as 404 — an operator-observable
+// failure (slog.Warn at boot) that the user has no agency to fix mid-request.
+func (h *OIDCHandler) writeStartError(w http.ResponseWriter, r *http.Request, providerID string, err error) {
+	if errors.Is(err, localauth.ErrUnknownProvider) || errors.Is(err, localauth.ErrProviderNotAvailable) {
+		apiresp.WriteError(w, r, apiresp.ErrNotFound)
+		return
+	}
+	if errors.Is(err, localauth.ErrInvalidReturnPath) {
+		slog.WarnContext(r.Context(), "oidc start: bad request", "error", err, "provider", providerID)
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "return", Code: "users.oidc_start_invalid", Message: "the start request is invalid"}))
+		return
+	}
+	// A sign or random-source failure is ours, not the client's.
+	apiresp.WriteError(w, r, fmt.Errorf("oidc start %q: build authorize url: %w", providerID, err))
+}
+
 // Callback handles GET /v1/auth/oidc/{provider}/callback. It trades the
-// authorization code for an id_token, resolves the user, emits a login audit
-// row, mints a local JWT, and 302s to the GUI return page with the JWT in the
-// URL fragment so it never hits any server log.
+// authorization code for a verified external identity and then, by the flow
+// the state was minted for, signs in (creating the account the provider's
+// jit_mode allows), links the identity to the authenticated session's
+// principal, or steps the session up. Every outcome is a 302 to the GUI return
+// page whose fragment carries `handoff=<code>` (sign-in), `linked=1`,
+// `stepped_up=1` or `error=<code>`; no token or refresh token is ever placed in
+// a redirect.
 func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	providerID := normalizeProviderID(r)
 
@@ -192,7 +171,9 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 	if providerErr := q.Get("error"); providerErr != "" {
-		h.redirectToFrontendError(w, r, providerErr)
+		// The provider's error text is untrusted; only the fact is passed on.
+		slog.WarnContext(r.Context(), "oidc callback: provider returned an error", "provider", providerID)
+		h.redirectError(w, r, localauth.RedirectErrAuthFailed)
 		return
 	}
 
@@ -211,7 +192,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	principal, statePayload, err := h.oauth.Exchange(r.Context(), providerID, code, rawState, cookie.Value)
+	identity, statePayload, err := h.oauth.Exchange(r.Context(), providerID, code, rawState, cookie.Value)
 	if err != nil {
 		slog.WarnContext(r.Context(), "oidc callback: exchange failed", "error", err, "provider", providerID)
 		// Unknown ID or init-failed provider → 404, same policy as /start.
@@ -233,122 +214,63 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			h.redirectToTestResult(w, r, providerID, "", "", "", err.Error())
 			return
 		}
-		h.redirectToFrontendError(w, r, "authentication_failed")
+		h.redirectError(w, r, localauth.RedirectErrAuthFailed)
 		return
 	}
 
-	// Test path: id_token verified cleanly. Skip resolver + JWT
-	// (no session mutation) and bounce back to /oidc-config with the
+	// Test path: id_token verified cleanly. Skip the resolver and session
+	// creation (no session mutation) and bounce back to /oidc-config with the
 	// verified identity details so the admin can confirm what the IdP
 	// asserted.
 	if statePayload.TestMode {
 		slog.InfoContext(r.Context(), "oidc test succeeded",
 			"provider", providerID,
-			"email", principal.Email,
-			"subject", principal.Subject,
+			"email", identity.Email,
+			"subject", identity.Subject,
 		)
-		h.redirectToTestResult(w, r, providerID, principal.Email, principal.Subject, principal.Issuer, "")
+		h.redirectToTestResult(w, r, providerID, identity.Email, identity.Subject, identity.Issuer, "")
 		return
 	}
 
-	// Link-mode branch: the state carries an existing user account UUID.
-	// Skip UserResolver; insert a new identity row instead.
-	if statePayload.LinkMode {
-		h.handleLinkMode(w, r, providerID, principal, statePayload)
-		return
+	switch statePayload.Flow {
+	case localauth.FlowLink:
+		h.callbackLink(w, r, providerID, identity, statePayload)
+	case localauth.FlowStepUp:
+		h.callbackStepUp(w, r, providerID, identity, statePayload)
+	default:
+		h.callbackLogin(w, r, providerID, identity, statePayload)
 	}
-
-	if principal.Email == "" {
-		// Without an email we can't link to or create a user record. This is
-		// almost always a scope misconfiguration on the IdP side.
-		slog.WarnContext(r.Context(), "oidc callback: principal missing email", "provider", providerID)
-		h.redirectToFrontendError(w, r, "missing_email")
-		return
-	}
-
-	uc, err := h.resolver.Resolve(r.Context(), principal)
-	if err != nil {
-		if errors.Is(err, localauth.ErrUserGone) {
-			slog.WarnContext(r.Context(), "oidc callback: user gone", "error", err, "provider", providerID)
-			h.redirectToFrontendError(w, r, "authentication_failed")
-			return
-		}
-		if errors.Is(err, localauth.ErrUnverifiedTakeover) {
-			slog.WarnContext(r.Context(), "oidc callback: unverified account takeover blocked", "provider", providerID)
-			h.redirectToFrontendError(w, r, "unverified_account_exists")
-			return
-		}
-		slog.ErrorContext(r.Context(), "oidc callback: resolve user internal error", "error", err, "provider", providerID)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: resolve user internal error: %w", err))
-		return
-	}
-
-	ua, err := h.queries.GetUserAccountByID(r.Context(), uc.UserAccountID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc callback: reload user account", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: reload user account: %w", err))
-		return
-	}
-
-	// Emit a login audit row before issuing the JWT. RecordLogin sets the
-	// opctx actor internally so the Authorizer sees the logging-in user.
-	if err := h.userSvc.RecordLogin(r.Context(), ua.ID, providerID); err != nil {
-		slog.ErrorContext(r.Context(), "oidc callback: record login audit", "error", err, "provider", providerID)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: record login audit: %w", err))
-		return
-	}
-
-	signer, err := h.signer, h.signerErr
-	if err == nil && signer == nil {
-		err = errors.New("oidc: no signer configured")
-	}
-	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc callback: jwt signer unavailable", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: jwt signer unavailable: %w", err))
-		return
-	}
-	token, err := localauth.IssueLocalJWTWithSigner(ua, signer, h.cfg.LocalAuth.LocalIssuer)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "oidc callback: issue jwt", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc callback: issue jwt: %w", err))
-		return
-	}
-
-	slog.InfoContext(r.Context(), "oidc login succeeded",
-		"provider", providerID,
-		"user_account_uuid", ua.Uuid.String(),
-	)
-
-	redirectURL := h.buildSuccessRedirect(token, statePayload.ReturnPath)
-	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
-// buildSuccessRedirect composes the GUI return URL with the JWT and return
-// path in the URL fragment so they never appear in server logs.
-func (h *OIDCHandler) buildSuccessRedirect(token, returnPath string) string {
-	base := h.oauth.FrontendReturnURL
-	frag := url.Values{}
-	frag.Set("token", token)
-	frag.Set("return", returnPath)
-	// Using url.Values encoding with '#' instead of '?' because the spec
-	// wants these in the fragment.
-	return base + "#" + frag.Encode()
-}
-
-// redirectToFrontendError 302s to the frontend return URL with a query
-// parameter describing a generic error code. We intentionally do not leak
-// internal errors; operators can correlate via slog.
-func (h *OIDCHandler) redirectToFrontendError(w http.ResponseWriter, r *http.Request, code string) {
+// redirectFragment 302s to the frontend return URL with frag as the URL
+// fragment, so nothing in it reaches a server log. The no-store header keeps a
+// one-time code out of shared caches.
+func (h *OIDCHandler) redirectFragment(w http.ResponseWriter, r *http.Request, frag url.Values) {
 	u, err := url.Parse(h.oauth.FrontendReturnURL)
 	if err != nil {
 		// Fall back to a plain error response if the configured URL is bad.
-		apiresp.WriteError(w, r, fmt.Errorf("oidc redirect to frontend error: parse frontend return URL: %w", err))
+		apiresp.WriteError(w, r, fmt.Errorf("oidc redirect: parse frontend return URL: %w", err))
 		return
 	}
-	q := u.Query()
-	q.Set("error", code)
-	u.RawQuery = q.Encode()
-	http.Redirect(w, r, u.String(), http.StatusFound)
+	u.Fragment, u.RawFragment = "", ""
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, u.String()+"#"+frag.Encode(), http.StatusFound)
+}
+
+// redirectError 302s to the frontend with `#error=<code>`. We intentionally do
+// not leak internal errors; operators can correlate via slog.
+func (h *OIDCHandler) redirectError(w http.ResponseWriter, r *http.Request, code string) {
+	h.redirectFragment(w, r, url.Values{"error": {code}})
+}
+
+// redirectOutcome 302s to the frontend with a success marker (`handoff=<code>`,
+// `linked=1` or `stepped_up=1`) and the validated return path.
+func (h *OIDCHandler) redirectOutcome(w http.ResponseWriter, r *http.Request, key, value, returnPath string) {
+	frag := url.Values{key: {value}}
+	if returnPath != "" {
+		frag.Set("return", returnPath)
+	}
+	h.redirectFragment(w, r, frag)
 }
 
 // redirectToTestResult 302s back to /oidc-config (same origin as the
@@ -387,158 +309,6 @@ func (h *OIDCHandler) redirectToTestResult(
 	q.Set("test_provider", providerID)
 	u.RawQuery = q.Encode()
 	http.Redirect(w, r, u.String(), http.StatusFound)
-}
-
-// handleLinkMode processes an OIDC callback that was initiated in link mode
-// (i.e. statePayload.LinkMode == true). It inserts a new identity row for the
-// user identified by statePayload.LinkUserAccountID without going through
-// UserResolver. The three outcomes are:
-//
-//  1. (issuer, subject) already belongs to the same account → idempotent success.
-//  2. (issuer, subject) belongs to a different account → redirect with identity_in_use.
-//  3. No existing row → insert and redirect with ?linked=1.
-func (h *OIDCHandler) handleLinkMode(w http.ResponseWriter, r *http.Request, providerID string, principal localauth.Principal, statePayload localauth.StatePayload) {
-	ctx := r.Context()
-
-	// Resolve the user account from the state-embedded UUID.
-	accountUUID, err := uuid.Parse(statePayload.LinkUserAccountID)
-	if err != nil {
-		slog.WarnContext(ctx, "oidc link-mode: invalid user account UUID in state", "error", err)
-		h.redirectToFrontendError(w, r, "authentication_failed")
-		return
-	}
-
-	ua, err := h.queries.GetUserAccountByUUID(ctx, accountUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// Token is valid but the account has been deleted since start.
-			h.redirectToFrontendError(w, r, "authentication_failed")
-		} else {
-			slog.ErrorContext(ctx, "oidc link-mode: load user account", "error", err)
-			apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: load user account: %w", err))
-		}
-		return
-	}
-
-	entityID := ua.AccountHolder
-
-	// Check if this (issuer, subject) is already linked anywhere.
-	existing, err := h.queries.GetOIDCIdentityByIssuerSubject(ctx, db.GetOIDCIdentityByIssuerSubjectParams{
-		Issuer:  principal.Issuer,
-		Subject: principal.Subject,
-	})
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		slog.ErrorContext(ctx, "oidc link-mode: lookup identity by issuer/subject", "error", err)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: lookup identity by issuer/subject: %w", err))
-		return
-	}
-
-	if err == nil {
-		// Identity already exists somewhere.
-		if existing.UserAccountID == ua.ID {
-			// Idempotent: already linked to the same account — touch and redirect.
-			if touchErr := h.queries.TouchOIDCIdentityLastSeen(ctx, existing.ID); touchErr != nil {
-				slog.WarnContext(ctx, "oidc link-mode: touch last_seen_at", "error", touchErr)
-			}
-			h.redirectToLinkSuccess(w, r, statePayload.ReturnPath)
-			return
-		}
-		// Conflict: identity belongs to a different account.
-		slog.WarnContext(ctx, "oidc link-mode: identity already linked to different account",
-			"provider", providerID,
-			"user_account_uuid", accountUUID.String(),
-		)
-		h.redirectToFrontendError(w, r, "identity_in_use")
-		return
-	}
-
-	// No existing row — insert it in a transaction with the observer.
-	var emailVerifiedAt *time.Time
-	if principal.EmailVerified {
-		now := time.Now()
-		emailVerifiedAt = &now
-	}
-
-	var insertedUUID string
-	tx, txErr := h.pool.Begin(ctx)
-	if txErr != nil {
-		slog.ErrorContext(ctx, "oidc link-mode: begin tx", "error", txErr)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: begin tx: %w", txErr))
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	qtx := h.queries.WithTx(tx)
-	identity, insertErr := qtx.InsertOIDCIdentity(ctx, db.InsertOIDCIdentityParams{
-		UserAccountID:      ua.ID,
-		Issuer:             principal.Issuer,
-		Subject:            principal.Subject,
-		Email:              pgtype.Text{String: principal.Email, Valid: principal.Email != ""},
-		EmailVerifiedAtIdp: emailVerifiedAt,
-	})
-	if insertErr != nil {
-		slog.ErrorContext(ctx, "oidc link-mode: insert identity", "error", insertErr)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: insert identity: %w", insertErr))
-		return
-	}
-	insertedUUID = identity.Uuid.String()
-
-	after := map[string]any{
-		"uuid":   insertedUUID,
-		"issuer": principal.Issuer,
-	}
-	if obsErr := h.safeObserve(ctx, tx, "create", "auth_oidc_identity", &entityID, nil, after); obsErr != nil {
-		slog.ErrorContext(ctx, "oidc link-mode: observe link", "error", obsErr)
-		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: observe link: %w", obsErr))
-		return
-	}
-
-	if commitErr := tx.Commit(ctx); commitErr != nil {
-		slog.ErrorContext(ctx, "oidc link-mode: commit", "error", fmt.Errorf("commit: %w", commitErr))
-		apiresp.WriteError(w, r, fmt.Errorf("oidc link-mode: commit: %w", commitErr))
-		return
-	}
-
-	h.safeObserveAfterCommit(ctx, "create", "auth_oidc_identity", &entityID, after)
-
-	slog.InfoContext(ctx, "oidc link-mode: identity linked",
-		"provider", providerID,
-		"user_account_uuid", accountUUID.String(),
-		"identity_uuid", insertedUUID,
-	)
-	h.redirectToLinkSuccess(w, r, statePayload.ReturnPath)
-}
-
-// redirectToLinkSuccess 302s to the frontend with ?linked=1.
-func (h *OIDCHandler) redirectToLinkSuccess(w http.ResponseWriter, r *http.Request, returnPath string) {
-	u, err := url.Parse(h.oauth.FrontendReturnURL)
-	if err != nil {
-		apiresp.WriteError(w, r, fmt.Errorf("oidc redirect to link success: parse frontend return URL: %w", err))
-		return
-	}
-	q := u.Query()
-	q.Set("linked", "1")
-	if returnPath != "" {
-		q.Set("return", returnPath)
-	}
-	u.RawQuery = q.Encode()
-	http.Redirect(w, r, u.String(), http.StatusFound)
-}
-
-// safeObserve calls obs.Observe only when h.obs is non-nil.
-func (h *OIDCHandler) safeObserve(ctx context.Context, tx pgx.Tx, op, resource string, targetEntityID *int64, before, after any) error {
-	if h.obs == nil {
-		return nil
-	}
-	return h.obs.Observe(ctx, tx, op, resource, targetEntityID, before, after)
-}
-
-// safeObserveAfterCommit calls obs.ObserveAfterCommit only when h.obs is non-nil.
-func (h *OIDCHandler) safeObserveAfterCommit(ctx context.Context, op, resource string, targetEntityID *int64, after any) {
-	if h.obs == nil {
-		return
-	}
-	h.obs.ObserveAfterCommit(ctx, op, resource, targetEntityID, after)
 }
 
 // newStateCookie builds the oidc_state cookie with the security attributes
@@ -591,4 +361,16 @@ func requestIsHTTPS(r *http.Request) bool {
 		return xf == "https"
 	}
 	return false
+}
+
+// writeAuthorizeURL answers a session-flow start: the state cookie plus the
+// authorize URL as JSON.
+func (h *OIDCHandler) writeAuthorizeURL(w http.ResponseWriter, r *http.Request, authURL, state string) {
+	http.SetCookie(w, h.newStateCookie(state, stateCookieMaxAge, r))
+	server.JSON(w, http.StatusOK, authorizeURLResponse{AuthorizeURL: authURL})
+}
+
+// authorizeURLResponse is the body of the link and step-up starts.
+type authorizeURLResponse struct {
+	AuthorizeURL string `json:"authorize_url"`
 }
