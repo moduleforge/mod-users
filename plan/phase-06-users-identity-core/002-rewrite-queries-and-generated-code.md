@@ -71,3 +71,12 @@ consumer under `api/`. Tasks 003 to 007 rewrite the consumers; task 008
 
 - After the query files are written and `make verify` passes.
 - After `make gen` and the SQLSTATE helpers.
+
+## Status
+
+- Outcome: succeeded (2026-10-23).
+- Validation: `make verify` passes; a second `make gen` produces no diff; `grep UserAccount|GetSystemActorBySlug model/db/` is empty; `gofmt -l` on the new Go files is empty; `sqlstate_test.go` passes when copied into a scratch package (the `service` package itself does not build until task 008).
+- Queries: `model/queries/{users,identifiers,credentials,challenges,sessions,party_policies,signing_keys}.sql` added; `oidc_providers.sql` gained `party_id`, `jit_mode`, `trust_acr`. Queries reference `mod_users` relations only (sqlc compiles against `migrations/sql/` alone); anything needing `public.*` goes through coredb or a `mod_users` function.
+- Generated: `model/db/` regenerated; the ten stale `*.sql.go` files of the deleted query files were removed by hand-delete (sqlc does not prune them).
+- Go: `api/internal/service/sqlstate.go` (+ `sqlstate_test.go`), re-exports in `api/usersservice/sqlstate.go`, including `UniqueViolationCode` for the named-index 409 mapping.
+- Red `api/` packages after this task (task 008 restores `make build`): `auth`, `cmd/server`, `config`, `handlers`, `handlers/authhandlers`, `internal/auth`, `internal/authz`, `internal/config`, `internal/db`, `internal/handlers`, `internal/handlers/auth`, `internal/observability`, `internal/server`, `internal/service`, `internal/users`, `localAuthz`, `localdb`, `server`, `users`, `usersservice`. Still green: `email`, `internal/email`, `internal/sshkey`, `internal/useraction`.

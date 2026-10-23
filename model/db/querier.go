@@ -12,89 +12,267 @@ import (
 )
 
 type Querier interface {
-	ArchiveSSHPublicKey(ctx context.Context, arg ArchiveSSHPublicKeyParams) (int64, error)
-	AssignUserAccountToApp(ctx context.Context, arg AssignUserAccountToAppParams) error
-	// Atomically claims one verification attempt (call before comparing the code).
-	// $2 is the max attempts. The code is consumed when the bound is reached.
-	// No row is returned when the code is already consumed or exhausted.
-	ClaimEmailCodeAttempt(ctx context.Context, arg ClaimEmailCodeAttemptParams) (EmailCode, error)
+	// Idempotent; an existing authorization is returned unchanged.
+	AuthorizeCredentialForParty(ctx context.Context, arg AuthorizeCredentialForPartyParams) (CredentialPartyAuthorization, error)
+	// First half of a primary switch; run SetIdentifierPrimary in the same
+	// transaction (user_identifiers_one_primary_email_uq allows one at a time).
+	ClearPrimaryEmail(ctx context.Context, userID int64) error
 	// Clear the setup token once the operator has confirmed configuration.
 	// Idempotent — safe to call on every confirmed boot.
 	ClearSetupTokenHash(ctx context.Context) error
-	ConsumeEmailCode(ctx context.Context, id int64) (int64, error)
-	ConsumePasswordReset(ctx context.Context, id int64) error
-	CountActiveSSHPublicKeysByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
-	CountOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) (int64, error)
-	CreateAnonToken(ctx context.Context, arg CreateAnonTokenParams) (AnonToken, error)
-	CreateEmailCode(ctx context.Context, arg CreateEmailCodeParams) (EmailCode, error)
-	// Atomically mints a code unless a code of ANY state (unconsumed, exhausted,
-	// or consumed by success) was created for the same (user, purpose) within the
-	// last cooldown_secs seconds. Concurrent callers are serialized by an advisory
-	// lock inside the create_email_code_with_cooldown function, so at most one
-	// code is created per window. No row is returned (pgx.ErrNoRows) when the
-	// cooldown applies; callers must then send no email.
-	CreateEmailCodeWithCooldown(ctx context.Context, arg CreateEmailCodeWithCooldownParams) (EmailCode, error)
-	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
-	CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (UserAccount, error)
-	DeleteAnonTokensByUserAccountID(ctx context.Context, userAccountID int64) error
-	DeleteAuthLocal(ctx context.Context, userAccountID int64) error
-	DeleteOIDCIdentityByUUID(ctx context.Context, arg DeleteOIDCIdentityByUUIDParams) (int64, error)
+	// Single-use: only an unconsumed, unexpired challenge is consumed (no row
+	// otherwise), so a replay or a race loses.
+	ConsumeChallenge(ctx context.Context, id int64) (AuthChallenge, error)
+	// Exchanges that look a challenge up by its code alone (login_handoff,
+	// password_reset): atomic find-and-consume.
+	ConsumeChallengeByCodeHash(ctx context.Context, arg ConsumeChallengeByCodeHashParams) (AuthChallenge, error)
+	// Supersede earlier open challenges of a subject (for example the password
+	// reset challenges of a principal once one is used).
+	ConsumeOpenChallengesBySubject(ctx context.Context, arg ConsumeOpenChallengesBySubjectParams) (int64, error)
+	// For the "last interactive credential" guard (409 users.last_credential).
+	CountActiveInteractiveCredentials(ctx context.Context, principalID int64) (int64, error)
+	// ---------------------------------------------------------------------------
+	// api_key
+	// ---------------------------------------------------------------------------
+	CreateAPIKeyCredential(ctx context.Context, arg CreateAPIKeyCredentialParams) (CredApiKey, error)
+	// ---------------------------------------------------------------------------
+	// anon
+	// ---------------------------------------------------------------------------
+	CreateAnonCredential(ctx context.Context, arg CreateAnonCredentialParams) (CredAnon, error)
+	// Direct insert for challenges without a cooldown (login_handoff, step_up
+	// bound to a credential).
+	CreateChallenge(ctx context.Context, arg CreateChallengeParams) (AuthChallenge, error)
+	// Queries over mod_users.auth_challenges: one-time codes and tokens. Only the
+	// hash of a code is stored. Challenges are not credentials.
+	// Mint at most one challenge per subject (kind, principal, identifier,
+	// session) per cooldown window. No row (sql.ErrNoRows / pgx.ErrNoRows) means a
+	// challenge was created within p_cooldown_secs: the caller answers "too soon".
+	CreateChallengeWithCooldown(ctx context.Context, arg CreateChallengeWithCooldownParams) (AuthChallenge, error)
+	// Queries over mod_users.credentials and the per-kind cred_* subtables.
+	// Credentials are revoked, never deleted. The `active` (and cred_password's
+	// principal_id) mirror columns are maintained by trigger and never written here.
+	// ---------------------------------------------------------------------------
+	// Common credential row
+	// ---------------------------------------------------------------------------
+	// Insert the common row; insert the matching cred_<kind> row in the same
+	// transaction. Invariants (kind allowed for the principal, default profile
+	// held) raise MF102.
+	CreateCredential(ctx context.Context, arg CreateCredentialParams) (Credential, error)
+	// ---------------------------------------------------------------------------
+	// email_otp
+	// ---------------------------------------------------------------------------
+	CreateEmailOTPCredential(ctx context.Context, arg CreateEmailOTPCredentialParams) (CredEmailOtp, error)
+	// Queries over mod_users.user_identifiers. value_canon is canonicalized by the
+	// caller (an email: trimmed and lowercased); the table checks it.
+	CreateIdentifier(ctx context.Context, arg CreateIdentifierParams) (UserIdentifier, error)
+	// ---------------------------------------------------------------------------
+	// oidc
+	// ---------------------------------------------------------------------------
+	// A second active (issuer, subject) fails on cred_oidc_active_issuer_subject_uq
+	// (23505, mapped to 409 users.oidc_identity_in_use).
+	CreateOIDCCredential(ctx context.Context, arg CreateOIDCCredentialParams) (CredOidc, error)
+	// ---------------------------------------------------------------------------
+	// password
+	// ---------------------------------------------------------------------------
+	// identifier_id NULL: an unbound password (at most one active per principal).
+	CreatePasswordCredential(ctx context.Context, arg CreatePasswordCredentialParams) (CredPassword, error)
+	// ---------------------------------------------------------------------------
+	// Refresh lineages
+	// ---------------------------------------------------------------------------
+	// A new token; lineage_uuid is supplied by the caller (a fresh uuid for a new
+	// lineage or fork, the existing one for rotation).
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (SessionRefreshToken, error)
+	// ---------------------------------------------------------------------------
+	// ssh_key
+	// ---------------------------------------------------------------------------
+	// A second active fingerprint fails on cred_ssh_key_active_fingerprint_uq
+	// (23505, mapped to 409 users.ssh_key_in_use).
+	CreateSSHKeyCredential(ctx context.Context, arg CreateSSHKeyCredentialParams) (CredSshKey, error)
+	// Queries over mod_users.sessions, session_factors and session_refresh_tokens,
+	// plus thin wrappers over the mod_users availability and liveness functions.
+	// ---------------------------------------------------------------------------
+	// Sessions
+	// ---------------------------------------------------------------------------
+	// impersonator_session_id, impersonated_profile_id and impersonation_reason are
+	// all NULL or all set (sessions_impersonation_complete); MF101 on nesting or an
+	// unheld profile.
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	// Queries over mod_users.users. Only mod_users relations appear in this
+	// directory's queries: sqlc compiles against the mod_users migrations alone, so
+	// anything that needs public.* (entities, principals, profiles) goes through
+	// mod-core's coredb queries or a mod_users function that reads them.
+	// Insert the users row for an already-created principal entity. The caller
+	// creates the entity (owner = the user itself, or managing_party_id) first, and
+	// the user's personal profile in the same transaction for a bring-your-own user.
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// The per-request check for a client-credentials token; always one row.
+	CredentialLiveness(ctx context.Context, arg CredentialLivenessParams) (CredentialLivenessRow, error)
+	CredentialProfileAvailability(ctx context.Context, arg CredentialProfileAvailabilityParams) (string, error)
+	// Departure cleanup: removes the party authorizations of every credential held
+	// by the departing principal.
+	DeleteCredentialAuthorizationsForHolderParty(ctx context.Context, arg DeleteCredentialAuthorizationsForHolderPartyParams) (int64, error)
+	DeleteCredentialPartyAuthorization(ctx context.Context, arg DeleteCredentialPartyAuthorizationParams) (int64, error)
+	// Housekeeping: drops challenges expired before the cutoff.
+	DeleteExpiredChallenges(ctx context.Context, expiresAt pgtype.Timestamptz) (int64, error)
+	DeleteExpiredRefreshTokens(ctx context.Context, expiresAt pgtype.Timestamptz) (int64, error)
+	// Fails with a foreign-key violation while a credential or challenge still
+	// binds the identifier; the caller revokes those first.
+	DeleteIdentifier(ctx context.Context, arg DeleteIdentifierParams) (int64, error)
 	// Remove a provider override row. Used by the "revert" endpoint — after
 	// deletion the merge layer falls back to env + well-known defaults.
 	// Returns the number of rows deleted so the handler can distinguish
 	// 204 (deleted) from 404 (never existed).
 	DeleteOIDCProvider(ctx context.Context, id string) (int64, error)
-	GetActiveEmailCode(ctx context.Context, arg GetActiveEmailCodeParams) (EmailCode, error)
-	GetActivePasswordReset(ctx context.Context, tokenHash string) (PasswordReset, error)
-	GetActiveSSHPublicKeyByUUIDForUserAccount(ctx context.Context, arg GetActiveSSHPublicKeyByUUIDForUserAccountParams) (ModUsersSshPublicKey, error)
-	GetAnonTokenBySessionToken(ctx context.Context, sessionToken string) (AnonToken, error)
-	GetAnonTokensByDeviceID(ctx context.Context, deviceID string) ([]AnonToken, error)
-	GetAuthLocal(ctx context.Context, userAccountID int64) (AuthLocal, error)
-	GetJWTSecret(ctx context.Context) (string, error)
-	GetOIDCConfig(ctx context.Context) (OidcConfig, error)
-	GetOIDCIdentityByIssuerSubject(ctx context.Context, arg GetOIDCIdentityByIssuerSubjectParams) (AuthOidcIdentity, error)
+	DeletePartyAuthnPolicy(ctx context.Context, partyID int64) (int64, error)
+	// Session revocation: the session's live tokens stop rotating.
+	ExpireRefreshTokensBySession(ctx context.Context, sessionID int64) (int64, error)
+	// client_credentials grant lookup; revoked or expired keys never match.
+	GetActiveAPIKeyByClientID(ctx context.Context, clientID string) (GetActiveAPIKeyByClientIDRow, error)
+	GetActiveAnonByTokenHash(ctx context.Context, tokenHash string) (GetActiveAnonByTokenHashRow, error)
+	GetActiveEmailOTPByIdentifier(ctx context.Context, identifierID int64) (GetActiveEmailOTPByIdentifierRow, error)
+	// The known-identity login path; it never matches by email.
+	GetActiveOIDCByIssuerSubject(ctx context.Context, arg GetActiveOIDCByIssuerSubjectParams) (GetActiveOIDCByIssuerSubjectRow, error)
+	// Login lookup: the active password credential bound to an identifier, with
+	// its user. Revoked or expired credentials never match.
+	GetActivePasswordLogin(ctx context.Context, arg GetActivePasswordLoginParams) (GetActivePasswordLoginRow, error)
+	// The resolver lookup (read-only; the active fingerprint index serves it).
+	GetActiveSSHKeyByFingerprint(ctx context.Context, fingerprintSha256 string) (GetActiveSSHKeyByFingerprintRow, error)
+	GetActiveUnboundPassword(ctx context.Context, principalID int64) (GetActiveUnboundPasswordRow, error)
+	GetChallengeByUUID(ctx context.Context, argUuid uuid.UUID) (AuthChallenge, error)
+	GetCredentialByID(ctx context.Context, id int64) (Credential, error)
+	GetCredentialByUUID(ctx context.Context, argUuid uuid.UUID) (Credential, error)
+	GetCredentialKind(ctx context.Context, kind string) (CredentialKind, error)
+	GetCredentialPartyAuthorization(ctx context.Context, arg GetCredentialPartyAuthorizationParams) (CredentialPartyAuthorization, error)
+	GetIdentifierByID(ctx context.Context, id int64) (UserIdentifier, error)
+	GetIdentifierByKindValue(ctx context.Context, arg GetIdentifierByKindValueParams) (UserIdentifier, error)
+	GetIdentifierByUUID(ctx context.Context, argUuid uuid.UUID) (UserIdentifier, error)
+	// The newest unconsumed, unexpired challenge of a subject, for code
+	// verification. Subject columns match with NULLs equal.
+	GetLatestOpenChallenge(ctx context.Context, arg GetLatestOpenChallengeParams) (AuthChallenge, error)
+	GetOIDCByCredentialID(ctx context.Context, credentialID int64) (CredOidc, error)
+	GetOIDCConfig(ctx context.Context) (GetOIDCConfigRow, error)
 	// Fetch one provider override row by id.
-	GetOIDCProvider(ctx context.Context, id string) (OidcProvider, error)
-	GetSystemActorBySlug(ctx context.Context, slug string) (GetSystemActorBySlugRow, error)
-	GetUserAccountByAccountHolder(ctx context.Context, accountHolder int64) (UserAccount, error)
-	GetUserAccountByEmail(ctx context.Context, lower string) (UserAccount, error)
-	GetUserAccountByID(ctx context.Context, id int64) (UserAccount, error)
-	GetUserAccountByUUID(ctx context.Context, argUuid uuid.UUID) (UserAccount, error)
-	// Cheap pre-check: true when a code of ANY state (unconsumed, exhausted, or
-	// consumed by success) was created for the same (user, purpose) within the last
-	// cooldown_secs seconds. Callers skip code generation and hashing when true.
-	// Advisory only: CreateEmailCodeWithCooldown remains the authoritative atomic guard.
-	HasRecentEmailCode(ctx context.Context, arg HasRecentEmailCodeParams) (bool, error)
-	InsertJWTSecretIfAbsent(ctx context.Context, secret string) (string, error)
-	InsertOIDCIdentity(ctx context.Context, arg InsertOIDCIdentityParams) (AuthOidcIdentity, error)
-	InsertSSHPublicKey(ctx context.Context, arg InsertSSHPublicKeyParams) (ModUsersSshPublicKey, error)
-	ListActiveSSHPublicKeysByUserAccount(ctx context.Context, arg ListActiveSSHPublicKeysByUserAccountParams) ([]ModUsersSshPublicKey, error)
-	ListAppUserAccounts(ctx context.Context, appID int64) ([]AppsUserAccount, error)
-	ListOIDCIdentitiesByUserAccount(ctx context.Context, userAccountID int64) ([]AuthOidcIdentity, error)
+	GetOIDCProvider(ctx context.Context, id string) (GetOIDCProviderRow, error)
+	// Queries over mod_users.party_authn_policies and
+	// mod_users.credential_party_authorizations. Credential confinement lives on
+	// credentials (SetCredentialConfinement in credentials.sql).
+	// No row means credential_rule 'any' and min_acr 1.
+	GetPartyAuthnPolicy(ctx context.Context, partyID int64) (PartyAuthnPolicy, error)
+	GetPasswordByCredentialID(ctx context.Context, credentialID int64) (CredPassword, error)
+	GetPrimaryEmailByUser(ctx context.Context, userID int64) (UserIdentifier, error)
+	// Reuse lookup: a row with used_at set presented again is reuse.
+	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (SessionRefreshToken, error)
+	GetSessionByID(ctx context.Context, id int64) (Session, error)
+	GetSessionByUUID(ctx context.Context, argUuid uuid.UUID) (Session, error)
+	// Queries over mod_users.auth_signing_keys, the single persisted Ed25519 key
+	// (PKCS#8 DER) used when JWT_SIGNING_KEY is unset.
+	GetSigningKey(ctx context.Context) (AuthSigningKey, error)
+	GetUserByEntityID(ctx context.Context, entityID int64) (User, error)
+	// Row-locks the user; serializes per-holder flows (admission, upgrade).
+	GetUserByEntityIDForUpdate(ctx context.Context, entityID int64) (User, error)
+	// Resolve the user holding an identifier (kind, canonical value).
+	GetUserByIdentifier(ctx context.Context, arg GetUserByIdentifierParams) (User, error)
+	// The attempt counter; the caller consumes the challenge once the budget is spent.
+	IncrementChallengeFailedAttempts(ctx context.Context, id int64) (int32, error)
+	// Concurrent first-boot callers race on the id = 1 primary key and all
+	// converge on the winner's key: read it back with GetSigningKey. Zero rows
+	// affected means another caller won.
+	InsertSigningKeyIfAbsent(ctx context.Context, privateKey []byte) (int64, error)
+	ListAPIKeysByPrincipal(ctx context.Context, principalID int64) ([]ListAPIKeysByPrincipalRow, error)
+	ListActiveCredentialsByPrincipal(ctx context.Context, principalID int64) ([]Credential, error)
+	ListActiveOIDCByPrincipal(ctx context.Context, principalID int64) ([]ListActiveOIDCByPrincipalRow, error)
+	ListActivePasswordsByPrincipal(ctx context.Context, principalID int64) ([]ListActivePasswordsByPrincipalRow, error)
+	// Credentials confined to the party, for the confinement listing.
+	ListConfinedCredentialsByParty(ctx context.Context, confinedToPartyID pgtype.Int8) ([]Credential, error)
+	ListCredentialKinds(ctx context.Context) ([]CredentialKind, error)
+	ListCredentialPartyAuthorizationsByCredential(ctx context.Context, credentialID int64) ([]CredentialPartyAuthorization, error)
+	ListCredentialPartyAuthorizationsByParty(ctx context.Context, partyID int64) ([]ListCredentialPartyAuthorizationsByPartyRow, error)
+	// Every credential of the principal, revoked ones included, newest first.
+	ListCredentialsByPrincipal(ctx context.Context, principalID int64) ([]Credential, error)
+	ListIdentifiersByUser(ctx context.Context, userID int64) ([]UserIdentifier, error)
+	// Batch form for directory lookups.
+	ListIdentifiersByUsers(ctx context.Context, userIds []int64) ([]UserIdentifier, error)
+	ListImpersonationChildren(ctx context.Context, impersonatorSessionID pgtype.Int8) ([]Session, error)
+	ListLiveSessionsByPrincipal(ctx context.Context, principalID int64) ([]Session, error)
+	ListManagedUsersByParty(ctx context.Context, managingPartyID pgtype.Int8) ([]User, error)
 	// Return every provider override row, sorted by id for stable output.
-	ListOIDCProviders(ctx context.Context) ([]OidcProvider, error)
-	ListUserAccountApps(ctx context.Context, userAccountID int64) ([]AppsUserAccount, error)
-	RemoveUserAccountFromApp(ctx context.Context, arg RemoveUserAccountFromAppParams) error
-	ResolveActiveSSHPublicKey(ctx context.Context, arg ResolveActiveSSHPublicKeyParams) (int64, error)
-	SearchUserAccounts(ctx context.Context, arg SearchUserAccountsParams) ([]UserAccount, error)
-	SetAppUserAccountRoles(ctx context.Context, arg SetAppUserAccountRolesParams) error
-	SetDefaultApp(ctx context.Context, arg SetDefaultAppParams) error
+	ListOIDCProviders(ctx context.Context) ([]ListOIDCProvidersRow, error)
+	ListRefreshTokensByLineage(ctx context.Context, lineageUuid uuid.UUID) ([]SessionRefreshToken, error)
+	// Active keys only; revoked keys stay in ListCredentialsByPrincipal.
+	ListSSHKeysByPrincipal(ctx context.Context, principalID int64) ([]ListSSHKeysByPrincipalRow, error)
+	// Distinct amr values of the session's unrevoked factors.
+	ListSessionAMR(ctx context.Context, sessionID int64) ([]string, error)
+	// The factors with their credential and kind, for acr/amr derivation and the
+	// session view.
+	ListSessionFactors(ctx context.Context, sessionID int64) ([]ListSessionFactorsRow, error)
+	// Batch read for directory lookups; unknown ids are simply absent.
+	ListUsersByEntityIDs(ctx context.Context, entityIds []int64) ([]User, error)
+	ListUsersByPerson(ctx context.Context, personID pgtype.Int8) ([]User, error)
+	// Idempotent: keeps the first verification time.
+	MarkIdentifierVerified(ctx context.Context, id int64) (UserIdentifier, error)
+	// ---------------------------------------------------------------------------
+	// Availability, liveness and acr wrappers
+	// ---------------------------------------------------------------------------
+	// 'available' or a lock reason (not_held, inactive, principal_disabled,
+	// confined, credential_not_authorized, provider_required, acr_too_low).
+	ProfileAvailability(ctx context.Context, arg ProfileAvailabilityParams) (string, error)
+	// Idempotent guard: only an unrevoked credential is revoked (no row otherwise).
+	RevokeCredential(ctx context.Context, arg RevokeCredentialParams) (Credential, error)
+	// Departure cleanup: a holder's credentials confined to the party they left.
+	RevokeCredentialsConfinedToParty(ctx context.Context, arg RevokeCredentialsConfinedToPartyParams) ([]Credential, error)
+	// Bulk revoke (guest upgrade supersedes the anon credentials, a disabled
+	// principal); returns the revoked rows so the caller can observe each.
+	RevokeCredentialsOfPrincipal(ctx context.Context, arg RevokeCredentialsOfPrincipalParams) ([]Credential, error)
+	// Ends the impersonation sessions started from a parent session.
+	RevokeImpersonationChildren(ctx context.Context, arg RevokeImpersonationChildrenParams) ([]Session, error)
+	// Only an unrevoked session is revoked (no row otherwise).
+	RevokeSession(ctx context.Context, arg RevokeSessionParams) (Session, error)
+	// Disable and "log out everywhere"; returns the revoked sessions.
+	RevokeSessionsByPrincipal(ctx context.Context, arg RevokeSessionsByPrincipalParams) ([]Session, error)
+	// Revoke every unrevoked session holding the credential as a factor
+	// (revoke_reason 'credential_revoked'). Impersonation children end through
+	// session_liveness (parent_session_ended). Returns the revoked sessions.
+	RevokeSessionsHoldingCredential(ctx context.Context, credentialID int64) ([]Session, error)
+	// A profile that ended: sessions impersonating it end with 'profile_ended'.
+	RevokeSessionsImpersonatingProfile(ctx context.Context, impersonatedProfileID pgtype.Int8) ([]Session, error)
+	// NULL when the session has no unrevoked factor (an impersonation session
+	// carries its parent's acr).
+	SessionACR(ctx context.Context, sessionID int64) (int16, error)
+	// The per-request check for an interactive token; always one row.
+	SessionLiveness(ctx context.Context, arg SessionLivenessParams) (SessionLivenessRow, error)
+	// A NULL party clears the confinement.
+	SetCredentialConfinement(ctx context.Context, arg SetCredentialConfinementParams) (Credential, error)
+	SetIdentifierPrimary(ctx context.Context, arg SetIdentifierPrimaryParams) (UserIdentifier, error)
 	// Narrow write used by /v1/oidc-config/confirm when the admin toggles a
 	// provider on/off from the summary page. Insert creates a row with just
 	// the enabled flag (all other override fields NULL → pass through to env
 	// / well-known); update leaves all other columns untouched so the row's
 	// existing overrides survive a simple enable/disable.
 	SetOIDCProviderEnabled(ctx context.Context, arg SetOIDCProviderEnabledParams) error
+	SetRefreshTokenReplacedBy(ctx context.Context, arg SetRefreshTokenReplacedByParams) error
+	// Impersonation renew.
+	SetSessionExpiry(ctx context.Context, arg SetSessionExpiryParams) (Session, error)
 	// Install or refresh the active setup-token hash; called once per boot
 	// when the state is unconfirmed and no hash is already present.
 	SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.Text) error
-	TouchOIDCIdentityLastSeen(ctx context.Context, id int64) error
+	SetUserDefaultProfile(ctx context.Context, arg SetUserDefaultProfileParams) error
+	// Link (or clear) the person record; refused by users_guest_unlinked for a guest.
+	SetUserPerson(ctx context.Context, arg SetUserPersonParams) (User, error)
+	TouchCredentialLastUsed(ctx context.Context, id int64) error
+	TouchSession(ctx context.Context, id int64) error
+	// A NULL default_profile_id clears the landing profile.
+	UpdateCredentialLabelAndDefault(ctx context.Context, arg UpdateCredentialLabelAndDefaultParams) (Credential, error)
 	// Persist the operator's opt-out choice (called from POST /v1/oidc-config/confirm).
 	// Per-provider enable flags live in the oidc_providers table and are
 	// upserted directly — no JSONB column on this singleton since 9.16.
 	UpdateOIDCConfig(ctx context.Context, optOut bool) error
-	UpdateUserAccount(ctx context.Context, arg UpdateUserAccountParams) error
-	UpsertAuthLocal(ctx context.Context, arg UpsertAuthLocalParams) error
+	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
+	// After a step-up: the recomputed acr/amr and a fresh auth_time.
+	UpdateSessionAssurance(ctx context.Context, arg UpdateSessionAssuranceParams) (Session, error)
+	// Set both defaults; a NULL clears the default.
+	UpdateUserDefaults(ctx context.Context, arg UpdateUserDefaultsParams) (User, error)
+	// is_guest only goes true -> false (users_validate_invariants refuses the reverse).
+	UpgradeGuestUser(ctx context.Context, arg UpgradeGuestUserParams) (User, error)
 	// Insert or replace a provider override row. NULL override fields mean
 	// "no opinion at this layer"; the merge code treats NULL as pass-through
 	// to env / well-known defaults.
@@ -104,7 +282,19 @@ type Querier interface {
 	// when field is omitted") must be resolved in Go code, because SQL
 	// NULL doesn't distinguish "field absent" from "explicit null". This
 	// keeps the query trivial and the semantics readable.
-	UpsertOIDCProvider(ctx context.Context, arg UpsertOIDCProviderParams) (OidcProvider, error)
+	UpsertOIDCProvider(ctx context.Context, arg UpsertOIDCProviderParams) (UpsertOIDCProviderRow, error)
+	UpsertPartyAuthnPolicy(ctx context.Context, arg UpsertPartyAuthnPolicyParams) (PartyAuthnPolicy, error)
+	// ---------------------------------------------------------------------------
+	// Session factors
+	// ---------------------------------------------------------------------------
+	// Add a factor, or re-verify it (step-up). MF101 when the credential belongs to
+	// another principal.
+	UpsertSessionFactor(ctx context.Context, arg UpsertSessionFactorParams) (SessionFactor, error)
+	// Atomic rotation step: marks a live, unused token used. No row means the
+	// token is already used (reuse), expired, or unknown; the caller then looks it
+	// up with GetRefreshTokenByHash to tell the cases apart.
+	UseRefreshToken(ctx context.Context, tokenHash string) (SessionRefreshToken, error)
+	UserHasVerifiedEmail(ctx context.Context, userID int64) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

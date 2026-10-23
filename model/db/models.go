@@ -11,102 +11,166 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type AnonToken struct {
-	ID            int64              `json:"id"`
-	Uuid          uuid.UUID          `json:"uuid"`
-	DeviceID      string             `json:"device_id"`
-	SessionToken  string             `json:"session_token"`
-	UserAccountID int64              `json:"user_account_id"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+type AuthChallenge struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	CredentialID   pgtype.Int8        `json:"credential_id"`
+	IdentifierID   pgtype.Int8        `json:"identifier_id"`
+	PrincipalID    pgtype.Int8        `json:"principal_id"`
+	SessionID      pgtype.Int8        `json:"session_id"`
+	CodeHash       string             `json:"code_hash"`
+	ConsumedAt     *time.Time         `json:"consumed_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	FailedAttempts int32              `json:"failed_attempts"`
+	Kind           string             `json:"kind"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
-type AppsUserAccount struct {
-	AppID         int64              `json:"app_id"`
-	UserAccountID int64              `json:"user_account_id"`
-	Roles         []string           `json:"roles"`
-	AssignedAt    pgtype.Timestamptz `json:"assigned_at"`
+type AuthSigningKey struct {
+	ID         int16              `json:"id"`
+	PrivateKey []byte             `json:"private_key"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
-type AuthLocal struct {
-	UserAccountID     int64              `json:"user_account_id"`
-	PasswordHash      string             `json:"password_hash"`
-	PasswordUpdatedAt pgtype.Timestamptz `json:"password_updated_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+type CredAnon struct {
+	CredentialID int64  `json:"credential_id"`
+	DeviceID     string `json:"device_id"`
+	TokenHash    string `json:"token_hash"`
 }
 
-type AuthOidcIdentity struct {
+type CredApiKey struct {
+	CredentialID int64  `json:"credential_id"`
+	ClientID     string `json:"client_id"`
+	SecretHash   string `json:"secret_hash"`
+}
+
+type CredEmailOtp struct {
+	CredentialID int64 `json:"credential_id"`
+	IdentifierID int64 `json:"identifier_id"`
+	Active       bool  `json:"active"`
+}
+
+type CredOidc struct {
+	CredentialID int64       `json:"credential_id"`
+	EmailAtLink  pgtype.Text `json:"email_at_link"`
+	Issuer       string      `json:"issuer"`
+	ProviderID   string      `json:"provider_id"`
+	Subject      string      `json:"subject"`
+	Active       bool        `json:"active"`
+}
+
+type CredPassword struct {
+	CredentialID int64       `json:"credential_id"`
+	IdentifierID pgtype.Int8 `json:"identifier_id"`
+	Hash         string      `json:"hash"`
+	Active       bool        `json:"active"`
+	PrincipalID  int64       `json:"principal_id"`
+}
+
+type CredSshKey struct {
+	CredentialID      int64  `json:"credential_id"`
+	FingerprintSha256 string `json:"fingerprint_sha256"`
+	KeyType           string `json:"key_type"`
+	PublicKey         string `json:"public_key"`
+	Active            bool   `json:"active"`
+}
+
+type Credential struct {
 	ID                 int64              `json:"id"`
 	Uuid               uuid.UUID          `json:"uuid"`
-	UserAccountID      int64              `json:"user_account_id"`
-	Issuer             string             `json:"issuer"`
-	Subject            string             `json:"subject"`
-	Email              pgtype.Text        `json:"email"`
-	EmailVerifiedAtIdp *time.Time         `json:"email_verified_at_idp"`
-	LinkedAt           pgtype.Timestamptz `json:"linked_at"`
-	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
+	PrincipalID        int64              `json:"principal_id"`
+	Kind               string             `json:"kind"`
+	ConfinedToPartyID  pgtype.Int8        `json:"confined_to_party_id"`
+	DefaultProfileID   pgtype.Int8        `json:"default_profile_id"`
+	ExpiresAt          *time.Time         `json:"expires_at"`
+	Label              string             `json:"label"`
+	RevokeReason       pgtype.Text        `json:"revoke_reason"`
+	RevokedAt          *time.Time         `json:"revoked_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	CreatedByProfileID pgtype.Int8        `json:"created_by_profile_id"`
+	LastUsedAt         *time.Time         `json:"last_used_at"`
 }
 
-type EmailCode struct {
-	ID             int64              `json:"id"`
-	UserAccountID  int64              `json:"user_account_id"`
-	CodeHash       string             `json:"code_hash"`
-	Purpose        string             `json:"purpose"`
-	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
-	ConsumedAt     *time.Time         `json:"consumed_at"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	FailedAttempts int32              `json:"failed_attempts"`
+type CredentialKind struct {
+	Kind              string `json:"kind"`
+	Amr               string `json:"amr"`
+	BaseAcr           int16  `json:"base_acr"`
+	Class             string `json:"class"`
+	Factor            string `json:"factor"`
+	PhishingResistant bool   `json:"phishing_resistant"`
+	ServiceAllowed    bool   `json:"service_allowed"`
 }
 
-type ModUsersSshPublicKey struct {
-	ID                int64              `json:"id"`
-	Uuid              uuid.UUID          `json:"uuid"`
-	UserAccountID     int64              `json:"user_account_id"`
-	KeyType           string             `json:"key_type"`
-	PublicKey         string             `json:"public_key"`
-	FingerprintSha256 string             `json:"fingerprint_sha256"`
-	Label             string             `json:"label"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	ArchivedAt        *time.Time         `json:"archived_at"`
+type CredentialPartyAuthorization struct {
+	CredentialID          int64              `json:"credential_id"`
+	PartyID               int64              `json:"party_id"`
+	AuthorizedByProfileID int64              `json:"authorized_by_profile_id"`
+	AuthorizedAt          pgtype.Timestamptz `json:"authorized_at"`
 }
 
-type OidcConfig struct {
-	ID                  int32              `json:"id"`
-	OptOut              bool               `json:"opt_out"`
-	SetupTokenHash      pgtype.Text        `json:"setup_token_hash"`
-	SetupTokenCreatedAt *time.Time         `json:"setup_token_created_at"`
-	SavedAt             pgtype.Timestamptz `json:"saved_at"`
+type PartyAuthnPolicy struct {
+	PartyID                int64              `json:"party_id"`
+	RequiredOidcProviderID pgtype.Text        `json:"required_oidc_provider_id"`
+	CredentialRule         string             `json:"credential_rule"`
+	MinAcr                 int16              `json:"min_acr"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 }
 
-type OidcProvider struct {
-	ID           string             `json:"id"`
-	DisplayName  pgtype.Text        `json:"display_name"`
-	IssuerUrl    pgtype.Text        `json:"issuer_url"`
-	ClientID     pgtype.Text        `json:"client_id"`
-	ClientSecret pgtype.Text        `json:"client_secret"`
-	ClaimStyle   pgtype.Text        `json:"claim_style"`
-	Scopes       []string           `json:"scopes"`
-	Enabled      bool               `json:"enabled"`
+type Session struct {
+	ID                    int64              `json:"id"`
+	Uuid                  uuid.UUID          `json:"uuid"`
+	PrincipalID           int64              `json:"principal_id"`
+	AppID                 pgtype.Int8        `json:"app_id"`
+	ImpersonatedProfileID pgtype.Int8        `json:"impersonated_profile_id"`
+	ImpersonatorSessionID pgtype.Int8        `json:"impersonator_session_id"`
+	Acr                   int16              `json:"acr"`
+	Amr                   []string           `json:"amr"`
+	AuthTime              pgtype.Timestamptz `json:"auth_time"`
+	ImpersonationReason   pgtype.Text        `json:"impersonation_reason"`
+	RevokeReason          pgtype.Text        `json:"revoke_reason"`
+	RevokedAt             *time.Time         `json:"revoked_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	LastSeenAt            pgtype.Timestamptz `json:"last_seen_at"`
+}
+
+type SessionFactor struct {
+	SessionID    int64              `json:"session_id"`
+	CredentialID int64              `json:"credential_id"`
+	AssertedAcr  pgtype.Int2        `json:"asserted_acr"`
+	VerifiedAt   pgtype.Timestamptz `json:"verified_at"`
+}
+
+type SessionRefreshToken struct {
+	ID           int64              `json:"id"`
+	SessionID    int64              `json:"session_id"`
+	ReplacedByID pgtype.Int8        `json:"replaced_by_id"`
+	LineageUuid  uuid.UUID          `json:"lineage_uuid"`
+	TokenHash    string             `json:"token_hash"`
+	UsedAt       *time.Time         `json:"used_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
 }
 
-type PasswordReset struct {
-	ID            int64              `json:"id"`
-	UserAccountID int64              `json:"user_account_id"`
-	TokenHash     string             `json:"token_hash"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
-	ConsumedAt    *time.Time         `json:"consumed_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+type User struct {
+	EntityID         int64              `json:"entity_id"`
+	DefaultAppID     pgtype.Int8        `json:"default_app_id"`
+	DefaultProfileID pgtype.Int8        `json:"default_profile_id"`
+	IsGuest          bool               `json:"is_guest"`
+	ManagingPartyID  pgtype.Int8        `json:"managing_party_id"`
+	PersonID         pgtype.Int8        `json:"person_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
-type UserAccount struct {
-	ID              int64              `json:"id"`
-	Uuid            uuid.UUID          `json:"uuid"`
-	AccountHolder   int64              `json:"account_holder"`
-	Email           pgtype.Text        `json:"email"`
-	EmailVerifiedAt *time.Time         `json:"email_verified_at"`
-	DefaultAppID    pgtype.Int8        `json:"default_app_id"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+type UserIdentifier struct {
+	ID         int64              `json:"id"`
+	Uuid       uuid.UUID          `json:"uuid"`
+	UserID     int64              `json:"user_id"`
+	IsPrimary  bool               `json:"is_primary"`
+	Kind       string             `json:"kind"`
+	ValueCanon string             `json:"value_canon"`
+	VerifiedAt *time.Time         `json:"verified_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
