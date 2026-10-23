@@ -33,13 +33,13 @@ import (
 // provider override rows. Declared as a small interface so handler/tests
 // can supply an in-memory fake without importing pgx.
 type OIDCProviderQuerier interface {
-	ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error)
+	ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error)
 }
 
 // DBProviderRow carries the editable override fields in the same nullable
 // shape sqlc produces, but package-local so the merge layer doesn't leak
 // pgtype into higher layers beyond what's unavoidable. It's a thin alias
-// over db.OidcProvider trimmed to the override-relevant columns.
+// over db.ListOIDCProvidersRow trimmed to the override-relevant columns.
 type DBProviderRow struct {
 	ID           string
 	DisplayName  pgtype.Text
@@ -276,7 +276,7 @@ func pgtypeText(t pgtype.Text) (string, bool) {
 
 // toDBProviderRow converts a sqlc row to the package-local shape. Copies
 // Scopes so later mutation of one doesn't alias the other.
-func toDBProviderRow(r db.OidcProvider) DBProviderRow {
+func toDBProviderRow(r db.ListOIDCProvidersRow) DBProviderRow {
 	out := DBProviderRow{
 		ID:           r.ID,
 		DisplayName:  r.DisplayName,

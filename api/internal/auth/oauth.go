@@ -128,7 +128,7 @@ type OAuth struct {
 	// ExchangeFn, when non-nil, replaces the real token-exchange logic.
 	// Used only in tests to simulate a successful provider exchange without
 	// a live IdP. Production code must leave this nil.
-	ExchangeFn func(ctx context.Context, providerID, code, rawState, cookieState string) (Principal, StatePayload, error)
+	ExchangeFn func(ctx context.Context, providerID, code, rawState, cookieState string) (ExternalIdentity, StatePayload, error)
 }
 
 // NewOAuth builds an OAuth for every provider in cfg.Providers. Unlike the
@@ -222,7 +222,7 @@ func initProvider(ctx context.Context, id string, p config.Provider, cfg *config
 		return state
 	}
 
-	mapper, err := NewClaimMapper(p.ClaimStyle, MapperOptions{AdminRole: cfg.Auth.AdminRole})
+	mapper, err := NewClaimMapper(p.ClaimStyle, MapperOptions{})
 	if err != nil {
 		state.Err = fmt.Errorf("provider %q claim mapper: %w", id, err)
 		return state
@@ -480,14 +480,14 @@ func (o *OAuth) LinkAuthorizeURL(providerID, userAccountUUID, returnPath string)
 
 // Exchange verifies the state parameter, trades the authorization code for
 // tokens at the provider's token endpoint, validates the resulting id_token,
-// and returns a normalized Principal plus the recovered state payload (so
+// and returns a normalized ExternalIdentity plus the recovered state payload (so
 // the caller can redirect to the return path).
-func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookieState string) (Principal, StatePayload, error) {
+func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookieState string) (ExternalIdentity, StatePayload, error) {
 	if o.ExchangeFn != nil {
 		return o.ExchangeFn(ctx, providerID, code, rawState, cookieState)
 	}
 
-	var empty Principal
+	var empty ExternalIdentity
 	var emptyPayload StatePayload
 
 	s, err := o.stateByID(providerID)

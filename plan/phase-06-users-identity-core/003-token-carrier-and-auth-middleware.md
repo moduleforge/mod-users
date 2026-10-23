@@ -111,3 +111,34 @@ architectural_impact: true
 - After the signer, verifier and signing-key bootstrap.
 - After `Identity`, `Authenticator` and the middleware.
 - After the `authz.go` port and call-site sweep.
+
+## Status
+
+- **Outcome:** succeeded (2026-10-23).
+- **Validation:** `go build` of `./internal/auth/... ./internal/config/... ./internal/authz/... ./auth/...`
+  passes; `go test ./internal/authz/...` passes; the forbidden-symbol grep returns nothing. Beyond
+  the required checks, `go vet` and `go test -race` pass for all four packages (every unit test
+  file in them now compiles and passes), and `go vet -tags integration ./internal/config/` passes.
+  The liveness SQL, the authz arms, the anonymous-actor lookup and the signing-key bootstrap
+  (including 4 concurrent callers on an empty database) were exercised against a throwaway
+  Postgres 16 with mod-core, mod-authz and mod-users migrations applied.
+- **Requirement 9 (U27):** mod-authz phase 13 has merged into its plan branch, so the wildcard,
+  entity and type-entity arms of `authz.go` now read only `scope = 'entity'` grants.
+- **Binding names (requirement 10):** the section 6.1 facade is re-exported as listed. Additions
+  not named in 6.1 are kept for existing consumers. `OAuth`, `NewOAuth` and `OAuthStateKey` are
+  neither listed nor removed, and the OIDC orchestrator and composition root still need them.
+  `ErrNoAuthHeader`, `ErrInvalidToken` and `ErrNotLive` are re-exported as variables. No binding
+  name changed.
+- **Affected sources:** `api/internal/auth/` (`carrier.go`, `identity.go`, `authenticator.go`,
+  `middleware.go`, `signer.go`, `jwt.go`, `derived_keys.go`, `anonymous_actor*.go`,
+  `require_verified.go`, `oauth_claims*.go` (moved from `claims*.go`), `oauth.go`,
+  `oauth_state.go`); `api/internal/config/` (`config.go`, `jwt_signing.go`,
+  `signing_key_bootstrap.go` (was `jwtsecret_bootstrap.go`), `provider_merge.go`);
+  `api/internal/authz/authz.go`; `api/auth/auth.go`; `.env.example`, `README.md`, `AGENTS.md`,
+  `deploy/k8s/base/configmap.yaml`, `deploy/local/docker-compose.yml`.
+- **Deleted:** `local_jwt.go`, `principal.go`, `stepup.go`, `resolver.go` (built entirely on the
+  removed account schema; the OIDC resolver task rewrites it) and the tests of the deleted
+  code.
+- **Decisions under the assumptions:** mod-core's `opctx.AuthContext` and
+  `coredb.GetSystemActorBySlug` resolved through the sibling links to the mod-core plan
+  worktree, as assumed.

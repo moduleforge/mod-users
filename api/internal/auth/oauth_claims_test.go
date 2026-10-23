@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"testing"
 )
 
@@ -425,49 +424,5 @@ func TestEmailVerifiedClaim(t *testing.T) {
 				t.Errorf("EmailVerified = %v, want %v", p.EmailVerified, tc.wantVerified)
 			}
 		})
-	}
-}
-
-// TestContextRoundTrip verifies the principal context helpers.
-func TestContextRoundTrip(t *testing.T) {
-	uc := &UserContext{
-		UserAccountID: 42,
-		UserUUID:      "uuid-abc",
-		Email:         "user@example.com",
-	}
-
-	ctx := WithUserContext(context.Background(), uc)
-
-	got, ok := FromContext(ctx)
-	if !ok {
-		t.Fatal("FromContext returned ok=false, want true")
-	}
-	if got != uc {
-		t.Errorf("FromContext returned different pointer: got %p, want %p", got, uc)
-	}
-}
-
-func TestMustFromContext_Present(t *testing.T) {
-	uc := &UserContext{UserAccountID: 1}
-	ctx := WithUserContext(context.Background(), uc)
-	got := MustFromContext(ctx)
-	if got != uc {
-		t.Error("MustFromContext returned wrong pointer")
-	}
-}
-
-func TestMustFromContext_Absent(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("MustFromContext should panic when UserContext is absent")
-		}
-	}()
-	MustFromContext(context.Background())
-}
-
-func TestFromContext_Empty(t *testing.T) {
-	_, ok := FromContext(context.Background())
-	if ok {
-		t.Error("FromContext on empty context should return ok=false")
 	}
 }

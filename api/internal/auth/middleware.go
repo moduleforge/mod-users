@@ -1,81 +1,25 @@
 package auth
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
-	"github.com/moduleforge/core-api/opctx"
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/mod-users/api/internal/server"
 )
 
-// Sentinel errors from AuthenticateRequest. Callers use errors.Is to
-// distinguish "no session" (treat as not-authenticated, possibly fall
-// through to an alternate auth path) from genuine internal faults.
-var (
-	// ErrNoAuthHeader is returned when the request has no Authorization
-	// header or the header isn't in "Bearer <token>" form.
-	ErrNoAuthHeader = errors.New("auth: no bearer token")
-	// ErrInvalidToken is returned when the verifier rejects the token
-	// (signature, expiry, issuer, audience, or parse failure).
-	ErrInvalidToken = errors.New("auth: invalid or expired token")
-)
-
-// AuthenticateRequest runs the Bearer-extract → verify → claim-map →
-// user-resolve pipeline on r. It does not touch the response writer;
-// callers decide how to map errors to HTTP status codes.
+// writeAuthError maps an Authenticate error to its HTTP response:
 //
-// Error classification:
-//   - ErrNoAuthHeader: missing or non-Bearer Authorization header.
-//   - ErrInvalidToken: verifier rejected the token.
-//   - ErrUserGone:     resolver reports the user no longer exists.
-//   - any other error: mapper/resolver internal fault (treat as 500).
-//
-// This is shared by RequireAuth (which maps the errors to HTTP
-// responses) and the onboarding AdminChecker (which maps them to
-// "fall through to setup-token" vs "500").
-func AuthenticateRequest(r *http.Request, verifier *Verifier, mapper ClaimMapper, resolver *UserResolver) (*UserContext, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return nil, ErrNoAuthHeader
-	}
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return nil, ErrNoAuthHeader
-	}
-	rawToken := strings.TrimPrefix(authHeader, "Bearer ")
-
-	claims, err := verifier.Verify(r.Context(), rawToken)
-	if err != nil {
-		return nil, ErrInvalidToken
-	}
-
-	principal, err := mapper.Map(claims)
-	if err != nil {
-		return nil, fmt.Errorf("claim map: %w", err)
-	}
-
-	uc, err := resolver.Resolve(r.Context(), principal)
-	if err != nil {
-		return nil, err // may wrap ErrUserGone, or be an internal fault
-	}
-	return uc, nil
-}
-
-// writeAuthError maps an AuthenticateRequest error to the appropriate HTTP
-// response, preserving the exact status codes, error codes, and messages
-// callers may already assert on. It is shared by every middleware that
-// authenticates via AuthenticateRequest and needs to reject the request on
-// error (currently RequireAuth; ResolveActorOrAnonymous reuses it for its
-// own non-ErrNoAuthHeader error paths).
+//	ErrNoAuthHeader  401 unauthorized (missing or malformed header)
+//	ErrInvalidToken  401 unauthorized
+//	*NotLiveError    401 users.session_revoked, or 401
+//	                 users.profile_unavailable with the lock reason in details
+//	anything else    500 internal_error (logged)
 func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
+	var notLive *NotLiveError
 	switch {
 	case errors.Is(err, ErrNoAuthHeader):
-		// Preserve the pre-9.10a distinction between missing
-		// header and malformed header for any callers that
-		// assert on the message.
 		if r.Header.Get("Authorization") == "" {
 			server.Error(w, http.StatusUnauthorized, "unauthorized", "missing Authorization header")
 		} else {
@@ -83,51 +27,40 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 		}
 	case errors.Is(err, ErrInvalidToken):
 		server.Error(w, http.StatusUnauthorized, "unauthorized", "invalid or expired token")
-	case errors.Is(err, ErrUserGone):
-		server.Error(w, http.StatusUnauthorized, "unauthorized", "user no longer exists")
-	default:
-		// Classify mapper vs resolver so ops can tell them
-		// apart; the helper doesn't differentiate but the
-		// error message does.
-		if strings.HasPrefix(err.Error(), "claim map:") {
-			slog.ErrorContext(r.Context(), "claim mapper error", "error", err)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to process authentication claims")
-		} else {
-			slog.ErrorContext(r.Context(), "user resolve error", "error", err)
-			server.Error(w, http.StatusInternalServerError, "internal_error", "failed to resolve user")
+	case errors.As(err, &notLive):
+		if notLive.Code() == CodeSessionRevoked {
+			server.Error(w, http.StatusUnauthorized, CodeSessionRevoked, "the session is no longer active; sign in again")
+			return
 		}
+		server.ErrorWithDetails(w, http.StatusUnauthorized, CodeProfileUnavailable,
+			"the profile is not available to this session",
+			[]apiresp.FieldError{{
+				Field:   "profile",
+				Code:    notLive.LockReason(),
+				Message: "profile unavailable: " + notLive.LockReason(),
+			}})
+	default:
+		slog.ErrorContext(r.Context(), "authentication error", "error", err)
+		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to authenticate request")
 	}
 }
 
-// contextWithAuthenticatedActor populates opctx values so downstream
-// service code and the Authorizer can read actor identity via
-// opctx.ActorEntityID. WithUserContext preserves the richer UserContext for
-// handler-level code that needs fields beyond what opctx exposes (email,
-// roles, etc.). Shared by every middleware that authenticates a request
-// successfully via AuthenticateRequest (currently RequireAuth;
-// ResolveActorOrAnonymous reuses it for its own authenticated-actor path).
-func contextWithAuthenticatedActor(ctx context.Context, uc *UserContext) context.Context {
-	ctx = WithUserContext(ctx, uc)
-	ctx = opctx.WithActor(ctx, uc.EntityID)
-	if uc.AssumedUser != nil {
-		ctx = opctx.WithSudoActor(ctx, uc.AssumedUser.EntityID)
+// NewRequireAuth returns middleware that authenticates the bearer token with
+// a, answers 401 unless the session or credential and its profile are live,
+// and otherwise installs the Identity and its opctx.AuthContext on the
+// request context.
+func NewRequireAuth(a *Authenticator) func(http.Handler) http.Handler {
+	if a == nil {
+		panic("auth: NewRequireAuth: authenticator must not be nil")
 	}
-	return ctx
-}
-
-// RequireAuth returns middleware that validates the Authorization header,
-// maps claims to a Principal, resolves/creates the user, and stores
-// *UserContext on the request context.
-func RequireAuth(verifier *Verifier, mapper ClaimMapper, resolver *UserResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			uc, err := AuthenticateRequest(r, verifier, mapper, resolver)
+			id, err := a.Authenticate(r)
 			if err != nil {
 				writeAuthError(w, r, err)
 				return
 			}
-			ctx := contextWithAuthenticatedActor(r.Context(), uc)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			next.ServeHTTP(w, r.WithContext(WithIdentity(r.Context(), id)))
 		})
 	}
 }

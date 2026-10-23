@@ -11,11 +11,11 @@ import (
 
 // stubProviderQuerier returns a canned list of DB rows.
 type stubProviderQuerier struct {
-	rows []db.OidcProvider
+	rows []db.ListOIDCProvidersRow
 	err  error
 }
 
-func (s stubProviderQuerier) ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error) {
+func (s stubProviderQuerier) ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error) {
 	return s.rows, s.err
 }
 
@@ -76,7 +76,7 @@ func TestLoadMergedProviders_DBOverridesEnv(t *testing.T) {
 			Scopes:       []string{"openid", "email", "profile"},
 		},
 	}
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "google",
 			ClientID:     validText("db-gid"),
@@ -106,7 +106,7 @@ func TestLoadMergedProviders_DBOverridesEnv(t *testing.T) {
 }
 
 func TestLoadMergedProviders_DBOnlyWellKnown(t *testing.T) {
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "google",
 			ClientID:     validText("db-only-gid"),
@@ -138,7 +138,7 @@ func TestLoadMergedProviders_DBOnlyWellKnown(t *testing.T) {
 }
 
 func TestLoadMergedProviders_UnknownProviderFullyFromDB(t *testing.T) {
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "keycloak",
 			DisplayName:  validText("My Keycloak"),
@@ -171,7 +171,7 @@ func TestLoadMergedProviders_UnknownProviderFullyFromDB(t *testing.T) {
 }
 
 func TestLoadMergedProviders_MicrosoftMultiTenant(t *testing.T) {
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "microsoft",
 			ClientID:     validText("mid"),
@@ -244,7 +244,7 @@ func TestLoadMergedProviders_EmptyScopesInDBFallsThrough(t *testing.T) {
 			Scopes:       []string{"openid", "email"},
 		},
 	}
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:      "google",
 			Scopes:  []string{}, // explicit empty array
@@ -274,7 +274,7 @@ func TestLoadMergedProviders_DisabledDBOverride(t *testing.T) {
 			Scopes:       []string{"openid", "email", "profile"},
 		},
 	}
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:      "google",
 			Enabled: false,
@@ -306,7 +306,7 @@ func TestLoadMergedProviders_HasClientSecretAttribution(t *testing.T) {
 		},
 	}
 	// DB row with client_secret NULL — secret should still be true from env.
-	rows := []db.OidcProvider{{ID: "google", Enabled: true}}
+	rows := []db.ListOIDCProvidersRow{{ID: "google", Enabled: true}}
 	merged, err := LoadMergedProviders(context.Background(), env, stubProviderQuerier{rows: rows})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

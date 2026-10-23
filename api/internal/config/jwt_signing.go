@@ -11,56 +11,32 @@ import (
 	"strings"
 )
 
-// Supported values for JWT_ALG.
-const (
-	// JWTAlgHS256 is the default: locally-issued JWTs are HMAC-signed with
-	// JWT_SECRET.
-	JWTAlgHS256 = "HS256"
-	// JWTAlgEdDSA signs locally-issued JWTs with an Ed25519 private key
-	// supplied via JWT_SIGNING_KEY.
-	JWTAlgEdDSA = "EdDSA"
-)
-
 // maxJWTKIDLen bounds JWT_SIGNING_KID; a kid is an opaque short identifier.
 const maxJWTKIDLen = 128
 
-// loadJWTSigning reads JWT_ALG, JWT_SIGNING_KEY, and JWT_SIGNING_KID from the
-// environment and returns the validated algorithm, parsed Ed25519 private key
-// (nil unless the algorithm is EdDSA), and kid. Every problem is returned as a
-// message in problems so Load can report them alongside all other config
-// errors. No message ever contains key material or the raw env value.
-func loadJWTSigning() (alg string, key ed25519.PrivateKey, kid string, problems []string) {
-	alg = JWTAlgHS256
-	if v := strings.TrimSpace(os.Getenv("JWT_ALG")); v != "" {
-		switch v {
-		case JWTAlgHS256, JWTAlgEdDSA:
-			alg = v
-		default:
-			problems = append(problems,
-				"JWT_ALG: invalid value (must be HS256 or EdDSA)")
-		}
-	}
-
+// loadJWTSigning reads JWT_SIGNING_KEY and JWT_SIGNING_KID from the
+// environment and returns the parsed Ed25519 private key (nil when
+// JWT_SIGNING_KEY is unset, in which case Load bootstraps the persisted key;
+// see signing_key_bootstrap.go) and the validated kid. Every problem is
+// returned as a message in problems so Load can report them alongside all
+// other config errors. No message ever contains key material or the raw env
+// value.
+func loadJWTSigning() (key ed25519.PrivateKey, kid string, problems []string) {
 	kid = strings.TrimSpace(os.Getenv("JWT_SIGNING_KID"))
 	if err := validateKID(kid); err != nil {
 		problems = append(problems, "JWT_SIGNING_KID: "+err.Error())
 		kid = ""
 	}
 
-	if alg == JWTAlgEdDSA {
-		raw := os.Getenv("JWT_SIGNING_KEY")
-		if strings.TrimSpace(raw) == "" {
-			problems = append(problems, "JWT_SIGNING_KEY: required when JWT_ALG=EdDSA")
+	if raw := os.Getenv("JWT_SIGNING_KEY"); strings.TrimSpace(raw) != "" {
+		k, err := ParseEd25519PrivateKeyPEM(raw)
+		if err != nil {
+			problems = append(problems, "JWT_SIGNING_KEY: "+err.Error())
 		} else {
-			k, err := ParseEd25519PrivateKeyPEM(raw)
-			if err != nil {
-				problems = append(problems, "JWT_SIGNING_KEY: "+err.Error())
-			} else {
-				key = k
-			}
+			key = k
 		}
 	}
-	return alg, key, kid, problems
+	return key, kid, problems
 }
 
 // validateKID accepts an empty kid (not configured) or a short printable-ASCII

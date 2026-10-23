@@ -11,31 +11,27 @@ type genericMapper struct {
 	opts MapperOptions
 }
 
-func (m *genericMapper) Map(rawClaims map[string]any) (Principal, error) {
+func (m *genericMapper) Map(rawClaims map[string]any) (ExternalIdentity, error) {
 	sub, iss, err := extractRequired(rawClaims)
 	if err != nil {
-		return Principal{}, err
+		return ExternalIdentity{}, err
 	}
 
 	if m.opts.EmailPath == "" {
-		return Principal{}, fmt.Errorf("auth: generic mapper requires opts.EmailPath")
+		return ExternalIdentity{}, fmt.Errorf("auth: generic mapper requires opts.EmailPath")
 	}
 	if m.opts.RolesPath == "" {
-		return Principal{}, fmt.Errorf("auth: generic mapper requires opts.RolesPath")
+		return ExternalIdentity{}, fmt.Errorf("auth: generic mapper requires opts.RolesPath")
 	}
 
 	email := getStringByPath(rawClaims, m.opts.EmailPath)
 	roles := lowercaseAll(getStringSliceByPath(rawClaims, m.opts.RolesPath))
 
-	// Extract sudo_user_uuid if present (set by IssueAssumeJWT).
-	sudoUserUUID, _ := rawClaims["sudo_user_uuid"].(string)
-
-	return Principal{
+	return ExternalIdentity{
 		Subject:       sub,
 		Issuer:        iss,
 		Email:         email,
 		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
 		Roles:         roles,
-		SudoUserUUID:  sudoUserUUID,
 	}, nil
 }

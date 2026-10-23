@@ -2,8 +2,8 @@
 
 package config
 
-// jwtsecret_bootstrap_integration_test.go proves, against a real Postgres,
-// the properties the unit tests in jwtsecret_bootstrap_test.go cannot: a
+// signing_key_bootstrap_integration_test.go proves, against a real Postgres,
+// the properties the unit tests in signing_key_bootstrap_test.go cannot: a
 // genuinely fresh, unmigrated database (config.Load() runs before this
 // module's own migrations apply -- see 001's and 002's header notes), a
 // genuinely concurrent multi-caller first boot against it (the
@@ -20,7 +20,7 @@ package config
 //
 // Migrations: mod-users' own plain migrations (usersmigrations,
 // model/migrations) are not self-contained -- the baseline migration 0100_baseline.sql
-// (the single usersmigrations.Migrate migration, which also creates auth_jwt_secrets) carries FKs
+// (the single usersmigrations.Migrate migration, which also creates mod_users.auth_signing_keys) carries FKs
 // into core-model tables (legal_entities, apps) that a mod-users-only
 // database never creates. Running usersmigrations.Migrate in-process
 // against a bare shadow DB therefore fails with SQLSTATE 42P01
@@ -42,8 +42,8 @@ package config
 // tables), since the fresh-database and concurrent-race scenarios below
 // specifically need no goose_db_version_users table present either -- see
 // resetJWTSecretShadowDB. The corruption-detection scenario
-// (TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret) creates
-// auth_jwt_secrets via bootstrapJWTSecretDDL directly (byte-identical to
+// (TestInteg_AuthSigningKeys_CheckConstraint_RejectsShortKey) creates
+// mod_users.auth_signing_keys via the bootstrap DDL directly (byte-identical to
 // the baseline migration's own DDL -- see the drift-guard unit test) instead of via
 // a full migration run, so it always exercises the real CHECK constraint
 // whenever the DB is reachable at all, independent of the composed-dir
@@ -58,6 +58,7 @@ package config
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"os"
@@ -220,7 +221,7 @@ func jwtSecretIntegShadowDSN(pgHost string) string {
 }
 
 // resetJWTSecretShadowDB drops and recreates jwt_secret_integ_users so every
-// test starts from a genuinely empty database: no auth_jwt_secrets table, no
+// test starts from a genuinely empty database: no auth_signing_keys table, no
 // goose_db_version_users table, nothing -- not merely truncated tables. This
 // is what the fresh-database and concurrent-race scenarios below need, and
 // is a superset of what the already-migrated scenario needs.
@@ -247,7 +248,7 @@ func resetJWTSecretShadowDB(t *testing.T) {
 // + authz + users, produced by `make -C model compose`) against dsn via the
 // goose CLI directly -- the same approach authz_integration_test.go's
 // resetDB uses -- rather than calling usersmigrations.Migrate in-process.
-// The baseline migration 0100_baseline.sql (which also creates auth_jwt_secrets) has
+// The baseline migration 0100_baseline.sql (which also creates mod_users.auth_signing_keys) has
 // FKs into core-model tables (legal_entities, apps) that a mod-users-only
 // database never creates; the composed dir already includes mod-core's own
 // migrations, so those FKs resolve and this never hits SQLSTATE 42P01
@@ -272,31 +273,24 @@ func runComposedMigrations(t *testing.T, dsn string) {
 // Real fetch-or-generate round trip against an already-migrated DB
 // ---------------------------------------------------------------------------
 
-// TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip resets the shadow DB and
-// applies the composed migrations dir against it via goose (normal path --
-// table pre-exists via goose, mirroring mod-core's field-key precedent
-// scenario), then calls bootstrapJWTSecretFromDB twice: the first call must
-// succeed and generate a well-formed secret; the second call against the
-// same DB must return the same persisted secret, not generate a new one.
-func TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip(t *testing.T) {
+// TestInteg_BootstrapSigningKey_MigratedDB_RoundTrip applies the composed
+// migrations, then calls bootstrapSigningKeyFromDB twice: the first call
+// generates and persists a key; the second must return the same key.
+func TestInteg_BootstrapSigningKey_MigratedDB_RoundTrip(t *testing.T) {
 	resetJWTSecretShadowDB(t)
 	dsn := jwtSecretIntegShadowDSN(integPGHost)
 	runComposedMigrations(t, dsn)
 
-	first, err := bootstrapJWTSecretFromDB(context.Background(), dsn)
+	first, err := bootstrapSigningKeyFromDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("first bootstrap call: %v", err)
 	}
-	if len(first) != jwtSecretByteLen*2 {
-		t.Errorf("first secret length = %d, want %d", len(first), jwtSecretByteLen*2)
-	}
-
-	second, err := bootstrapJWTSecretFromDB(context.Background(), dsn)
+	second, err := bootstrapSigningKeyFromDB(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("second bootstrap call: %v", err)
 	}
-	if second != first {
-		t.Errorf("second call returned a different secret (%q) than the first (%q); a second call against the same DB must return the persisted secret", second, first)
+	if !second.Equal(first) {
+		t.Error("second call returned a different key than the first; it must return the persisted key")
 	}
 }
 
@@ -304,28 +298,16 @@ func TestInteg_BootstrapJWTSecret_MigratedDB_RoundTrip(t *testing.T) {
 // Real fresh-database round trip
 // ---------------------------------------------------------------------------
 
-// TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose
-// resets the shadow DB to genuinely empty -- no auth_jwt_secrets, no
-// goose_db_version_users, no migrations applied at all -- the scenario
-// mod-core's field-key precedent does not need, since mod-core's
-// config-equivalent bootstrap runs after its own migrations. It calls
-// bootstrapJWTSecretFromDB directly against that raw, unmigrated DB and
-// asserts it succeeds (creating the table itself via its own idempotent
-// DDL), then applies the composed migrations dir against that same DB
-// afterward via goose and asserts it succeeds cleanly and records migration
-// the baseline (version 100) as applied in goose_db_version_users -- proving the goose
-// migration's own CREATE TABLE IF NOT EXISTS tolerates the table Load()'s
-// bootstrap already created, and the two converge.
-func TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose(t *testing.T) {
+// TestInteg_BootstrapSigningKey_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose
+// bootstraps against a genuinely empty database (no mod_users schema, no
+// goose table), then applies the composed migrations and asserts the
+// baseline's CREATE ... IF NOT EXISTS converges with the bootstrap's own DDL.
+func TestInteg_BootstrapSigningKey_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose(t *testing.T) {
 	resetJWTSecretShadowDB(t)
 	dsn := jwtSecretIntegShadowDSN(integPGHost)
 
-	secret, err := bootstrapJWTSecretFromDB(context.Background(), dsn)
-	if err != nil {
+	if _, err := bootstrapSigningKeyFromDB(context.Background(), dsn); err != nil {
 		t.Fatalf("bootstrap against a genuinely fresh, unmigrated DB: %v", err)
-	}
-	if len(secret) != jwtSecretByteLen*2 {
-		t.Errorf("secret length = %d, want %d", len(secret), jwtSecretByteLen*2)
 	}
 
 	runComposedMigrations(t, dsn)
@@ -347,11 +329,11 @@ func TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWith
 	}
 
 	var count int
-	if err := conn.QueryRow(ctx, "SELECT count(*) FROM auth_jwt_secrets").Scan(&count); err != nil {
-		t.Fatalf("count auth_jwt_secrets rows after convergence: %v", err)
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM mod_users.auth_signing_keys").Scan(&count); err != nil {
+		t.Fatalf("count auth_signing_keys rows after convergence: %v", err)
 	}
 	if count != 1 {
-		t.Errorf("auth_jwt_secrets row count after bootstrap+migrate = %d, want 1", count)
+		t.Errorf("auth_signing_keys row count after bootstrap+migrate = %d, want 1", count)
 	}
 }
 
@@ -359,45 +341,36 @@ func TestInteg_BootstrapJWTSecret_FreshUnmigratedDB_CreatesTableAndConvergesWith
 // Real concurrent-race proof, including the table-creation race
 // ---------------------------------------------------------------------------
 
-// TestInteg_BootstrapJWTSecret_ConcurrentFirstBoot_SingleWinnerAcrossAllCallers
-// resets the shadow DB to genuinely empty (no migrations applied) and
-// launches 8 goroutines, each calling bootstrapJWTSecretFromDB concurrently
-// against the same DSN with its own independent connection -- simulating N
-// replica instances booting simultaneously against a brand-new database.
-// This is the test that actually exercises the advisory lock under real
-// concurrency against an unmigrated database: the unit tests can only prove
-// the Go-level control flow handles a *simulated* row-level lost race
-// correctly, not that the table-creation race -- the part ON CONFLICT DO
-// NOTHING alone does not protect -- is genuinely closed. Unaffected by this
-// file's KNOWN LIMITATION: it never calls usersmigrations.Migrate.
-func TestInteg_BootstrapJWTSecret_ConcurrentFirstBoot_SingleWinnerAcrossAllCallers(t *testing.T) {
+// TestInteg_BootstrapSigningKey_ConcurrentFirstBoot_SingleWinnerAcrossAllCallers
+// launches 8 concurrent bootstrap callers against a genuinely empty database
+// and asserts they all converge on one key and one row: the advisory lock
+// closes the schema/table-creation race that ON CONFLICT DO NOTHING alone
+// does not.
+func TestInteg_BootstrapSigningKey_ConcurrentFirstBoot_SingleWinnerAcrossAllCallers(t *testing.T) {
 	resetJWTSecretShadowDB(t)
 	dsn := jwtSecretIntegShadowDSN(integPGHost)
 	const n = 8
 
 	var wg sync.WaitGroup
-	secrets := make([]string, n)
+	keys := make([]ed25519.PrivateKey, n)
 	errs := make([]error, n)
-
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			secrets[i], errs[i] = bootstrapJWTSecretFromDB(context.Background(), dsn)
+			keys[i], errs[i] = bootstrapSigningKeyFromDB(context.Background(), dsn)
 		}(i)
 	}
 	wg.Wait()
 
 	for i, err := range errs {
 		if err != nil {
-			t.Errorf("goroutine %d: bootstrapJWTSecretFromDB failed: %v", i, err)
+			t.Errorf("goroutine %d: bootstrapSigningKeyFromDB failed: %v", i, err)
 		}
 	}
-
-	want := secrets[0]
-	for i, s := range secrets {
-		if s != want {
-			t.Errorf("goroutine %d returned secret %q, want %q (every concurrent first-boot caller must converge on the same secret)", i, s, want)
+	for i, k := range keys {
+		if k == nil || !k.Equal(keys[0]) {
+			t.Errorf("goroutine %d returned a different key; every concurrent first-boot caller must converge", i)
 		}
 	}
 
@@ -409,11 +382,11 @@ func TestInteg_BootstrapJWTSecret_ConcurrentFirstBoot_SingleWinnerAcrossAllCalle
 	defer conn.Close(ctx)
 
 	var count int
-	if err := conn.QueryRow(ctx, "SELECT count(*) FROM auth_jwt_secrets").Scan(&count); err != nil {
-		t.Fatalf("count auth_jwt_secrets rows after concurrent boot: %v", err)
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM mod_users.auth_signing_keys").Scan(&count); err != nil {
+		t.Fatalf("count auth_signing_keys rows after concurrent boot: %v", err)
 	}
 	if count != 1 {
-		t.Errorf("auth_jwt_secrets row count after %d concurrent bootstrap callers = %d, want exactly 1 (the table-creation race is not genuinely closed)", n, count)
+		t.Errorf("auth_signing_keys row count after %d concurrent bootstrap callers = %d, want exactly 1", n, count)
 	}
 }
 
@@ -421,19 +394,11 @@ func TestInteg_BootstrapJWTSecret_ConcurrentFirstBoot_SingleWinnerAcrossAllCalle
 // Real corruption-detection proof
 // ---------------------------------------------------------------------------
 
-// TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret resets the
-// shadow DB, creates auth_jwt_secrets via bootstrapJWTSecretDDL directly
-// (byte-identical to the baseline migration's own DDL -- see
-// TestBootstrapJWTSecretDDL_MatchesBaselineMigration) without inserting a row,
-// then attempts a raw INSERT INTO auth_jwt_secrets (id, secret) VALUES (1,
-// 'short') directly and asserts it fails with a CHECK constraint violation
-// -- proving the char_length(secret) >= 32 CHECK from Task 001 actually
-// rejects a short secret at the schema level, independent of the Go-level
-// length check fetchOrGeneratePersistedJWTSecret also performs. Creating
-// the table via the DDL constant directly (rather than via a full migration
-// run) sidesteps this file's KNOWN LIMITATION entirely, and exercises
-// exactly the same constraint a normal migration would have created.
-func TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret(t *testing.T) {
+// TestInteg_AuthSigningKeys_CheckConstraint_RejectsShortKey creates the table
+// via the bootstrap DDL (byte-identical to the baseline; see the drift-guard
+// unit test) and asserts the octet_length(private_key) >= 48 CHECK rejects a
+// truncated key at the schema level.
+func TestInteg_AuthSigningKeys_CheckConstraint_RejectsShortKey(t *testing.T) {
 	resetJWTSecretShadowDB(t)
 	dsn := jwtSecretIntegShadowDSN(integPGHost)
 
@@ -444,29 +409,23 @@ func TestInteg_AuthJWTSecrets_CheckConstraint_RejectsShortSecret(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	if _, err := conn.Exec(ctx, bootstrapJWTSecretDDL); err != nil {
-		t.Fatalf("create auth_jwt_secrets table: %v", err)
+	for _, ddl := range []string{bootstrapSigningKeySchemaDDL, bootstrapSigningKeyTableDDL} {
+		if _, err := conn.Exec(ctx, ddl); err != nil {
+			t.Fatalf("create auth_signing_keys table: %v", err)
+		}
 	}
 
-	_, err = conn.Exec(ctx, "INSERT INTO auth_jwt_secrets (id, secret) VALUES (1, 'short')")
+	_, err = conn.Exec(ctx, "INSERT INTO mod_users.auth_signing_keys (id, private_key) VALUES (1, $1)", []byte("short"))
 	if err == nil {
-		t.Fatal("insert a short secret directly: got nil error, want a CHECK constraint violation")
+		t.Fatal("insert a short key directly: got nil error, want a CHECK constraint violation")
 	}
 
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
-		t.Fatalf("insert a short secret: error is not a *pgconn.PgError: %v (%T)", err, err)
+		t.Fatalf("insert a short key: error is not a *pgconn.PgError: %v (%T)", err, err)
 	}
 	const checkViolation = "23514" // Postgres SQLSTATE for check_violation
 	if pgErr.Code != checkViolation {
-		t.Errorf("insert a short secret: pg error code = %q, want %q (check_violation): %v", pgErr.Code, checkViolation, err)
-	}
-
-	var count int
-	if err := conn.QueryRow(ctx, "SELECT count(*) FROM auth_jwt_secrets").Scan(&count); err != nil {
-		t.Fatalf("count rows after rejected insert: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("row count after a rejected insert = %d, want 0", count)
+		t.Errorf("insert a short key: pg error code = %q, want %q (check_violation): %v", pgErr.Code, checkViolation, err)
 	}
 }

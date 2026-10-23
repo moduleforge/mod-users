@@ -9,10 +9,10 @@ type autheliaMapper struct {
 	opts MapperOptions
 }
 
-func (m *autheliaMapper) Map(rawClaims map[string]any) (Principal, error) {
+func (m *autheliaMapper) Map(rawClaims map[string]any) (ExternalIdentity, error) {
 	sub, iss, err := extractRequired(rawClaims)
 	if err != nil {
-		return Principal{}, err
+		return ExternalIdentity{}, err
 	}
 
 	groups := lowercaseAll(getStringSlice(rawClaims, "groups"))
@@ -38,7 +38,7 @@ func (m *autheliaMapper) Map(rawClaims map[string]any) (Principal, error) {
 		}
 	}
 
-	return Principal{
+	return ExternalIdentity{
 		Subject:       sub,
 		Issuer:        iss,
 		Email:         getString(rawClaims, "email"),

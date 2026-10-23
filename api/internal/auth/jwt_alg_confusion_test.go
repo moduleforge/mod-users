@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/base64"
@@ -42,30 +41,22 @@ func TestVerifier_PublicKeyAsHMACSecretVariants(t *testing.T) {
 	}
 }
 
-// TestVerifier_MixedModeWrongKeyAndClaims confirms that when both algorithms
-// are enabled, each path still enforces its own key plus issuer and expiry.
-func TestVerifier_MixedModeWrongKeyAndClaims(t *testing.T) {
+// TestVerifier_WrongKeyAndClaims confirms the EdDSA path enforces its key
+// plus issuer and expiry, and that HMAC tokens are rejected however keyed.
+func TestVerifier_WrongKeyAndClaims(t *testing.T) {
 	pub, priv := eddsaKey(t)
 	_, otherPriv := eddsaKey(t)
 	exp := time.Now().Add(time.Hour)
-	v, err := NewVerifierWithOptions(context.Background(),
-		WithLocalIssuer(eddsaTestIssuer), WithHS256Secret("s3cret"),
-		WithEd25519PublicKeys(map[string]ed25519.PublicKey{"k1": pub}))
-	if err != nil {
-		t.Fatal(err)
-	}
+	v := verifyOnly(t, map[string]ed25519.PublicKey{"k1": pub})
 	mustReject(t, v, signEdDSA(t, otherPriv, "k1", testClaims(exp)), "EdDSA wrong key")
-	mustReject(t, v, signHS256(t, "wrong", "", testClaims(exp)), "HS256 wrong secret")
-	// Public key as HMAC secret must not work even though HS256 is enabled.
-	mustReject(t, v, signHS256(t, string(pub), "k1", testClaims(exp)), "HS256 keyed by public key")
+	mustReject(t, v, signHS256(t, "s3cret", "", testClaims(exp)), "HMAC token")
+	mustReject(t, v, signHS256(t, string(pub), "k1", testClaims(exp)), "HMAC keyed by public key")
 
 	past := testClaims(time.Now().Add(-time.Hour))
 	mustReject(t, v, signEdDSA(t, priv, "k1", past), "EdDSA expired")
-	mustReject(t, v, signHS256(t, "s3cret", "", past), "HS256 expired")
 	bad := testClaims(exp)
 	bad["iss"] = "elsewhere"
 	mustReject(t, v, signEdDSA(t, priv, "k1", bad), "EdDSA wrong issuer")
-	mustReject(t, v, signHS256(t, "s3cret", "", bad), "HS256 wrong issuer")
 }
 
 // TestVerifier_MalformedKidHeader ensures a non-string kid cannot select a

@@ -44,10 +44,13 @@ func signEdDSA(t *testing.T, priv ed25519.PrivateKey, kid string, claims jwt.Map
 
 func signHS256(t *testing.T, secret, kid string, claims jwt.MapClaims) string {
 	t.Helper()
-	// Built directly (not via NewHS256Signer, which rejects an empty secret) so
-	// tests can forge tokens keyed with an empty secret.
-	hs := &Signer{method: jwt.SigningMethodHS256, key: []byte(secret), kid: kid}
-	raw, err := hs.Sign(claims)
+	// Forged directly with the jwt library: the module itself never issues
+	// HMAC tokens, so these exist only to prove the verifier rejects them.
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	if kid != "" {
+		tok.Header["kid"] = kid
+	}
+	raw, err := tok.SignedString([]byte(secret))
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
@@ -154,56 +157,20 @@ func TestVerifier_AlgorithmPinning(t *testing.T) {
 		mustReject(t, pubOnly, enc([]byte(`{"kid":"k1"}`))+"."+payload+".", "missing alg")
 	})
 
-	t.Run("secret-only verifier rejects EdDSA and none", func(t *testing.T) {
-		v, err := NewVerifier(context.Background(), "", "", "s3cret", eddsaTestIssuer)
-		if err != nil {
-			t.Fatal(err)
-		}
-		mustReject(t, v, signEdDSA(t, priv, "k1", testClaims(exp)), "EdDSA vs HS256-only verifier")
-		enc := base64.RawURLEncoding.EncodeToString
-		mustReject(t, v, enc([]byte(`{"alg":"none"}`))+"."+enc([]byte(`{"iss":"`+eddsaTestIssuer+`","exp":4102444800}`))+".", "alg none")
-	})
-
-	t.Run("empty secret never verifies HS256", func(t *testing.T) {
-		v, err := NewVerifier(context.Background(), "", "", "", eddsaTestIssuer)
-		if err != nil {
-			t.Fatal(err)
-		}
-		mustReject(t, v, signHS256(t, "", "", testClaims(exp)), "HMAC with empty key")
-		if _, err := NewVerifierWithOptions(context.Background(), WithHS256Secret(""), WithLocalIssuer("x")); err == nil {
-			t.Error("WithHS256Secret(\"\") accepted")
-		}
-	})
-
-	t.Run("both algs configured accepts both", func(t *testing.T) {
-		v, err := NewVerifierWithOptions(context.Background(),
-			WithLocalIssuer(eddsaTestIssuer), WithHS256Secret("s3cret"), WithEd25519PublicKeys(map[string]ed25519.PublicKey{"k1": pub}))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := v.Verify(context.Background(), signHS256(t, "s3cret", "", testClaims(exp))); err != nil {
-			t.Errorf("HS256: %v", err)
-		}
-		if _, err := v.Verify(context.Background(), signEdDSA(t, priv, "k1", testClaims(exp))); err != nil {
+	t.Run("EdDSA with the configured key accepted", func(t *testing.T) {
+		if _, err := pubOnly.Verify(context.Background(), signEdDSA(t, priv, "k1", testClaims(exp))); err != nil {
 			t.Errorf("EdDSA: %v", err)
 		}
 	})
-}
 
-func TestVerifier_HS256PathUnchanged(t *testing.T) {
-	v, err := NewVerifier(context.Background(), "", "", "local-secret", eddsaTestIssuer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	exp := time.Now().Add(time.Hour)
-	// With and without a kid header (the HS256 path ignores kid).
-	for _, kid := range []string{"", "anything"} {
-		if _, err := v.Verify(context.Background(), signHS256(t, "local-secret", kid, testClaims(exp))); err != nil {
-			t.Errorf("kid %q: %v", kid, err)
-		}
-	}
-	mustReject(t, v, signHS256(t, "wrong", "", testClaims(exp)), "wrong secret")
-	mustReject(t, v, signHS256(t, "local-secret", "", testClaims(time.Now().Add(-time.Minute))), "expired")
+	t.Run("alg none rejected", func(t *testing.T) {
+		enc := base64.RawURLEncoding.EncodeToString
+		mustReject(t, pubOnly, enc([]byte(`{"alg":"none"}`))+"."+enc([]byte(`{"iss":"`+eddsaTestIssuer+`","exp":4102444800}`))+".", "alg none")
+	})
+
+	t.Run("HMAC with an empty key never verifies", func(t *testing.T) {
+		mustReject(t, pubOnly, signHS256(t, "", "", testClaims(exp)), "HMAC with empty key")
+	})
 }
 
 func TestVerifier_Rotation(t *testing.T) {
@@ -267,9 +234,9 @@ func TestNewLocalVerifier(t *testing.T) {
 	pubOld, privOld := eddsaKey(t)
 	exp := time.Now().Add(time.Hour)
 
-	t.Run("EdDSA mode accepts signer output, rejects HS256", func(t *testing.T) {
+	t.Run("accepts signer output and rotation keys, rejects HMAC", func(t *testing.T) {
 		lc := config.LocalAuthConfig{
-			JWTSecret: "s3cret", JWTAlg: config.JWTAlgEdDSA, JWTSigningKey: priv,
+			JWTSecret: "s3cret", JWTSigningKey: priv,
 			JWTSigningKID: "cur", LocalIssuer: eddsaTestIssuer,
 			JWTVerifyPublicKeys: map[string]ed25519.PublicKey{"old": pubOld},
 		}
@@ -295,21 +262,15 @@ func TestNewLocalVerifier(t *testing.T) {
 		_ = pub
 	})
 
-	t.Run("HS256 mode unchanged", func(t *testing.T) {
-		lc := config.LocalAuthConfig{JWTSecret: "s3cret", JWTAlg: config.JWTAlgHS256, LocalIssuer: eddsaTestIssuer}
-		v, err := NewLocalVerifier(ctx, lc)
-		if err != nil {
-			t.Fatal(err)
+	t.Run("missing signing key is an error", func(t *testing.T) {
+		if _, err := NewLocalVerifier(ctx, config.LocalAuthConfig{LocalIssuer: eddsaTestIssuer}); err == nil {
+			t.Error("expected an error without a signing key")
 		}
-		if _, err := v.Verify(ctx, signHS256(t, "s3cret", "", testClaims(exp))); err != nil {
-			t.Errorf("HS256: %v", err)
-		}
-		mustReject(t, v, signEdDSA(t, priv, "", testClaims(exp)), "EdDSA under HS256 mode")
 	})
 
 	t.Run("conflicting kid is an error", func(t *testing.T) {
 		lc := config.LocalAuthConfig{
-			JWTAlg: config.JWTAlgEdDSA, JWTSigningKey: priv, JWTSigningKID: "cur",
+			JWTSigningKey: priv, JWTSigningKID: "cur",
 			LocalIssuer: eddsaTestIssuer, JWTVerifyPublicKeys: map[string]ed25519.PublicKey{"cur": pubOld},
 		}
 		if _, err := NewLocalVerifier(ctx, lc); err == nil {

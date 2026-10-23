@@ -22,15 +22,15 @@ type auth0Mapper struct {
 	opts MapperOptions
 }
 
-func (m *auth0Mapper) Map(rawClaims map[string]any) (Principal, error) {
+func (m *auth0Mapper) Map(rawClaims map[string]any) (ExternalIdentity, error) {
 	sub, iss, err := extractRequired(rawClaims)
 	if err != nil {
-		return Principal{}, err
+		return ExternalIdentity{}, err
 	}
 
 	roles := m.extractRoles(rawClaims)
 
-	return Principal{
+	return ExternalIdentity{
 		Subject:       sub,
 		Issuer:        iss,
 		Email:         getString(rawClaims, "email"),

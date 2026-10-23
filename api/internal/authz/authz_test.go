@@ -15,15 +15,30 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-// ctxWithActor returns a context with actor entity ID set.
-func ctxWithActor(entityID int64) context.Context {
-	return opctx.WithActor(context.Background(), entityID)
+// ctxWithActor returns a context whose AuthContext acts as the profile with
+// entity id profileID in an ordinary session. The principal id deliberately
+// differs from the profile id, so a test that sees the profile id proves the
+// Authorizer reads opctx.ProfileID, never the principal.
+func ctxWithActor(profileID int64) context.Context {
+	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID: profileID + 1000,
+		ProfileID:   profileID,
+		SessionID:   1,
+		ACR:         1,
+	})
 }
 
-// ctxWithSudoActor returns a context with both actor and sudo actor set.
-func ctxWithSudoActor(actorID, sudoID int64) context.Context {
-	ctx := opctx.WithActor(context.Background(), actorID)
-	return opctx.WithSudoActor(ctx, sudoID)
+// ctxImpersonating returns a context whose AuthContext is an impersonation
+// session: the administrator (principal impersonatorPrincipalID) acts as the
+// target profile profileID.
+func ctxImpersonating(impersonatorPrincipalID, profileID int64) context.Context {
+	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID:             profileID + 1000,
+		ProfileID:               profileID,
+		ImpersonatorPrincipalID: impersonatorPrincipalID,
+		SessionID:               2,
+		ACR:                     1,
+	})
 }
 
 // newTestAuthorizer builds an Authorizer suitable for unit tests.
@@ -194,28 +209,58 @@ func TestAuthorize_UnknownOperation_WildcardAdmin(t *testing.T) {
 	}
 }
 
-// TestAuthorize_SudoActor verifies that when an actor assumes another user's
-// identity, the sudo user's permissions apply (not the real actor's).
+// TestAuthorize_Impersonation_WildcardDoesNotEscalate verifies that under
+// impersonation the impersonated profile's permissions apply, never the
+// administrator's.
 //
-// Scenario: real actor (entity 1) is a wildcard admin. Sudo user (entity 50)
-// is NOT a wildcard admin. When real actor assumes entity 50, the effective
-// actor is entity 50, so wildcard admin privileges do NOT apply.
-func TestAuthorize_SudoActor_WildcardDoesNotEscalate(t *testing.T) {
-	// wildcardGrantFn returns true only for actor entity 1 (the real admin),
-	// false for entity 50 (the sudo user). Since the effective actor is the
-	// sudo user, no wildcard grant should be found.
+// Scenario: the administrator (principal 1) is a wildcard admin. The
+// impersonated profile (entity 50) is not. The effective actor is profile 50,
+// so wildcard admin privileges do NOT apply.
+func TestAuthorize_Impersonation_WildcardDoesNotEscalate(t *testing.T) {
+	// wildcardGrantFn returns true only for id 1 (the administrator), false
+	// for profile 50. Since the effective actor is the impersonated profile,
+	// no wildcard grant should be found.
 	az := authz.NewWithStubOpReg(func(_ context.Context, actor int64, _ []int32) (bool, error) {
-		return actor == 1, nil // only entity 1 is wildcard admin
+		return actor == 1, nil // only id 1 is wildcard admin
 	})
 
-	// Real actor (1) assumes sudo user (50).
-	ctx := ctxWithSudoActor(1, 50)
+	ctx := ctxImpersonating(1, 50)
 
-	// The effective actor is 50 (sudo user). Sudo user is NOT wildcard admin,
-	// so nil-target operations must be denied.
 	err := az.Authorize(ctx, "create", nil)
 	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("sudo non-admin user should be forbidden from create: got %v", err)
+		t.Errorf("impersonated non-admin profile should be forbidden from create: got %v", err)
+	}
+}
+
+// TestAuthorize_ProfileIsTheActor verifies the grant-or-own arm receives the
+// acting profile id from the AuthContext, not the principal id.
+func TestAuthorize_ProfileIsTheActor(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardDenyFn)
+	var gotActor int64
+	az.SetGrantOrOwnFn(func(_ context.Context, actor, _ int64, _ []int32) (bool, error) {
+		gotActor = actor
+		return true, nil
+	})
+
+	if err := az.Authorize(ctxWithActor(7), "read", ptr(int64(99))); err != nil {
+		t.Fatalf("Authorize: %v", err)
+	}
+	if gotActor != 7 {
+		t.Errorf("grant-or-own actor: got %d, want the profile id 7", gotActor)
+	}
+}
+
+// TestAuthorize_ZeroProfile_Unauthenticated verifies an AuthContext without a
+// profile id is treated as no actor.
+func TestAuthorize_ZeroProfile_Unauthenticated(t *testing.T) {
+	az := newTestAuthorizer(wildcardAllowFn)
+	ctx := opctx.WithAuthContext(context.Background(), opctx.AuthContext{PrincipalID: 3})
+
+	if err := az.Authorize(ctx, "read", ptr(int64(1))); !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Errorf("expected ErrUnauthenticated, got %v", err)
+	}
+	if err := az.AuthorizeType(ctx, "create", 7); !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Errorf("AuthorizeType: expected ErrUnauthenticated, got %v", err)
 	}
 }
 
@@ -464,7 +509,7 @@ func TestAuthorizeType_TypeGrant_Allowed(t *testing.T) {
 	}{
 		{"actor/create", ctxWithActor(1), "create", 1},
 		{"actor/list", ctxWithActor(1), "list", 1},
-		{"sudo-actor", ctxWithSudoActor(1, 50), "create", 50},
+		{"impersonating", ctxImpersonating(1, 50), "create", 50},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -547,25 +592,25 @@ func TestAuthorizeType_NoActor(t *testing.T) {
 	}
 }
 
-// TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor verifies the
-// wildcard check receives the effective (sudo) actor id, so a wildcard-holding
-// real actor does not escalate a non-admin sudo identity.
-func TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor(t *testing.T) {
+// TestAuthorizeType_Impersonation_WildcardCheckedAgainstProfile verifies the
+// wildcard check receives the impersonated profile id, so a wildcard-holding
+// administrator does not escalate a non-admin impersonated profile.
+func TestAuthorizeType_Impersonation_WildcardCheckedAgainstProfile(t *testing.T) {
 	var seen []int64
 	az := authz.NewWithStubOpReg(func(_ context.Context, actor int64, _ []int32) (bool, error) {
 		seen = append(seen, actor)
-		return actor == 1, nil // only the real actor (1) is a wildcard admin
+		return actor == 1, nil // only the administrator (1) is a wildcard admin
 	})
 	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-	err := az.AuthorizeType(ctxWithSudoActor(1, 50), "create", 7)
+	err := az.AuthorizeType(ctxImpersonating(1, 50), "create", 7)
 	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("sudo non-admin user should be forbidden from type-level create: got %v", err)
+		t.Errorf("impersonated non-admin profile should be forbidden from type-level create: got %v", err)
 	}
 	if len(seen) != 1 || seen[0] != 50 {
-		t.Errorf("wildcard check should receive the sudo actor id 50, got %v", seen)
+		t.Errorf("wildcard check should receive the impersonated profile id 50, got %v", seen)
 	}
 }
 

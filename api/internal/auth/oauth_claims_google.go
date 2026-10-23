@@ -8,13 +8,13 @@ type googleMapper struct {
 	opts MapperOptions
 }
 
-func (m *googleMapper) Map(rawClaims map[string]any) (Principal, error) {
+func (m *googleMapper) Map(rawClaims map[string]any) (ExternalIdentity, error) {
 	sub, iss, err := extractRequired(rawClaims)
 	if err != nil {
-		return Principal{}, err
+		return ExternalIdentity{}, err
 	}
 
-	return Principal{
+	return ExternalIdentity{
 		Subject:       sub,
 		Issuer:        iss,
 		Email:         getString(rawClaims, "email"),

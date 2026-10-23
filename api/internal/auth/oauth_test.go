@@ -65,7 +65,7 @@ func TestValidateReturnPath(t *testing.T) {
 }
 
 // TestOAuth_EndToEnd walks through AuthorizeURL → token exchange → ID-token
-// verification → Principal mapping, using a fully-local fake OIDC provider.
+// verification → ExternalIdentity mapping, using a fully-local fake OIDC provider.
 // A correctly-signed id_token with the expected issuer/audience/nonce passes
 // all checks; this pins down that our wiring matches the protocol.
 func TestOAuth_EndToEnd(t *testing.T) {
@@ -166,7 +166,6 @@ func TestOAuth_EndToEnd(t *testing.T) {
 	// 3. Build a Config pointing at the fake provider.
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -432,7 +431,6 @@ func newFakeOIDCHarness(t *testing.T, mutate func(jwt.MapClaims, string, string)
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -480,7 +478,6 @@ func newOAuthForStateOnlyTest(t *testing.T) *OAuth {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -535,7 +532,6 @@ func TestNewOAuth_PartialInitFailure(t *testing.T) {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -626,7 +622,6 @@ func TestOAuth_Status(t *testing.T) {
 	baseCfg := func() *config.Config {
 		return &config.Config{
 			Auth: config.AuthConfig{
-				AdminRole:            "admin",
 				FrontendReturnURL:    "http://gui.test/return",
 				OAuthRedirectBaseURL: "http://api.test",
 			},
@@ -829,7 +824,6 @@ func newFakeMultiTenantHarness(t *testing.T, tokenIssuer string) *fakeMultiTenan
 	// ClaimStyle "microsoft" exercises the mapper path we actually care about.
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -861,7 +855,7 @@ func newFakeMultiTenantHarness(t *testing.T, tokenIssuer string) *fakeMultiTenan
 // exchange tests: it drives AuthorizeURL → Exchange and returns whatever
 // Exchange produced, so each test can assert success or a specific failure
 // without duplicating setup.
-func runMultiTenantExchange(t *testing.T, h *fakeMultiTenantHarness) (Principal, StatePayload, error) {
+func runMultiTenantExchange(t *testing.T, h *fakeMultiTenantHarness) (ExternalIdentity, StatePayload, error) {
 	t.Helper()
 
 	oauth, err := NewOAuth(context.Background(), h.cfg)
@@ -914,7 +908,6 @@ func TestOAuth_Rebuild(t *testing.T) {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -1015,7 +1008,7 @@ func enabledIDs(o *OAuth) []string {
 // TestOAuth_MultiTenant_HappyPath verifies that a multi-tenant Microsoft
 // provider (discovery returns the "{tenantid}" placeholder, id_token carries
 // a tenant-UUID issuer) completes the full Exchange flow and yields a
-// Principal. This pins down the intended happy path end-to-end.
+// ExternalIdentity. This pins down the intended happy path end-to-end.
 func TestOAuth_MultiTenant_HappyPath(t *testing.T) {
 	tokenIssuer := "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0"
 	h := newFakeMultiTenantHarness(t, tokenIssuer)
@@ -1025,13 +1018,13 @@ func TestOAuth_MultiTenant_HappyPath(t *testing.T) {
 		t.Fatalf("Exchange: %v", err)
 	}
 	if principal.Issuer != tokenIssuer {
-		t.Errorf("Principal.Issuer = %q, want %q", principal.Issuer, tokenIssuer)
+		t.Errorf("ExternalIdentity.Issuer = %q, want %q", principal.Issuer, tokenIssuer)
 	}
 	if principal.Subject != "ms-sub-123" {
-		t.Errorf("Principal.Subject = %q, want %q", principal.Subject, "ms-sub-123")
+		t.Errorf("ExternalIdentity.Subject = %q, want %q", principal.Subject, "ms-sub-123")
 	}
 	if principal.Email != "user@example.com" {
-		t.Errorf("Principal.Email = %q, want %q", principal.Email, "user@example.com")
+		t.Errorf("ExternalIdentity.Email = %q, want %q", principal.Email, "user@example.com")
 	}
 	if payload.ReturnPath != "/profile" {
 		t.Errorf("payload.ReturnPath = %q, want /profile", payload.ReturnPath)
