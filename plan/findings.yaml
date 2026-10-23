@@ -108,4 +108,49 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
+    - title: Task 008 must call UserService.WithSelfServic
+      id: LKRp
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: Task 008 must call UserService.WithSelfService in the facade or manifest.
+    - title: Task 008 must call service.RegisterDisplayRen
+      id: nRoQ
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: Task 008 must call service.RegisterDisplayRenderers(displayReg, pool) in cmd/server/main.go.
+    - title: Task 008 must re-export ReadPrincipalSummarie
+      id: bGov
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: Task 008 must re-export ReadPrincipalSummaries, DirectoryService, and the two handlers (handlers/me RegisterMeRoutes, handlers/principals RegisterPrincipalRoutes), and mount /v1/me and /v1/principals behind NewRequireAuth.
+    - title: Task 008 must add api/openapi.yaml entries fo
+      id: s2Tg
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: Task 008 must add api/openapi.yaml entries for the new routes.
+    - title: internal/handlers/oidc_config.go (kept file)
+      id: 1uxT
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: internal/handlers/oidc_config.go (kept file) does not compile against the new db package (db.OidcConfig and db.OidcProvider removed); needs porting in task 008 or a follow-on.
 closed: []
