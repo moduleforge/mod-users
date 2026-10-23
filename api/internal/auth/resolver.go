@@ -16,7 +16,7 @@ import (
 const (
 	// RedirectErrAccountExists: the identity is unknown, but its email matches
 	// an existing identifier. The user must sign in and link the provider; the
-	// resolver never links by email.
+	// email match is only ever a refusal.
 	RedirectErrAccountExists = "account_exists_sign_in_and_link"
 	// RedirectErrNoAccount: the identity is unknown and the provider creates no
 	// account for it.
@@ -124,7 +124,7 @@ type ResolverQuerier interface {
 //	unknown, jit_mode byo                                 -> ActionCreateBYO
 //	unknown, jit_mode managed with a party                -> ActionCreateManaged
 //
-// It never links an identity to an account by email: an email only ever
+// An email address is never a key to an account: an email match only ever
 // produces a refusal.
 type OIDCResolver struct {
 	q ResolverQuerier
