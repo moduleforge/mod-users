@@ -18,7 +18,7 @@ phases:
             branch: plan/identity-model-impl-06-001
             commit:
                 - 5c342b0
-            merge: null
+            merge: ef800f747da13d951185ff07012837e7de3ef297
         - number: 2
           slug: rewrite-queries-and-generated-code
           title: Rewrite Queries And Generated Code
