@@ -100,7 +100,8 @@ phases:
           digest: Deleted superseded self, identities, user_accounts, assume, apps, ssh_keys handlers and services, api/internal/users, api/users. Ported oidc_config.go. Facades in api/handlers/handlers.go and usersservice re-exports; cmd/server wired; moduleforge.module.yaml rewritten; api/openapi.yaml rewritten. make build.api passes; test-file vet errors remain for task 010.
           git:
             branch: plan/identity-model-impl-06-008
-            commit: []
+            commit:
+                - c017fde
             merge: null
         - number: 9
           slug: db-invariant-integration-tests
