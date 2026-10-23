@@ -78,7 +78,7 @@ phases:
             branch: plan/identity-model-impl-06-006
             commit:
                 - 2482d7f
-            merge: null
+            merge: d6ba9ff4b14f37bd4fb91d72d102bf5465908fd0
         - number: 7
           slug: self-service-and-principals
           title: Self Service And Principals
