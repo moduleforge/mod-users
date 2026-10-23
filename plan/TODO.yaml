@@ -102,7 +102,7 @@ phases:
             branch: plan/identity-model-impl-06-008
             commit:
                 - c017fde
-            merge: null
+            merge: 09c1f887873f99516e663a7d4d5450fd7c29e01e
         - number: 9
           slug: db-invariant-integration-tests
           title: DB Invariant Integration Tests
