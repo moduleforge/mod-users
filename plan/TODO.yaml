@@ -30,7 +30,7 @@ phases:
             branch: plan/identity-model-impl-06-002
             commit:
                 - 461c891
-            merge: null
+            merge: 5ba1530a419f3845b0d900c30f2507793ec833d2
         - number: 3
           slug: token-carrier-and-auth-middleware
           title: Token Carrier And Auth Middleware
