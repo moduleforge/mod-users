@@ -8,12 +8,16 @@ for the rationale behind the Postgres + goose choices.
 
 ## Layout
 
-- `migrations/` — goose versioned migration files (`.sql`)
+- `migrations/sql/` — goose versioned migration files (`.sql`); currently the single
+  `0100_baseline.sql`, which creates every mod-users table, trigger and function in the
+  `mod_users` schema (see the file's header comment for the schema rule and the `MF101`–`MF103`
+  SQLSTATE contract)
+- `migrations/migrate.go` — embeds `migrations/sql/*.sql` and exposes `Migrate`
 - `queries/` — sqlc query files (`.sql`), one per concept
-- `internal/db/` — sqlc-generated Go code (do not edit)
+- `db/` — sqlc-generated Go code (do not edit)
 - `scripts/shadow-db-lint.sh` — ephemeral-Postgres lint runner
-- `scripts/` — operational SQL scripts (e.g., `relink_auth.sql`)
-- `sqlc.yaml` — sqlc v2 configuration
+- `sqlc.yaml` — sqlc v2 configuration; its `rename` overrides keep the Go names of the
+  `mod_users` tables unprefixed (`User`, not `ModUsersUser`)
 
 ## Prerequisites
 
