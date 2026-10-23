@@ -18,4 +18,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'model/sqlc.yaml points sqlc''s schema at ./migrations/sql only, so a query in model/queries/ that reads a mod-core relation (public.profiles, public.principals, public.entities, public.natural_persons, public.profile_policy_confirmations) fails `sqlc compile` / `make verify` with ''relation "profiles" does not exist'' (verified with sqlc v1.31.1). mod-users queries over the new mod_users schema routinely need those joins (directory summaries, profile lists, principal disable/enable, session revocation by profile). Options: add the composed mod-core migrations to the sqlc schema list (for example the schema/migrations directory `make compose` assembles, or $(SIBLINGS_DIR)/mod-core/model/migrations), or keep such reads in Go over coredb. Two related sqlc behaviors when wrapping the model/migrations/sql/0100_baseline.sql functions: a function declared RETURNS TABLE is not typed (sqlc returns interface{}), which is why mod_users.session_liveness and mod_users.credential_liveness use OUT parameters; and the TEXT[] OUT parameter amr of session_liveness is generated as pgtype.Text, so a wrapper query needs an explicit cast or a column override to get []string.'
+    - title: 'Deploy manifests: signing key wiring'
+      id: CLi0
+      date: "2026-10-23"
+      tags:
+        - type:documentation
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: deploy/k8s/base/deployment.yaml and deploy/cloudrun/service.yaml still inject JWT_SECRET from a required secret (users-api-secrets/jwt-secret) and never wire JWT_SIGNING_KEY or JWT_SIGNING_KID. After the EdDSA-only change in api/internal/config (config.Load, loadJWTSigning, bootstrapSigningKeyFromDB), JWT_SECRET is optional and keys only the OAuth state HMAC (api/internal/auth/derived_keys.go OAuthStateKey), and access tokens are signed by JWT_SIGNING_KEY or, when it is unset, a key persisted in mod_users.auth_signing_keys. The manifests should make jwt-secret optional and show how to supply JWT_SIGNING_KEY (and JWT_VERIFY_PUBLIC_KEYS for rotation) from a secret, with the new AUTH_* lifetime and audience variables where a deployment needs non-default values.
 closed: []
