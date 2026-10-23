@@ -54,4 +54,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Task 008: wire NewSessionService(pool, q, coreQ, az, obs, signer, challenges, SessionConfigFrom(cfg)) and authhandlers.New(pool, q, coreQ, users, creds, challenges, sessions, oauth, sender, guiBase); re-export SessionHandler and RegisterSessionRoutes from internal/handlers/session; mount OIDC step-up start on /v1/session; document device_token, lock remedy kinds and app_login_not_granted lock reason in OpenAPI.'
+    - title: 'Decision needed: password reset does not copy'
+      id: 1xmT
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Decision needed: password reset does not copy old credential party authorizations, so a party profile with credential_rule ''authorized'' locks after reset until re-authorized. Decide whether a later task should copy them.'
 closed: []
