@@ -81,4 +81,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: api/scripts/check-server-error-literals.sh (run by `make lint` in api/) fails with "expected 11 marked carve-outs in handlers/auth/, found 0" because the rewritten /v1/auth handlers no longer contain any literal-keep server.Error calls. Update the expected count (and the script header prose) to 0, or drop the handlers/auth check, once the handler set is final.
+    - title: 'Task 008 mounting: OIDCHandler.LinkStart on P'
+      id: C1zt
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Task 008 mounting: OIDCHandler.LinkStart on POST /v1/me/credentials/oidc/{provider}/start; OIDCHandler.StepUpStart on POST /v1/session/step-up/oidc/{provider}/start; chi path param must be named provider; constructor NewOIDCHandler(pool, q, coreQ, oauth, resolver, users, creds, challenges, sessions, obs, cfg) with resolver from auth.NewOIDCResolver(queries); ProvidersDeps.Parties should be a coredb.Querier, without it a provider cannot be bound to a party.'
 closed: []
