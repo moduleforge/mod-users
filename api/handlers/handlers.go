@@ -6,36 +6,36 @@ package handlers
 
 import (
 	"net/http"
-	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	coreAuthz "github.com/moduleforge/core-api/authz"
-	"github.com/moduleforge/core-api/entity"
-	"github.com/moduleforge/core-api/observer"
-	coreservice "github.com/moduleforge/core-api/service"
 	coredb "github.com/moduleforge/core-model/db"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 
 	"github.com/moduleforge/mod-users/api/auth"
 	"github.com/moduleforge/mod-users/api/config"
 	inner "github.com/moduleforge/mod-users/api/internal/handlers"
-	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
-	innersvc "github.com/moduleforge/mod-users/api/internal/service"
+	innerme "github.com/moduleforge/mod-users/api/internal/handlers/me"
+	innerprincipals "github.com/moduleforge/mod-users/api/internal/handlers/principals"
+	innersession "github.com/moduleforge/mod-users/api/internal/handlers/session"
 	"github.com/moduleforge/mod-users/api/usersservice"
 )
 
 // Handler type aliases.
-type OIDCConfigHandler = inner.OIDCConfigHandler
-type UserAccountsHandler = inner.UserAccountsHandler
-type ProvidersHandler = inner.ProvidersHandler
-type AssumeHandler = inner.AssumeHandler
-type AppsHandler = inner.AppsHandler
-type GrantAdminFn = inner.GrantAdminFn
-type SelfHandler = inner.SelfHandler
-type IdentitiesHandler = inner.IdentitiesHandler
-type SSHKeysHandler = inner.SSHKeysHandler
+type (
+	// OIDCConfigHandler serves the /v1/oidc-config onboarding routes and owns
+	// the OIDC boot state.
+	OIDCConfigHandler = inner.OIDCConfigHandler
+	// ProvidersHandler serves the /v1/oidc-config provider CRUD routes.
+	ProvidersHandler = inner.ProvidersHandler
+	// MeHandler serves the /v1/me routes.
+	MeHandler = innerme.MeHandler
+	// SessionHandler serves the /v1/session routes.
+	SessionHandler = innersession.SessionHandler
+	// PrincipalsHandler serves the /v1/principals routes.
+	PrincipalsHandler = innerprincipals.PrincipalsHandler
+)
 
 // NewOIDCConfigHandler constructs the OIDC config handler from individual
 // dependencies declared in the module manifest.
@@ -63,64 +63,28 @@ func NewOIDCConfigHandler(
 	})
 }
 
-// NewUserAccountsHandler constructs the user accounts handler.
-// grantAdmin and revokeAdmin may be nil for deployments that do not wire
-// the admin-grant closures (known gap: phase-4 closure design).
-func NewUserAccountsHandler(svc *innersvc.UserAccountService, grantAdmin, revokeAdmin GrantAdminFn) *UserAccountsHandler {
-	return inner.NewUserAccountsHandler(svc, grantAdmin, revokeAdmin)
-}
-
 // NewProvidersHandler constructs the OIDC providers handler from individual
-// dependencies declared in the module manifest.
+// dependencies declared in the module manifest. parties resolves a provider's
+// party_uuid; a nil parties refuses every non-null party_uuid with 400.
 func NewProvidersHandler(
 	queries *usersdb.Queries,
 	oauth *auth.OAuth,
 	envRegistry config.ProviderRegistry,
 	redirectBase string,
+	parties coredb.Querier,
 	confirmer *OIDCConfigHandler,
 ) *ProvidersHandler {
-	return inner.NewProvidersHandler(inner.ProvidersDeps{
+	deps := inner.ProvidersDeps{
 		Queries:      queries,
 		EnvRegistry:  envRegistry,
 		OAuth:        oauth,
 		RedirectBase: redirectBase,
 		Confirmer:    confirmer,
-	})
-}
-
-// NewAssumeHandler constructs the assume-identity handler.
-func NewAssumeHandler(
-	svc *innersvc.UserAccountService,
-	jwtSecret, issuer string,
-) *AssumeHandler {
-	return inner.NewAssumeHandler(svc, jwtSecret, issuer)
-}
-
-// NewAssumeHandlerWithSigner constructs the assume-identity handler with an
-// explicit signer (see auth.NewSigner). Prefer it over NewAssumeHandler for any
-// app that may run with JWT_ALG=EdDSA; a nil signer is an error.
-func NewAssumeHandlerWithSigner(
-	svc *innersvc.UserAccountService,
-	signer *auth.Signer,
-	issuer string,
-) (*AssumeHandler, error) {
-	return inner.NewAssumeHandlerWithSigner(svc, signer, issuer)
-}
-
-// NewAppsHandler constructs the apps handler, which serves the
-// apps/user-accounts membership endpoints (/v1/apps/{uuid}/user-accounts).
-// Top-level /apps CRUD lives in mod-core; entityResolver resolves the
-// {uuid} path param to the app's internal id since mod-users no longer
-// owns an apps query of its own.
-func NewAppsHandler(
-	pool *pgxpool.Pool,
-	queries *usersdb.Queries,
-	az coreAuthz.Authorizer,
-	observers *observer.ObserverGroup,
-	entityResolver *entity.Resolver,
-	coreQ *coredb.Queries,
-) *AppsHandler {
-	return inner.NewAppsHandler(pool, queries, az, observers, entityResolver, coreQ)
+	}
+	if parties != nil {
+		deps.Parties = parties
+	}
+	return inner.NewProvidersHandler(deps)
 }
 
 // RegisterOIDCConfigRoutes mounts the OIDC-config endpoints on r.
@@ -128,116 +92,61 @@ func RegisterOIDCConfigRoutes(r chi.Router, h *OIDCConfigHandler, p *ProvidersHa
 	inner.RegisterOIDCConfigRoutes(r, h, p)
 }
 
-// RegisterAccountRoutes mounts the user-accounts, assume-identity, and
-// apps/user-accounts membership endpoints on r. assume and apps may be nil
-// for partial deployments. Top-level /apps CRUD is not part of this
-// registrar — it now lives in mod-core.
-func RegisterAccountRoutes(r chi.Router, h *UserAccountsHandler, assume *AssumeHandler, apps *AppsHandler) {
-	inner.RegisterAccountRoutes(r, h, assume, apps)
+// NewMeHandler constructs the /v1/me handler over the user service, which
+// must have been wired with UserService.WithSelfService.
+func NewMeHandler(users *usersservice.UserService) *MeHandler {
+	return innerme.NewMeHandler(users)
 }
 
-// NewSelfHandler constructs the /self handler. /self is a composite identity
-// endpoint: core-module owns entity data (via coreSvcs.Entity.GetSelf) while
-// users-module owns the user-account row (email, timestamps, uuid).
-func NewSelfHandler(q *usersdb.Queries, coreQ *coredb.Queries, coreSvcs *coreservice.Services) *SelfHandler {
-	return inner.NewSelfHandler(q, coreQ, coreSvcs)
+// OIDCLinkStarter is the OIDC handler's start of the link-a-credential flow,
+// mounted on POST /credentials/oidc/{provider}/start of the /v1/me group.
+// *authhandlers.OIDCHandler satisfies it.
+type OIDCLinkStarter interface {
+	LinkStart(w http.ResponseWriter, r *http.Request)
 }
 
-// RegisterSelfGetRoute mounts GET /self on r. Deliberately separate from
-// RegisterSelfPutRoute so each can carry its own middleware group in the
-// module manifest -- GET must stay reachable to accounts with an unverified
-// email (the GUI renders the "verify your email" page from it).
-func RegisterSelfGetRoute(r chi.Router, h *SelfHandler) {
-	inner.RegisterSelfGetRoute(r, h)
+// RegisterMeRoutes mounts the /v1/me routes on r; the caller applies
+// auth.NewRequireAuth first. link may be nil (an untyped nil) when OIDC is not
+// wired, in which case the OIDC link start is not mounted.
+func RegisterMeRoutes(r chi.Router, h *MeHandler, link OIDCLinkStarter) {
+	innerme.RegisterMeRoutes(r, h)
+	if link != nil {
+		r.Post("/credentials/oidc/{provider}/start", link.LinkStart)
+	}
 }
 
-// RegisterSelfPutRoute mounts PUT /self on r. Requires a verified email --
-// see RegisterSelfGetRoute's doc comment for why this is a separate entry.
-func RegisterSelfPutRoute(r chi.Router, h *SelfHandler) {
-	inner.RegisterSelfPutRoute(r, h)
+// NewSessionHandler constructs the /v1/session handler.
+func NewSessionHandler(sessions *usersservice.SessionService) *SessionHandler {
+	return innersession.NewSessionHandler(sessions)
 }
 
-// NewIdentitiesHandler constructs the identity/credential self-service
-// handler from individually-typed dependencies declared in the module
-// manifest. sender is typed as the exported, method-set-identical
-// authhandlers.Sender interface (rather than inner's unexported emailSender)
-// so the facade can name it; assigning it into the emailSender-typed
-// IdentitiesHandlerDeps.Sender field is valid Go since the method sets are
-// identical.
-func NewIdentitiesHandler(
-	pool *pgxpool.Pool,
-	queries *usersdb.Queries,
-	oauth *auth.OAuth,
-	obs *observer.ObserverGroup,
-	sender authhandlers.Sender,
-	jwtSecret string,
-	consumed *sync.Map,
-	stepUpRequired bool,
-	cookiePath string,
-) *IdentitiesHandler {
-	return inner.NewIdentitiesHandlerWithDeps(inner.IdentitiesHandlerDeps{
-		Pool:           pool,
-		Queries:        queries,
-		OAuth:          oauth,
-		Obs:            obs,
-		Sender:         sender,
-		JWTSecret:      jwtSecret,
-		Consumed:       consumed,
-		StepUpRequired: stepUpRequired,
-		CookiePath:     cookiePath,
-	})
+// OIDCStepUpStarter is the OIDC handler's start of the step-up flow, mounted
+// on POST /step-up/oidc/{provider}/start of the /v1/session group.
+// *authhandlers.OIDCHandler satisfies it.
+type OIDCStepUpStarter interface {
+	StepUpStart(w http.ResponseWriter, r *http.Request)
 }
 
-// RegisterSelfIdentitiesReadRoute mounts GET /self/identities on r. Reachable
-// to accounts with an unverified email -- see RegisterSelfGetRoute's doc
-// comment for the rationale this mirrors.
-func RegisterSelfIdentitiesReadRoute(r chi.Router, h *IdentitiesHandler) {
-	inner.RegisterSelfIdentitiesReadRoute(r, h)
+// RegisterSessionRoutes mounts the /v1/session routes on r; the caller applies
+// auth.NewRequireAuth first. stepUp may be nil (an untyped nil) when OIDC is
+// not wired, in which case the OIDC step-up start is not mounted.
+func RegisterSessionRoutes(r chi.Router, h *SessionHandler, stepUp OIDCStepUpStarter) {
+	innersession.RegisterSessionRoutes(r, h)
+	if stepUp != nil {
+		r.Post("/step-up/oidc/{provider}/start", stepUp.StepUpStart)
+	}
 }
 
-// RegisterSelfIdentitiesWriteRoutes mounts the six credential-mutating
-// identity endpoints on r. Requires a verified email -- see
-// RegisterSelfPutRoute's doc comment for the rationale this mirrors.
-func RegisterSelfIdentitiesWriteRoutes(r chi.Router, h *IdentitiesHandler) {
-	inner.RegisterSelfIdentitiesWriteRoutes(r, h)
+// NewPrincipalsHandler constructs the /v1/principals handler over the user
+// service, which must have been wired with UserService.WithSelfService.
+func NewPrincipalsHandler(users *usersservice.UserService) *PrincipalsHandler {
+	return innerprincipals.NewPrincipalsHandler(users)
 }
 
-// NewSSHKeysHandler constructs the SSH public-key HTTP handler (see
-// docs/architecture/ssh-keys.md for the design rationale) from the facade
-// usersservice.SSHKeyService type and the same step-up dependencies
-// NewIdentitiesHandler takes.
-func NewSSHKeysHandler(
-	svc *usersservice.SSHKeyService,
-	jwtSecret string,
-	consumed *sync.Map,
-	stepUpRequired bool,
-) *SSHKeysHandler {
-	return inner.NewSSHKeysHandler(svc, jwtSecret, consumed, stepUpRequired)
-}
-
-// RegisterSelfSSHKeysReadRoute mounts GET /self/ssh-keys on r. Reachable to
-// accounts with an unverified email, and never step-up-gated -- see
-// RegisterSelfIdentitiesReadRoute's doc comment for the rationale this
-// mirrors.
-func RegisterSelfSSHKeysReadRoute(r chi.Router, h *SSHKeysHandler) {
-	inner.RegisterSelfSSHKeysReadRoute(r, h)
-}
-
-// RegisterSelfSSHKeysWriteRoutes mounts the two credential-mutating
-// self-service SSH-key endpoints on r. Requires a verified email; each
-// endpoint additionally enforces step-up when AUTH_REQUIRE_STEP_UP is on.
-func RegisterSelfSSHKeysWriteRoutes(r chi.Router, h *SSHKeysHandler) {
-	inner.RegisterSelfSSHKeysWriteRoutes(r, h)
-}
-
-// RegisterUserAccountSSHKeyRoutes mounts the operator SSH-key endpoints
-// (list/register/revoke a target account's keys) on r. Register/revoke are
-// step-up-gated when the path UUID is the caller's own account; a genuine
-// operator-on-behalf-of-a-different-account call is not gated, matching
-// every other /v1/user-accounts/* admin route (docs/architecture/
-// ssh-keys.md D9).
-func RegisterUserAccountSSHKeyRoutes(r chi.Router, h *SSHKeysHandler) {
-	inner.RegisterUserAccountSSHKeyRoutes(r, h)
+// RegisterPrincipalRoutes mounts the /v1/principals routes on r; the caller
+// applies auth.NewRequireAuth first.
+func RegisterPrincipalRoutes(r chi.Router, h *PrincipalsHandler) {
+	innerprincipals.RegisterPrincipalRoutes(r, h)
 }
 
 // Live is the liveness health-check handler.

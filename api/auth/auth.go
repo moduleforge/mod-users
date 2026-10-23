@@ -20,6 +20,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	usersdb "github.com/moduleforge/mod-users/model/db"
+
 	"github.com/moduleforge/mod-users/api/config"
 	inner "github.com/moduleforge/mod-users/api/internal/auth"
 )
@@ -185,4 +187,13 @@ func NewOAuth(ctx context.Context, cfg *config.Config) (*OAuth, error) {
 // it.
 func OAuthStateKey(lc config.LocalAuthConfig) ([]byte, error) {
 	return inner.OAuthStateKey(lc)
+}
+
+// OIDCResolver decides what a verified external OIDC identity maps to. It
+// resolves by (issuer, subject) credential, never by email.
+type OIDCResolver = inner.OIDCResolver
+
+// NewOIDCResolver constructs an OIDCResolver over the module's queries.
+func NewOIDCResolver(q usersdb.Querier) *OIDCResolver {
+	return inner.NewOIDCResolver(q)
 }

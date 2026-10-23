@@ -90,3 +90,14 @@ architectural_impact: true
 - After deletions and route mounting build.
 - After the facades and `main.go`.
 - After the manifest and OpenAPI document.
+
+## Status
+
+- Outcome: succeeded (2026-10-23).
+- `cd api && go build ./...` and `make build.api` pass, including `cmd/server`. `go vet` and `make lint` report only `_test.go` errors (task 010 migrates them).
+- Deleted the superseded handlers, services, `api/internal/users`, `api/users` and their tests. Ported `api/internal/handlers/oidc_config.go` to the new db row types.
+- Facades: `api/handlers/handlers.go`, `api/handlers/authhandlers/authhandlers.go`, `api/usersservice/service.go`, `api/auth/auth.go` (`OIDCResolver`, `NewOIDCResolver`).
+- `cmd/server/main.go` mounts `/v1/auth`, `/v1/session`, `/v1/me`, `/v1/principals` and `/v1/oidc-config`; OIDC link and step-up starts mounted; slugs per U18.
+- `moduleforge.module.yaml` rewritten; mfgen validation passes against a scratch app manifest (generated `main.go` wires every new service and route).
+- `api/openapi.yaml` rewritten for the served routes, token response and `ProfileView`.
+- Remaining: `api/handlers/onboarding_boot_test.go` and other tests fail to compile until task 010. Display renderers are not expressible in the manifest (finding filed).

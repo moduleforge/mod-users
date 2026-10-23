@@ -2,30 +2,42 @@ openapi: "3.0.3"
 info:
   title: Users Module API
   description: |
-    REST API for mod-users. Manages user accounts, authentication,
-    authorization, application tenancy, and audit logging.
+    REST API for mod-users. Manages users and their identifiers, credentials,
+    sessions and profiles, and authentication.
+
+    ## Authentication
+
+    Bearer is the only security scheme. A sign-in answers with the token
+    response (`TokenResponse`): an EdDSA access token that carries a
+    server-side session, plus an opaque refresh token held per client tab.
+    Every authenticated request re-checks the session (or credential) and the
+    acting profile; no route reads an authentication cookie. A client that
+    holds no profile after sign-in (`selection_required: true`) calls the
+    refresh grant with a chosen `profile_uuid`.
 
     ## Error precedence
 
-    Routes that mount `RequireAuth` answer in this order: 401 (no effective
-    actor, code `unauthenticated`), 400 (stateless request shape: path UUIDs,
+    Routes that mount `RequireAuth` answer in this order: 401 (no live
+    session or credential, codes `unauthorized`, `users.session_revoked` or
+    `users.profile_unavailable`), 400 (stateless request shape: path UUIDs,
     JSON body, field validation, with `details`), 403 (authorization), 404
     (lookup), then 409 or 422 (state conflicts). Documented exceptions:
 
     - Public and credential routes (`/v1/auth/*`) have no 401 gate; their
-      credential failures keep their own 401 messages.
-    - The OIDC config write routes accept a body `setup_token` as a
-      credential, so a caller with no admin session and no
-      `X-Setup-Token` header and a malformed body gets 400, not 401.
-    - Step-up (`409 users.step_up_required`) comes after the 400 shape checks
-      and before authorization on the identity and ssh-key credential routes.
-    - A user account that does not exist is masked as 403 for every caller,
-      the same as the ssh-key routes.
+      credential failures answer 401 `users.invalid_credentials`, which does
+      not distinguish an unknown identifier from a wrong secret.
+    - Step-up (`409 users.step_up_required`, an action-required response) comes
+      after the 400 shape checks and before authorization on the self-service
+      writes and the principal disable and enable.
 
     Every JSON body route decodes strictly: unknown fields, trailing data
     and an empty body give 400 (`invalid_json_body`), and a body over 1 MiB
-    gives 400 (`body_too_large`; ssh-key register caps at 32 KiB).
-  version: 0.1.0
+    gives 400 (`body_too_large`).
+
+    The earlier self, self-identity, self-credential, self-ssh-key,
+    user-account, assume, app-membership and anonymous-demo route families are
+    removed and answer 404.
+  version: 0.2.0
   contact:
     email: zane@liquid-labs.com
 
@@ -34,10 +46,23 @@ servers:
     description: Local development
 
 tags:
-  - name: SSH Keys
+  - name: Health
+    description: Liveness and readiness probes.
+  - name: Auth
     description: >-
-      SSH public keys used for git-over-SSH authentication by composing
-      applications.
+      Public sign-in, registration, token and OIDC routes. No bearer token is
+      required.
+  - name: Session
+    description: >-
+      The caller's session: read, switch profile, fork a refresh lineage,
+      step up, and log out.
+  - name: Me
+    description: >-
+      The caller's own user record, identifiers, credentials and sessions.
+  - name: Principals
+    description: Administration of users and service accounts.
+  - name: Audit
+    description: Audit log reads (served by the audit module).
 
 # ---------------------------------------------------------------------------
 # Security
@@ -52,8 +77,9 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        JWT obtained via any supported auth method (password, email-code,
-        Google OIDC, Microsoft OIDC). Pass as `Authorization: Bearer <token>`.
+        EdDSA access token from the token response of any sign-in (password,
+        email code, OIDC handoff, refresh, client credentials) or step-up.
+        Pass as `Authorization: Bearer <token>`.
 
   # -------------------------------------------------------------------------
   # Reusable schemas
@@ -66,18 +92,26 @@ components:
         code:
           type: string
           description: |
-            Machine-readable error code, drawn from the reserved top-level vocabulary
-            (a closed set so a generic client can branch on it). Finer-grained,
-            module-specific distinctions are carried in `details[].code`, namespaced
-            by module (e.g. `users.email_taken`) — a module never introduces a new
-            top-level code.
+            Machine-readable error code. Either one of the reserved top-level
+            codes (a closed set so a generic client can branch on it), or one
+            of the sign-in and session codes listed below, which the sign-in
+            and session flows use as the top-level code. Finer-grained,
+            module-specific distinctions are carried in `details[].code`,
+            namespaced by module (e.g. `users.email_taken`).
           enum:
             - unauthenticated
+            - unauthorized
             - forbidden
             - not_found
             - invalid_input
             - conflict
             - internal_error
+            - users.invalid_credentials
+            - users.session_revoked
+            - users.profile_unavailable
+            - users.refresh_reuse
+            - users.app_login_not_granted
+            - users.byo_identity_disabled
           example: invalid_input
         message:
           type: string
@@ -87,7 +121,9 @@ components:
           type: array
           description: |
             Optional field-level and sub-error breakdown. Omitted (not present, not
-            an empty array) when there is no per-field detail.
+            an empty array) when there is no per-field detail. For
+            `users.profile_unavailable` the single entry carries the lock
+            reason in `code` (for example `profile_suspended`).
           items:
             $ref: "#/components/schemas/FieldError"
 
@@ -130,7 +166,7 @@ components:
             owning module's closed, per-module registry (parallel to how
             `Error.code` documents its reserved enum, except namespaced
             rather than top-level — an action-required response has no
-            generic/reserved-core layer). mod-users registers three codes
+            generic/reserved-core layer). mod-users registers these codes
             today, enumerated below; a module MUST NOT emit an unregistered
             or un-namespaced action code.
           enum:
@@ -173,86 +209,175 @@ components:
         db:
           type: string
 
-    UserSummary:
+    # -- Token response and profiles --
+
+    TokenResponse:
       type: object
+      description: |
+        The token response of every sign-in, refresh, handoff, switch, fork
+        and step-up. Every member is always present. `access_token` is null
+        when the landing chain found no profile (`selection_required` is then
+        true and the client calls the refresh grant with a chosen
+        `profile_uuid`); `refresh_token` is null when none was minted (switch,
+        step-up, client credentials); `session` is null for client
+        credentials.
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - refresh_token
+        - session
+        - profile
+        - selection_required
+        - profiles
+      properties:
+        access_token:
+          type: string
+          nullable: true
+          description: EdDSA access token carrying the session and the acting profile.
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          format: int64
+          description: Access-token lifetime in seconds.
+          example: 3600
+        refresh_token:
+          type: string
+          nullable: true
+          description: Opaque refresh token of this client's refresh lineage (one per tab).
+        session:
+          allOf:
+            - $ref: "#/components/schemas/SessionView"
+          nullable: true
+        profile:
+          allOf:
+            - $ref: "#/components/schemas/ProfileView"
+          nullable: true
+          description: The profile the access token acts as; null with no access token.
+        selection_required:
+          type: boolean
+        profiles:
+          type: array
+          description: The principal's profiles with their availability to this session.
+          items:
+            $ref: "#/components/schemas/ProfileView"
+
+    AnonymousTokenResponse:
+      description: >-
+        The token response of a new guest, plus the device token of its
+        anonymous credential. The device token is returned once, only when a
+        guest is created, and signs the guest back in later.
+      allOf:
+        - $ref: "#/components/schemas/TokenResponse"
+        - type: object
+          properties:
+            device_token:
+              type: string
+              description: Secret that signs this guest back in; store it securely.
+
+    SessionView:
+      type: object
+      required: [uuid, acr, amr, auth_time, impersonating]
       properties:
         uuid:
           type: string
           format: uuid
-        email:
+        acr:
+          type: integer
+          format: int32
+          description: Authentication context class reached by the session's factors.
+          example: 1
+        amr:
+          type: array
+          description: Authentication methods used (for example `pwd`).
+          items:
+            type: string
+        auth_time:
           type: string
-          format: email
-          nullable: true
-        email_verified:
+          format: date-time
+          description: When the caller last authenticated; step-up refreshes it.
+        impersonating:
           type: boolean
-        is_admin:
-          type: boolean
-        is_anonymous:
-          type: boolean
-          description: True when the account has no email address (anonymous user).
-        entity:
-          $ref: "#/components/schemas/EntityInfo"
 
-    EntityInfo:
+    ProfileView:
       type: object
+      required: [uuid, kind, party, status, display_name, available, lock]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [personal, party]
+        party:
+          allOf:
+            - $ref: "#/components/schemas/PartyView"
+          nullable: true
+          description: The party of a party profile; null for a personal profile.
+        status:
+          type: string
+          description: Profile status.
+        display_name:
+          type: string
+          description: >-
+            The holder's name for a personal profile, or `<holder> @ <party>`
+            for a party profile.
+        available:
+          type: boolean
+          description: Whether the session (or credential) may act as this profile.
+        lock:
+          allOf:
+            - $ref: "#/components/schemas/ProfileLock"
+          nullable: true
+          description: Why the profile is not available; null when it is.
+
+    PartyView:
+      type: object
+      required: [uuid, kind, display_name]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: The party's fundamental type slug (for example `organization`).
+        display_name:
+          type: string
+
+    ProfileLock:
+      type: object
+      required: [reason, remedy]
+      properties:
+        reason:
+          type: string
+          description: |
+            Lock reason: a `profile_availability` reason (for example
+            `profile_suspended`, `acr_too_low`, `credential_not_authorized`),
+            or `app_login_not_granted` when the session's invite-only app
+            does not admit the profile.
+        remedy:
+          allOf:
+            - $ref: "#/components/schemas/LockRemedy"
+          nullable: true
+
+    LockRemedy:
+      type: object
+      required: [kind]
       properties:
         kind:
           type: string
-          enum: [natural_person, corporation, service_account]
-        display_name:
+          enum:
+            - sign_in_with_provider
+            - step_up
+            - sign_in_with_authorized_credential
+            - accept_invitation
+        provider_id:
           type: string
-        given_name:
-          type: string
-        family_name:
-          type: string
-        legal_name:
-          type: string
-        jurisdiction:
-          type: string
-        label:
-          type: string
+          description: "Present for `sign_in_with_provider`: the provider to sign in with."
 
-    UserDetail:
-      allOf:
-        - $ref: "#/components/schemas/UserSummary"
-        - type: object
-          properties:
-            default_app:
-              $ref: "#/components/schemas/AppSummary"
-
-    UserSelf:
-      description: >-
-        The caller's own profile, returned by GET/PUT /v1/self. Extends
-        UserDetail with email_verified_at, which describes only the caller's
-        own account; the admin user endpoints (which return UserDetail) emit
-        the boolean email_verified instead and never carry this field.
-      allOf:
-        - $ref: "#/components/schemas/UserDetail"
-        - type: object
-          required: [email_verified_at]
-          properties:
-            email_verified_at:
-              type: string
-              format: date-time
-              nullable: true
-              description: >-
-                Time the caller's email was verified, or null when it has not
-                been. Always present (explicit null when unverified). Lets
-                clients prompt for verification before a verified-email-gated
-                call is refused with users.email_unverified.
-
-    SelfUpdateRequest:
-      type: object
-      properties:
-        given_name:
-          type: string
-        family_name:
-          type: string
-        default_app_uuid:
-          type: string
-          format: uuid
-
-    # -- Auth schemas --
+    # -- Auth requests --
 
     RegisterRequest:
       type: object
@@ -263,11 +388,14 @@ components:
           format: email
         password:
           type: string
-          minLength: 8
+          minLength: 12
         given_name:
           type: string
         family_name:
           type: string
+        app:
+          type: string
+          description: The app (uuid) the new session signs in to.
 
     LoginRequest:
       type: object
@@ -278,41 +406,32 @@ components:
           format: email
         password:
           type: string
+        app:
+          type: string
+          description: The app (uuid) the session signs in to.
+        profile_uuid:
+          type: string
+          format: uuid
+          description: The profile to land on.
 
-    AuthToken:
+    AnonymousRequest:
       type: object
+      required: [device_id]
       properties:
-        token:
+        device_id:
           type: string
-          description: JWT access token.
-        expires_at:
+          description: Stable device fingerprint supplied by the client.
+          example: "device-abc123"
+        device_token:
           type: string
-          format: date-time
-
-    LoginResponse:
-      type: object
-      required: [token, user]
-      properties:
-        token:
+          description: >-
+            The device token a previous call returned. When set, signs that
+            guest back in (200) instead of creating a guest; an unknown token,
+            or one registered for another device, is 401
+            `users.invalid_credentials`.
+        app:
           type: string
-          description: JWT access token.
-        user:
-          type: object
-          required: [uuid, email, email_verified_at]
-          properties:
-            uuid:
-              type: string
-              format: uuid
-            email:
-              type: string
-            email_verified_at:
-              type: string
-              format: date-time
-              nullable: true
-              description: >-
-                Time the account's email was verified, or null when it has
-                not been. Always present; same semantics as the
-                email_verified_at field of GET /v1/self.
+          description: The app (uuid) the session signs in to.
 
     EmailCodeRequest:
       type: object
@@ -321,6 +440,10 @@ components:
         email:
           type: string
           format: email
+        purpose:
+          type: string
+          enum: [login]
+          description: Optional; `login` is the only purpose.
 
     EmailCodeVerify:
       type: object
@@ -331,8 +454,16 @@ components:
           format: email
         code:
           type: string
-          minLength: 6
-          maxLength: 6
+        purpose:
+          type: string
+          enum: [login]
+        app:
+          type: string
+          description: The app (uuid) the session signs in to.
+        profile_uuid:
+          type: string
+          format: uuid
+          description: The profile to land on.
 
     PasswordResetRequest:
       type: object
@@ -344,149 +475,498 @@ components:
 
     PasswordResetConfirm:
       type: object
-      required: [token, new_password]
+      required: [token, password]
       properties:
         token:
           type: string
-        new_password:
+        password:
           type: string
-          minLength: 8
+          minLength: 12
 
-    # -- Admin user management schemas --
-
-    AdminCreateUserRequest:
+    TokenRequest:
       type: object
-      required: [email, given_name, family_name]
+      required: [grant_type]
+      properties:
+        grant_type:
+          type: string
+          enum: [refresh_token, client_credentials]
+        refresh_token:
+          type: string
+          description: Required for the `refresh_token` grant.
+        profile_uuid:
+          type: string
+          format: uuid
+          description: Required for `refresh_token`; optional for `client_credentials`.
+        client_id:
+          type: string
+          description: Required for `client_credentials`.
+        client_secret:
+          type: string
+          description: Required for `client_credentials`.
+        app:
+          type: string
+          description: Optional audience app (uuid) of a `client_credentials` token.
+
+    HandoffRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: The one-time code the OIDC callback redirect carried in `#handoff=`.
+
+    # -- Session requests --
+
+    SwitchRequest:
+      type: object
+      required: [profile_uuid]
+      properties:
+        profile_uuid:
+          type: string
+          format: uuid
+
+    StepUpPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    StepUpEmailCodeRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: One of the caller's email identifiers; the primary email when omitted.
+
+    StepUpEmailCodeVerify:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+        email:
+          type: string
+          format: email
+
+    SessionInfo:
+      type: object
+      required: [session, profile, profiles]
+      properties:
+        session:
+          allOf:
+            - $ref: "#/components/schemas/SessionView"
+          nullable: true
+        profile:
+          allOf:
+            - $ref: "#/components/schemas/ProfileView"
+          nullable: true
+        profiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileView"
+
+    AuthorizeURL:
+      type: object
+      required: [authorize_url]
+      properties:
+        authorize_url:
+          type: string
+          description: >-
+            The provider's authorization URL. The browser navigates to it; the
+            signed state cookie is set on this response.
+
+    # -- Me --
+
+    UserView:
+      type: object
+      required:
+        - uuid
+        - kind
+        - is_guest
+        - managed
+        - given_name
+        - family_name
+        - display_name
+        - email
+        - email_verified
+        - default_profile_uuid
+        - default_app_uuid
+        - created_at
+        - updated_at
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          example: user
+        is_guest:
+          type: boolean
+        managed:
+          type: boolean
+          description: True for a managed user (owned by a party).
+        given_name:
+          type: string
+          nullable: true
+        family_name:
+          type: string
+          nullable: true
+        display_name:
+          type: string
+        email:
+          type: string
+          nullable: true
+          description: The primary email identifier.
+        email_verified:
+          type: boolean
+          description: True when the user holds at least one verified email.
+        default_profile_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        default_app_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateMeRequest:
+      type: object
+      description: Absent fields are left unchanged; the two default fields accept null to clear.
+      properties:
+        given_name:
+          type: string
+        family_name:
+          type: string
+        default_profile_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        default_app_uuid:
+          type: string
+          format: uuid
+          nullable: true
+
+    ProfileList:
+      type: object
+      required: [profiles]
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileView"
+
+    IdentifierView:
+      type: object
+      required: [uuid, kind, value, is_primary, verified, verified_at, created_at]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [email]
+        value:
+          type: string
+        is_primary:
+          type: boolean
+        verified:
+          type: boolean
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    IdentifierList:
+      type: object
+      required: [identifiers]
+      properties:
+        identifiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/IdentifierView"
+
+    AddIdentifierRequest:
+      type: object
+      required: [value]
+      properties:
+        kind:
+          type: string
+          enum: [email]
+          default: email
+        value:
+          type: string
+
+    VerifyIdentifierRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+
+    CredentialView:
+      type: object
+      description: >-
+        An active credential: identifying and display attributes only, never a
+        hash, secret or token. Kind-specific members are present only for
+        their kind.
+      required:
+        - uuid
+        - kind
+        - label
+        - created_at
+        - last_used_at
+        - expires_at
+        - default_profile_uuid
+        - confined_to_party_uuid
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: Credential kind (for example `password`, `oidc`, `ssh_key`, `email_otp`, `api_key`, `anon`).
+        label:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        default_profile_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        confined_to_party_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        identifier_uuid:
+          type: string
+          format: uuid
+          description: The identifier a password or email-code credential is bound to.
+        provider_id:
+          type: string
+          description: Present for `oidc`.
+        email_at_link:
+          type: string
+          description: "Present for `oidc`: the email the provider asserted when linked."
+        key_type:
+          type: string
+          description: Present for `ssh_key`.
+        fingerprint:
+          type: string
+          description: Present for `ssh_key`.
+        public_key:
+          type: string
+          description: "Present for `ssh_key`: canonical `authorized_keys` form."
+
+    CredentialList:
+      type: object
+      required: [credentials]
+      properties:
+        credentials:
+          type: array
+          items:
+            $ref: "#/components/schemas/CredentialView"
+
+    AddPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 12
+        label:
+          type: string
+        identifier_uuid:
+          type: string
+          format: uuid
+          description: One of the caller's identifiers; the primary email when omitted.
+
+    AddSSHKeyRequest:
+      type: object
+      required: [public_key]
+      properties:
+        public_key:
+          type: string
+          description: >-
+            A single `authorized_keys`-format line (`<type> <base64>
+            [comment]`). A line carrying options, a certificate key type or
+            more than one key is refused with 400 `users.ssh_key_invalid`.
+        label:
+          type: string
+          maxLength: 100
+          nullable: true
+
+    PatchCredentialRequest:
+      type: object
+      description: At least one member is required; `default_profile_uuid` accepts null to clear.
+      properties:
+        label:
+          type: string
+        default_profile_uuid:
+          type: string
+          format: uuid
+          nullable: true
+
+    SelfSession:
+      type: object
+      required:
+        - uuid
+        - acr
+        - amr
+        - auth_time
+        - created_at
+        - last_seen_at
+        - expires_at
+        - impersonating
+        - current
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        acr:
+          type: integer
+          format: int32
+        amr:
+          type: array
+          items:
+            type: string
+        auth_time:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        impersonating:
+          type: boolean
+        current:
+          type: boolean
+          description: True for the session that made the request.
+
+    SessionList:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelfSession"
+
+    UpgradeRequest:
+      type: object
+      required: [email, password, given_name, family_name]
       properties:
         email:
           type: string
           format: email
         password:
           type: string
+          minLength: 12
         given_name:
           type: string
         family_name:
           type: string
-        is_admin:
-          type: boolean
-          default: false
 
-    AdminUpdateUserRequest:
+    # -- Principals --
+
+    PrincipalView:
       type: object
-      properties:
-        email:
-          type: string
-          format: email
-        given_name:
-          type: string
-        family_name:
-          type: string
-        is_admin:
-          type: boolean
-
-    GrantRevokeRequest:
-      type: object
-      required: [is_admin]
-      properties:
-        is_admin:
-          type: boolean
-
-    AnonRegisterRequest:
-      type: object
-      required: [device_id]
-      properties:
-        device_id:
-          type: string
-          description: Stable device fingerprint supplied by the client.
-          example: "device-abc123"
-
-    AnonAuthToken:
-      type: object
-      properties:
-        token:
-          type: string
-          description: JWT access token.
-        session_token:
-          type: string
-          description: Raw session token for cross-session identity continuity. Store securely on the client.
-        user:
-          type: object
-          properties:
-            uuid:
-              type: string
-              format: uuid
-            is_anonymous:
-              type: boolean
-            email_verified_at:
-              type: string
-              format: date-time
-              nullable: true
-              description: Always null; anonymous accounts have no email to verify.
-
-    # -- App schemas --
-
-    AppSummary:
-      type: object
+      required:
+        - uuid
+        - kind
+        - display_name
+        - email
+        - is_guest
+        - managed
+        - managing_party_uuid
+        - disabled
+        - disabled_at
+        - disabled_reason
+        - created_at
       properties:
         uuid:
           type: string
           format: uuid
-        name:
+        kind:
           type: string
-        slug:
+          enum: [user, service_account]
+        display_name:
           type: string
-
-    # AppDetail/AppCreateRequest/AppUpdateRequest (app CRUD request/response
-    # shapes) were removed here: mod-users no longer serves /v1/apps CRUD
-    # (see the "-- Apps --" path section above). See mod-core's own openapi
-    # contract for the current app CRUD schemas.
-
-    AppMemberRequest:
-      type: object
-      required: [user_uuid]
-      properties:
-        user_uuid:
+        email:
+          type: string
+          nullable: true
+          description: The primary email of a user.
+        is_guest:
+          type: boolean
+        managed:
+          type: boolean
+        managing_party_uuid:
           type: string
           format: uuid
-        roles:
+          nullable: true
+        disabled:
+          type: boolean
+        disabled_at:
+          type: string
+          format: date-time
+          nullable: true
+        disabled_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    PrincipalPage:
+      type: object
+      required: [principals, total, limit, offset]
+      properties:
+        principals:
           type: array
           items:
-            type: string
-
-    AppMember:
-      type: object
-      description: >-
-        Response shape for assign/update-roles operations on the
-        apps/user-accounts membership join.
-      properties:
-        app_uuid:
-          type: string
-          format: uuid
-        user_uuid:
-          type: string
-          format: uuid
-        roles:
-          type: array
-          items:
-            type: string
-
-    AppUserAccount:
-      type: object
-      description: >-
-        One row of the apps/user-accounts membership list. NOTE:
-        user_account_id is the module's internal numeric id, not a uuid —
-        this list endpoint pre-dates and does not yet follow this contract's
-        general "internal ids are never exposed in HTTP responses" rule (see
-        AGENTS.md); flagged here as a known, separate defect, not fixed by
-        this schema change.
-      properties:
-        user_account_id:
+            $ref: "#/components/schemas/PrincipalView"
+        total:
           type: integer
           format: int64
-        roles:
-          type: array
-          items:
-            type: string
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+
+    DisablePrincipalRequest:
+      type: object
+      description: The body is optional.
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          description: Free text recorded on the principal.
 
     # -- Audit schemas --
 
@@ -513,18 +993,6 @@ components:
           type: string
           format: date-time
 
-    # -- Pagination --
-
-    PaginatedUsers:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/UserSummary"
-        total:
-          type: integer
-
     PaginatedAudit:
       type: object
       properties:
@@ -533,105 +1001,11 @@ components:
           items:
             $ref: "#/components/schemas/AuditEntry"
         total:
-          type: integer
-
-    # -- SSH key schemas --
-
-    SSHKey:
-      type: object
-      description: An SSH public key registered for git-over-SSH authentication.
-      required: [uuid, key_type, fingerprint, public_key, label, created_at]
-      properties:
-        uuid:
-          type: string
-          format: uuid
-        key_type:
-          type: string
-          description: SSH public-key algorithm, as reported by the key's own type string.
-          enum:
-            - ssh-ed25519
-            - sk-ssh-ed25519@openssh.com
-            - ecdsa-sha2-nistp256
-            - ecdsa-sha2-nistp384
-            - ecdsa-sha2-nistp521
-            - sk-ecdsa-sha2-nistp256@openssh.com
-            - ssh-rsa
-          example: ssh-ed25519
-        fingerprint:
-          type: string
-          description: SHA256 fingerprint in OpenSSH's `SHA256:<base64>` form.
-          example: "SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8"
-        public_key:
-          type: string
-          description: >-
-            Canonical `authorized_keys` form (`<type> <base64>`), with no
-            comment and no options.
-          example: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBl0Ub0EDwl4y6RGrKUYy3xzQeF8bYh9vQ6kzT8b3F9k"
-        label:
-          type: string
-          maxLength: 100
-          description: >-
-            User-supplied label. Defaults to the key's `authorized_keys`
-            comment (trimmed and truncated to 100 characters) when omitted
-            at registration. Control and bidi-formatting characters are
-            rejected in a supplied label and stripped from a
-            comment-derived default.
-        created_at:
-          type: string
-          format: date-time
-
-    SSHKeyCreate:
-      type: object
-      required: [public_key]
-      properties:
-        public_key:
-          type: string
-          description: >-
-            A single `authorized_keys`-format line (`<type> <base64>
-            [comment]`). A line carrying `authorized_keys` options (for
-            example `command="..."`, `no-pty`), a certificate key type
-            (any `*-cert-v01@openssh.com` type), or more than one key is
-            refused with `400 invalid_input` / `users.ssh_key_invalid`.
-          example: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBl0Ub0EDwl4y6RGrKUYy3xzQeF8bYh9vQ6kzT8b3F9k user@example.com"
-        label:
-          type: string
-          maxLength: 100
-          nullable: true
-          description: >-
-            Optional label, at most 100 characters. When omitted or null,
-            defaults to the key's `authorized_keys` comment, trimmed and
-            truncated to 100 characters. Control and bidi-formatting
-            characters are rejected in a supplied label and stripped from a
-            comment-derived default.
-
-    PaginatedSSHKeys:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/SSHKey"
-        total:
-          type: integer
 
   # -------------------------------------------------------------------------
   # Reusable parameters
   # -------------------------------------------------------------------------
   parameters:
-    UserUUID:
-      name: user_uuid
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    AppUUID:
-      name: app_uuid
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
     Limit:
       name: limit
       in: query
@@ -645,35 +1019,32 @@ components:
       schema:
         type: integer
         default: 0
-    KeyUUID:
-      name: key_uuid
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    AccountUUID:
+    UUID:
       name: uuid
       in: path
       required: true
-      description: >-
-        Account UUID, as used by the `/v1/user-accounts/{uuid}` routes this
-        module actually serves — distinct from the `UserUUID` parameter's
-        `user_uuid` name, used by the older `/v1/users/{user_uuid}` admin
-        paths.
       schema:
         type: string
         format: uuid
-    StepUpToken:
-      name: X-Step-Up-Token
-      in: header
-      required: false
+    Provider:
+      name: provider
+      in: path
+      required: true
+      description: Provider identifier as listed by `GET /v1/auth/providers`.
       schema:
         type: string
-      description: >-
-        Step-up verification token, checked when `AUTH_REQUIRE_STEP_UP` is
-        enabled. Missing or invalid when required yields `409
-        users.step_up_required` (action-required, not an error).
+    ReturnPath:
+      name: return
+      in: query
+      required: false
+      description: |
+        Site-relative path the GUI navigates to after the flow completes. Must
+        begin with `/`; absolute URLs and protocol-relative references are
+        refused with 400 (`users.return_path_invalid`) to prevent open
+        redirects.
+      schema:
+        type: string
+        default: "/"
 
   responses:
     BadRequest:
@@ -689,65 +1060,72 @@ components:
             $ref: "#/components/schemas/Error"
     Unauthorized:
       description: |
-        Missing or invalid authentication token. A request with no effective
-        actor on a route that mounts `RequireAuth` gets code `unauthenticated`
-        before any handler code runs; the composed module's token middleware
-        answers code `unauthorized`.
+        No live session or credential (the `Error` shape). `code` is
+        `unauthorized` for a missing, malformed or expired token,
+        `users.session_revoked` when the session is revoked or expired, and
+        `users.profile_unavailable` when the acting profile is locked (the
+        lock reason is in `details[0].code`). On a sign-in, token, handoff or
+        step-up route the code is `users.invalid_credentials`,
+        `users.session_revoked`, `users.refresh_reuse` or
+        `users.profile_unavailable`.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     Forbidden:
-      description: Caller lacks permission.
+      description: |
+        Caller lacks permission (`error.code: forbidden`), or a sign-in is
+        refused (`users.app_login_not_granted` for an invite-only app,
+        `users.byo_identity_disabled` when self-registration is off).
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     NotFound:
-      description: |
-        Resource not found. User accounts are the exception: a missing
-        account is masked as 403 (`Forbidden`) for every caller.
+      description: Resource not found, or not visible to the caller.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
-
     Conflict:
       description: |
-        State conflict (`error.code: conflict`). A duplicate account email
-        gives detail `users.email_taken` on field `email`; an existing OIDC
-        provider id gives `users.oidc_provider_exists` on field `id`.
+        State conflict (`error.code: conflict`) with a detail code such as
+        `users.identifier_taken`, `users.oidc_identity_in_use`,
+        `users.ssh_key_in_use`, `users.last_credential`,
+        `users.guest_upgrade_required` or `users.password_exists`.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
-    Unprocessable:
+    StepUpRequired:
       description: |
-        Well-formed request that names a missing referent
-        (`error.code: unprocessable_entity`), for example a body `user_uuid`
-        that names no user account (detail `users.user_account_unknown`).
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-
-    EmailUnverified:
-      description: |
-        Action-required, not an error: the actor is authenticated but their
-        email is unverified. `action.path` is the verification page the
-        client must navigate to before retrying.
+        Action-required, not an error: the operation needs a fresh
+        authentication (`action.code: users.step_up_required`). The client
+        completes a step-up (`POST /v1/session/step-up/*`) and retries. A
+        wrong password or code on a step-up route is this same response.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Action"
+    ConflictOrStepUp:
+      description: |
+        One of two shapes, both HTTP 409: a state conflict (the `Error`
+        shape, `error.code: conflict`), or step-up required (the `Action`
+        shape, `action.code: users.step_up_required`). The response body's
+        top-level member, `error` or `action`, is the discriminator.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/Error"
+              - $ref: "#/components/schemas/Action"
     ForbiddenOrEmailUnverified:
       description: |
         Caller lacks permission (the `Error` shape, `error.code: forbidden`),
         OR the actor's email is unverified (the `Action` shape,
         `action.code: users.email_unverified`). Both share HTTP 403; the
-        response body's top-level member — `error` vs. `action` — is the
-        discriminator, never both on the same response. A missing resource
-        on these endpoints is a genuine 404 (`NotFound`), not masked as 403.
+        response body's top-level member, `error` or `action`, is the
+        discriminator, never both on the same response.
       content:
         application/json:
           schema:
@@ -764,48 +1142,6 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Action"
-
-    SSHKeyConflict:
-      description: |
-        Duplicate key: the fingerprint already matches another active,
-        registered key. The response is identical whether the existing
-        holder is the caller or a different account, so it never reveals
-        which account holds the key (the `Error` shape, `error.code:
-        conflict`, detail `users.ssh_key_in_use` on field `public_key`).
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-
-    SSHKeyStepUpRequired:
-      description: |
-        Action-required, not an error: step-up verification is required
-        (`AUTH_REQUIRE_STEP_UP` is enabled) and the `X-Step-Up-Token` header
-        was missing or invalid. `action.path` is the step-up flow the
-        client must complete before retrying with a valid token (the
-        `Action` shape, `action.code: users.step_up_required`).
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Action"
-
-    SSHKeyRegisterConflict:
-      description: |
-        One of two shapes, both HTTP 409: a duplicate key (the `Error`
-        shape, `error.code: conflict`, detail `users.ssh_key_in_use` on
-        field `public_key` — see `SSHKeyConflict`), or step-up verification
-        required (the `Action` shape, `action.code:
-        users.step_up_required`, action-required, not an error — see
-        `SSHKeyStepUpRequired`) when `AUTH_REQUIRE_STEP_UP` is enabled and
-        the `X-Step-Up-Token` header was missing or invalid. The response
-        body's top-level member — `error` vs. `action` — is the
-        discriminator, never both on the same response.
-      content:
-        application/json:
-          schema:
-            oneOf:
-              - $ref: "#/components/schemas/Error"
-              - $ref: "#/components/schemas/Action"
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -847,14 +1183,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
-  # -- Authentication (unauthenticated) --
+
+  # -- Authentication --
+
+
+  # -- Authentication (public, behind requireOIDCConfirmed) --
 
   /v1/auth/register:
     post:
-      summary: Create a new user account (email + password)
+      summary: Register a user (email and password)
+      description: |
+        Self-registration of a bring-your-own user. In one transaction it creates the user
+        with its own person record and personal profile, the primary email identifier
+        (unverified), the password credential and the session, then emails a
+        verification code. 403 `users.byo_identity_disabled` when the platform does not
+        allow bring-your-own identities.
       tags: [Auth]
-      security: []
       operationId: register
+      security: []
       requestBody:
         required: true
         content:
@@ -863,66 +1209,30 @@ paths:
               $ref: "#/components/schemas/RegisterRequest"
       responses:
         "201":
-          description: Account created; JWT returned.
+          description: Registered; token response for the new session.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthToken"
+                $ref: "#/components/schemas/TokenResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
-          description: Email already in use.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/auth/anonymous:
-    post:
-      tags: [Auth]
-      summary: Create anonymous user account
-      description: |
-        Creates a new anonymous user account with no email address. Returns a JWT
-        and a session token for cross-session identity continuity. The account can
-        be upgraded to a named account by patching the email via PUT /v1/self.
-      security: []
-      operationId: registerAnonymous
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AnonRegisterRequest"
-      responses:
-        "201":
-          description: Anonymous account created.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AnonAuthToken"
-        "400":
-          description: Validation error (missing device_id).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Conflict"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/login:
     post:
-      summary: Authenticate with email + password
+      summary: Sign in with email and password
+      description: |
+        Answers 200 with the token response; `access_token` is null and
+        `selection_required` true when the landing chain finds no profile. Every
+        credential failure is 401 `users.invalid_credentials`.
       tags: [Auth]
-      security: []
       operationId: login
+      security: []
       requestBody:
         required: true
         content:
@@ -931,24 +1241,68 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Authentication successful.
+          description: Signed in.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginResponse"
+                $ref: "#/components/schemas/TokenResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
-  /v1/auth/email-code:
+  /v1/auth/anonymous:
     post:
-      summary: Request a one-time email login code
+      summary: Guest sign-in
+      description: |
+        Without a `device_token` it creates a guest user (personal profile, no person,
+        one anonymous credential) and its session, answering 201 with the token
+        response and the new `device_token`. With a `device_token` it signs that guest
+        back in (200, no new device token). Upgrade a guest with `POST /v1/me/upgrade`.
       tags: [Auth]
+      operationId: anonymousSignIn
       security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnonymousRequest"
+      responses:
+        "201":
+          description: Guest created; token response plus the one-time `device_token`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnonymousTokenResponse"
+        "200":
+          description: Existing guest signed back in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
+
+  /v1/auth/email-code/request:
+    post:
+      summary: Request a one-time email sign-in code
+      description: |
+        Always answers 204 after the same floor latency, whether or not the email is
+        registered; the code is minted and sent in the background.
+      tags: [Auth]
       operationId: requestEmailCode
+      security: []
       requestBody:
         required: true
         content:
@@ -957,16 +1311,18 @@ paths:
               $ref: "#/components/schemas/EmailCodeRequest"
       responses:
         "204":
-          description: Code sent (if account exists). Response is always 204 to prevent enumeration.
+          description: Accepted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/email-code/verify:
     post:
-      summary: Verify email code and obtain JWT
+      summary: Verify an email code and sign in
       tags: [Auth]
-      security: []
       operationId: verifyEmailCode
+      security: []
       requestBody:
         required: true
         content:
@@ -975,26 +1331,28 @@ paths:
               $ref: "#/components/schemas/EmailCodeVerify"
       responses:
         "200":
-          description: Code valid for the `login` purpose; JWT returned.
+          description: Code valid; token response.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginResponse"
-        "204":
-          description: Code valid for the `verify_email` purpose; email marked verified (no content).
+                $ref: "#/components/schemas/TokenResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
-  /v1/auth/password-reset:
+  /v1/auth/password-reset/request:
     post:
       summary: Request a password-reset email
+      description: |
+        Always answers 204 after the same floor latency, whether or not the email is registered.
       tags: [Auth]
-      security: []
       operationId: requestPasswordReset
+      security: []
       requestBody:
         required: true
         content:
@@ -1003,16 +1361,22 @@ paths:
               $ref: "#/components/schemas/PasswordResetRequest"
       responses:
         "204":
-          description: Reset email sent (if account exists). Always 204 (no content) to prevent enumeration.
+          description: Accepted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
   /v1/auth/password-reset/confirm:
     post:
-      summary: Set new password using reset token
+      summary: Set a new password with a reset token
+      description: |
+        Supersedes the password bound to the token's email identifier, which also
+        revokes every session holding it. Does not sign in. An unknown, expired or
+        spent token is 401 `users.invalid_credentials`.
       tags: [Auth]
-      security: []
       operationId: confirmPasswordReset
+      security: []
       requestBody:
         required: true
         content:
@@ -1020,16 +1384,82 @@ paths:
             schema:
               $ref: "#/components/schemas/PasswordResetConfirm"
       responses:
-        "200":
+        "204":
           description: Password updated.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
-          description: Token invalid or expired.
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
+
+  /v1/auth/token:
+    post:
+      summary: Refresh an access token or exchange client credentials
+      description: |
+        `grant_type` `refresh_token` (with `refresh_token` and `profile_uuid`) rotates the
+        tab's refresh token and issues an access token for the named profile after
+        re-running its availability. A reused token revokes the whole session (401
+        `users.refresh_reuse`); an unknown or expired token, or a dead session, is 401
+        `users.session_revoked`; an unavailable profile is 401
+        `users.profile_unavailable` (the refresh token stays usable).
+
+        `grant_type` `client_credentials` (with `client_id`, `client_secret`, optional
+        `profile_uuid` and `app`) issues an access token for an API key, with no
+        session and no refresh token. Bad credentials are 401
+        `users.invalid_credentials`.
+      tags: [Auth]
+      operationId: token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenRequest"
+      responses:
+        "200":
+          description: Token response.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/OIDCNotConfirmed"
+
+  /v1/auth/handoff:
+    post:
+      summary: Exchange an OIDC handoff code for tokens
+      description: |
+        Exchanges the one-time code an OIDC callback redirect carried
+        (`#handoff=<code>`) for the token response, once. A spent, expired or unknown
+        code is 401 `users.invalid_credentials`.
+      tags: [Auth]
+      operationId: handoff
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HandoffRequest"
+      responses:
+        "200":
+          description: Token response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
@@ -1068,38 +1498,24 @@ paths:
 
   /v1/auth/oidc/{provider}/start:
     get:
-      summary: Begin OIDC authorization-code flow
+      summary: Begin the OIDC sign-in authorization-code flow
       description: |
         Generates a signed state token, writes it to the `oidc_state` cookie
-        (scoped to `/v1/auth/oidc/`), and 302-redirects the browser to the
+        (scoped to the OIDC route prefix), and 302-redirects the browser to the
         provider's authorization endpoint.
       tags: [Auth]
       security: []
       operationId: startOIDC
       parameters:
-        - in: path
-          name: provider
-          required: true
-          schema:
-            type: string
-          description: Provider identifier as listed by /v1/auth/providers.
-        - in: query
-          name: return
-          required: false
-          schema:
-            type: string
-            default: "/"
-          description: |
-            Site-relative path the GUI should navigate to after a successful
-            login. Must begin with `/`; absolute URLs or protocol-relative
-            references are rejected with 400 to prevent open-redirect attacks.
+        - $ref: "#/components/parameters/Provider"
+        - $ref: "#/components/parameters/ReturnPath"
       responses:
         "302":
           description: Redirect to the provider's authorization endpoint.
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
-          description: Unknown provider.
+          description: Unknown or disabled provider.
           content:
             application/json:
               schema:
@@ -1111,21 +1527,29 @@ paths:
     get:
       summary: OIDC authorization-code flow callback
       description: |
-        Completes the OAuth 2.0 authorization-code exchange: validates the
-        state cookie, trades the authorization code for an ID token, verifies
-        the ID token (signature, issuer, audience, nonce), normalizes claims,
-        resolves or creates the user, and mints a local session JWT. On
-        success, 302-redirects to the configured frontend return URL with the
-        JWT and original return path in the URL fragment.
+        Completes the authorization-code exchange: validates the state cookie,
+        trades the code for an ID token, verifies it (signature, issuer, audience,
+        nonce) and resolves the verified identity against credentials by issuer
+        and subject, never by email. What happens next depends on the flow the
+        state names:
+
+        - sign-in: creates (or, for a just-in-time provider, creates then uses)
+          the session and a one-time handoff code, and redirects to the
+          frontend return URL with `#handoff=<code>`; the client exchanges the
+          code at `POST /v1/auth/handoff`. No token is placed in the redirect.
+        - link: links the identity as an `oidc` credential of the calling
+          session's principal and redirects with an outcome.
+        - step-up: raises the calling session's factors and redirects with an
+          outcome.
+
+        A refusal redirects with `#error=<code>`, one of
+        `account_exists_sign_in_and_link`, `no_account`,
+        `authentication_failed` or `missing_email`.
       tags: [Auth]
       security: []
       operationId: callbackOIDC
       parameters:
-        - in: path
-          name: provider
-          required: true
-          schema:
-            type: string
+        - $ref: "#/components/parameters/Provider"
         - in: query
           name: code
           required: false
@@ -1146,10 +1570,7 @@ paths:
           description: Error code when the provider denies or cancels the flow.
       responses:
         "302":
-          description: |
-            Redirect to the frontend return URL. On success the URL fragment
-            carries `token=<jwt>&return=<path>`; on error the query string
-            carries `error=<code>`.
+          description: Redirect to the frontend return URL, with `#handoff=<code>` on a sign-in or `#error=<code>` on a refusal.
         "400":
           description: Invalid or missing state, code, or cookie.
           content:
@@ -1165,385 +1586,739 @@ paths:
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
-  # -- Self --
+  # -- Session (bearer) --
 
-  /v1/self:
+  /v1/session:
     get:
-      summary: Get the authenticated user's profile
-      tags: [Self]
-      operationId: getSelf
+      summary: Read the caller's session
+      description: |
+        The session, the profile the token acts as, and the principal's profiles with their availability.
+      tags: [Session]
+      operationId: getSession
       responses:
         "200":
-          description: Caller's profile.
+          description: Session information.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserSelf"
+                $ref: "#/components/schemas/SessionInfo"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-    put:
-      summary: Update the authenticated user's profile
+
+  /v1/session/switch:
+    post:
+      summary: Switch the acting profile
       description: |
-        A present-but-blank `given_name` or `family_name` gives 400 with
-        `natural_persons.given_name_required` or
-        `natural_persons.family_name_required` before any lookup. Unknown
-        fields are rejected.
-      tags: [Self]
-      operationId: updateSelf
+        Returns a new access token acting as `profile_uuid` for the same session, with no
+        session write and no refresh token. An unavailable profile is 401
+        `users.profile_unavailable`, and 403 `users.app_login_not_granted` for the
+        invite-only app gate.
+      tags: [Session]
+      operationId: switchProfile
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SelfUpdateRequest"
+              $ref: "#/components/schemas/SwitchRequest"
       responses:
         "200":
-          description: Updated profile returned.
+          description: Token response.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserSelf"
+                $ref: "#/components/schemas/TokenResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/EmailUnverified"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
+          $ref: "#/components/responses/Forbidden"
 
-  # -- Admin: Users --
+  /v1/session/fork:
+    post:
+      summary: Fork a refresh lineage
+      description: |
+        Starts a new refresh lineage for the caller's session (a new tab) and returns it
+        with an access token acting as the caller's current profile. The body is ignored.
+      tags: [Session]
+      operationId: forkSession
+      responses:
+        "200":
+          description: Token response with a new refresh token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
-  /v1/users:
-    get:
-      summary: Search / list users (admin)
-      tags: [Users]
-      operationId: listUsers
+  /v1/session/step-up/password:
+    post:
+      summary: Step up with the password
+      description: |
+        Re-verifies a password of the caller, raises the session's acr as the factors
+        allow, sets `auth_time` to now and returns a fresh access token (no refresh
+        token). Any refusal is the 409 `users.step_up_required` action.
+      tags: [Session]
+      operationId: stepUpPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StepUpPasswordRequest"
+      responses:
+        "200":
+          description: Token response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/StepUpRequired"
+
+  /v1/session/step-up/email-code/request:
+    post:
+      summary: Email a step-up code
+      description: |
+        Emails a step-up code bound to the session. 204; a request inside the cooldown
+        sends nothing. No email credential to send to is the 409
+        `users.step_up_required` action. The body is optional.
+      tags: [Session]
+      operationId: requestStepUpEmailCode
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StepUpEmailCodeRequest"
+      responses:
+        "204":
+          description: Accepted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/StepUpRequired"
+
+  /v1/session/step-up/email-code/verify:
+    post:
+      summary: Step up with an emailed code
+      description: |
+        Verifies the step-up code, adds the email credential as a factor and returns a fresh access token.
+      tags: [Session]
+      operationId: verifyStepUpEmailCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StepUpEmailCodeVerify"
+      responses:
+        "200":
+          description: Token response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/StepUpRequired"
+
+  /v1/session/step-up/oidc/{provider}/start:
+    post:
+      summary: Begin an OIDC step-up
+      description: |
+        Returns the authorize URL of a step-up flow for the caller's session and
+        sets the signed state cookie. The principal must hold an active `oidc`
+        credential for the provider; otherwise, and for an impersonation, the
+        refusal is 409 `users.step_up_required`. The callback completes the step-up
+        and redirects to the return path.
+      tags: [Session]
+      operationId: startOIDCStepUp
       parameters:
-        - name: q
-          in: query
-          description: Search query (matches email, name).
+        - $ref: "#/components/parameters/Provider"
+        - $ref: "#/components/parameters/ReturnPath"
+      responses:
+        "200":
+          description: Authorize URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizeURL"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/StepUpRequired"
+
+  /v1/session/logout:
+    post:
+      summary: Log out
+      description: |
+        Revokes the caller's session (revoke reason `logout`) and its refresh lineages. The body is ignored.
+      tags: [Session]
+      operationId: logout
+      responses:
+        "204":
+          description: Session revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # -- Me (bearer; reachable with an unverified email) --
+
+  /v1/me:
+    get:
+      summary: Read the caller's user record
+      tags: [Me]
+      operationId: getMe
+      responses:
+        "200":
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserView"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Update the caller's user record
+      description: |
+        Names (on the user's own person record) and default profile and app. Absent fields are left unchanged.
+      tags: [Me]
+      operationId: updateMe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeRequest"
+      responses:
+        "200":
+          description: The updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/profiles:
+    get:
+      summary: List the caller's profiles
+      description: |
+        Every non-ended profile with its availability to the caller's session and, when locked, the lock reason and remedy.
+      tags: [Me]
+      operationId: listMyProfiles
+      responses:
+        "200":
+          description: Profiles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me/identifiers:
+    get:
+      summary: List the caller's identifiers
+      tags: [Me]
+      operationId: listMyIdentifiers
+      responses:
+        "200":
+          description: Identifiers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentifierList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      summary: Add an email identifier
+      description: |
+        Adds an unverified email. Verify it with the emailed code.
+      tags: [Me]
+      operationId: addMyIdentifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddIdentifierRequest"
+      responses:
+        "201":
+          description: The identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentifierView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/identifiers/{uuid}:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    delete:
+      summary: Remove an identifier
+      tags: [Me]
+      operationId: removeMyIdentifier
+      responses:
+        "204":
+          description: Removed.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/identifiers/{uuid}/verification:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Email a verification code
+      description: |
+        204; an already verified identifier, or a request inside the cooldown, sends nothing.
+      tags: [Me]
+      operationId: requestIdentifierVerification
+      responses:
+        "204":
+          description: Accepted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/me/identifiers/{uuid}/verify:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Verify an identifier with the emailed code
+      tags: [Me]
+      operationId: verifyMyIdentifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyIdentifierRequest"
+      responses:
+        "200":
+          description: The verified identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentifierView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/me/identifiers/{uuid}/primary:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    put:
+      summary: Make an identifier primary
+      description: |
+        The body is ignored.
+      tags: [Me]
+      operationId: setMyPrimaryIdentifier
+      responses:
+        "200":
+          description: The identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentifierView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/credentials:
+    get:
+      summary: List the caller's active credentials
+      tags: [Me]
+      operationId: listMyCredentials
+      responses:
+        "200":
+          description: Credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me/credentials/password:
+    post:
+      summary: Add a password credential
+      tags: [Me]
+      operationId: addMyPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPasswordRequest"
+      responses:
+        "201":
+          description: The credential.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/credentials/ssh-keys:
+    post:
+      summary: Add an SSH key credential
+      tags: [Me]
+      operationId: addMySSHKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddSSHKeyRequest"
+      responses:
+        "201":
+          description: The credential.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/credentials/oidc/{provider}/start:
+    post:
+      summary: Begin linking an OIDC identity
+      description: |
+        Returns the authorize URL of a link flow for the caller's session and sets
+        the signed state cookie. The callback links the verified identity as an
+        `oidc` credential and redirects to the return path. A service account or a
+        managed user cannot link (403); a guest must upgrade first (409
+        `users.guest_upgrade_required`); an identity already linked is 409
+        `users.oidc_identity_in_use`.
+      tags: [Me]
+      operationId: startOIDCLink
+      parameters:
+        - $ref: "#/components/parameters/Provider"
+        - $ref: "#/components/parameters/ReturnPath"
+      responses:
+        "200":
+          description: Authorize URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizeURL"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/credentials/{uuid}:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    patch:
+      summary: Update a credential's label or landing profile
+      tags: [Me]
+      operationId: patchMyCredential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchCredentialRequest"
+      responses:
+        "200":
+          description: The credential.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+    delete:
+      summary: Revoke a credential
+      description: |
+        Revokes the credential. The last interactive credential is 409 `users.last_credential`.
+      tags: [Me]
+      operationId: revokeMyCredential
+      responses:
+        "204":
+          description: Revoked.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/sessions:
+    get:
+      summary: List the caller's live sessions
+      description: |
+        Most recently seen first; the requesting session is marked `current`.
+      tags: [Me]
+      operationId: listMySessions
+      responses:
+        "200":
+          description: Sessions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me/sessions/{uuid}:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    delete:
+      summary: Revoke one of the caller's sessions
+      description: |
+        The caller's own current session may be revoked (it then behaves as a logout).
+      tags: [Me]
+      operationId: revokeMySession
+      responses:
+        "204":
+          description: Revoked.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/upgrade:
+    post:
+      summary: Upgrade a guest to a registered user
+      description: |
+        Turns the calling guest into a registered user. The guest's anonymous credential is
+        revoked, which ends the guest's sessions, so the client signs in again with the
+        email and password it just registered.
+      tags: [Me]
+      operationId: upgradeGuest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpgradeRequest"
+      responses:
+        "200":
+          description: The user record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  # -- Principals (bearer) --
+
+  /v1/principals:
+    get:
+      summary: List principals
+      description: |
+        Users and service accounts the caller may list, through the
+        `accessible_*_ids_for_actor` access functions.
+      tags: [Principals]
+      operationId: listPrincipals
+      parameters:
+        - in: query
+          name: kind
+          required: false
           schema:
             type: string
+            enum: [user, service_account]
+          description: Both kinds when omitted.
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
       responses:
         "200":
-          description: Paginated user list.
+          description: A page of principals.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaginatedUsers"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-    post:
-      summary: Create a user (admin)
-      tags: [Users]
-      operationId: createUser
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminCreateUserRequest"
-      responses:
-        "201":
-          description: User created.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserDetail"
+                $ref: "#/components/schemas/PrincipalPage"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/principals/{uuid}:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    get:
+      summary: Read a principal
+      description: |
+        404 for an unknown principal and for one the caller may not read.
+      tags: [Principals]
+      operationId: getPrincipal
+      responses:
+        "200":
+          description: The principal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrincipalView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/principals/{uuid}/disable:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Disable a principal
+      description: |
+        Disables the principal and revokes its sessions. Requires `update` on the principal and a step-up. The body is optional.
+      tags: [Principals]
+      operationId: disablePrincipal
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisablePrincipalRequest"
+      responses:
+        "200":
+          description: The updated principal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrincipalView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "409":
-          description: Email already in use.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
+          $ref: "#/components/responses/ConflictOrStepUp"
 
-  /v1/users/{user_uuid}:
-    get:
-      summary: Get a user by UUID (admin)
-      tags: [Users]
-      operationId: getUser
-      parameters:
-        - $ref: "#/components/parameters/UserUUID"
-      responses:
-        "200":
-          description: User detail.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserDetail"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-    put:
-      summary: Update a user (admin)
-      tags: [Users]
-      operationId: updateUser
-      parameters:
-        - $ref: "#/components/parameters/UserUUID"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminUpdateUserRequest"
-      responses:
-        "200":
-          description: Updated user.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserDetail"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-    delete:
-      summary: Archive a user (admin, soft-delete)
-      tags: [Users]
-      operationId: archiveUser
-      parameters:
-        - $ref: "#/components/parameters/UserUUID"
-      responses:
-        "204":
-          description: User archived.
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/users/{user_uuid}/grant:
+  /v1/principals/{uuid}/enable:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
     post:
-      summary: Grant or revoke admin privileges
-      tags: [Users]
-      operationId: grantRevoke
-      parameters:
-        - $ref: "#/components/parameters/UserUUID"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GrantRevokeRequest"
-      responses:
-        "200":
-          description: Privileges updated.
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/users/{user_uuid}/assume:
-    post:
-      summary: Assume a user's identity (admin)
+      summary: Enable a principal
       description: |
-        Returns a token scoped to the target user. The admin's original identity
-        is recorded in the token so actions are audited as "admin acting as user".
-      tags: [Users]
-      operationId: assumeUser
-      parameters:
-        - $ref: "#/components/parameters/UserUUID"
+        The body is ignored.
+      tags: [Principals]
+      operationId: enablePrincipal
       responses:
         "200":
-          description: Assumed-identity token.
+          description: The updated principal.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/users/{user_uuid}/audit:
-    get:
-      summary: Audit log for changes performed by a user
-      tags: [Audit]
-      operationId: auditByActor
-      parameters:
-        - $ref: "#/components/parameters/UserUUID"
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
-      responses:
-        "200":
-          description: Paginated audit entries.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedAudit"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  # -- Apps --
-  # Top-level /v1/apps CRUD (list/create/get/update/archive) is NOT served by
-  # mod-users. Apps moved to mod-core as an entity subtype (apps-to-core
-  # Phase 02); mod-users retains only the apps/user-accounts membership join
-  # below, served by AppsHandler (api/internal/handlers/apps.go). See
-  # mod-core's own openapi contract for the app CRUD operations.
-
-  /v1/apps/{app_uuid}/user-accounts:
-    get:
-      summary: List an application's assigned user accounts (admin)
-      tags: [Apps]
-      operationId: listAppUserAccounts
-      parameters:
-        - $ref: "#/components/parameters/AppUUID"
-      responses:
-        "200":
-          description: Assigned user accounts, each with its per-app roles.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user_accounts:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AppUserAccount"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-    post:
-      summary: Assign a user account to an application (admin)
-      description: |
-        Path UUIDs and the body are checked (400) before authorization (403).
-        Unknown fields are rejected, so send `roles`, not `role`. An unknown
-        app is 404 for an authorized admin; a body `user_uuid` that names no
-        account is 422.
-      tags: [Apps]
-      operationId: assignAppUserAccount
-      parameters:
-        - $ref: "#/components/parameters/AppUUID"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AppMemberRequest"
-      responses:
-        "201":
-          description: User account assigned.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AppMember"
+                $ref: "#/components/schemas/PrincipalView"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/Unprocessable"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/apps/{app_uuid}/user-accounts/{user_uuid}:
-    delete:
-      summary: Remove a user account's assignment to an application (admin)
-      tags: [Apps]
-      operationId: removeAppUserAccount
-      parameters:
-        - $ref: "#/components/parameters/AppUUID"
-        - $ref: "#/components/parameters/UserUUID"
-      responses:
-        "204":
-          description: Assignment removed.
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/apps/{app_uuid}/user-accounts/{user_uuid}/roles:
-    put:
-      summary: Replace a user account's roles on an application (admin)
-      tags: [Apps]
-      operationId: updateAppUserAccountRoles
-      parameters:
-        - $ref: "#/components/parameters/AppUUID"
-        - $ref: "#/components/parameters/UserUUID"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                roles:
-                  type: array
-                  items:
-                    type: string
-      responses:
-        "200":
-          description: Updated roles.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AppMember"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
 
   # -- Audit --
 
@@ -1607,242 +2382,3 @@ paths:
         "503":
           $ref: "#/components/responses/OIDCNotConfirmed"
 
-  # -- SSH Keys (self) --
-
-  /v1/self/ssh-keys:
-    get:
-      summary: List the authenticated user's SSH public keys
-      description: |
-        Lists the caller's own active SSH public keys, ordered by
-        registration time. Reachable with an unverified email, matching
-        `GET /v1/self/identities` — listing does not require step-up.
-      tags: [SSH Keys]
-      operationId: listSelfSSHKeys
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
-      responses:
-        "200":
-          description: Paginated list of the caller's active SSH keys.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedSSHKeys"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-    post:
-      summary: Register an SSH public key for the authenticated user
-      description: |
-        Registers a new SSH public key on the caller's own account.
-        Requires a verified email. When `AUTH_REQUIRE_STEP_UP` is enabled,
-        also requires a valid `X-Step-Up-Token` header; the request fails
-        with `409 users.step_up_required` (action-required, not an error)
-        when the token is missing or invalid — see the `409` response
-        below.
-
-        `public_key` must be a single `authorized_keys`-format line. A line
-        carrying `authorized_keys` options (for example `command="..."`,
-        `no-pty`), a certificate key type, or more than one key is refused
-        with `400` / `users.ssh_key_invalid`. Accepted key types are
-        Ed25519, the FIDO `sk-` variants, ECDSA P-256/384/521, and RSA of
-        at least 2048 bits; an unsupported type is refused with `400` /
-        `users.ssh_key_type_unsupported`, an under-strength RSA key with
-        `400` / `users.ssh_key_too_weak`, and a `label` over 100 characters
-        with `400` / `users.ssh_key_label_too_long`. A supplied `label`
-        containing a control or bidi-formatting character is refused with
-        `400` / `users.ssh_key_label_invalid`. These shape checks run before
-        the step-up gate and authorization, so a malformed request gets 400
-        (not 409) with or without a step-up token and does not consume one.
-        Unknown body fields and bodies over 32 KiB are refused with `400`.
-      tags: [SSH Keys]
-      operationId: registerSelfSSHKey
-      parameters:
-        - $ref: "#/components/parameters/StepUpToken"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SSHKeyCreate"
-      responses:
-        "201":
-          description: Key registered.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SSHKey"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/EmailUnverified"
-        "409":
-          $ref: "#/components/responses/SSHKeyRegisterConflict"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/self/ssh-keys/{key_uuid}:
-    delete:
-      summary: Revoke one of the authenticated user's SSH public keys
-      description: |
-        Archives the key; it stops resolving on the caller's next SSH
-        connection (an already-open session is not terminated). Requires a
-        verified email and, when `AUTH_REQUIRE_STEP_UP` is enabled, a valid
-        `X-Step-Up-Token` header; the request fails with `409
-        users.step_up_required` (action-required, not an error) when the
-        token is missing or invalid — see the `409` response below. Every
-        not-found-or-not-permitted outcome — unknown `key_uuid`, a
-        `key_uuid` belonging to another account, or an already-revoked key
-        — returns the same masked `403`, indistinguishable from a genuine
-        permission failure.
-      tags: [SSH Keys]
-      operationId: revokeSelfSSHKey
-      parameters:
-        - $ref: "#/components/parameters/KeyUUID"
-        - $ref: "#/components/parameters/StepUpToken"
-      responses:
-        "204":
-          description: Key revoked.
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "409":
-          $ref: "#/components/responses/SSHKeyStepUpRequired"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  # -- SSH Keys (operator) --
-
-  /v1/user-accounts/{uuid}/ssh-keys:
-    get:
-      summary: List a user's SSH public keys (operator)
-      description: |
-        Lists the target account's active SSH public keys. Requires `read`
-        on the target account's holder and a verified email on the caller. Uses the `/v1/user-accounts/{uuid}`
-        prefix, the prefix this module actually serves
-        (`api/internal/handlers/account_routes.go`), unlike the older
-        `/v1/users/{user_uuid}` admin paths documented elsewhere in this file.
-        Every not-found-or-not-permitted outcome — unknown account UUID, or
-        an account the caller may not act on — returns the same masked
-        `403`.
-      tags: [SSH Keys]
-      operationId: listUserAccountSSHKeys
-      parameters:
-        - $ref: "#/components/parameters/AccountUUID"
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
-      responses:
-        "200":
-          description: Paginated list of the target account's active SSH keys.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PaginatedSSHKeys"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-    post:
-      summary: Register an SSH public key for a user (operator)
-      description: |
-        Registers a new SSH public key on the target account. Requires the
-        `assume` operation on the target account's holder (`update` alone is
-        not sufficient; `manage` implies `assume`) and a verified email on
-        the caller. Step-up-gated exactly like the
-        self-service register endpoint above, but **only when `{uuid}`
-        names the caller's own account** — a genuine
-        operator-on-behalf-of-a-different-account call is not step-up-gated,
-        matching every other `/v1/user-accounts/*` admin route. Uses the
-        `/v1/user-accounts/{uuid}` prefix, the prefix this module actually
-        serves (`api/internal/handlers/account_routes.go`), unlike the older
-        `/v1/users/{user_uuid}` admin paths documented elsewhere in this file.
-        Every not-found-or-not-permitted outcome — unknown account UUID, or
-        an account the caller may not act on — returns the same masked
-        `403`.
-
-        `public_key` must be a single `authorized_keys`-format line, subject
-        to the same validation as self-registration: options, certificate
-        key types, and multiple keys are refused with `400` /
-        `users.ssh_key_invalid`; accepted key types are Ed25519, the FIDO
-        `sk-` variants, ECDSA P-256/384/521, and RSA of at least 2048 bits
-        (otherwise `400` / `users.ssh_key_type_unsupported` or `400` /
-        `users.ssh_key_too_weak`); a `label` over 100 characters is refused
-        with `400` / `users.ssh_key_label_too_long`, and a `label`
-        containing a control or bidi-formatting character is refused with
-        `400` / `users.ssh_key_label_invalid`.
-      tags: [SSH Keys]
-      operationId: registerUserAccountSSHKey
-      parameters:
-        - $ref: "#/components/parameters/AccountUUID"
-        - $ref: "#/components/parameters/StepUpToken"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SSHKeyCreate"
-      responses:
-        "201":
-          description: Key registered.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SSHKey"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "409":
-          $ref: "#/components/responses/SSHKeyRegisterConflict"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
-
-  /v1/user-accounts/{uuid}/ssh-keys/{key_uuid}:
-    delete:
-      summary: Revoke a user's SSH public key (operator)
-      description: |
-        Archives the key; it stops resolving on the account's next SSH
-        connection (an already-open session is not terminated). Requires the
-        `assume` operation on the target account's holder (`update` alone is
-        not sufficient; `manage` implies `assume`) and a verified email on
-        the caller. Step-up-gated exactly like the
-        self-service revoke endpoint above, but **only when `{uuid}`
-        names the caller's own account** — a genuine
-        operator-on-behalf-of-a-different-account call is not step-up-gated,
-        matching every other `/v1/user-accounts/*` admin route. Uses the
-        `/v1/user-accounts/{uuid}` prefix, the prefix this module actually
-        serves (`api/internal/handlers/account_routes.go`), unlike the older
-        `/v1/users/{user_uuid}` admin paths documented elsewhere in this file.
-        Every not-found-or-not-permitted outcome — unknown account UUID, an
-        account the caller may not act on, unknown `key_uuid`, a
-        `key_uuid` belonging to a different account, or an already-revoked
-        key — returns the same masked `403`.
-      tags: [SSH Keys]
-      operationId: revokeUserAccountSSHKey
-      parameters:
-        - $ref: "#/components/parameters/AccountUUID"
-        - $ref: "#/components/parameters/KeyUUID"
-        - $ref: "#/components/parameters/StepUpToken"
-      responses:
-        "204":
-          description: Key revoked.
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/ForbiddenOrEmailUnverified"
-        "409":
-          $ref: "#/components/responses/SSHKeyStepUpRequired"
-        "503":
-          $ref: "#/components/responses/OIDCNotConfirmed"
