@@ -54,7 +54,7 @@ phases:
             branch: plan/identity-model-impl-06-004
             commit:
                 - 2fd92b1
-            merge: null
+            merge: ccb36c0d4d17fda005b64861e5949fb8a53e221b
         - number: 5
           slug: sessions-and-auth-routes
           title: Sessions And Auth Routes
