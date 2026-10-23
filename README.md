@@ -36,15 +36,23 @@ For embedding the components in an app (configuration, routes, Next.js and React
 
 ## Configuration
 
-Local-auth JWT settings (see [docs/jwt-eddsa.md](./docs/jwt-eddsa.md); full list in `.env.example`):
+Access tokens are EdDSA (Ed25519) JWTs that carry a server-side session or non-interactive credential; the session or credential and the acting profile are re-checked on every request, so a revocation takes effect on the next request. Bearer tokens only: no route reads an authentication cookie. Settings (see [docs/jwt-eddsa.md](./docs/jwt-eddsa.md); full list in `.env.example`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `JWT_SECRET` | required for HS256; optional under EdDSA | HS256 secret; also signs OAuth state and step-up tokens. Under `JWT_ALG=EdDSA`, when unset those keys are derived from `JWT_SIGNING_KEY` |
-| `JWT_ALG` | `HS256` | `HS256` or `EdDSA` signing for locally-issued tokens |
-| `JWT_SIGNING_KEY` | unset | Ed25519 private key (PKCS#8 PEM; literal `\n` accepted); required for `EdDSA` |
+| `JWT_SIGNING_KEY` | unset: a key is generated on first boot and persisted in `mod_users.auth_signing_keys` | Ed25519 private key (PKCS#8 PEM; literal `\n` accepted) that signs access tokens |
 | `JWT_SIGNING_KID` | unset | `kid` header for issued tokens |
 | `JWT_VERIFY_PUBLIC_KEYS` | unset | Extra accepted public keys: one PKIX PEM, or JSON `kid` to PEM |
+| `JWT_SECRET` | unset: derived from the signing key | Optional explicit HMAC key for the OAuth state parameter only |
+| `AUTH_ACCESS_TOKEN_TTL` | `1h` (maximum `1h`) | Access-token lifetime; `exp` never outlives the session |
+| `AUTH_SESSION_MAX_AGE` | `720h` | Absolute session lifetime |
+| `AUTH_SESSION_IDLE_TIMEOUT` | `168h` | Refresh-lineage expiry |
+| `AUTH_CLIENT_CREDENTIALS_TTL` | `15m` | Client-credentials access-token lifetime |
+| `AUTH_IMPERSONATION_TTL` | `30m` | Lifetime of one impersonation token or renewal |
+| `AUTH_IMPERSONATION_MAX` | `60m` | Total impersonation time from its start |
+| `AUTH_SELF_SERVICE_MAX_AUTH_AGE` | `10m` | How recent `auth_time` must be for self-service credential and identifier changes |
+| `AUTH_DEFAULT_AUDIENCE` | `mod-users` | `aud` of a token whose session has no app |
+| `AUTH_ACCEPTED_AUDIENCES` | unset: the default audience plus any registered app slug | Comma-separated `aud` values bearer tokens may carry |
 
 CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and any entry containing `*` is rejected at startup outside local mode. Entries are bare `scheme://host[:port]` origins (no trailing slash or path), matched case-insensitively. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
 

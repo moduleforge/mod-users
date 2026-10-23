@@ -17,7 +17,6 @@ data:
   DEPLOY_MODE: k8s
   SERVER_ADDR: ":8080"
   LOG_LEVEL: info
-  AUTH_ADMIN_ROLE: admin
   AUTH_OAUTH_REDIRECT_BASE_URL: https://api.example.com
   AUTH_FRONTEND_RETURN_URL: https://app.example.com/auth/oidc/return
   # Example provider; add more as needed.
