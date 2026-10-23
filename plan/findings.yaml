@@ -117,4 +117,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Task 008 must call UserService.WithSelfService in the facade or manifest.
+    - title: Task 008 must call service.RegisterDisplayRen
+      id: nRoQ
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: Task 008 must call service.RegisterDisplayRenderers(displayReg, pool) in cmd/server/main.go.
 closed: []
