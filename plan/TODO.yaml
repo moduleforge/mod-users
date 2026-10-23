@@ -73,6 +73,7 @@ phases:
           path: phase-06-users-identity-core/006-oidc-resolver.md
           done: false
           tier: sonnet-high
+          digest: Added OIDC resolver decision table (auth/resolver.go), reworked oauth_state (Flow login/link/step_up), SessionAuthorizeURL, claim enrichment, provider party/jit_mode/trust_acr. Rewrote handlers/auth/oidc.go (Start, Callback, LinkStart, StepUpStart) and removed the oidc_resolver_pending fence. Providers CRUD gained party_uuid/jit_mode/trust_acr. Build and internal/auth and internal/config tests pass; handler tests deferred to task 010.
           git:
             branch: null
             commit: []
