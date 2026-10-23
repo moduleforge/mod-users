@@ -66,7 +66,7 @@ phases:
             branch: plan/identity-model-impl-06-005
             commit:
                 - 2d4025e
-            merge: null
+            merge: 81b4af00862fa4694747bd1f086e40d716abc33c
         - number: 6
           slug: oidc-resolver
           title: OIDC Resolver
