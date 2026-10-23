@@ -5,6 +5,7 @@ phases:
     - number: 6
       slug: users-identity-core
       title: Users Identity Core
+      diff_base: 9ef551b8766f43d956fa4dd5fae9dccc2e7e61ec
       tasks:
         - number: 1
           slug: rewrite-baseline-schema
