@@ -99,4 +99,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Task 010: rewrite handlers/auth/oidc_test.go and oidc_linkmode_test.go, which still target the removed OIDCHandler API.'
+    - title: 'Decision needed: link does not confine the ne'
+      id: wZsk
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
 closed: []
