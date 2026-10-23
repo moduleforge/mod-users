@@ -28,6 +28,7 @@ const (
 	opUpdate = "update"
 	opDelete = "delete"
 	opRevoke = "revoke"
+	opLogin  = "login"
 )
 
 // Observer resources this package emits.
