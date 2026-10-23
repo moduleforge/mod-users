@@ -92,6 +92,26 @@ func validateEmail(canon string) error {
 	return nil
 }
 
+// ValidateEmail reports the field error the identifier services would return
+// for value (canonicalized first), so an HTTP handler can answer 400 before
+// any authorization or state check.
+func ValidateEmail(value string) error {
+	return validateEmail(CanonicalizeEmail(value))
+}
+
+// ValidatePassword reports the field error CreatePasswordInTx would return
+// for a password of the wrong length, so an HTTP handler can answer 400
+// before any authorization or state check.
+func ValidatePassword(password string) error {
+	if len(password) < passwordMinLength {
+		return invalidField("password", "users.password_too_short", "password must be at least 12 characters")
+	}
+	if len(password) > maxPasswordBytes {
+		return invalidField("password", "users.password_too_long", "password is too long")
+	}
+	return nil
+}
+
 // HashToken returns the lowercase hex SHA-256 of a high-entropy opaque token
 // (an anonymous device token, an API key secret, a password-reset or handoff
 // code). It is deterministic, so a token can be looked up by its hash. It must

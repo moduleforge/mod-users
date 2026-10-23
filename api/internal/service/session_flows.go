@@ -111,6 +111,24 @@ func (s *SessionService) LoginWithEmailCode(ctx context.Context, in LoginInput) 
 	return s.signIn(ctx, otp, in)
 }
 
+// LoginWithDeviceToken signs a guest back in with the device token its anon
+// credential was issued with (POST /v1/auth/anonymous with device_token). The
+// token must belong to an active anon credential registered for deviceID;
+// anything else is ErrInvalidCredentials.
+func (s *SessionService) LoginWithDeviceToken(ctx context.Context, deviceID, token, appSlug string) (TokenResponse, error) {
+	row, err := s.q.GetActiveAnonByTokenHash(ctx, HashToken(token))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TokenResponse{}, ErrInvalidCredentials
+	}
+	if err != nil {
+		return TokenResponse{}, fmt.Errorf("sessions: look up device token: %w", err)
+	}
+	if row.DeviceID != strings.TrimSpace(deviceID) {
+		return TokenResponse{}, ErrInvalidCredentials
+	}
+	return s.signIn(ctx, row.Credential, LoginInput{AppSlug: appSlug})
+}
+
 // emailOTPFor returns the email identifier with value canon and its active
 // email_otp credential. Both are zero when either is missing.
 func (s *SessionService) emailOTPFor(ctx context.Context, canon string) (usersdb.UserIdentifier, usersdb.Credential, error) {

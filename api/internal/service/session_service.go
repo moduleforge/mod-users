@@ -743,6 +743,20 @@ func (s *SessionService) afterRevoke(ctx context.Context, tx pgx.Tx, q usersdb.Q
 	return nil
 }
 
+// UnauthenticatedActingContext returns ctx carrying the AuthContext an
+// unauthenticated flow (password reset, OIDC callback) uses for its
+// observations about principalID when no session is involved (API surface
+// section 10.1): the principal acting as its personal profile, else its
+// oldest non-ended profile. ok is false when the principal holds no
+// non-ended profile, so no actor exists to observe as.
+func UnauthenticatedActingContext(ctx context.Context, db usersdb.DBTX, principalID int64) (context.Context, bool, error) {
+	acting, err := fallbackActingProfile(ctx, db, principalID)
+	if err != nil || acting == 0 {
+		return ctx, false, err
+	}
+	return withActingProfile(ctx, principalID, acting), true, nil
+}
+
 // withFallbackActor returns ctx carrying the section 10.1 AuthContext for an
 // observation about principalID's session sessionID: the personal profile,
 // else the oldest non-ended profile. When the principal holds no non-ended
