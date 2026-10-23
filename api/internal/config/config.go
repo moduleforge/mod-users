@@ -524,11 +524,10 @@ func validate(cfg *Config, parseErrors []string) error {
 	// Collect any parse errors accumulated during Load.
 	problems = append(problems, parseErrors...)
 
-	// The signing key is always required. It is absent here only when
-	// another problem already explains why (an invalid JWT_SIGNING_KEY, a
-	// failed bootstrap, or no DB URL to bootstrap from); report it anyway so
-	// Load can never return a Config without one.
-	if cfg.LocalAuth.JWTSigningKey == nil {
+	// The signing key is always required. When it is absent and no
+	// JWT_SIGNING_KEY problem explains why (invalid value, failed bootstrap),
+	// report it, so Load can never return a Config without one.
+	if cfg.LocalAuth.JWTSigningKey == nil && !jwtSigningKeyProblem(parseErrors) {
 		problems = append(problems, "JWT_SIGNING_KEY: no signing key (set JWT_SIGNING_KEY or configure the database so one can be bootstrapped)")
 	}
 

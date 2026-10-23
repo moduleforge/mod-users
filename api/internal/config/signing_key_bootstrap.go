@@ -92,12 +92,14 @@ var signingKeyBootstrapLockKey = func() int64 {
 	return int64(h.Sum64())
 }()
 
-// bootstrapSigningKeyDDL must stay byte-for-byte identical to the
-// mod_users.auth_signing_keys section of model/migrations/sql/0100_baseline.sql
-// (see that section's own comment for why IF NOT EXISTS is required there),
-// preceded by the baseline's own CREATE SCHEMA IF NOT EXISTS statement.
-const bootstrapSigningKeyDDL = `CREATE SCHEMA IF NOT EXISTS mod_users;
-CREATE TABLE IF NOT EXISTS mod_users.auth_signing_keys (
+// bootstrapSigningKeySchemaDDL and bootstrapSigningKeyTableDDL must each stay
+// byte-for-byte identical to the corresponding statement of
+// model/migrations/sql/0100_baseline.sql (see the auth_signing_keys section's
+// own comment for why IF NOT EXISTS is required there). A drift-guard test in
+// signing_key_bootstrap_test.go asserts the baseline contains both verbatim.
+const bootstrapSigningKeySchemaDDL = `CREATE SCHEMA IF NOT EXISTS mod_users;`
+
+const bootstrapSigningKeyTableDDL = `CREATE TABLE IF NOT EXISTS mod_users.auth_signing_keys (
   id          SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   private_key BYTEA NOT NULL CHECK (octet_length(private_key) >= 48),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -136,8 +138,10 @@ func bootstrapSigningKeyFromDB(ctx context.Context, dbURL string) (ed25519.Priva
 	// Ensure the schema and table exist: config.Load() runs before this
 	// module's own migrations apply, so on a fresh database neither exists
 	// yet. Idempotent and serialized by the advisory lock above.
-	if _, err := conn.Exec(ctx, bootstrapSigningKeyDDL); err != nil {
-		return nil, fmt.Errorf("signingkey: ensure table: %w", err)
+	for _, ddl := range []string{bootstrapSigningKeySchemaDDL, bootstrapSigningKeyTableDDL} {
+		if _, err := conn.Exec(ctx, ddl); err != nil {
+			return nil, fmt.Errorf("signingkey: ensure table: %w", err)
+		}
 	}
 
 	q := db.New(conn) // *pgx.Conn satisfies db.DBTX

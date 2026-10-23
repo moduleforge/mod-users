@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -13,13 +14,15 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
 // TestVerifier_RejectsExternalOIDC is a Phase-9 regression pin. Before
-// Phase 9, RequireAuth was expected to accept either a local HS256 JWT or
+// Phase 9, RequireAuth was expected to accept either a local JWT or
 // a provider-issued id_token (RS256 verified via JWKS). Post-Phase 9, the
-// OAuth callback trades the id_token for a local JWT internally, so
-// user-facing endpoints should only ever see local HS256 tokens. Any
+// OAuth callback trades the id_token for a local session internally, so
+// user-facing endpoints should only ever see local EdDSA tokens. Any
 // accidental re-enabling of external verification in RequireAuth's Verifier
 // would be a silent regression on that architectural decision.
 //
@@ -77,10 +80,16 @@ func TestVerifier_RejectsExternalOIDC(t *testing.T) {
 	}
 
 	// Build the verifier the way main.go does — no OIDC issuer, so only
-	// local HS256 tokens should verify.
-	verifier, err := NewVerifier(context.Background(), "", "", "local-secret", "users-module-local")
+	// local EdDSA tokens should verify.
+	_, edKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		t.Fatalf("NewVerifier: %v", err)
+		t.Fatalf("generate key: %v", err)
+	}
+	verifier, err := NewLocalVerifier(context.Background(), config.LocalAuthConfig{
+		JWTSigningKey: edKey, LocalIssuer: "users-module-local",
+	})
+	if err != nil {
+		t.Fatalf("NewLocalVerifier: %v", err)
 	}
 
 	if _, err := verifier.Verify(context.Background(), raw); err == nil {
@@ -88,34 +97,47 @@ func TestVerifier_RejectsExternalOIDC(t *testing.T) {
 	}
 }
 
-// TestVerifier_AcceptsLocalHS256 rounds out the Phase-9 scope pin: with the
-// same Verifier config, a locally-minted HS256 token should verify cleanly.
-func TestVerifier_AcceptsLocalHS256(t *testing.T) {
-	const secret = "local-secret-for-test"
+// TestVerifier_LocalEdDSAOnly rounds out the Phase-9 scope pin: with the
+// same Verifier config, a locally-minted EdDSA token verifies cleanly and an
+// HMAC token with otherwise identical claims does not.
+func TestVerifier_LocalEdDSAOnly(t *testing.T) {
 	const issuer = "users-module-local"
-
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"iss":   issuer,
-		"sub":   "00000000-0000-0000-0000-000000000001",
-		"email": "u@example.com",
-		"iat":   time.Now().Unix(),
-		"exp":   time.Now().Add(time.Hour).Unix(),
-	})
-	raw, err := tok.SignedString([]byte(secret))
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	claims := jwt.MapClaims{
+		"iss": issuer,
+		"sub": "00000000-0000-0000-0000-000000000001",
+		"iat": time.Now().Unix(),
+		"exp": time.Now().Add(time.Hour).Unix(),
+	}
+	signer, err := NewEdDSASigner(key, "")
+	if err != nil {
+		t.Fatalf("NewEdDSASigner: %v", err)
+	}
+	raw, err := signer.Sign(claims)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-
-	verifier, err := NewVerifier(context.Background(), "", "", secret, issuer)
+	hmacRaw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("local-secret"))
 	if err != nil {
-		t.Fatalf("NewVerifier: %v", err)
+		t.Fatalf("hmac sign: %v", err)
 	}
 
-	claims, err := verifier.Verify(context.Background(), raw)
+	verifier, err := NewLocalVerifier(context.Background(), config.LocalAuthConfig{JWTSigningKey: key, LocalIssuer: issuer})
+	if err != nil {
+		t.Fatalf("NewLocalVerifier: %v", err)
+	}
+
+	got, err := verifier.Verify(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
-	if claims["iss"] != issuer {
-		t.Errorf("iss = %v, want %q", claims["iss"], issuer)
+	if got["iss"] != issuer {
+		t.Errorf("iss = %v, want %q", got["iss"], issuer)
+	}
+	if _, err := verifier.Verify(context.Background(), hmacRaw); err == nil {
+		t.Error("an HMAC-signed token must be rejected")
 	}
 }
