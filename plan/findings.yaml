@@ -144,4 +144,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Task 008 must add api/openapi.yaml entries for the new routes.
+    - title: internal/handlers/oidc_config.go (kept file)
+      id: 1uxT
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: internal/handlers/oidc_config.go (kept file) does not compile against the new db package (db.OidcConfig and db.OidcProvider removed); needs porting in task 008 or a follow-on.
 closed: []
