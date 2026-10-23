@@ -27,4 +27,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: deploy/k8s/base/deployment.yaml and deploy/cloudrun/service.yaml still inject JWT_SECRET from a required secret (users-api-secrets/jwt-secret) and never wire JWT_SIGNING_KEY or JWT_SIGNING_KID. After the EdDSA-only change in api/internal/config (config.Load, loadJWTSigning, bootstrapSigningKeyFromDB), JWT_SECRET is optional and keys only the OAuth state HMAC (api/internal/auth/derived_keys.go OAuthStateKey), and access tokens are signed by JWT_SIGNING_KEY or, when it is unset, a key persisted in mod_users.auth_signing_keys. The manifests should make jwt-secret optional and show how to supply JWT_SIGNING_KEY (and JWT_VERIFY_PUBLIC_KEYS for rotation) from a secret, with the new AUTH_* lifetime and audience variables where a deployment needs non-default values.
+    - title: Identifier delete blocked by cred FKs
+      id: oi9B
+      date: "2026-10-23"
+      tags:
+        - type:bug
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: 'model/migrations/sql/0100_baseline.sql: cred_password.identifier_id and cred_email_otp.identifier_id reference mod_users.user_identifiers(id) ON DELETE RESTRICT, and credential rows are revoked, never deleted. Once an identifier has ever had a bound password or email_otp credential (every verified email gets an email_otp), DELETE FROM user_identifiers always fails with a foreign-key violation even after the credentials are revoked, so a verified email can never be removed. api/internal/service/user_service.go RemoveIdentifierInTx revokes the bound credentials, attempts the delete inside a savepoint and returns ErrIdentifierInUse (409 users.identifier_in_use) on the 23503, rolling the revocations back. Decide whether the foreign keys should become ON DELETE SET NULL or NO ACTION with nullable columns, whether identifier removal should instead be a soft state, or whether the API surface should drop DELETE /v1/me/identifiers/{uuid} for identifiers that ever had a credential.'
 closed: []
