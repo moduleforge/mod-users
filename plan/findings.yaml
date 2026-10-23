@@ -90,4 +90,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Task 008 mounting: OIDCHandler.LinkStart on POST /v1/me/credentials/oidc/{provider}/start; OIDCHandler.StepUpStart on POST /v1/session/step-up/oidc/{provider}/start; chi path param must be named provider; constructor NewOIDCHandler(pool, q, coreQ, oauth, resolver, users, creds, challenges, sessions, obs, cfg) with resolver from auth.NewOIDCResolver(queries); ProvidersDeps.Parties should be a coredb.Querier, without it a provider cannot be bound to a party.'
+    - title: 'Task 010: rewrite handlers/auth/oidc_test.go'
+      id: Oczs
+      date: "2026-10-23"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Task 010: rewrite handlers/auth/oidc_test.go and oidc_linkmode_test.go, which still target the removed OIDCHandler API.'
 closed: []
