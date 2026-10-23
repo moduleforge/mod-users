@@ -28,7 +28,8 @@ phases:
           digest: Replaced the query set (users, identifiers, credentials, challenges, sessions, party_policies, signing_keys; oidc queries updated) and regenerated usersdb with make gen; old generated files removed. Added SQLSTATE helpers (MF101-MF103, unique-violation mapping), tests, and usersservice re-exports. api packages stay red until task 008. No findings filed.
           git:
             branch: plan/identity-model-impl-06-002
-            commit: []
+            commit:
+                - 461c891
             merge: null
         - number: 3
           slug: token-carrier-and-auth-middleware
