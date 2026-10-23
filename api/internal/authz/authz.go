@@ -1,17 +1,30 @@
 // Package authz provides the users-module Authorizer implementation.
 //
-// Policy: actors with a wildcard grant in the grants table can perform any
-// operation (checkWildcardGrant short-circuit, replacing the previous is_admin
-// column-based approach). All other actors must have an explicit grant in the
-// grants table, resolved via recursive actor/target group CTEs, OR own the
-// target entity outright (entities.owner_id equals the effective actor's
-// entity id). Ownership is a single, resource-agnostic predicate: it is not
-// scoped per resource type, and owning the target satisfies every operation
-// on that entity, not just reads.
+// This is the minimal identity-model port; the full engine (assurance gate,
+// owned-scope arm, ownership_confers, AuthorizeTypeIn) replaces it later.
 //
-// The implementation resolves the acting user from ctx via
-// opctx.EffectiveActorEntityID, which applies the sudo-first-then-actor
-// policy (a sudo actor, when set, takes priority over the real actor).
+// Actor: the effective actor is the acting profile, opctx.ProfileID — the
+// profile the authentication middleware installed on the AuthContext (under
+// impersonation, the impersonated profile). A context without an AuthContext
+// is ErrUnauthenticated. Liveness and profile availability were already
+// checked once per request by the authentication middleware; Authorize trusts
+// the installed AuthContext.
+//
+// Policy: actors whose actor chain holds a wildcard grant (scope 'entity',
+// target_id NULL) can perform any operation (checkWildcardGrant
+// short-circuit). All other actors must hold an entity grant (scope 'entity')
+// in the grants table, resolved via recursive actor/target group CTEs, OR own
+// the target through the own arm: entities.owner_id equals
+// public.profile_own_subject(actor) — the holder user of a personal profile;
+// NULL (so never a match) for party profiles, service accounts and system
+// actors. The own arm is not yet gated on the operation's ownership_confers
+// flag: owning the target satisfies every operation on that entity. Only
+// scope = 'entity' grants are read, so an owned-scope grant never acts as an
+// entity or wildcard grant on its target.
+//
+// The Authorizer does not implement the OwnerScopedTypeAuthorizer capability
+// yet: mod-core's authz.AuthorizeTypeIn helper falls back to AuthorizeType
+// (wildcard and type-entity grants only) for it.
 //
 // Authorize is an entity-level check: its target is always an entities.id, or
 // nil for "no specific entity". Operations with a nil target (list, or other
@@ -36,13 +49,13 @@
 // grant), but it is never a stand-in for the type id in a type-level check.
 //
 // The Authorizer's single-row check issues one recursive-CTE SQL query
-// (checkGrantOrOwn) that walks UP from the actor through actor groups, checks
-// for a grant between any actor-chain member and any target-chain member
-// (target walking UP to target groups) for any operation in the SatisfiedBy
-// closure, OR-ed with a check that the target entity's owner_id equals the
-// effective actor's entity id. A NULL owner_id matches no actor, so entities
-// that keep a NULL owner by design (corporation, authz_actor_group,
-// authz_target_group) stay inaccessible via this predicate.
+// (checkGrantOrOwn) that walks UP from the actor profile through actor groups,
+// checks for an entity grant between any actor-chain member and any
+// target-chain member (target walking UP to target groups) for any operation
+// in the SatisfiedBy closure, OR-ed with a check that the target entity's
+// owner_id equals profile_own_subject(actor). A NULL owner_id or a NULL own
+// subject matches nothing, so entities that keep a NULL owner by design and
+// actors without an own subject stay outside this predicate.
 //
 // Instance semantics: the target chain is also seeded with the entity of the
 // target's exact type, so a grant on a type's entity (directly or through a
@@ -161,10 +174,9 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 // coreAuthz.Authorizer must assert TypeAuthorizer and otherwise fall back to
 // Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID).
 //
-// The effective actor is whichever entity ID is set on ctx:
-//   - When SudoActorEntityID is set, that is the effective actor (admin is
-//     acting as the sudo user; the sudo user's permissions apply).
-//   - Otherwise ActorEntityID is the actor.
+// The effective actor is the acting profile, opctx.ProfileID. Under
+// impersonation that is the impersonated profile, so the target's own
+// permissions apply, never the administrator's.
 //
 // Flow:
 //  1. Resolve effective actor from context.
@@ -175,10 +187,10 @@ func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpoo
 //     against; only a wildcard grant, already checked in step 3, can satisfy
 //     a nil-target operation).
 //  5. If target != nil: run checkGrantOrOwn — a single recursive-CTE query
-//     that resolves a grant via the actor/target group chains (the target
-//     chain is seeded with the target and, unless the target is itself a type
-//     entity, the entity of its exact type), OR-ed with an entities.owner_id
-//     ownership check against the target.
+//     that resolves an entity grant via the actor/target group chains (the
+//     target chain is seeded with the target and, unless the target is itself
+//     a type entity, the entity of its exact type), OR-ed with the own arm
+//     (entities.owner_id = profile_own_subject(actor)).
 //
 // WARNING, instance semantics: the target chain is also seeded with the entity of the
 // target's exact type, so a grant on a type's entity (directly or through a
@@ -238,15 +250,11 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 		return ErrForbidden
 	}
 
-	// Run the recursive-CTE grant check, OR-ed with an entities.owner_id
-	// ownership check against the target — one query, one DB round-trip.
-	// Owning the target satisfies every operation on that entity (read,
-	// update, delete, assume, grant, revoke, ...); the own arm is not gated
-	// on the operation or on opIDs, mirroring the list-side own-arm in
-	// mod-core/api/authz/setup/grant_table.go, which is scoped only by the
-	// caller's op_ids closure and never by op identity within the arm
-	// itself. A genuine DB error propagates to the caller rather than being
-	// swallowed into a denial.
+	// Run the recursive-CTE grant check, OR-ed with the own arm
+	// (entities.owner_id = profile_own_subject(actor)) — one query, one DB
+	// round-trip. In this minimal port the own arm is not yet gated on the
+	// operation's ownership_confers flag. A genuine DB error propagates to
+	// the caller rather than being swallowed into a denial.
 	granted, err := a.checkGrantOrOwnDispatch(ctx, actorEntityID, *target, opIDs)
 	if err != nil {
 		return err
@@ -264,8 +272,8 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 // entities.id.
 //
 // The call is allowed when either holds:
-//   - the effective actor (sudo first), or an actor group in its chain, holds a
-//     wildcard grant (target_id IS NULL) whose operation is in the SatisfiedBy
+//   - the effective actor (the acting profile), or an actor group in its chain,
+//     holds a wildcard grant (scope 'entity', target_id IS NULL) whose operation is in the SatisfiedBy
 //     closure of operation, for example manage, which implies create; or
 //   - the actor chain holds a grant, with an operation in that closure, on the
 //     exact type's entity (types.entity_id of typeID), directly or on a target
@@ -328,7 +336,7 @@ func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID
 // operation; actorEntityID and opIDs are valid for any further, entity-level
 // check the caller chooses to make.
 func (a *Authorizer) authorizePrelude(ctx context.Context, operation string) (actorEntityID int64, opIDs []int32, done bool, err error) {
-	// Resolve effective actor. Assumed actor takes priority over real actor.
+	// Resolve the effective actor: the acting profile.
 	actorEntityID, ok := effectiveActor(ctx)
 	if !ok {
 		return 0, nil, true, ErrUnauthenticated
@@ -377,13 +385,15 @@ func (a *Authorizer) authorizePrelude(ctx context.Context, operation string) (ac
 	return actorEntityID, opIDs, false, nil
 }
 
-// effectiveActor returns the entity ID that should be used for policy checks.
-// It delegates to opctx.EffectiveActorEntityID, which applies the
-// sudo-first-then-actor policy (the sudo actor wins when one is set on ctx,
-// otherwise the real actor). The helper is retained as a package-local name
-// for the concept rather than being inlined at the call site.
+// effectiveActor returns the acting profile's entity id from the
+// AuthContext (opctx.ProfileID). A context without an AuthContext, or with a
+// non-positive profile id, has no actor.
 func effectiveActor(ctx context.Context) (int64, bool) {
-	return opctx.EffectiveActorEntityID(ctx)
+	id, ok := opctx.ProfileID(ctx)
+	if !ok || id <= 0 {
+		return 0, false
+	}
+	return id, true
 }
 
 // checkWildcardGrantDispatch calls wildcardGrantFn if set (test stub), otherwise
@@ -414,8 +424,9 @@ func (a *Authorizer) checkTypeGrantDispatch(ctx context.Context, actorEntityID, 
 }
 
 // checkWildcardGrant queries the grants table for a wildcard grant:
-// a row where actor_id is in the actor's transitive group chain and
-// target_id IS NULL and operation_id is in the opIDs closure.
+// a row where actor_id is in the actor's transitive group chain,
+// scope = 'entity', target_id IS NULL and operation_id is in the opIDs
+// closure.
 //
 // This implements the B4 mechanism from the Final design: a Go-side
 // EXISTS query before checkGrantOrOwn, replacing the is_admin column
@@ -437,6 +448,7 @@ SELECT EXISTS(
     SELECT 1 FROM grants g
     JOIN ActorChain ac ON g.actor_id = ac.aid
     WHERE g.operation_id = ANY($2::int[])
+      AND g.scope = 'entity'
       AND g.target_id IS NULL
 )`
 
@@ -448,8 +460,8 @@ SELECT EXISTS(
 	return exists, nil
 }
 
-// checkGrantOrOwn runs the recursive-CTE grant check, OR-ed with a generic,
-// resource-agnostic ownership check against entities.owner_id:
+// checkGrantOrOwn runs the recursive-CTE entity-grant check, OR-ed with the
+// own arm (entities.owner_id = profile_own_subject(actor)):
 //
 //	WITH RECURSIVE
 //	    ActorChain AS (
@@ -476,11 +488,12 @@ SELECT EXISTS(
 //	        JOIN ActorChain ac ON g.actor_id = ac.aid
 //	        JOIN TargetChain tc ON g.target_id = tc.tid
 //	        WHERE g.operation_id = ANY(opIDs)
+//	          AND g.scope = 'entity'
 //	    )
 //	    OR EXISTS (
 //	        SELECT 1 FROM entities e
 //	        WHERE e.id = targetEntityID
-//	          AND e.owner_id = actorEntityID
+//	          AND e.owner_id = public.profile_own_subject(actorEntityID)
 //	    )
 //
 // Instance semantics: TargetChain is seeded with the target AND the entity of
@@ -525,20 +538,23 @@ SELECT EXISTS(
 // accessible_*_ids_for_actor functions agree for type-grant holders, because
 // mod-core's GrantTableGenerator carries the matching arm.
 //
-// The ownership arm is a single, resource-agnostic predicate — it is not
-// scoped per resource type, and it is not gated on the operation or on
-// opIDs: owning the target satisfies every operation on that entity. It is
-// also not scoped by type_is_or_descends_from, unlike the analogous
-// list-side own-arm in mod-core/api/authz/setup/grant_table.go — that
-// predicate is load-bearing there only because that arm scans all of
-// entities; here the query already has one specific target entity id, so
-// type scoping would be meaningless.
+// Only scope = 'entity' grants are read, so an owned-scope grant never acts
+// as an entity grant on its target.
 //
-// e.owner_id = actorEntityID evaluates to NULL (not true) when owner_id IS
-// NULL, so a NULL-owner entity — corporation, authz_actor_group,
-// authz_target_group, by design — matches no actor and stays inaccessible
-// via this predicate. No COALESCE / IS NOT DISTINCT FROM is used, since
-// either would defeat that semantics.
+// The own arm is a single, resource-agnostic predicate: the target's owner
+// must be profile_own_subject(actor), the holder user of a personal profile
+// (NULL for party profiles, service accounts and system actors). In this
+// minimal port it is not yet gated on the operation's ownership_confers flag,
+// so owning the target satisfies every operation on that entity. It is not
+// scoped by type_is_or_descends_from, unlike the list-side own arm in
+// mod-core's generated access functions — that predicate is load-bearing
+// there only because that arm scans all of entities; here the query already
+// has one specific target entity id.
+//
+// The comparison evaluates to NULL (not true) when owner_id or the own
+// subject IS NULL, so a NULL-owner entity and an actor without an own subject
+// match nothing. No COALESCE / IS NOT DISTINCT FROM is used, since either
+// would defeat that semantics.
 //
 // Returns true if a matching grant exists or the actor owns the target.
 func (a *Authorizer) checkGrantOrOwn(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error) {
@@ -571,11 +587,12 @@ SELECT
         JOIN ActorChain ac ON g.actor_id = ac.aid
         JOIN TargetChain tc ON g.target_id = tc.tid
         WHERE g.operation_id = ANY($3::int[])
+          AND g.scope = 'entity'
     )
     OR EXISTS (
         SELECT 1 FROM entities e
         WHERE e.id = $2::bigint
-          AND e.owner_id = $1::bigint
+          AND e.owner_id = public.profile_own_subject($1::bigint)
     )`
 
 	var exists bool
@@ -606,6 +623,7 @@ SELECT
 //	    JOIN ActorChain ac ON g.actor_id = ac.aid
 //	    JOIN TargetChain tc ON g.target_id = tc.tid
 //	    WHERE g.operation_id = ANY(opIDs)
+//	      AND g.scope = 'entity'
 //	)
 //
 // Properties:
@@ -646,6 +664,7 @@ SELECT EXISTS (
     JOIN ActorChain ac ON g.actor_id = ac.aid
     JOIN TargetChain tc ON g.target_id = tc.tid
     WHERE g.operation_id = ANY($3::int[])
+      AND g.scope = 'entity'
 )`
 
 	var exists bool

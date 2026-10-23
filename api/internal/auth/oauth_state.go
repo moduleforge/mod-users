@@ -38,9 +38,9 @@ func (s StatePayload) Expired(now time.Time) bool {
 }
 
 // StateSigner signs and verifies OAuth state payloads using HMAC-SHA256.
-// The key is the explicit JWT_SECRET when set (shared with the HS256 local JWT
-// signer, so the operator has no second secret to rotate), otherwise a key
-// derived from the EdDSA signing key under LabelOAuthState; see OAuthStateKey.
+// The key is the explicit JWT_SECRET when set (its only remaining use),
+// otherwise a key derived from the Ed25519 signing key under
+// LabelOAuthState; see OAuthStateKey.
 type StateSigner struct {
 	key []byte
 }
