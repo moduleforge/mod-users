@@ -42,7 +42,7 @@ phases:
             branch: plan/identity-model-impl-06-003
             commit:
                 - cb9176d
-            merge: null
+            merge: 5126cdaf44027caee40b874f59dd6b521d6fc32c
         - number: 4
           slug: users-identifiers-credentials-challenges
           title: Users Identifiers Credentials Challenges
