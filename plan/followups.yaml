@@ -1408,3 +1408,13 @@ items:
         - cross-repo/origin:core
         - effort:unspecified
       text: 'mod-core identity-model-impl (phase 10 task 001, finding KUfk) fixed an authorization bypass in the generated owned-scope arm: an owned-scope grant on a self-owned entity (for example a user whose owner_id is itself) reached the owner''s own row. mod-core now adds `e.id <> e.owner_id` to the owned-scope arm of the generator output and to the authztest EntitySemantic.Authorize single-row query. mod-users'' production Authorizer (checkGrantOrOwn and the owned-scope query it uses) must apply the same exclusion, with an integration test granting owned-scope on a self-owned user and asserting the user''s own row is denied. mod-users plan identity-model-impl phase 08 task 001 should absorb this; if that task is already written, add it to its requirements.'
+    - title: sqlc schema lacks mod-core tables
+      id: tC3F
+      date: "2026-10-23"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/phase:users-identity-core
+        - plan/slug:identity-model-impl
+      text: 'model/sqlc.yaml points sqlc''s schema at ./migrations/sql only, so a query in model/queries/ that reads a mod-core relation (public.profiles, public.principals, public.entities, public.natural_persons, public.profile_policy_confirmations) fails `sqlc compile` / `make verify` with ''relation "profiles" does not exist'' (verified with sqlc v1.31.1). mod-users queries over the new mod_users schema routinely need those joins (directory summaries, profile lists, principal disable/enable, session revocation by profile). Options: add the composed mod-core migrations to the sqlc schema list (for example the schema/migrations directory `make compose` assembles, or $(SIBLINGS_DIR)/mod-core/model/migrations), or keep such reads in Go over coredb. Two related sqlc behaviors when wrapping the model/migrations/sql/0100_baseline.sql functions: a function declared RETURNS TABLE is not typed (sqlc returns interface{}), which is why mod_users.session_liveness and mod_users.credential_liveness use OUT parameters; and the TEXT[] OUT parameter amr of session_liveness is generated as pgtype.Text, so a wrapper query needs an explicit cast or a column override to get []string.'
