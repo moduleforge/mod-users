@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Identifier delete vs bound credentials
-      id: 2yby
-      date: "2026-10-23"
-      tags:
-        - type:conflict
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: 'The identifier-removal route (DELETE /v1/me/identifiers/{uuid}) implies hard-deleting a mod_users.user_identifiers row, but credentials are revoked and never deleted, and model/migrations/sql/0100_baseline.sql binds them with ON DELETE RESTRICT foreign keys: mod_users.cred_password.identifier_id (nullable) and mod_users.cred_email_otp.identifier_id (NOT NULL). Once an identifier has ever had a password or email-OTP credential bound to it (including the email_otp credential created automatically on verification), deleting the identifier fails with 23503 even after those credentials are revoked. The service implementing identifier removal must choose a model, for example: unbind revoked passwords (identifier_id NULL) and archive identifiers (an archived_at column, excluded from user_identifiers_kind_value_uq by a partial index) instead of deleting them, or relax cred_email_otp.identifier_id. Deleting the cred_* rows is not an option (it would orphan credentials rows of that kind). mod_users.auth_challenges.identifier_id already cascades and is not affected.'
     - title: sqlc schema lacks mod-core tables
       id: tC3F
       date: "2026-10-23"
@@ -1047,4 +1038,13 @@ items:
           explicitly from a verified session. Also stamp a distinct JWS typ header
           on audience tokens (for example "aud+jwt"), so offline verifiers can tell
           the two token classes apart.
-closed: []
+closed:
+    - id: 2yby
+      title: Identifier delete vs bound credentials
+      disposition: dismissed
+      reason: |-
+        Duplicate of aA5K: the same conflict. DELETE /v1/me/identifiers/{uuid} cannot delete an
+        identifier once a password or email_otp credential was ever bound to it, because the
+        cred_password/cred_email_otp identifier_id ON DELETE RESTRICT foreign keys meet the
+        "credentials are revoked, never deleted" rule. aA5K carries the escalation.
+      date: "2026-10-24"
