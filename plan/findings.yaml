@@ -9,15 +9,6 @@ items:
         - priority:medium
         - effort:small
       text: deploy/k8s/base/deployment.yaml and deploy/cloudrun/service.yaml still inject JWT_SECRET from a required secret (users-api-secrets/jwt-secret) and never wire JWT_SIGNING_KEY or JWT_SIGNING_KID. After the EdDSA-only change in api/internal/config (config.Load, loadJWTSigning, bootstrapSigningKeyFromDB), JWT_SECRET is optional and keys only the OAuth state HMAC (api/internal/auth/derived_keys.go OAuthStateKey), and access tokens are signed by JWT_SIGNING_KEY or, when it is unset, a key persisted in mod_users.auth_signing_keys. The manifests should make jwt-secret optional and show how to supply JWT_SIGNING_KEY (and JWT_VERIFY_PUBLIC_KEYS for rotation) from a secret, with the new AUTH_* lifetime and audience variables where a deployment needs non-default values.
-    - title: 'Task 008: wire NewSessionService(pool, q, cor'
-      id: 1Nqm
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Task 008: wire NewSessionService(pool, q, coreQ, az, obs, signer, challenges, SessionConfigFrom(cfg)) and authhandlers.New(pool, q, coreQ, users, creds, challenges, sessions, oauth, sender, guiBase); re-export SessionHandler and RegisterSessionRoutes from internal/handlers/session; mount OIDC step-up start on /v1/session; document device_token, lock remedy kinds and app_login_not_granted lock reason in OpenAPI.'
     - title: 'Decision needed: password reset does not copy'
       id: 1xmT
       date: "2026-10-23"
@@ -1041,4 +1032,13 @@ closed:
         Already fixed. api/internal/handlers/auth/oidc.go has no build constraint (it starts with
         "package auth"), OIDCHandler.Start (oidc.go:110) and Callback (oidc.go:156) exist, and
         `go build ./...` and `go vet ./internal/handlers/...` pass in api/.
+      date: "2026-10-24"
+    - id: 1Nqm
+      title: 'Task 008: wire NewSessionService(pool, q, cor'
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/cmd/server/main.go:376 constructs NewSessionService. main.go:428 mounts
+        session.RegisterSessionRoutes and main.go:429 mounts the OIDC step-up start on /v1/session.
+        api/openapi.yaml documents device_token (lines 276 and 425), the lock remedy (351-360) and
+        users.app_login_not_granted (113 and 1078).
       date: "2026-10-24"
