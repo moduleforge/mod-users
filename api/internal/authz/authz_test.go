@@ -15,11 +15,11 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-// ctxWithActor returns a context whose AuthContext acts as the profile with
+// ctxAsProfile returns a context whose AuthContext acts as the profile with
 // entity id profileID in an ordinary session. The principal id deliberately
 // differs from the profile id, so a test that sees the profile id proves the
 // Authorizer reads opctx.ProfileID, never the principal.
-func ctxWithActor(profileID int64) context.Context {
+func ctxAsProfile(profileID int64) context.Context {
 	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
 		PrincipalID: profileID + 1000,
 		ProfileID:   profileID,
@@ -130,7 +130,7 @@ func TestAuthorize_WildcardAdmin_AllowsAnything(t *testing.T) {
 	// So we cannot test wildcard without opReg. Use a stub opReg.
 	az := authz.NewWithStubOpReg(wildcardAllowFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	tests := []struct {
 		name      string
@@ -158,7 +158,7 @@ func TestAuthorize_WildcardAdmin_AllowsAnything(t *testing.T) {
 func TestAuthorize_NonWildcard_NilTargetDenied(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 
-	ctx := ctxWithActor(7)
+	ctx := ctxAsProfile(7)
 
 	for _, op := range []string{"create", "list", "manage"} {
 		t.Run(op, func(t *testing.T) {
@@ -175,7 +175,7 @@ func TestAuthorize_WildcardDBError(t *testing.T) {
 	dbErr := errors.New("pool connection lost")
 	az := authz.NewWithStubOpReg(wildcardErrFn(dbErr))
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected DB error to propagate, got: %v", err)
@@ -188,7 +188,7 @@ func TestAuthorize_UnknownOperation_NonAdmin(t *testing.T) {
 	// wildcardDenyFn: actor has no wildcard grant. Unknown op → fallback to
 	// manage opIDs wildcard check → also denied → ErrForbidden.
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	err := az.Authorize(ctx, "unknown_op", ptr(int64(1)))
 	if !errors.Is(err, authz.ErrForbidden) {
@@ -200,7 +200,7 @@ func TestAuthorize_UnknownOperation_NonAdmin(t *testing.T) {
 // actor can perform unknown operation slugs (the manage fallback allows it).
 func TestAuthorize_UnknownOperation_WildcardAdmin(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardAllowFn)
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	// Wildcard admin: unknown op → fallback to manage opIDs → wildcard check → allowed.
 	err := az.Authorize(ctx, "unknown_op", ptr(int64(1)))
@@ -242,7 +242,7 @@ func TestAuthorize_ProfileIsTheActor(t *testing.T) {
 		return true, nil
 	})
 
-	if err := az.Authorize(ctxWithActor(7), "read", ptr(int64(99))); err != nil {
+	if err := az.Authorize(ctxAsProfile(7), "read", ptr(int64(99))); err != nil {
 		t.Fatalf("Authorize: %v", err)
 	}
 	if gotActor != 7 {
@@ -274,7 +274,7 @@ func TestAuthorize_OwnEntity_Allowed(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnAllowFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	for _, op := range []string{"read", "update", "delete", "grant"} {
 		t.Run(op, func(t *testing.T) {
@@ -291,7 +291,7 @@ func TestAuthorize_NonOwner_NoGrant_Denied(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for non-owner with no grant, got: %v", err)
@@ -310,7 +310,7 @@ func TestAuthorize_NullOwnerTarget_Denied(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(100)))
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for NULL-owner target, got: %v", err)
@@ -327,7 +327,7 @@ func TestAuthorize_GrantOrOwnDBError(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnErrFn(dbErr))
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected DB error to propagate, got: %v", err)
@@ -397,7 +397,7 @@ func TestAuthorize_WildcardAdmin_Create_InspectsOpIDs(t *testing.T) {
 	}
 
 	az := authz.NewWithStubOpReg(wildcardGrantFn)
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	if err := az.Authorize(ctx, "create", nil); err != nil {
 		t.Errorf(`expected wildcard-manage actor to be allowed "create", got: %v`, err)
@@ -457,7 +457,7 @@ func TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied(t *testing.T) {
 			var typeCalls []typeGrantCall
 			az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-			err := az.AuthorizeType(ctxWithActor(1), op, typeID)
+			err := az.AuthorizeType(ctxAsProfile(1), op, typeID)
 			if !errors.Is(err, authz.ErrForbidden) {
 				t.Errorf("expected ErrForbidden for entity-N owner with typeID==N, got: %v", err)
 			}
@@ -482,7 +482,7 @@ func TestAuthorizeType_WildcardHolder_Allowed(t *testing.T) {
 			var typeCalls []typeGrantCall
 			az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-			if err := az.AuthorizeType(ctxWithActor(1), op, 7); err != nil {
+			if err := az.AuthorizeType(ctxAsProfile(1), op, 7); err != nil {
 				t.Errorf("wildcard holder should be allowed %q, got: %v", op, err)
 			}
 			if calls != 0 {
@@ -507,8 +507,8 @@ func TestAuthorizeType_TypeGrant_Allowed(t *testing.T) {
 		op   string
 		want int64 // effective actor
 	}{
-		{"actor/create", ctxWithActor(1), "create", 1},
-		{"actor/list", ctxWithActor(1), "list", 1},
+		{"actor/create", ctxAsProfile(1), "create", 1},
+		{"actor/list", ctxAsProfile(1), "list", 1},
 		{"impersonating", ctxImpersonating(1, 50), "create", 50},
 	}
 	for _, tc := range cases {
@@ -550,7 +550,7 @@ func TestAuthorizeType_TypeGrantMiss_Forbidden(t *testing.T) {
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	err := az.AuthorizeType(ctxAsProfile(1), "create", 7)
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden, got: %v", err)
 	}
@@ -567,7 +567,7 @@ func TestAuthorizeType_TypeGrantDBError(t *testing.T) {
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, dbErr))
 
-	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	err := az.AuthorizeType(ctxAsProfile(1), "create", 7)
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected type-grant DB error to propagate, got: %v", err)
 	}
@@ -622,7 +622,7 @@ func TestAuthorizeType_UnknownOperation(t *testing.T) {
 		az := authz.NewWithStubOpReg(wildcardDenyFn)
 		var typeCalls []typeGrantCall
 		az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
-		err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7)
+		err := az.AuthorizeType(ctxAsProfile(1), "unknown_op", 7)
 		if !errors.Is(err, authz.ErrForbidden) {
 			t.Errorf("non-admin with unknown operation should return ErrForbidden, got: %v", err)
 		}
@@ -634,7 +634,7 @@ func TestAuthorizeType_UnknownOperation(t *testing.T) {
 		az := authz.NewWithStubOpReg(wildcardAllowFn)
 		var typeCalls []typeGrantCall
 		az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
-		if err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7); err != nil {
+		if err := az.AuthorizeType(ctxAsProfile(1), "unknown_op", 7); err != nil {
 			t.Errorf("wildcard-manage holder with unknown operation should be allowed, got: %v", err)
 		}
 		if len(typeCalls) != 0 {
@@ -651,7 +651,7 @@ func TestAuthorizeType_BadTypeID(t *testing.T) {
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 
 	for _, typeID := range []int64{0, -1} {
-		err := az.AuthorizeType(ctxWithActor(1), "create", typeID)
+		err := az.AuthorizeType(ctxAsProfile(1), "create", typeID)
 		if !errors.Is(err, authz.ErrForbidden) {
 			t.Errorf("typeID=%d should return ErrForbidden even for a wildcard holder, got: %v", typeID, err)
 		}
@@ -670,7 +670,7 @@ func TestAuthorizeType_WildcardDBError(t *testing.T) {
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 
-	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	err := az.AuthorizeType(ctxAsProfile(1), "create", 7)
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected DB error to propagate, got: %v", err)
 	}
