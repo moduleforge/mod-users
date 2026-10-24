@@ -27,15 +27,6 @@ items:
         - priority:high
         - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
-    - title: Task 008 must add api/openapi.yaml entries fo
-      id: s2Tg
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: Task 008 must add api/openapi.yaml entries for the new routes.
     - title: internal/handlers/oidc_config.go (kept file)
       id: 1uxT
       date: "2026-10-23"
@@ -1033,4 +1024,12 @@ closed:
         ReadPrincipalSummaries (139-143). main.go:438 mounts me.RegisterMeRoutes and main.go:445
         mounts principals.RegisterPrincipalRoutes, each inside a route group that uses
         requireAuth = auth.NewRequireAuth(authenticator) (main.go:416, 437, 444).
+      date: "2026-10-24"
+    - id: s2Tg
+      title: Task 008 must add api/openapi.yaml entries fo
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/openapi.yaml has 39 /v1/auth, /v1/session, /v1/me and /v1/principals
+        path entries, including /v1/me/identifiers/{uuid} (1889), /v1/session/switch (1608) and the
+        anonymous device_token route (1262).
       date: "2026-10-24"
