@@ -211,32 +211,6 @@ items:
           same setting. Guests are bring-your-own principals with personal profiles,
           so refusing is the reading consistent with the identity model. Add tests
           for both routes with allow_byo_identity=false.
-    - title: The package and Authorize doc comments still…
-      id: 2TCI
-      date: "2026-10-24"
-      tags:
-        - type:bug
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/authz/authz.go
-        lines: 1-75
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          The package and Authorize doc comments still describe the removed operator surface: 'assume'
-          of user accounts, installing SSH keys 'through the operator register and revoke routes' and
-          natural_person type-grant escalation via assume. Phase 6 deleted assume, the operator routes
-          and user_accounts, and the file header already says this is a minimal port, so these
-          paragraphs now describe routes and operations that do not exist and could mislead a reader
-          assessing escalation paths.
-        recommendation:
-          Trim the instance-semantics WARNING to the operations that still exist (read, update, delete,
-          grant, revoke) and drop the assume and operator SSH key sentences, or mark them as describing
-          the pre-identity-model surface.
     - title: next-steps.md describes MERGE-V2 as implemen…
       id: mEJv
       date: "2026-10-24"
@@ -841,4 +815,12 @@ closed:
         Duplicate of Nobq. It describes the same callbackLink gap
         (oidc_flows.go:381-434, no PolicyFor and no ConfinedToPartyID) and asks the same
         confine/refuse/allow decision. Nobq (security) and wZsk carry the escalation.
+      date: "2026-10-24"
+    - id: 2TCI
+      title: The package and Authorize doc comments still…
+      disposition: dismissed
+      reason: |-
+        Already planned: 8/001 (rewrite-authorization-engine). Its requirement 9 rewrites the
+        package documentation of api/internal/authz/authz.go and removes all assume, sudo and
+        "account holder" wording. Its validation greps for the stale terms.
       date: "2026-10-24"
