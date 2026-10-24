@@ -9,15 +9,6 @@ items:
         - priority:medium
         - effort:small
       text: deploy/k8s/base/deployment.yaml and deploy/cloudrun/service.yaml still inject JWT_SECRET from a required secret (users-api-secrets/jwt-secret) and never wire JWT_SIGNING_KEY or JWT_SIGNING_KID. After the EdDSA-only change in api/internal/config (config.Load, loadJWTSigning, bootstrapSigningKeyFromDB), JWT_SECRET is optional and keys only the OAuth state HMAC (api/internal/auth/derived_keys.go OAuthStateKey), and access tokens are signed by JWT_SIGNING_KEY or, when it is unset, a key persisted in mod_users.auth_signing_keys. The manifests should make jwt-secret optional and show how to supply JWT_SIGNING_KEY (and JWT_VERIFY_PUBLIC_KEYS for rotation) from a secret, with the new AUTH_* lifetime and audience variables where a deployment needs non-default values.
-    - title: 'Task 006: remove the build constraint from ap'
-      id: Fhun
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Task 006: remove the build constraint from api/internal/handlers/auth/oidc.go; OIDCHandler must provide Start and Callback to satisfy auth.OIDCRoutes; use CreateSessionInTx, AddFactorInTx, TokenForSessionInTx, UnauthenticatedActingContext.'
     - title: 'Task 008: wire NewSessionService(pool, q, cor'
       id: 1Nqm
       date: "2026-10-23"
@@ -1042,4 +1033,12 @@ closed:
         Duplicate of aA5K. It describes the same blocked identifier removal (RemoveIdentifierInTx,
         api/internal/service/user_service.go:581-629, returns ErrIdentifierInUse on 23503) and asks
         the same contract question. aA5K carries the escalation.
+      date: "2026-10-24"
+    - id: Fhun
+      title: 'Task 006: remove the build constraint from ap'
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/internal/handlers/auth/oidc.go has no build constraint (it starts with
+        "package auth"), OIDCHandler.Start (oidc.go:110) and Callback (oidc.go:156) exist, and
+        `go build ./...` and `go vet ./internal/handlers/...` pass in api/.
       date: "2026-10-24"
