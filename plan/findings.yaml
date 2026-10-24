@@ -27,15 +27,6 @@ items:
         - priority:high
         - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
-    - title: Task 008 must call service.RegisterDisplayRen
-      id: nRoQ
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: Task 008 must call service.RegisterDisplayRenderers(displayReg, pool) in cmd/server/main.go.
     - title: Task 008 must re-export ReadPrincipalSummarie
       id: bGov
       date: "2026-10-23"
@@ -1034,4 +1025,12 @@ closed:
         Already fixed. api/cmd/server/main.go:379 calls userSvc.WithSelfService(...), and
         moduleforge.module.yaml:134 uses the constructor usersservice.NewUserServiceWithSelfService,
         which wraps WithSelfService (api/usersservice/service.go:51-65).
+      date: "2026-10-24"
+    - id: nRoQ
+      title: Task 008 must call service.RegisterDisplayRen
+      disposition: dismissed
+      reason: |-
+        Already fixed for the dev server: api/cmd/server/main.go:247 calls
+        usersservice.RegisterDisplayRenderers(displayReg, pool). The separate gap for
+        mfgen-generated apps is xgGT.
       date: "2026-10-24"
