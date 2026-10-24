@@ -126,7 +126,7 @@ phases:
             branch: plan/identity-model-impl-06-010
             commit:
                 - 6ef9004
-            merge: null
+            merge: f24fa926bf03fb55ccbc59906014e98833bb0c5b
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
