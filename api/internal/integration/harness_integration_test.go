@@ -251,6 +251,11 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "integration: open pool: %v\n", err)
 		os.Exit(1)
 	}
+	if err := checkClockSkew(context.Background(), pool); err != nil {
+		fmt.Fprintf(os.Stderr, "integration: %v\n", err)
+		pool.Close()
+		os.Exit(1)
+	}
 	s, err := newStack(context.Background(), pool, audit != "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "integration: compose stack: %v\n", err)
@@ -261,6 +266,30 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	pool.Close()
 	os.Exit(code)
+}
+
+// maxClockSkew is the largest difference between the database clock and this
+// process's clock the suite tolerates. The module stamps times with the
+// database clock (auth_time, expiries) and compares them with its own, so a
+// database container whose clock drifted (for example after the host slept)
+// makes freshness and expiry assertions fail for reasons that have nothing to
+// do with the code under test.
+const maxClockSkew = 10 * time.Second
+
+func checkClockSkew(ctx context.Context, pool *pgxpool.Pool) error {
+	var dbNow time.Time
+	before := time.Now()
+	if err := pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&dbNow); err != nil {
+		return fmt.Errorf("read database clock: %w", err)
+	}
+	skew := dbNow.Sub(before)
+	if skew < 0 {
+		skew = -skew
+	}
+	if skew > maxClockSkew {
+		return fmt.Errorf("the database clock differs from this machine's by %v (limit %v); resync the Postgres container's clock and rerun", skew.Round(time.Second), maxClockSkew)
+	}
+	return nil
 }
 
 func checkPrereqs() error {

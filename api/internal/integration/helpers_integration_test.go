@@ -3,12 +3,17 @@
 package integration
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -85,3 +90,12 @@ func newRequest(method, path, token string) *http.Request {
 }
 
 func newRecorder() *httptest.ResponseRecorder { return httptest.NewRecorder() }
+
+func errorsIs(err, target error) bool { return errors.Is(err, target) }
+
+func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
+
+func parseUUID(s string) uuid.UUID {
+	id, _ := uuid.Parse(s)
+	return id
+}
