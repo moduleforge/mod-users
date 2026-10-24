@@ -27,15 +27,6 @@ items:
         - priority:high
         - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
-    - title: Task 008 must re-export ReadPrincipalSummarie
-      id: bGov
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: Task 008 must re-export ReadPrincipalSummaries, DirectoryService, and the two handlers (handlers/me RegisterMeRoutes, handlers/principals RegisterPrincipalRoutes), and mount /v1/me and /v1/principals behind NewRequireAuth.
     - title: Task 008 must add api/openapi.yaml entries fo
       id: s2Tg
       date: "2026-10-23"
@@ -1033,4 +1024,13 @@ closed:
         Already fixed for the dev server: api/cmd/server/main.go:247 calls
         usersservice.RegisterDisplayRenderers(displayReg, pool). The separate gap for
         mfgen-generated apps is xgGT.
+      date: "2026-10-24"
+    - id: bGov
+      title: Task 008 must re-export ReadPrincipalSummarie
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/usersservice/service.go re-exports DirectoryService (129-136) and
+        ReadPrincipalSummaries (139-143). main.go:438 mounts me.RegisterMeRoutes and main.go:445
+        mounts principals.RegisterPrincipalRoutes, each inside a route group that uses
+        requireAuth = auth.NewRequireAuth(authenticator) (main.go:416, 437, 444).
       date: "2026-10-24"
