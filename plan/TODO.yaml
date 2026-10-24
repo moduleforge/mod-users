@@ -1,6 +1,9 @@
 slug: identity-model-impl
 version: 1
 title: ""
+remediation:
+    rounds: 1
+    tasks_added: 0
 phases:
     - number: 6
       slug: users-identity-core
@@ -377,3 +380,9 @@ phases:
             branch: null
             commit: []
             merge: null
+    - number: 12
+      slug: remediation-01
+      title: Remediation Round 1
+      kind: remediation
+      remediates_phase: 6
+      tasks: []
