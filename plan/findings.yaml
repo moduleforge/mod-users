@@ -27,15 +27,6 @@ items:
         - priority:high
         - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
-    - title: Task 008 must call UserService.WithSelfServic
-      id: LKRp
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: Task 008 must call UserService.WithSelfService in the facade or manifest.
     - title: Task 008 must call service.RegisterDisplayRen
       id: nRoQ
       date: "2026-10-23"
@@ -1035,4 +1026,12 @@ closed:
         Already fixed. oidc_linkmode_test.go no longer exists under api/internal/handlers/auth/.
         oidc_test.go compiles against the current OIDCHandler API: `go vet ./internal/handlers/...`
         passes.
+      date: "2026-10-24"
+    - id: LKRp
+      title: Task 008 must call UserService.WithSelfServic
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/cmd/server/main.go:379 calls userSvc.WithSelfService(...), and
+        moduleforge.module.yaml:134 uses the constructor usersservice.NewUserServiceWithSelfService,
+        which wraps WithSelfService (api/usersservice/service.go:51-65).
       date: "2026-10-24"
