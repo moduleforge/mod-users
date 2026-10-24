@@ -189,4 +189,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Remove the leftover throwaway Postgres container mod-users-authz-integ-t009 (port 49420) from the interrupted run: docker rm -f mod-users-authz-integ-t009.'
+    - title: Compose omits mod-audit audit_log migration
+      id: LPl2
+      date: "2026-10-24"
+      tags:
+        - type:bug
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: model/Makefile's compose target (which feeds make dev.start, migrate.up and the integration suites) copies only the mod-core and mod-authz migrations plus mod-users' own, so schema/migrations has no audit_log table. api/cmd/server/main.go puts mod-audit's observer (auditservice.New) in the observer group, so the first sign-in or other observed write against a database built from that composed directory fails with "relation audit_log does not exist". Add mod-audit's model/migrations (0400_audit_log.sql) to compose, resolved the same way as CORE_DIR and AUTHZ_DIR (go list -m github.com/moduleforge/audit-model, falling back to the sibling path). api/internal/integration/harness_integration_test.go currently works around it by copying the composed directory and adding the audit migration to a temporary copy; it can then drop that copy.
 closed: []
