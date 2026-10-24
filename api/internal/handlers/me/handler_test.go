@@ -2,6 +2,8 @@ package me
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -12,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
+	svc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
 func TestRegisterMeRoutes(t *testing.T) {
@@ -157,4 +160,48 @@ func TestRequestValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWriteError_RendersTheSharedEnvelopes(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPut, "/", nil)
+
+	t.Run("step-up required is the shared apiresp action-required envelope", func(t *testing.T) {
+		t.Parallel()
+		rec := httptest.NewRecorder()
+		writeError(rec, req, fmt.Errorf("update self: %w", svc.ErrStepUpRequired))
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status = %d, want 409", rec.Code)
+		}
+		var body struct {
+			Action struct {
+				Code, Message, Path string
+			} `json:"action"`
+			Error json.RawMessage `json:"error"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Action.Code != "users.step_up_required" || body.Action.Message == "" || body.Action.Path != "/step-up" || body.Error != nil {
+			t.Errorf("body = %s, want only the users.step_up_required action", rec.Body.String())
+		}
+	})
+
+	t.Run("an AuthError keeps its own status and code", func(t *testing.T) {
+		t.Parallel()
+		rec := httptest.NewRecorder()
+		writeError(rec, req, svc.ErrBYOIdentityDisabled)
+		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"users.byo_identity_disabled"`) {
+			t.Errorf("response = %d %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("an unexpected error is a 500 that never echoes it", func(t *testing.T) {
+		t.Parallel()
+		rec := httptest.NewRecorder()
+		writeError(rec, req, errors.New("pq: password authentication failed for user postgres"))
+		if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "postgres") {
+			t.Errorf("response = %d %s", rec.Code, rec.Body.String())
+		}
+	})
 }

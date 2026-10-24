@@ -97,3 +97,30 @@ and fixtures in place, so phase-exit checks can run together).
 - After the existing tests compile and pass again.
 - After the session and carrier tests.
 - After the credential, OIDC and client-credentials tests.
+
+## Status
+
+- Outcome: succeeded (2026-10-24).
+- Validation (logs under `.flow/validation-logs/`):
+  - `make build.model build.api`, `make lint.model lint.api`, `cd model && make verify`, `make test.model test.api` pass. `go test -race ./...` in `api/` passes. `go vet` passes with and without `-tags=integration`.
+  - `make -C api test.integration` (authz, config, integration packages) passes against a throwaway `postgres:16` with mod-core, mod-authz and mod-audit linked.
+  - The `ordertest.(Actor|Sudo|SudoOnly)|WithActor\(|ActorEntityID|UserAccount` grep over `api/**/*_test.go` returns nothing. The `ctxWithActor` helper in `api/internal/authz/authz_test.go` was renamed `ctxAsProfile` so the grep is empty.
+  - The aggregate `make build`, `make test` and `make lint` still fail in `gui/`: `@moduleforge/core-gui` is unresolved because `mod-core/gui` is not built in the linked sibling worktree. This is not caused by this task.
+- Pending phases: mod-authz phases 12 and 13 and mod-audit phase 20 are all done and merged in the linked plan worktrees. Nothing is pending.
+- Migrated or removed:
+  - Deleted the tests of removed behavior in `api/internal/service`, `api/internal/handlers` and `api/internal/handlers/auth`.
+  - Ported the OIDC config and providers tests to the new `db` row types.
+  - Rewrote `internal/handlers/auth` `oidc_test.go`, `order_test.go` and `emailcode_bounded_test.go` for the new handler API.
+  - Moved `api/internal/config/signing_key_bootstrap_integration_test.go` to `signing_key` naming.
+  - Updated `api/scripts/check-server-error-literals.sh` to expect 0 carve-outs.
+- Added:
+  - `api/internal/integration` (build tag `integration`): the composed HTTP stack over Postgres with the real mod-audit observer.
+    - Covers sessions, carrier and middleware, credentials, OIDC (the IdP replaced by `OAuth.ExchangeFn`), client credentials, apps and the invite-only gate, the audit vocabulary, `LinkOIDCInTx`, `ReadPrincipalSummaries` on a pool of one, and ordertest-based route order tests for `/v1/me` and `/v1/principals`.
+  - `api/internal/authz/owned_scope_integration_test.go` (U27).
+  - Unit tests: `api/handlers/require_auth_mount_test.go`, `internal/handlers/session/handler_test.go`, `internal/service/session_service_test.go`, and a `writeError` step-up test in `internal/handlers/me`.
+  - `api/Makefile` `test.integration` and the `AGENTS.md` recipe now cover all three integration packages.
+- Decisions:
+  - The suite fails fast if the database clock differs from the host clock by more than 10 seconds (a drifted Docker VM clock caused false failures).
+  - ordertest cannot model the masked-404 authorization of `/v1/principals`, so those cases are explicit tests.
+  - An ordinary user's `/v1/principals` list contains only itself.
+- Finding filed: `model/Makefile` compose omits mod-audit's `audit_log` migration (LPl2).

@@ -23,15 +23,15 @@ import (
 // (though in practice we stay on the test goroutine).
 type fakeQuerier struct {
 	mu        sync.Mutex
-	row       db.OidcConfig
-	providers map[string]db.OidcProvider
+	row       db.GetOIDCConfigRow
+	providers map[string]db.ListOIDCProvidersRow
 }
 
-func newFakeQuerier(initial db.OidcConfig) *fakeQuerier {
-	return &fakeQuerier{row: initial, providers: map[string]db.OidcProvider{}}
+func newFakeQuerier(initial db.GetOIDCConfigRow) *fakeQuerier {
+	return &fakeQuerier{row: initial, providers: map[string]db.ListOIDCProvidersRow{}}
 }
 
-func (f *fakeQuerier) GetOIDCConfig(ctx context.Context) (db.OidcConfig, error) {
+func (f *fakeQuerier) GetOIDCConfig(ctx context.Context) (db.GetOIDCConfigRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.row, nil
@@ -71,14 +71,14 @@ func (f *fakeQuerier) SetOIDCProviderEnabled(ctx context.Context, arg db.SetOIDC
 		f.providers[arg.ID] = existing
 		return nil
 	}
-	f.providers[arg.ID] = db.OidcProvider{ID: arg.ID, Enabled: arg.Enabled}
+	f.providers[arg.ID] = db.ListOIDCProvidersRow{ID: arg.ID, Enabled: arg.Enabled}
 	return nil
 }
 
-func (f *fakeQuerier) ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error) {
+func (f *fakeQuerier) ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]db.OidcProvider, 0, len(f.providers))
+	out := make([]db.ListOIDCProvidersRow, 0, len(f.providers))
 	for _, p := range f.providers {
 		out = append(out, p)
 	}
@@ -103,7 +103,7 @@ func newEmptyOAuth(t *testing.T) *auth.OAuth {
 // newHandler wires a handler with a starting DB row and empty env
 // registry / empty OAuth — enough to cover the confirm/status/saved
 // branches without triggering network init.
-func newHandler(t *testing.T, initial db.OidcConfig) (*OIDCConfigHandler, *fakeQuerier) {
+func newHandler(t *testing.T, initial db.GetOIDCConfigRow) (*OIDCConfigHandler, *fakeQuerier) {
 	t.Helper()
 	fq := newFakeQuerier(initial)
 	h := NewOIDCConfigHandler(OIDCConfigDeps{
@@ -122,7 +122,7 @@ func newHandler(t *testing.T, initial db.OidcConfig) (*OIDCConfigHandler, *fakeQ
 // TestStatus_Unconfirmed covers the initial unconfirmed state: no env
 // providers, no opt_out, no token yet.
 func TestStatus_Unconfirmed(t *testing.T) {
-	h, _ := newHandler(t, db.OidcConfig{ID: 1})
+	h, _ := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/oidc-config/status", nil)
 	rr := httptest.NewRecorder()
@@ -150,7 +150,7 @@ func TestStatus_Unconfirmed(t *testing.T) {
 // first call generates + persists a hash; second call (state still
 // unconfirmed) returns empty plaintext because the token is reused.
 func TestEnsureSetupToken_GeneratesAndReuses(t *testing.T) {
-	h, fq := newHandler(t, db.OidcConfig{ID: 1})
+	h, fq := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 
 	first, err := h.EnsureSetupToken(context.Background())
 	if err != nil {
@@ -179,7 +179,7 @@ func TestEnsureSetupToken_GeneratesAndReuses(t *testing.T) {
 // The prior plaintext was unrecoverable by construction, so rotation
 // does not weaken one-time-use semantics.
 func TestEnsureSetupToken_RotatesOnRestart(t *testing.T) {
-	h, fq := newHandler(t, db.OidcConfig{ID: 1})
+	h, fq := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 
 	first, err := h.EnsureSetupToken(context.Background())
 	if err != nil {
@@ -227,7 +227,7 @@ func TestEnsureSetupToken_RotatesOnRestart(t *testing.T) {
 // gets 200 with the current plaintext; and the endpoint returns 404
 // once state is confirmed.
 func TestSetupToken_LoopbackOnly(t *testing.T) {
-	h, _ := newHandler(t, db.OidcConfig{ID: 1})
+	h, _ := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 	plain, err := h.EnsureSetupToken(context.Background())
 	if err != nil || plain == "" {
 		t.Fatalf("EnsureSetupToken: err=%v plain=%q", err, plain)
@@ -279,7 +279,7 @@ func TestSetupToken_LoopbackOnly(t *testing.T) {
 // setup token + empty enabled_providers results in opt_out=true in DB
 // and BootStateConfirmedOptOut.
 func TestConfirm_OptOut(t *testing.T) {
-	h, fq := newHandler(t, db.OidcConfig{ID: 1})
+	h, fq := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 	token, err := h.EnsureSetupToken(context.Background())
 	if err != nil {
 		t.Fatalf("EnsureSetupToken: %v", err)
@@ -312,7 +312,7 @@ func TestConfirm_OptOut(t *testing.T) {
 // AdminChecker closure for tests covering the admin re-confirm path.
 func newHandlerWithAdmin(t *testing.T, checker func(r *http.Request) (bool, error)) (*OIDCConfigHandler, *fakeQuerier) {
 	t.Helper()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	h := NewOIDCConfigHandler(OIDCConfigDeps{
 		Queries:      fq,
 		OAuth:        newEmptyOAuth(t),
@@ -401,7 +401,7 @@ func TestConfirm_NoAdmin_FallsThroughToToken(t *testing.T) {
 // TestConfirm_InvalidToken verifies that an invalid setup token is
 // rejected with 401 and nothing is persisted.
 func TestConfirm_InvalidToken(t *testing.T) {
-	h, fq := newHandler(t, db.OidcConfig{ID: 1})
+	h, fq := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 	if _, err := h.EnsureSetupToken(context.Background()); err != nil {
 		t.Fatalf("EnsureSetupToken: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestConfirm_InvalidToken(t *testing.T) {
 // TestSaved_ReturnsLastPersisted verifies the /saved endpoint returns
 // the last successful UpdateOIDCConfig values.
 func TestSaved_ReturnsLastPersisted(t *testing.T) {
-	h, _ := newHandler(t, db.OidcConfig{ID: 1})
+	h, _ := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 	token, err := h.EnsureSetupToken(context.Background())
 	if err != nil {
 		t.Fatalf("EnsureSetupToken: %v", err)
@@ -462,7 +462,7 @@ func TestSaved_ReturnsLastPersisted(t *testing.T) {
 // the summary page and edit modal see the same enabled flag) and must
 // not rely on the removed oidc_config.provider_enabled JSONB column.
 func TestConfirm_WritesPerProviderEnabled_NotJSONB(t *testing.T) {
-	h, fq := newHandler(t, db.OidcConfig{ID: 1})
+	h, fq := newHandler(t, db.GetOIDCConfigRow{ID: 1})
 	token, err := h.EnsureSetupToken(context.Background())
 	if err != nil {
 		t.Fatalf("EnsureSetupToken: %v", err)
@@ -675,7 +675,7 @@ var _ OIDCConfigQuerier = (*fakeQuerier)(nil)
 // expect (e.g. a missed copy of SetupTokenHash).
 func TestFakeQuerier_RoundTrip(t *testing.T) {
 	ctx := context.Background()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 
 	if err := fq.SetSetupTokenHash(ctx, pgtype.Text{String: "abc", Valid: true}); err != nil {
 		t.Fatalf("Set: %v", err)
@@ -750,8 +750,8 @@ func TestMarkExternallyManaged_ConfirmsWithoutDB(t *testing.T) {
 
 type erroringQuerier struct{}
 
-func (erroringQuerier) GetOIDCConfig(ctx context.Context) (db.OidcConfig, error) {
-	return db.OidcConfig{}, errors.New("boom")
+func (erroringQuerier) GetOIDCConfig(ctx context.Context) (db.GetOIDCConfigRow, error) {
+	return db.GetOIDCConfigRow{}, errors.New("boom")
 }
 func (erroringQuerier) UpdateOIDCConfig(ctx context.Context, _ bool) error {
 	return errors.New("boom")
@@ -765,6 +765,6 @@ func (erroringQuerier) ClearSetupTokenHash(ctx context.Context) error {
 func (erroringQuerier) SetOIDCProviderEnabled(ctx context.Context, _ db.SetOIDCProviderEnabledParams) error {
 	return errors.New("boom")
 }
-func (erroringQuerier) ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error) {
+func (erroringQuerier) ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error) {
 	return nil, errors.New("boom")
 }

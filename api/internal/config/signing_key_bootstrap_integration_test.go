@@ -9,7 +9,7 @@ package config
 // genuinely concurrent multi-caller first boot against it (the
 // table-creation race the advisory lock protects, which ON CONFLICT DO
 // NOTHING alone does not), and a real CHECK-constraint rejection of a
-// corrupt secret.
+// corrupt signing key.
 //
 // Structural precedent: api/internal/authz/authz_integration_test.go
 // establishes the TestMain / prerequisite-check / host-resolution /
@@ -31,17 +31,17 @@ package config
 // resetDB does -- see migrationsDir/runComposedMigrations below. This means
 // the composed dir must exist before running this suite; run `make -C model
 // compose` (or `make dev.start`, which builds it as a dependency) first.
-// checkJWTSecretIntegPrereqs treats a missing composed dir as a missing
+// checkSigningKeyIntegPrereqs treats a missing composed dir as a missing
 // prerequisite (clean skip with an actionable message), mirroring
 // authz_integration_test.go's checkPrereqs.
 //
-// This suite's shadow DB (jwt_secret_integ_users) is distinct from
+// This suite's shadow DB (signing_key_integ_users) is distinct from
 // authz_integ_users, so both suites can share the same
 // "users-module-postgres" container without colliding. "Genuinely empty"
 // here means dropping the whole shadow database (not merely truncating
 // tables), since the fresh-database and concurrent-race scenarios below
 // specifically need no goose_db_version_users table present either -- see
-// resetJWTSecretShadowDB. The corruption-detection scenario
+// resetSigningKeyShadowDB. The corruption-detection scenario
 // (TestInteg_AuthSigningKeys_CheckConstraint_RejectsShortKey) creates
 // mod_users.auth_signing_keys via the bootstrap DDL directly (byte-identical to
 // the baseline migration's own DDL -- see the drift-guard unit test) instead of via
@@ -49,12 +49,11 @@ package config
 // whenever the DB is reachable at all, independent of the composed-dir
 // prerequisite above.
 //
-// Run with:
+// Run with the throwaway-Postgres recipe in authz_integration_test.go's header,
+// replacing the package path with ./internal/config/...:
 //
-//	cd mod-users && make dev.start   # or an equivalent Postgres; see authz_integration_test.go
-//	cd mod-users/api && \
-//	  AUTHZ_DEV_PG_HOST=localhost \
-//	  go test -tags=integration -p 1 -v ./internal/config/...
+//	(cd api && AUTHZ_DEV_PG_HOST=127.0.0.1 AUTHZ_DEV_PG_PORT="$port" \
+//	   go test -tags=integration -p 1 -count=1 ./internal/config/...)
 
 import (
 	"context"
@@ -81,23 +80,23 @@ import (
 // Package-level state
 // ---------------------------------------------------------------------------
 
-// jwtSecretIntegDB is this suite's dedicated shadow database, distinct from
+// signingKeyIntegDB is this suite's dedicated shadow database, distinct from
 // authz_integ_users (authz_integration_test.go) and any other suite's
 // shadow DB on the same shared Postgres container.
-const jwtSecretIntegDB = "jwt_secret_integ_users"
+const signingKeyIntegDB = "signing_key_integ_users"
 
-// jwtSecretIntegContainer is the shared Postgres container reused by every
+// signingKeyIntegContainer is the shared Postgres container reused by every
 // mod-users integration suite in this environment (see
 // authz_integration_test.go's header comment).
-const jwtSecretIntegContainer = "users-module-postgres"
+const signingKeyIntegContainer = "users-module-postgres"
 
-// jwtSecretIntegMigrationsDirEnvVar overrides migrationsDir()'s resolved
+// signingKeyIntegMigrationsDirEnvVar overrides migrationsDir()'s resolved
 // path, for environments where the test binary does not run from its normal
 // location inside a mod-users checkout. Unset by default. Mirrors
 // authz_integration_test.go's integMigrationsDirEnvVar (AUTHZ_INTEG_MIGRATIONS_DIR),
 // kept as a distinct, file-scoped constant rather than shared across
 // packages.
-const jwtSecretIntegMigrationsDirEnvVar = "JWTSECRET_INTEG_MIGRATIONS_DIR"
+const signingKeyIntegMigrationsDirEnvVar = "SIGNING_KEY_INTEG_MIGRATIONS_DIR"
 
 // integPGHost is resolved once in TestMain and reused by every test.
 var integPGHost string
@@ -106,10 +105,10 @@ var integPGHost string
 // produced by mod-users/model/Makefile's `compose` target) relative to this
 // source file's own location, mirroring authz_integration_test.go's own
 // migrationsDir. This file lives at
-// <repo>/api/internal/config/jwtsecret_bootstrap_integration_test.go; the
+// <repo>/api/internal/config/signing_key_bootstrap_integration_test.go; the
 // composed schema lives at <repo>/model/schema/migrations.
 func migrationsDir() string {
-	if d := os.Getenv(jwtSecretIntegMigrationsDirEnvVar); d != "" {
+	if d := os.Getenv(signingKeyIntegMigrationsDirEnvVar); d != "" {
 		return d
 	}
 	_, thisFile, _, _ := runtime.Caller(0)
@@ -123,16 +122,16 @@ func dirExists(path string) bool {
 }
 
 func TestMain(m *testing.M) {
-	pgHost := resolveJWTSecretIntegHost()
-	if err := checkJWTSecretIntegPrereqs(pgHost); err != nil {
-		fmt.Fprintf(os.Stderr, "integration: skipping jwtsecret bootstrap tests — %v\n", err)
+	pgHost := resolveSigningKeyIntegHost()
+	if err := checkSigningKeyIntegPrereqs(pgHost); err != nil {
+		fmt.Fprintf(os.Stderr, "integration: skipping signing-key bootstrap tests — %v\n", err)
 		os.Exit(0) // exit 0 so `go test` reports skipped, not failed.
 	}
 	integPGHost = pgHost
 	os.Exit(m.Run())
 }
 
-// checkJWTSecretIntegPrereqs verifies docker, the shared container, and
+// checkSigningKeyIntegPrereqs verifies docker, the shared container, and
 // goose are available (matching authz_integration_test.go's own prerequisite
 // check), that the composed migrations dir this suite's two
 // migration-dependent scenarios apply via goose exists (mirroring that same
@@ -144,21 +143,21 @@ func TestMain(m *testing.M) {
 // suite's own DSNs. Treating a probe failure as a missing prerequisite
 // (clean skip) avoids every test in this file failing individually on it
 // later.
-func checkJWTSecretIntegPrereqs(pgHost string) error {
+func checkSigningKeyIntegPrereqs(pgHost string) error {
 	// An explicit AUTHZ_DEV_PG_HOST means the caller supplied their own
 	// Postgres (e.g. a throwaway container); skip the shared-container check,
 	// but refuse the default port unless confirmed (this suite drops and
 	// recreates a database).
 	if os.Getenv("AUTHZ_DEV_PG_HOST") == "" {
-		cmd := exec.Command("docker", "inspect", "--format={{.State.Running}}", jwtSecretIntegContainer)
+		cmd := exec.Command("docker", "inspect", "--format={{.State.Running}}", signingKeyIntegContainer)
 		out, err := cmd.Output()
 		if err != nil {
 			return fmt.Errorf("docker inspect: %w", err)
 		}
 		if strings.TrimSpace(string(out)) != "true" {
-			return fmt.Errorf("container %s is not running", jwtSecretIntegContainer)
+			return fmt.Errorf("container %s is not running", signingKeyIntegContainer)
 		}
-	} else if resolveJWTSecretIntegPort() == "5432" && os.Getenv("AUTHZ_DEV_PG_CONFIRM_SHARED") != "1" {
+	} else if resolveSigningKeyIntegPort() == "5432" && os.Getenv("AUTHZ_DEV_PG_CONFIRM_SHARED") != "1" {
 		return fmt.Errorf("refusing to run: AUTHZ_DEV_PG_HOST is set but AUTHZ_DEV_PG_PORT is unset or 5432 (likely a shared Postgres); " +
 			"set AUTHZ_DEV_PG_PORT to a throwaway container's port, or AUTHZ_DEV_PG_CONFIRM_SHARED=1 to confirm using the shared instance")
 	}
@@ -168,32 +167,32 @@ func checkJWTSecretIntegPrereqs(pgHost string) error {
 	if dir := migrationsDir(); !dirExists(dir) {
 		return fmt.Errorf(
 			"composed migrations dir %s not found — run `make -C model compose` (or `make dev.start`, which builds it as a dependency) first, or set %s",
-			dir, jwtSecretIntegMigrationsDirEnvVar)
+			dir, signingKeyIntegMigrationsDirEnvVar)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn, err := pgx.Connect(ctx, jwtSecretIntegAdminDSN(pgHost))
+	conn, err := pgx.Connect(ctx, signingKeyIntegAdminDSN(pgHost))
 	if err != nil {
-		return fmt.Errorf("connect to %s as the expected users/users role: %w", jwtSecretIntegContainer, err)
+		return fmt.Errorf("connect to %s as the expected users/users role: %w", signingKeyIntegContainer, err)
 	}
 	conn.Close(context.Background())
 
 	return nil
 }
 
-// resolveJWTSecretIntegHost mirrors authz_integration_test.go's resolveHost:
+// resolveSigningKeyIntegHost mirrors authz_integration_test.go's resolveHost:
 // AUTHZ_DEV_PG_HOST always wins when set (the documented
 // AUTHZ_DEV_PG_HOST=localhost Docker Desktop for macOS convention -- reused
 // verbatim, per this task's own instruction, rather than inventing a new
 // host-resolution env var), falling back to the container's Docker-network
 // IP, and finally the historical hard-coded sandbox IP.
-func resolveJWTSecretIntegHost() string {
+func resolveSigningKeyIntegHost() string {
 	if h := os.Getenv("AUTHZ_DEV_PG_HOST"); h != "" {
 		return h
 	}
 	cmd := exec.Command("docker", "inspect",
-		"--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", jwtSecretIntegContainer)
+		"--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", signingKeyIntegContainer)
 	out, err := cmd.Output()
 	if err == nil {
 		if ip := strings.TrimSpace(string(out)); ip != "" {
@@ -203,40 +202,40 @@ func resolveJWTSecretIntegHost() string {
 	return "172.23.0.3"
 }
 
-// resolveJWTSecretIntegPort returns the Postgres host port: AUTHZ_DEV_PG_PORT
+// resolveSigningKeyIntegPort returns the Postgres host port: AUTHZ_DEV_PG_PORT
 // (same variable as authz_integration_test.go), default 5432.
-func resolveJWTSecretIntegPort() string {
+func resolveSigningKeyIntegPort() string {
 	if p := os.Getenv("AUTHZ_DEV_PG_PORT"); p != "" {
 		return p
 	}
 	return "5432"
 }
 
-func jwtSecretIntegAdminDSN(pgHost string) string {
-	return fmt.Sprintf("postgres://users:users@%s:%s/postgres?sslmode=disable", pgHost, resolveJWTSecretIntegPort())
+func signingKeyIntegAdminDSN(pgHost string) string {
+	return fmt.Sprintf("postgres://users:users@%s:%s/postgres?sslmode=disable", pgHost, resolveSigningKeyIntegPort())
 }
 
-func jwtSecretIntegShadowDSN(pgHost string) string {
-	return fmt.Sprintf("postgres://users:users@%s:%s/%s?sslmode=disable", pgHost, resolveJWTSecretIntegPort(), jwtSecretIntegDB)
+func signingKeyIntegShadowDSN(pgHost string) string {
+	return fmt.Sprintf("postgres://users:users@%s:%s/%s?sslmode=disable", pgHost, resolveSigningKeyIntegPort(), signingKeyIntegDB)
 }
 
-// resetJWTSecretShadowDB drops and recreates jwt_secret_integ_users so every
+// resetSigningKeyShadowDB drops and recreates signing_key_integ_users so every
 // test starts from a genuinely empty database: no auth_signing_keys table, no
 // goose_db_version_users table, nothing -- not merely truncated tables. This
 // is what the fresh-database and concurrent-race scenarios below need, and
 // is a superset of what the already-migrated scenario needs.
-func resetJWTSecretShadowDB(t *testing.T) {
+func resetSigningKeyShadowDB(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, jwtSecretIntegAdminDSN(integPGHost))
+	conn, err := pgx.Connect(ctx, signingKeyIntegAdminDSN(integPGHost))
 	if err != nil {
 		t.Fatalf("reset shadow db: connect admin: %v", err)
 	}
 	defer conn.Close(ctx)
 
 	for _, stmt := range []string{
-		"DROP DATABASE IF EXISTS " + jwtSecretIntegDB,
-		"CREATE DATABASE " + jwtSecretIntegDB,
+		"DROP DATABASE IF EXISTS " + signingKeyIntegDB,
+		"CREATE DATABASE " + signingKeyIntegDB,
 	} {
 		if _, err := conn.Exec(ctx, stmt); err != nil {
 			t.Fatalf("reset shadow db: %s: %v", stmt, err)
@@ -277,8 +276,8 @@ func runComposedMigrations(t *testing.T, dsn string) {
 // migrations, then calls bootstrapSigningKeyFromDB twice: the first call
 // generates and persists a key; the second must return the same key.
 func TestInteg_BootstrapSigningKey_MigratedDB_RoundTrip(t *testing.T) {
-	resetJWTSecretShadowDB(t)
-	dsn := jwtSecretIntegShadowDSN(integPGHost)
+	resetSigningKeyShadowDB(t)
+	dsn := signingKeyIntegShadowDSN(integPGHost)
 	runComposedMigrations(t, dsn)
 
 	first, err := bootstrapSigningKeyFromDB(context.Background(), dsn)
@@ -303,8 +302,8 @@ func TestInteg_BootstrapSigningKey_MigratedDB_RoundTrip(t *testing.T) {
 // goose table), then applies the composed migrations and asserts the
 // baseline's CREATE ... IF NOT EXISTS converges with the bootstrap's own DDL.
 func TestInteg_BootstrapSigningKey_FreshUnmigratedDB_CreatesTableAndConvergesWithGoose(t *testing.T) {
-	resetJWTSecretShadowDB(t)
-	dsn := jwtSecretIntegShadowDSN(integPGHost)
+	resetSigningKeyShadowDB(t)
+	dsn := signingKeyIntegShadowDSN(integPGHost)
 
 	if _, err := bootstrapSigningKeyFromDB(context.Background(), dsn); err != nil {
 		t.Fatalf("bootstrap against a genuinely fresh, unmigrated DB: %v", err)
@@ -347,8 +346,8 @@ func TestInteg_BootstrapSigningKey_FreshUnmigratedDB_CreatesTableAndConvergesWit
 // closes the schema/table-creation race that ON CONFLICT DO NOTHING alone
 // does not.
 func TestInteg_BootstrapSigningKey_ConcurrentFirstBoot_SingleWinnerAcrossAllCallers(t *testing.T) {
-	resetJWTSecretShadowDB(t)
-	dsn := jwtSecretIntegShadowDSN(integPGHost)
+	resetSigningKeyShadowDB(t)
+	dsn := signingKeyIntegShadowDSN(integPGHost)
 	const n = 8
 
 	var wg sync.WaitGroup
@@ -399,8 +398,8 @@ func TestInteg_BootstrapSigningKey_ConcurrentFirstBoot_SingleWinnerAcrossAllCall
 // unit test) and asserts the octet_length(private_key) >= 48 CHECK rejects a
 // truncated key at the schema level.
 func TestInteg_AuthSigningKeys_CheckConstraint_RejectsShortKey(t *testing.T) {
-	resetJWTSecretShadowDB(t)
-	dsn := jwtSecretIntegShadowDSN(integPGHost)
+	resetSigningKeyShadowDB(t)
+	dsn := signingKeyIntegShadowDSN(integPGHost)
 
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)

@@ -84,25 +84,27 @@ cd api   && go test ./...
 cd gui   && bun test
 ```
 
-### Authz integration tests against a throwaway Postgres
+### Integration tests against a throwaway Postgres
 
-On a shared Docker host, run `api/internal/authz` integration tests against a throwaway container rather than `users-module-postgres`:
+On a shared Docker host, run the integration suites (`api/internal/authz`, `api/internal/config`, `api/internal/integration`) against a throwaway container rather than `users-module-postgres`:
 
 ```sh
-name="mod-users-authz-integ-$(openssl rand -hex 4)"
+name="mod-users-integ-$(openssl rand -hex 4)"
 docker run -d --rm --name "$name" -e POSTGRES_USER=users -e POSTGRES_PASSWORD=users \
   -e POSTGRES_DB=postgres -p 127.0.0.1::5432 postgres:16
 port="$(docker port "$name" 5432/tcp | head -1 | sed 's/.*://')"
 until docker exec "$name" pg_isready -U users; do sleep 1; done
 make -C model compose
 (cd api && AUTHZ_DEV_PG_HOST=127.0.0.1 AUTHZ_DEV_PG_PORT="$port" \
-   go test -tags=integration -p 1 -count=1 ./internal/authz/...)
+   go test -tags=integration -p 1 -count=1 ./internal/authz/... ./internal/config/... ./internal/integration/...)
 docker rm -f "$name"
 ```
 
-`AUTHZ_DEV_PG_HOST` (explicit host, skips the `users-module-postgres` check) and `AUTHZ_DEV_PG_PORT` (default 5432) apply to both the authz and the `internal/config` signing-key bootstrap integration suites (`signing_key_bootstrap_integration_test.go`). These suites drop and recreate a database, so an explicit host with the default port 5432 is refused unless `AUTHZ_DEV_PG_CONFIRM_SHARED=1` is set to confirm use of a shared Postgres.
+`AUTHZ_DEV_PG_HOST` (explicit host, skips the `users-module-postgres` check) and `AUTHZ_DEV_PG_PORT` (default 5432) apply to all three suites. Each drops and recreates its own database (`authz_integ_users`, `signing_key_integ_users`, `users_integ_http`), so an explicit host with the default port 5432 is refused unless `AUTHZ_DEV_PG_CONFIRM_SHARED=1` is set to confirm use of a shared Postgres.
 
-See the header of `api/internal/authz/authz_integration_test.go` for detail.
+`api/internal/integration` composes the real services, handlers, authentication middleware and token carrier over that database and drives them through `httptest` (sessions, refresh and fork, step-up, credentials, OIDC with the identity provider replaced by `OAuth.ExchangeFn`, client credentials, the audit vocabulary and the route error order). When the mod-audit sibling is linked (`MODULEFORGE_SIBLINGS_DIR/mod-audit`, or `../mod-audit`), its `audit_log` migration is applied and its real observer runs in the observer group, so an op or principal outside mod-audit's contract fails the operation. The suite compares the database clock with the machine clock and refuses to run when they differ by more than ten seconds (a Docker VM whose clock drifted after the host slept); restart or resync the container then.
+
+See the header of `api/internal/authz/authz_integration_test.go` and of `api/internal/integration/harness_integration_test.go` for detail.
 
 ## Dev stack commands
 

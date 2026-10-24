@@ -23,39 +23,39 @@ import (
 // Separate from fakeQuerier so the two flows stay independently testable.
 type fakeProvidersQuerier struct {
 	mu   sync.Mutex
-	rows map[string]db.OidcProvider
+	rows map[string]db.ListOIDCProvidersRow
 }
 
 func newFakeProvidersQuerier() *fakeProvidersQuerier {
-	return &fakeProvidersQuerier{rows: map[string]db.OidcProvider{}}
+	return &fakeProvidersQuerier{rows: map[string]db.ListOIDCProvidersRow{}}
 }
 
-func (f *fakeProvidersQuerier) GetOIDCProvider(ctx context.Context, id string) (db.OidcProvider, error) {
+func (f *fakeProvidersQuerier) GetOIDCProvider(ctx context.Context, id string) (db.GetOIDCProviderRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r, ok := f.rows[id]
 	if !ok {
-		return db.OidcProvider{}, pgx.ErrNoRows
+		return db.GetOIDCProviderRow{}, pgx.ErrNoRows
 	}
-	return r, nil
+	return db.GetOIDCProviderRow(r), nil
 }
 
-func (f *fakeProvidersQuerier) ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error) {
+func (f *fakeProvidersQuerier) ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]db.OidcProvider, 0, len(f.rows))
+	out := make([]db.ListOIDCProvidersRow, 0, len(f.rows))
 	for _, r := range f.rows {
 		out = append(out, r)
 	}
 	return out, nil
 }
 
-func (f *fakeProvidersQuerier) UpsertOIDCProvider(ctx context.Context, arg db.UpsertOIDCProviderParams) (db.OidcProvider, error) {
+func (f *fakeProvidersQuerier) UpsertOIDCProvider(ctx context.Context, arg db.UpsertOIDCProviderParams) (db.UpsertOIDCProviderRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	existing, ok := f.rows[arg.ID]
 	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
-	row := db.OidcProvider{
+	row := db.ListOIDCProvidersRow{
 		ID:           arg.ID,
 		DisplayName:  arg.DisplayName,
 		IssuerUrl:    arg.IssuerUrl,
@@ -64,6 +64,9 @@ func (f *fakeProvidersQuerier) UpsertOIDCProvider(ctx context.Context, arg db.Up
 		ClaimStyle:   arg.ClaimStyle,
 		Scopes:       arg.Scopes,
 		Enabled:      arg.Enabled,
+		PartyID:      arg.PartyID,
+		JitMode:      arg.JitMode,
+		TrustAcr:     arg.TrustAcr,
 		UpdatedAt:    now,
 	}
 	if ok {
@@ -72,7 +75,7 @@ func (f *fakeProvidersQuerier) UpsertOIDCProvider(ctx context.Context, arg db.Up
 		row.CreatedAt = now
 	}
 	f.rows[arg.ID] = row
-	return row, nil
+	return db.UpsertOIDCProviderRow(row), nil
 }
 
 func (f *fakeProvidersQuerier) DeleteOIDCProvider(ctx context.Context, id string) (int64, error) {
@@ -98,7 +101,7 @@ func newProvidersHandlerForTest(t *testing.T, envRegistry config.ProviderRegistr
 	*fakeQuerier,
 ) {
 	t.Helper()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	fp := newFakeProvidersQuerier()
 
 	confirmer := NewOIDCConfigHandler(OIDCConfigDeps{
@@ -273,7 +276,7 @@ func TestProviders_Get_DBOverrideReportsDBSource(t *testing.T) {
 	}
 	h, _, fp, _ := newProvidersHandlerForTest(t, env)
 	// DB overrides just the client_id.
-	fp.rows["google"] = db.OidcProvider{
+	fp.rows["google"] = db.ListOIDCProvidersRow{
 		ID:       "google",
 		ClientID: pgtype.Text{String: "db-gid", Valid: true},
 		Enabled:  true,
@@ -362,7 +365,7 @@ func TestProviders_Put_UpdatesFields(t *testing.T) {
 func TestProviders_Put_MissingSecretKeepsExisting(t *testing.T) {
 	h, _, fp, _ := newProvidersHandlerForTest(t, config.ProviderRegistry{})
 	// Seed a row with a known secret.
-	fp.rows["google"] = db.OidcProvider{
+	fp.rows["google"] = db.ListOIDCProvidersRow{
 		ID:           "google",
 		ClientID:     pgtype.Text{String: "db-gid", Valid: true},
 		ClientSecret: pgtype.Text{String: "existing-secret", Valid: true},
@@ -387,7 +390,7 @@ func TestProviders_Put_MissingSecretKeepsExisting(t *testing.T) {
 // client_secret clears the stored value.
 func TestProviders_Put_EmptySecretClears(t *testing.T) {
 	h, _, fp, _ := newProvidersHandlerForTest(t, config.ProviderRegistry{})
-	fp.rows["google"] = db.OidcProvider{
+	fp.rows["google"] = db.ListOIDCProvidersRow{
 		ID:           "google",
 		ClientID:     pgtype.Text{String: "db-gid", Valid: true},
 		ClientSecret: pgtype.Text{String: "existing-secret", Valid: true},
@@ -409,7 +412,7 @@ func TestProviders_Put_EmptySecretClears(t *testing.T) {
 // clears the override.
 func TestProviders_Put_NullFieldClears(t *testing.T) {
 	h, _, fp, _ := newProvidersHandlerForTest(t, config.ProviderRegistry{})
-	fp.rows["google"] = db.OidcProvider{
+	fp.rows["google"] = db.ListOIDCProvidersRow{
 		ID:          "google",
 		ClientID:    pgtype.Text{String: "db-gid", Valid: true},
 		DisplayName: pgtype.Text{String: "Custom", Valid: true},
@@ -452,7 +455,7 @@ func TestProviders_Post_BadSlug(t *testing.T) {
 // TestProviders_Post_Duplicate_409 — POST with a DB-existing id → 409.
 func TestProviders_Post_Duplicate_409(t *testing.T) {
 	h, _, fp, _ := newProvidersHandlerForTest(t, config.ProviderRegistry{})
-	fp.rows["keycloak"] = db.OidcProvider{ID: "keycloak", Enabled: true}
+	fp.rows["keycloak"] = db.ListOIDCProvidersRow{ID: "keycloak", Enabled: true}
 
 	body := `{"id":"keycloak","issuer_url":"https://kc.example.com/realms/main"}`
 	rr := routeRequest(h, http.MethodPost, "/v1/oidc-config/providers", body)
@@ -482,7 +485,7 @@ func TestProviders_Post_CreatesNew(t *testing.T) {
 // TestProviders_Delete_RemovesRow — DELETE removes the DB row and returns 204.
 func TestProviders_Delete_RemovesRow(t *testing.T) {
 	h, _, fp, _ := newProvidersHandlerForTest(t, config.ProviderRegistry{})
-	fp.rows["google"] = db.OidcProvider{
+	fp.rows["google"] = db.ListOIDCProvidersRow{
 		ID:       "google",
 		ClientID: pgtype.Text{String: "x", Valid: true},
 		Enabled:  true,
@@ -501,7 +504,7 @@ func TestProviders_Delete_RemovesRow(t *testing.T) {
 // setup token return 401.
 func TestProviders_Auth_NoCredentials_401(t *testing.T) {
 	fp := newFakeProvidersQuerier()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	confirmer := NewOIDCConfigHandler(OIDCConfigDeps{
 		Queries:      fq,
 		OAuth:        newEmptyOAuth(t),
@@ -556,7 +559,7 @@ func TestProviders_Auth_NoCredentials_401(t *testing.T) {
 // body (for PUT/POST) authorizes when admin path is closed.
 func TestProviders_Auth_SetupToken_Succeeds(t *testing.T) {
 	fp := newFakeProvidersQuerier()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	confirmer := NewOIDCConfigHandler(OIDCConfigDeps{
 		Queries:      fq,
 		OAuth:        newEmptyOAuth(t),
@@ -598,7 +601,7 @@ func TestProviders_Auth_SetupToken_Succeeds(t *testing.T) {
 // (first-time setup) to reach those endpoints.
 func TestProviders_Auth_SetupTokenHeader_AuthorizesGetAndDelete(t *testing.T) {
 	fp := newFakeProvidersQuerier()
-	fp.rows["keycloak"] = db.OidcProvider{
+	fp.rows["keycloak"] = db.ListOIDCProvidersRow{
 		ID:           "keycloak",
 		ClientID:     pgtype.Text{String: "c", Valid: true},
 		ClientSecret: pgtype.Text{String: "s", Valid: true},
@@ -606,7 +609,7 @@ func TestProviders_Auth_SetupTokenHeader_AuthorizesGetAndDelete(t *testing.T) {
 		ClaimStyle:   pgtype.Text{String: "keycloak", Valid: true},
 		Enabled:      true,
 	}
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	confirmer := NewOIDCConfigHandler(OIDCConfigDeps{
 		Queries:      fq,
 		OAuth:        newEmptyOAuth(t),
@@ -673,7 +676,7 @@ func TestProviders_Auth_SetupTokenHeader_AuthorizesGetAndDelete(t *testing.T) {
 // as 500 (matches the /confirm semantics).
 func TestProviders_AdminCheckerError_500(t *testing.T) {
 	fp := newFakeProvidersQuerier()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	confirmer := NewOIDCConfigHandler(OIDCConfigDeps{
 		Queries:      fq,
 		OAuth:        newEmptyOAuth(t),
@@ -711,7 +714,7 @@ func TestProviders_AdminCheckerError_500(t *testing.T) {
 // clears the stored override (falls back to env/defaults on next read).
 func TestProviders_ScopesEmptyClears(t *testing.T) {
 	h, _, fp, _ := newProvidersHandlerForTest(t, config.ProviderRegistry{})
-	fp.rows["google"] = db.OidcProvider{
+	fp.rows["google"] = db.ListOIDCProvidersRow{
 		ID:      "google",
 		Scopes:  []string{"custom"},
 		Enabled: true,

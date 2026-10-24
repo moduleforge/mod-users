@@ -18,19 +18,18 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/moduleforge/mod-users/api/internal/config"
-	svc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
-const orderAuthSecret = "test-secret-at-least-32-bytes-xx"
-
-// orderAuthRouter mounts the real RegisterRoutes under /v1/auth.
+// orderAuthRouter mounts the real RegisterRoutes under /v1/auth. The handlers
+// hold no services: every case below is decided before a service is called
+// (the stateful cases run in the integration suite).
 func orderAuthRouter(t *testing.T) http.Handler {
 	t.Helper()
-	h := newGuardTestHandler(&stubAuthQuerier{}, &recordingSender{})
-	h.userSvc = &stubAnonCreator{result: svc.CreateAnonymousUserResult{}}
-	oidc := newTestHandler(t, config.ProviderRegistry{
+	registry := config.ProviderRegistry{
 		"google": config.Provider{ID: "google", DisplayName: "Google"},
-	})
+	}
+	h := New(nil, nil, nil, nil, nil, nil, nil, newTestOAuth(t, registry), nil, "http://gui.test")
+	oidc := newTestHandler(t, registry)
 	r := chi.NewRouter()
 	r.Route("/v1/auth", func(r chi.Router) { RegisterRoutes(r, h, oidc) })
 	return r
@@ -118,49 +117,6 @@ func TestOrderAuth_StatelessChecks_400(t *testing.T) {
 	}
 }
 
-// TestOrderAuth_CredentialFailures_401: a well-formed request with a bad
-// credential is the handler's 401 with its preserved message.
-func TestOrderAuth_CredentialFailures_401(t *testing.T) {
-	cases := []struct{ name, path, body, msg string }{
-		{"login", "/login", `{"email":"nobody@example.com","password":"whatever-password"}`, "invalid email or password"},
-		{"email-code verify", "/email-code/verify", `{"email":"nobody@example.com","code":"123456"}`, "invalid or expired code"},
-		{"password-reset confirm", "/password-reset/confirm", `{"token":"nope","password":"long-enough-password"}`, "invalid or expired reset token"},
-	}
-	for _, c := range cases {
-		rr := orderAuthDo(t, http.MethodPost, c.path, c.body)
-		if rr.Code != http.StatusUnauthorized {
-			t.Errorf("%s: got %d, want 401, body=%s", c.name, rr.Code, rr.Body.String())
-			continue
-		}
-		e := orderAuthErr(t, rr)
-		if e.Error.Code != "unauthenticated" || e.Error.Message != c.msg {
-			t.Errorf("%s: error = %+v, want unauthenticated / %q", c.name, e.Error, c.msg)
-		}
-	}
-}
-
-// TestOrderAuth_AntiEnumeration_204: the request routes answer 204 whether or
-// not the email exists (the stub querier knows no account).
-func TestOrderAuth_AntiEnumeration_204(t *testing.T) {
-	for _, path := range []string{"/email-code/request", "/password-reset/request"} {
-		rr := orderAuthDo(t, http.MethodPost, path, `{"email":"nobody@example.com"}`)
-		if rr.Code != http.StatusNoContent {
-			t.Errorf("%s: got %d, want 204, body=%s", path, rr.Code, rr.Body.String())
-		}
-		if rr.Body.Len() != 0 {
-			t.Errorf("%s: body = %q, want empty", path, rr.Body.String())
-		}
-	}
-}
-
-// TestOrderAuth_Anonymous_201: the anonymous sign-in needs no credential.
-func TestOrderAuth_Anonymous_201(t *testing.T) {
-	rr := orderAuthDo(t, http.MethodPost, "/anonymous", `{"device_id":"dev-1"}`)
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("got %d, want 201, body=%s", rr.Code, rr.Body.String())
-	}
-}
-
 // TestOrderAuth_OIDCRoutes: provider discovery and the start/callback
 // redirects are public; an unknown provider is 404 and a known provider's bad
 // request is 400, never 401.
@@ -184,16 +140,13 @@ func TestOrderAuth_OIDCRoutes(t *testing.T) {
 }
 
 // TestOrderAuth_NoRoute401: with no RequireAuth and no identity mounted, no
-// route of the group answers 401 because of authentication. The only 401s are
-// the three preserved credential-failure messages, asserted above.
+// route of the group answers 401 because of authentication. The credential
+// failures that are 401 run in the integration suite.
 func TestOrderAuth_NoRoute401(t *testing.T) {
 	cases := []struct{ method, path, body string }{
 		{http.MethodPost, "/register", `{}`},
 		{http.MethodPost, "/login", `{}`},
-		{http.MethodPost, "/anonymous", `{"device_id":"d"}`},
-		{http.MethodPost, "/email-code/request", `{"email":"a@example.com"}`},
 		{http.MethodPost, "/email-code/verify", `{}`},
-		{http.MethodPost, "/password-reset/request", `{"email":"a@example.com"}`},
 		{http.MethodPost, "/password-reset/confirm", `{}`},
 		{http.MethodGet, "/providers", ""},
 		// An invalid return path keeps Start from reaching the (nil) provider
