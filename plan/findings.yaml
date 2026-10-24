@@ -27,15 +27,6 @@ items:
         - priority:high
         - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
-    - title: internal/handlers/oidc_config.go (kept file)
-      id: 1uxT
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: internal/handlers/oidc_config.go (kept file) does not compile against the new db package (db.OidcConfig and db.OidcProvider removed); needs porting in task 008 or a follow-on.
     - title: Manifest cannot register display renderers
       id: xgGT
       date: "2026-10-23"
@@ -1032,4 +1023,12 @@ closed:
         Already fixed. api/openapi.yaml has 39 /v1/auth, /v1/session, /v1/me and /v1/principals
         path entries, including /v1/me/identifiers/{uuid} (1889), /v1/session/switch (1608) and the
         anonymous device_token route (1262).
+      date: "2026-10-24"
+    - id: 1uxT
+      title: internal/handlers/oidc_config.go (kept file)
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/internal/handlers/oidc_config.go compiles: `go build ./...` and
+        `go vet ./internal/handlers/...` pass. main.go:144 constructs handlers.NewOIDCConfigHandler
+        and main.go:406 mounts its routes.
       date: "2026-10-24"
