@@ -113,7 +113,7 @@ func TestCarrier_ClaimsAreExactlyThoseOfAPISurface5(t *testing.T) {
 			t.Errorf("forbidden claim %q present", forbidden)
 		}
 	}
-	if c["iss"] != integIssuer || c["aud"] != config.DefaultAudience && !audContains(c["aud"], config.DefaultAudience) {
+	if c["iss"] != integIssuer || !audContains(c["aud"], config.DefaultAudience) {
 		t.Errorf("iss/aud = %v / %v", c["iss"], c["aud"])
 	}
 	if c["sid"] != tk.Session.UUID {

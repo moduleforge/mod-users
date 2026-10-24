@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/config"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moduleforge/core-api/opctx"
@@ -203,5 +206,25 @@ func TestClientCredentials_UnregisteredAppAudienceIsRefused(t *testing.T) {
 	body["app"] = "no-such-app"
 	if r := env.do(t, http.MethodPost, "/v1/auth/token", "", body); r.status == http.StatusOK {
 		t.Fatalf("a token was issued for an unregistered app audience: %s", r.raw)
+	}
+}
+
+func TestClientCredentials_CannotLinkOrStepUpAnOIDCCredential(t *testing.T) {
+	sa := env.seedServiceAccount(t)
+	tk := env.do(t, http.MethodPost, "/v1/auth/token", "", clientCredentials(sa)).wantStatus(t, http.StatusOK).tok(t)
+	provider := env.addProvider(t, config.Provider{JITMode: config.JITModeNone})
+
+	// A service principal has no session to link to or step up.
+	env.do(t, http.MethodPost, "/v1/me/credentials/oidc/"+provider+"/start", tk.access(), nil).wantStatus(t, http.StatusForbidden)
+	env.do(t, http.MethodPost, "/v1/session/step-up/oidc/"+provider+"/start", tk.access(), nil).wantStatus(t, http.StatusForbidden)
+
+	// A forged link callback that names the service account as the principal
+	// of a real user's session is refused, and nothing is linked to it.
+	a := env.register(t)
+	id := idpIdentity(uniq("sa")+"@example.test", true)
+	env.idpReturns(t, id, env.stateFor(t, auth.FlowLink, a.tk.Session.UUID, sa.ID))
+	env.wantRedirectError(t, provider, "authentication_failed")
+	if n := env.count(t, "oidc on the service account", `SELECT count(*) FROM mod_users.credentials WHERE principal_id = $1 AND kind = 'oidc'`, sa.ID); n != 0 {
+		t.Errorf("the service account gained an oidc credential")
 	}
 }

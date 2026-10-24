@@ -496,3 +496,81 @@ func TestStepUp_SecondFactorClassRaisesAcr(t *testing.T) {
 		t.Fatalf("AuthContext after step-up = acr %d auth_time %v, want 2 and now", p.ACR, p.AuthTime)
 	}
 }
+
+func TestRefresh_ReuseStillRevokesWhenThePrincipalHoldsNoLiveProfile(t *testing.T) {
+	party := env.seedParty(t, "Reuse Party "+uniq("p"))
+	email := uniq("reuse") + "@example.test"
+	uid := env.seedManagedUser(t, party, email, testPassword)
+	profID, _ := env.seedPartyProfile(t, uid, party, "active")
+
+	tk := env.loginRaw(t, email, testPassword, nil).wantStatus(t, http.StatusOK).tok(t)
+	rotated := env.do(t, http.MethodPost, "/v1/auth/token", "", refreshReq(tk)).wantStatus(t, http.StatusOK).tok(t)
+
+	// The profile ends, so the principal has no non-ended profile left to
+	// observe the revocation as: the revocation is logged rather than observed,
+	// and it still commits.
+	env.exec(t, "end profile", `UPDATE profiles SET status = 'ended', ended_at = now(), end_reason = 'test' WHERE entity_id = $1`, profID)
+	env.obs.reset()
+	env.do(t, http.MethodPost, "/v1/auth/token", "", refreshReq(tk)).wantError(t, http.StatusUnauthorized, "users.refresh_reuse", "")
+
+	var reason string
+	if err := env.pool.QueryRow(context.Background(),
+		`SELECT revoke_reason FROM mod_users.sessions WHERE uuid = $1::uuid`, tk.Session.UUID).Scan(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if reason != "refresh_reuse" {
+		t.Errorf("revoke_reason = %q, want refresh_reuse", reason)
+	}
+	if got := env.obs.pairs(); len(got) != 0 {
+		t.Errorf("observations = %v, want none (no acting profile exists)", got)
+	}
+	env.do(t, http.MethodGet, "/v1/probe", rotated.access(), nil).wantStatus(t, http.StatusUnauthorized)
+}
+
+func TestPassword_ResetKeepsTheCredentialsLandingProfile(t *testing.T) {
+	a := env.register(t)
+	uid := env.principalID(t, a.Email)
+	party := env.seedParty(t, "Reset Party "+uniq("p"))
+	_, profile := env.seedPartyProfile(t, uid, party, "active")
+
+	cred := env.credentialUUID(t, a.tk.access(), "password")
+	env.do(t, http.MethodPatch, "/v1/me/credentials/"+cred, a.tk.access(),
+		map[string]any{"default_profile_uuid": profile, "label": "work laptop"}).wantStatus(t, http.StatusOK)
+
+	seen := env.mail.count(a.Email)
+	env.do(t, http.MethodPost, "/v1/auth/password-reset/request", "", map[string]string{"email": a.Email}).wantStatus(t, http.StatusNoContent)
+	token := env.resetTokenAfter(t, a.Email, seen)
+	env.do(t, http.MethodPost, "/v1/auth/password-reset/confirm", "", map[string]string{"token": token, "password": "reset-keeps-landing-1"}).
+		wantStatus(t, http.StatusNoContent)
+
+	// The new password is a new credential that keeps the label and the default profile.
+	tk := env.loginRaw(t, a.Email, "reset-keeps-landing-1", nil).wantStatus(t, http.StatusOK).tok(t)
+	if tk.Profile == nil || tk.Profile.UUID != profile {
+		t.Fatalf("landed on %+v, want the kept default profile %s", tk.Profile, profile)
+	}
+	var list struct {
+		Credentials []struct {
+			UUID               string  `json:"uuid"`
+			Kind               string  `json:"kind"`
+			Label              string  `json:"label"`
+			DefaultProfileUUID *string `json:"default_profile_uuid"`
+		} `json:"credentials"`
+	}
+	env.do(t, http.MethodGet, "/v1/me/credentials", tk.access(), nil).wantStatus(t, http.StatusOK).into(t, &list)
+	var found bool
+	for _, c := range list.Credentials {
+		if c.Kind != "password" {
+			continue
+		}
+		found = true
+		if c.UUID == cred {
+			t.Errorf("the old password credential is still listed")
+		}
+		if c.Label != "work laptop" || c.DefaultProfileUUID == nil || *c.DefaultProfileUUID != profile {
+			t.Errorf("new password credential = %+v, want label and default profile kept", c)
+		}
+	}
+	if !found {
+		t.Error("no password credential after the reset")
+	}
+}

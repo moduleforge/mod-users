@@ -405,11 +405,8 @@ func TestOIDC_LinkCallbackRefusedWithoutALiveSessionOfTheStatedPrincipal(t *test
 	for name, st := range cases {
 		t.Run(name, func(t *testing.T) {
 			env.idpReturns(t, id, st)
-			// A state that fails validation or names a bad session never links.
-			status, frag, loc := env.callback(t, provider)
-			if frag.Get("linked") != "" || frag.Get("handoff") != "" {
-				t.Fatalf("callback = %d %q linked or signed in", status, loc)
-			}
+			// A state that names no live session of the stated principal never links.
+			env.wantRedirectError(t, provider, "authentication_failed")
 		})
 	}
 

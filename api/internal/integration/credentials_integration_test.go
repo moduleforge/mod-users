@@ -330,9 +330,8 @@ func TestMePut_UpdatesTheCallersOwnRecord(t *testing.T) {
 	}
 	// A profile the caller does not hold cannot become the default.
 	r := env.do(t, http.MethodPut, "/v1/me", a.tk.access(), map[string]any{"default_profile_uuid": "11111111-1111-1111-1111-111111111111"})
-	if r.status != http.StatusNotFound && r.status != http.StatusBadRequest && r.status != http.StatusForbidden {
-		t.Errorf("foreign default profile: status %d, want a 4xx refusal: %s", r.status, r.raw)
-	}
+	r.wantError(t, http.StatusNotFound, "not_found", "")
+
 	// Anonymous: 401 first.
 	env.do(t, http.MethodPut, "/v1/me", "", `{"given_name":`).wantStatus(t, http.StatusUnauthorized)
 }
