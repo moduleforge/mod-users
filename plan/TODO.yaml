@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 6
       slug: users-identity-core
@@ -384,5 +384,19 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 6
-      tasks: []
+      tasks:
+        - number: 1
+          slug: enforce-byo-identity-on-guest-paths
+          title: Enforce Allow BYO Identity on Guest Sign-In and Guest Upgrade
+          path: phase-12-remediation-01/001-enforce-byo-identity-on-guest-paths.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - TrRi
+          git:
+            branch: null
+            commit: []
+            merge: null
