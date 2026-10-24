@@ -119,11 +119,13 @@ phases:
           slug: session-credential-route-tests
           title: Session Credential Route Tests
           path: phase-06-users-identity-core/010-session-credential-route-tests.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Cleared stale test packages in internal/service, internal/handlers and handlers/auth; rewrote OIDC handler tests for the new API; added HTTP-level integration suite in api/internal/integration covering requirements 2 to 8, plus U27 and U23/U24 tests. Integration suite green against throwaway Postgres 16; make build/lint/test pass for model and api. No implementation defects found.
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-06-010
+            commit:
+                - 6ef9004
             merge: null
     - number: 7
       slug: parties-profiles-and-bootstrap
