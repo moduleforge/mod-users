@@ -3,25 +3,17 @@
 # server.ErrorWithDetails literal-call drift in api/internal/handlers/ and
 # api/internal/handlers/auth/.
 #
-# Background: the centralize-server-error plan collapsed 92 of 96 literal
-# server.Error(...)/server.ErrorWithDetails(...) call sites in the top-level
-# api/internal/handlers/*.go package onto apiresp.WriteError(w, r, err), which
-# classifies errors via sentinel matching instead of hand-picked HTTP
-# status/code/message literals; the provider-exists 409 has since moved onto
-# apiresp.Conflict(...) too. Exactly 3 documented carve-outs remain (marked
-# by a comment), each justified by a comment referencing followup ZVum:
-# apiresp currently exposes no public detail-carrying constructor for the
-# specific error shapes those 3 sites need (a 404 with details and two
-# authentication-detail-carrying 401s, all in identities.go), so they cannot
-# be routed through apiresp.WriteError without losing information.
+# Background: the centralize-server-error plan collapsed the literal
+# server.Error(...)/server.ErrorWithDetails(...) call sites in the handlers
+# onto apiresp.WriteError(w, r, err), which classifies errors via sentinel
+# matching instead of hand-picked HTTP status/code/message literals. The
+# identity-model rewrite then removed the last documented carve-outs (the
+# identities.go detail-carrying shapes and the public auth credential-failure
+# and register literals), so no marked carve-out remains in either package:
+# the expected count is 0 and every literal call is a violation.
 #
 # The public auth package (api/internal/handlers/auth/) is scanned separately
-# with its own marker and count. Its 11 documented keeps, each marked by a
-# "literal-keep:" comment giving the reason, are the 6 credential-failure
-# 401s (login, email-code verify, password-reset confirm) and the 5 register
-# literals (4 required-field 400s and the 409) whose messages the GUI
-# (register-form.tsx) displays verbatim; every other literal there has
-# been converted to apiresp.
+# with its own marker ("literal-keep:") and count.
 #
 # This script re-greps every build and fails the build if a new literal call
 # to server.Error(/server.ErrorWithDetails( shows up anywhere else in those
@@ -138,8 +130,8 @@ check_dir() {
 }
 
 status=0
-# Top-level handlers: the 3 ZVum carve-outs in identities.go.
-check_dir "handlers/" "$HANDLERS_DIR" 'followup ZVum' 3 || status=$?
-# Public auth handlers: 6 credential-failure 401s plus the 5 register literals.
-check_dir "handlers/auth/" "$AUTH_HANDLERS_DIR" 'literal-keep:' 11 || { s=$?; [[ $status -eq 0 || $s -gt $status ]] && status=$s; }
+# Top-level handlers: no documented carve-outs remain.
+check_dir "handlers/" "$HANDLERS_DIR" 'followup ZVum' 0 || status=$?
+# Public auth handlers: no documented carve-outs remain.
+check_dir "handlers/auth/" "$AUTH_HANDLERS_DIR" 'literal-keep:' 0 || { s=$?; [[ $status -eq 0 || $s -gt $status ]] && status=$s; }
 exit "$status"

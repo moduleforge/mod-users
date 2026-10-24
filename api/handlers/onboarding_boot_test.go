@@ -20,14 +20,14 @@ import (
 // empty ProviderRegistry.
 type fakeQuerier struct {
 	mu  sync.Mutex
-	row db.OidcConfig
+	row db.GetOIDCConfigRow
 }
 
-func newFakeQuerier(initial db.OidcConfig) *fakeQuerier {
+func newFakeQuerier(initial db.GetOIDCConfigRow) *fakeQuerier {
 	return &fakeQuerier{row: initial}
 }
 
-func (f *fakeQuerier) GetOIDCConfig(ctx context.Context) (db.OidcConfig, error) {
+func (f *fakeQuerier) GetOIDCConfig(ctx context.Context) (db.GetOIDCConfigRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.row, nil
@@ -59,7 +59,7 @@ func (f *fakeQuerier) SetOIDCProviderEnabled(ctx context.Context, arg db.SetOIDC
 	return nil
 }
 
-func (f *fakeQuerier) ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error) {
+func (f *fakeQuerier) ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error) {
 	return nil, nil
 }
 
@@ -68,7 +68,7 @@ func (f *fakeQuerier) ListOIDCProviders(ctx context.Context) ([]db.OidcProvider,
 // concrete *usersdb.Queries rather than the OIDCConfigQuerier interface)
 // wired to a fake querier and an empty-registry OAuth orchestrator — no
 // network I/O happens for an empty registry.
-func newTestHandler(t *testing.T, initial db.OidcConfig, tokenDisplay pubconfig.TokenDisplay) (*handlers.OIDCConfigHandler, *fakeQuerier) {
+func newTestHandler(t *testing.T, initial db.GetOIDCConfigRow, tokenDisplay pubconfig.TokenDisplay) (*handlers.OIDCConfigHandler, *fakeQuerier) {
 	t.Helper()
 	fq := newFakeQuerier(initial)
 	oauth, err := pubauth.NewOAuth(context.Background(), &pubconfig.Config{
@@ -91,7 +91,7 @@ func newTestHandler(t *testing.T, initial db.OidcConfig, tokenDisplay pubconfig.
 }
 
 func TestEnsureSetupTokenAndPrint_TokenDisplayNone_Unconfirmed(t *testing.T) {
-	h, _ := newTestHandler(t, db.OidcConfig{ID: 1}, pubconfig.TokenDisplayNone)
+	h, _ := newTestHandler(t, db.GetOIDCConfigRow{ID: 1}, pubconfig.TokenDisplayNone)
 
 	err := handlers.EnsureSetupTokenAndPrint(context.Background(), h, pubconfig.TokenDisplayNone, "http://localhost:3000")
 	if err == nil {
@@ -102,7 +102,7 @@ func TestEnsureSetupTokenAndPrint_TokenDisplayNone_Unconfirmed(t *testing.T) {
 func TestEnsureSetupTokenAndPrint_TokenDisplayNone_Confirmed(t *testing.T) {
 	// opt_out=true with an empty provider registry yields a confirmed
 	// boot state (no providers configured, opted out).
-	h, _ := newTestHandler(t, db.OidcConfig{ID: 1, OptOut: true}, pubconfig.TokenDisplayNone)
+	h, _ := newTestHandler(t, db.GetOIDCConfigRow{ID: 1, OptOut: true}, pubconfig.TokenDisplayNone)
 	if !h.CurrentState().Confirmed() {
 		t.Fatalf("test setup: expected confirmed state, got %s", h.CurrentState())
 	}
@@ -115,7 +115,7 @@ func TestEnsureSetupTokenAndPrint_TokenDisplayNone_Confirmed(t *testing.T) {
 func TestEnsureSetupTokenAndPrint_MintsTokenWhenUnconfirmed(t *testing.T) {
 	for _, td := range []pubconfig.TokenDisplay{pubconfig.TokenDisplayStderr, pubconfig.TokenDisplayBoth, pubconfig.TokenDisplayLocalhost} {
 		t.Run(string(td), func(t *testing.T) {
-			h, fq := newTestHandler(t, db.OidcConfig{ID: 1}, td)
+			h, fq := newTestHandler(t, db.GetOIDCConfigRow{ID: 1}, td)
 
 			if err := handlers.EnsureSetupTokenAndPrint(context.Background(), h, td, "http://localhost:3000"); err != nil {
 				t.Fatalf("EnsureSetupTokenAndPrint: got error %v, want nil", err)
@@ -132,7 +132,7 @@ func TestEnsureSetupTokenAndPrint_MintsTokenWhenUnconfirmed(t *testing.T) {
 }
 
 func TestEnsureSetupTokenAndPrint_NoOpOnRepeatCall(t *testing.T) {
-	h, _ := newTestHandler(t, db.OidcConfig{ID: 1}, pubconfig.TokenDisplayBoth)
+	h, _ := newTestHandler(t, db.GetOIDCConfigRow{ID: 1}, pubconfig.TokenDisplayBoth)
 
 	if err := handlers.EnsureSetupTokenAndPrint(context.Background(), h, pubconfig.TokenDisplayBoth, "http://localhost:3000"); err != nil {
 		t.Fatalf("first call: got error %v, want nil", err)

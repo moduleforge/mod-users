@@ -18,9 +18,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
-
+	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
+	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
+	"github.com/moduleforge/mod-users/api/internal/handlers/me"
+	"github.com/moduleforge/mod-users/api/internal/handlers/principals"
+	"github.com/moduleforge/mod-users/api/internal/handlers/session"
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
@@ -42,7 +45,7 @@ type orderOIDCFixture struct {
 
 func orderOIDCNewFixture(t *testing.T) *orderOIDCFixture {
 	t.Helper()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	fp := newFakeProvidersQuerier()
 	confirmer := NewOIDCConfigHandler(OIDCConfigDeps{
 		Queries:      fq,
@@ -215,7 +218,7 @@ func TestOrderOIDC_CredentialRoutes_Order(t *testing.T) {
 // users.oidc_provider_exists detail, after the credential.
 func TestOrderOIDC_Create_Existing_409(t *testing.T) {
 	f := orderOIDCNewFixture(t)
-	f.fp.rows["keycloak"] = db.OidcProvider{ID: "keycloak", Enabled: true}
+	f.fp.rows["keycloak"] = db.ListOIDCProvidersRow{ID: "keycloak", Enabled: true}
 	if rr := f.do(orderOIDCNone, http.MethodPost, "/providers", `{"id":"keycloak"}`); rr.Code != http.StatusUnauthorized {
 		t.Errorf("no credential: got %d, want 401 (credential precedes the conflict)", rr.Code)
 	}
@@ -238,25 +241,25 @@ func TestOrderOIDC_Create_Existing_409(t *testing.T) {
 func TestOrderOIDC_ComposedRouter_NoRequireAuth(t *testing.T) {
 	f := orderOIDCNewFixture(t)
 	oauth := newEmptyOAuth(t)
-	cfg := &config.Config{
-		LocalAuth: config.LocalAuthConfig{JWTSecret: "test-secret-at-least-32-bytes-xx", LocalIssuer: "test-issuer"},
-	}
-	authH := authhandlers.New(nil, nil, nil, "test-secret-at-least-32-bytes-xx", "test-issuer", nil, "http://gui.test")
-	oidcH := authhandlers.NewOIDCHandler(nil, oauth, nil, nil, cfg)
+	authH := authhandlers.New(nil, nil, nil, nil, nil, nil, nil, oauth, nil, "http://gui.test")
+	requireAuth := auth.NewRequireAuth(auth.NewAuthenticator(nil, nil, config.AuthConfig{}))
 
 	r := chi.NewRouter()
 	r.Route("/v1", func(r chi.Router) {
-		r.Use(recoverToSentinel)
-		RegisterAccountRoutes(r, &UserAccountsHandler{}, &AssumeHandler{}, &AppsHandler{})
-		RegisterSelfGetRoute(r, &SelfHandler{})
-		RegisterSelfPutRoute(r, &SelfHandler{})
-		RegisterSelfIdentitiesReadRoute(r, &IdentitiesHandler{})
-		RegisterSelfIdentitiesWriteRoutes(r, &IdentitiesHandler{})
-		RegisterSelfSSHKeysReadRoute(r, &SSHKeysHandler{})
-		RegisterSelfSSHKeysWriteRoutes(r, &SSHKeysHandler{})
-		RegisterUserAccountSSHKeyRoutes(r, &SSHKeysHandler{})
+		r.Route("/me", func(r chi.Router) {
+			r.Use(requireAuth)
+			me.RegisterMeRoutes(r, me.NewMeHandler(nil))
+		})
+		r.Route("/principals", func(r chi.Router) {
+			r.Use(requireAuth)
+			principals.RegisterPrincipalRoutes(r, principals.NewPrincipalsHandler(nil))
+		})
+		r.Route("/session", func(r chi.Router) {
+			r.Use(requireAuth)
+			session.RegisterSessionRoutes(r, session.NewSessionHandler(nil))
+		})
 		r.Route("/oidc-config", func(r chi.Router) { RegisterOIDCConfigRoutes(r, f.confirmer, f.providers) })
-		r.Route("/auth", func(r chi.Router) { authhandlers.RegisterRoutes(r, authH, oidcH) })
+		r.Route("/auth", func(r chi.Router) { authhandlers.RegisterRoutes(r, authH, nil) })
 	})
 	do := func(method, path, body string, hdr map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -269,8 +272,10 @@ func TestOrderOIDC_ComposedRouter_NoRequireAuth(t *testing.T) {
 	}
 
 	// Sanity: an authenticated registrar on the same router does gate.
-	if rr := do(http.MethodGet, "/v1/self", "", nil); rr.Code != http.StatusUnauthorized {
-		t.Fatalf("GET /v1/self anonymous: got %d, want 401 (RequireAuth must still gate it)", rr.Code)
+	for _, p := range []string{"/v1/me", "/v1/principals", "/v1/session"} {
+		if rr := do(http.MethodGet, p, "", nil); rr.Code != http.StatusUnauthorized {
+			t.Fatalf("GET %s anonymous: got %d, want 401 (RequireAuth must still gate it)", p, rr.Code)
+		}
 	}
 	for _, p := range []string{"/v1/auth/providers", "/v1/oidc-config/status", "/v1/oidc-config/saved"} {
 		if rr := do(http.MethodGet, p, "", nil); rr.Code != http.StatusOK {
