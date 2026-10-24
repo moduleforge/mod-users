@@ -15,8 +15,8 @@ items:
       tags:
         - type:ambiguity
         - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: 'Decision needed: password reset does not copy old credential party authorizations, so a party profile with credential_rule ''authorized'' locks after reset until re-authorized. Decide whether a later task should copy them.'
     - title: Managed JIT user creation duplicates service
       id: ApCx
