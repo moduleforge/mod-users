@@ -63,10 +63,10 @@ package authz_test
 //  6. Revocation — deleting the wildcard manage grant demotes the user immediately.
 //  7. Nil-target Authorize — wildcard admins pass; non-wildcards are denied.
 //  8. OIDC-role admin path removed — JWT roles claim does NOT confer admin privileges.
-//  9. Generic owner predicate — a corporation entity (a type that never
+//  9. Generic owner predicate — a organization entity (a type that never
 //     self-owns) created with an explicit owner_id is accessible to its
 //     owner for every operation and denied to everyone else; a NULL-owner
-//     corporation is denied to all; ownership does not leak across entities;
+//     organization is denied to all; ownership does not leak across entities;
 //     and single-row Authorize agrees with the list-side access function
 //     when the real access functions are installed.
 
@@ -82,14 +82,11 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	authzapi "github.com/moduleforge/authz-api/authz"
 	authzdb "github.com/moduleforge/authz-model/db"
 	authzsetup "github.com/moduleforge/core-api/authz/setup"
-	"github.com/moduleforge/core-api/opctx"
-	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/mod-users/api/internal/authz"
 )
 
@@ -267,7 +264,7 @@ func wireServices(ctx context.Context, pool *pgxpool.Pool) error {
 	// of authzSlugs in cmd/server/main.go that the symmetry test exercises;
 	// "type" is deliberately absent because production never generates
 	// accessible_type_ids_for_actor.
-	if err := authzsetup.ApplyFuncs(ctx, pool, authzsetup.NewGrantTableGenerator(), []string{"corporation", "natural_person", "legal_entity"}); err != nil {
+	if err := authzsetup.ApplyFuncs(ctx, pool, authzsetup.NewGrantTableGenerator(), []string{"organization", "natural_person", "legal_entity"}); err != nil {
 		return fmt.Errorf("apply access functions: %w", err)
 	}
 	return nil
@@ -276,197 +273,25 @@ func wireServices(ctx context.Context, pool *pgxpool.Pool) error {
 // ---------------------------------------------------------------------------
 // Seed helpers
 // ---------------------------------------------------------------------------
-
-// seedUser inserts entity → legal_entity → natural_person → user_account and
-// returns the entity's internal ID. Optionally grants a wildcard manage grant.
-func seedUser(t *testing.T, email string, withWildcardManage bool) (entityID int64) {
-	t.Helper()
-	ctx := context.Background()
-
-	coreQ := coredb.New(integPool)
-
-	const typeSQL = `SELECT id FROM types WHERE slug = 'natural_person'`
-	var npTypeID int64
-	if err := integPool.QueryRow(ctx, typeSQL).Scan(&npTypeID); err != nil {
-		t.Fatalf("seedUser: resolve type: %v", err)
-	}
-
-	ent, err := coreQ.CreateEntity(ctx, npTypeID)
-	if err != nil {
-		t.Fatalf("seedUser: create entity: %v", err)
-	}
-	entityID = ent.ID
-
-	if _, err := coreQ.CreateLegalEntity(ctx, entityID); err != nil {
-		t.Fatalf("seedUser: create legal_entity: %v", err)
-	}
-
-	const uaSQL = `INSERT INTO user_accounts (account_holder, email) VALUES ($1, $2)`
-	if _, err := integPool.Exec(ctx, uaSQL, entityID, email); err != nil {
-		t.Fatalf("seedUser: insert user_account: %v", err)
-	}
-
-	if withWildcardManage {
-		seedWildcardGrant(t, entityID, "manage")
-	}
-	return entityID
-}
-
-// seedWildcardGrant inserts a wildcard grant (target_id IS NULL) for the given
-// actor entity and operation slug.
-func seedWildcardGrant(t *testing.T, actorEntityID int64, operationSlug string) {
-	t.Helper()
-	ctx := context.Background()
-
-	const opSQL = `SELECT id FROM authz_operations WHERE slug = $1`
-	var opID int64
-	if err := integPool.QueryRow(ctx, opSQL, operationSlug).Scan(&opID); err != nil {
-		t.Fatalf("seedWildcardGrant: resolve op %q: %v", operationSlug, err)
-	}
-
-	const grantSQL = `
-INSERT INTO grants (actor_id, operation_id, target_id, granted_by)
-VALUES ($1, $2, NULL, NULL)
-ON CONFLICT DO NOTHING`
-	if _, err := integPool.Exec(ctx, grantSQL, actorEntityID, opID); err != nil {
-		t.Fatalf("seedWildcardGrant: insert grant: %v", err)
-	}
-}
-
-// deleteWildcardGrant removes the wildcard grant for (actor, operationSlug).
-func deleteWildcardGrant(t *testing.T, actorEntityID int64, operationSlug string) {
-	t.Helper()
-	ctx := context.Background()
-
-	const opSQL = `SELECT id FROM authz_operations WHERE slug = $1`
-	var opID int64
-	if err := integPool.QueryRow(ctx, opSQL, operationSlug).Scan(&opID); err != nil {
-		t.Fatalf("deleteWildcardGrant: resolve op %q: %v", operationSlug, err)
-	}
-
-	const delSQL = `DELETE FROM grants WHERE actor_id = $1 AND operation_id = $2 AND target_id IS NULL`
-	if _, err := integPool.Exec(ctx, delSQL, actorEntityID, opID); err != nil {
-		t.Fatalf("deleteWildcardGrant: delete: %v", err)
-	}
-}
-
-// targetedGrant inserts a targeted grant (actor → op → target).
-func targetedGrant(t *testing.T, actorID, targetID int64, operationSlug string) {
-	t.Helper()
-	ctx := context.Background()
-
-	const opSQL = `SELECT id FROM authz_operations WHERE slug = $1`
-	var opID int64
-	if err := integPool.QueryRow(ctx, opSQL, operationSlug).Scan(&opID); err != nil {
-		t.Fatalf("targetedGrant: resolve op %q: %v", operationSlug, err)
-	}
-
-	const grantSQL = `
-INSERT INTO grants (actor_id, operation_id, target_id, granted_by)
-VALUES ($1, $2, $3, NULL)
-ON CONFLICT DO NOTHING`
-	if _, err := integPool.Exec(ctx, grantSQL, actorID, opID, targetID); err != nil {
-		t.Fatalf("targetedGrant: insert: %v", err)
-	}
-}
-
-// actorCtx returns a context with the given entity ID set as actor.
-func actorCtx(entityID int64) context.Context {
-	return opctx.WithActor(context.Background(), entityID)
-}
-
-// ---------------------------------------------------------------------------
-// Owner-predicate seed helpers (Scenario 9)
-// ---------------------------------------------------------------------------
 //
-// corporation is the subject: a concrete type that never self-owns (the
-// entities_owner_default_self trigger, migration 0013, matches only
-// natural_person and service_account descendants), and it exists in
-// mod-users' own composed schema, so these scenarios prove type-agnostic
-// ownership without depending on mod-tags or mod-tasks.
-
-// corporationTypeID resolves the 'corporation' type's internal ID.
-func corporationTypeID(t *testing.T) int64 {
-	t.Helper()
-	ctx := context.Background()
-	const typeSQL = `SELECT id FROM types WHERE slug = 'corporation'`
-	var typeID int64
-	if err := integPool.QueryRow(ctx, typeSQL).Scan(&typeID); err != nil {
-		t.Fatalf("corporationTypeID: resolve type: %v", err)
-	}
-	return typeID
-}
-
-// seedOwnedCorporation inserts entity -> legal_entity -> corporation with
-// owner_id set to ownerEntityID at INSERT time via CreateEntityWithOwner,
-// and returns the entity's internal ID.
+// The SQL-only fixtures (users, profiles, operators, grants, organizations)
+// live in fixtures_integration_test.go. The actors here are profiles: a plain
+// seedUser returns a bring-your-own user's personal profile, and
+// seedUser(..., true) returns an operator profile holding a wildcard manage
+// grant.
 //
-// owner_id must be set at INSERT time, not via a follow-up UPDATE:
-// entities_owner_immutable (migration 0013) fires on any UPDATE OF
-// owner_id, including the first NULL -> value write, so a
-// CreateEntity-then-UPDATE seeding helper would fail with "entities:
-// owner_id is immutable after insert".
-func seedOwnedCorporation(t *testing.T, ownerEntityID int64, legalName string) (entityID int64) {
-	t.Helper()
-	ctx := context.Background()
-	coreQ := coredb.New(integPool)
-
-	ent, err := coreQ.CreateEntityWithOwner(ctx, coredb.CreateEntityWithOwnerParams{
-		FundamentalTypeID: corporationTypeID(t),
-		OwnerID:           pgtype.Int8{Int64: ownerEntityID, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("seedOwnedCorporation: create entity: %v", err)
-	}
-	entityID = ent.ID
-
-	if _, err := coreQ.CreateLegalEntity(ctx, entityID); err != nil {
-		t.Fatalf("seedOwnedCorporation: create legal_entity: %v", err)
-	}
-	if _, err := coreQ.CreateCorporation(ctx, coredb.CreateCorporationParams{EntityID: entityID, LegalName: legalName}); err != nil {
-		t.Fatalf("seedOwnedCorporation: create corporation: %v", err)
-	}
-	return entityID
-}
-
-// seedUnownedCorporation inserts entity -> legal_entity -> corporation via
-// plain CreateEntity (no owner argument), so owner_id stays NULL — matching
-// every real corporation-creation path in the system (see
-// mod-core/api/service/corporation.go, and the single-row-own-predicate
-// investigation note's per-type owner_id table: no creation path ever sets
-// a corporation's owner_id).
-func seedUnownedCorporation(t *testing.T, legalName string) (entityID int64) {
-	t.Helper()
-	ctx := context.Background()
-	coreQ := coredb.New(integPool)
-
-	ent, err := coreQ.CreateEntity(ctx, corporationTypeID(t))
-	if err != nil {
-		t.Fatalf("seedUnownedCorporation: create entity: %v", err)
-	}
-	entityID = ent.ID
-
-	if _, err := coreQ.CreateLegalEntity(ctx, entityID); err != nil {
-		t.Fatalf("seedUnownedCorporation: create legal_entity: %v", err)
-	}
-	if _, err := coreQ.CreateCorporation(ctx, coredb.CreateCorporationParams{EntityID: entityID, LegalName: legalName}); err != nil {
-		t.Fatalf("seedUnownedCorporation: create corporation: %v", err)
-	}
-	return entityID
-}
+// organization is the subject of the owner-predicate scenarios: a concrete
+// type that never self-owns, created here with an explicit owner_id at INSERT
+// time (owner_id is immutable afterwards).
 
 // assertOwnerIDNull asserts, via direct SQL against entities, that
 // entityID's owner_id is NULL. Scenarios that depend on a NULL owner call
-// this before exercising Authorize, so a future change to
-// entities_owner_default_self's type matching (e.g. if 'corporation' were
-// ever added to the self-owning types) cannot make the scenario pass
-// vacuously.
+// this before exercising Authorize, so a change to the owner-default trigger
+// cannot make the scenario pass vacuously.
 func assertOwnerIDNull(t *testing.T, entityID int64) {
 	t.Helper()
-	ctx := context.Background()
-	const ownerSQL = `SELECT owner_id FROM entities WHERE id = $1`
 	var ownerID *int64
-	if err := integPool.QueryRow(ctx, ownerSQL, entityID).Scan(&ownerID); err != nil {
+	if err := integPool.QueryRow(context.Background(), `SELECT owner_id FROM entities WHERE id = $1`, entityID).Scan(&ownerID); err != nil {
 		t.Fatalf("assertOwnerIDNull: query entity %d: %v", entityID, err)
 	}
 	if ownerID != nil {
@@ -501,7 +326,7 @@ func TestInteg_WildcardManageAdmin_PassesAll(t *testing.T) {
 	if err := integAZ.Authorize(ctx, "delete", &targetID); err != nil {
 		t.Errorf("wildcard admin: delete target: got %v, want nil", err)
 	}
-	if err := integAZ.Authorize(ctx, "assume", &targetID); err != nil {
+	if err := integAZ.Authorize(ctx, "impersonate", &targetID); err != nil {
 		t.Errorf("wildcard admin: assume target: got %v, want nil", err)
 	}
 }
@@ -511,10 +336,8 @@ func TestInteg_WildcardManageAdmin_PassesAll(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestInteg_WildcardReadHolder_ReadAllowedWriteDenied(t *testing.T) {
-	readerID := seedUser(t, "reader-s2@example.com", false)
+	readerID := seedOperator(t, "read") // wildcard grants go only to operator actors
 	targetID := seedUser(t, "target-s2@example.com", false)
-
-	seedWildcardGrant(t, readerID, "read")
 
 	ctx := actorCtx(readerID)
 
@@ -545,7 +368,7 @@ func TestInteg_WildcardReadHolder_ReadAllowedWriteDenied(t *testing.T) {
 	if err := integAZ.Authorize(ctx, "delete", &targetID); err == nil {
 		t.Errorf("wildcard read: delete target: got nil, want ErrForbidden")
 	}
-	if err := integAZ.Authorize(ctx, "assume", &targetID); err == nil {
+	if err := integAZ.Authorize(ctx, "impersonate", &targetID); err == nil {
 		t.Errorf("wildcard read: assume target: got nil, want ErrForbidden")
 	}
 
@@ -719,7 +542,7 @@ func TestInteg_OIDCRoleAdminPathRemoved(t *testing.T) {
 	// because target == actor. Before task 001, the old code recognized
 	// this case via a hardcoded `*target == actorEntityID` identity check;
 	// that check is gone, and this assertion now exercises the same
-	// generic own-arm Scenario 9 proves against a corporation (a type that
+	// generic own-arm Scenario 9 proves against a organization (a type that
 	// never self-owns), so the coincidence that oidcUserID's target equals
 	// its own actor ID is no longer load-bearing for this assertion to
 	// pass.
@@ -730,7 +553,7 @@ func TestInteg_OIDCRoleAdminPathRemoved(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // Scenario 9: Generic owner predicate (entities.owner_id), proved against a
-// corporation — a concrete type that never self-owns via
+// organization — a concrete type that never self-owns via
 // entities_owner_default_self. Task 001 folded a generic "OR EXISTS (...
 // e.owner_id = actorEntityID)" arm into checkGrantOrOwn, replacing the old
 // *target == actorEntityID identity check and checkTagOwnership. Task 001's
@@ -740,21 +563,21 @@ func TestInteg_OIDCRoleAdminPathRemoved(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestInteg_OwnerPredicate_OwnerAllowedAnyOperation seeds actor A and a
-// corporation entity with owner_id = A via seedOwnedCorporation, records no
+// organization entity with owner_id = A via seedOwnedOrg, records no
 // grant of any kind, and asserts Authorize returns nil for read, update,
 // delete, and a non-CRUD verb (assume) — operation by operation, so the
 // requirement that the own-arm is not gated on the operation or on opIDs is
 // pinned per-operation rather than by a single passing call. This is
-// exactly the case that returned ErrForbidden before task 001: corporation
+// exactly the case that returned ErrForbidden before task 001: organization
 // is not natural_person or service_account, so the old identity check never
 // matched, and checkTagOwnership cannot even run in mod-users' own schema
 // (no tags table).
 func TestInteg_OwnerPredicate_OwnerAllowedAnyOperation(t *testing.T) {
 	ownerID := seedUser(t, "owner-s9a@example.com", false)
-	corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9A")
+	corpID := seedOwnedOrg(t, ownerID, "Acme Corp S9A")
 	ctx := actorCtx(ownerID)
 
-	for _, op := range []string{"read", "update", "delete", "assume"} {
+	for _, op := range []string{"read", "update", "delete", "grant"} {
 		if err := integAZ.Authorize(ctx, op, &corpID); err != nil {
 			t.Errorf("owner predicate: owner op=%q: got %v, want nil", op, err)
 		}
@@ -763,24 +586,24 @@ func TestInteg_OwnerPredicate_OwnerAllowedAnyOperation(t *testing.T) {
 
 // TestInteg_OwnerPredicate_NonOwnerDenied is the non-owner mirror of
 // TestInteg_OwnerPredicate_OwnerAllowedAnyOperation: a second actor B, with
-// no grants and no ownership of A's corporation, is denied every operation
+// no grants and no ownership of A's organization, is denied every operation
 // A is allowed on that same entity.
 func TestInteg_OwnerPredicate_NonOwnerDenied(t *testing.T) {
 	ownerID := seedUser(t, "owner-s9b@example.com", false)
 	nonOwnerID := seedUser(t, "nonowner-s9b@example.com", false)
-	corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9B")
+	corpID := seedOwnedOrg(t, ownerID, "Acme Corp S9B")
 	ctx := actorCtx(nonOwnerID)
 
-	for _, op := range []string{"read", "update", "delete", "assume"} {
+	for _, op := range []string{"read", "update", "delete", "grant"} {
 		if err := integAZ.Authorize(ctx, op, &corpID); err == nil {
 			t.Errorf("owner predicate: non-owner op=%q: got nil, want ErrForbidden", op)
 		}
 	}
 }
 
-// TestInteg_OwnerPredicate_NullOwnerDenied seeds a corporation via
-// seedUnownedCorporation (plain CreateEntity — owner_id stays NULL, matching
-// every real corporation-creation path), asserts the NULL precondition by
+// TestInteg_OwnerPredicate_NullOwnerDenied seeds a organization via
+// seedUnownedOrg (plain CreateEntity — owner_id stays NULL, matching
+// every real organization-creation path), asserts the NULL precondition by
 // direct SQL first via assertOwnerIDNull, then asserts both actor A and
 // actor B are denied read. e.owner_id = actorEntityID evaluates to NULL
 // (not true) when owner_id IS NULL, so the own-arm's EXISTS is false and a
@@ -789,7 +612,7 @@ func TestInteg_OwnerPredicate_NonOwnerDenied(t *testing.T) {
 func TestInteg_OwnerPredicate_NullOwnerDenied(t *testing.T) {
 	actorA := seedUser(t, "actor-a-s9c@example.com", false)
 	actorB := seedUser(t, "actor-b-s9c@example.com", false)
-	corpID := seedUnownedCorporation(t, "Acme Corp S9C")
+	corpID := seedUnownedOrg(t, "Acme Corp S9C")
 
 	assertOwnerIDNull(t, corpID)
 
@@ -799,22 +622,22 @@ func TestInteg_OwnerPredicate_NullOwnerDenied(t *testing.T) {
 	}{{"A", actorA}, {"B", actorB}} {
 		ctx := actorCtx(actor.id)
 		if err := integAZ.Authorize(ctx, "read", &corpID); err == nil {
-			t.Errorf("null-owner corporation: actor %s: got nil, want ErrForbidden", actor.name)
+			t.Errorf("null-owner organization: actor %s: got nil, want ErrForbidden", actor.name)
 		}
 	}
 }
 
 // TestInteg_OwnerPredicate_DoesNotLeakAcrossEntities seeds actor A owning
-// corporation X, and asserts A is denied read on both an unowned corporation
-// Y and a corporation Z owned by a different actor — guarding against a
+// organization X, and asserts A is denied read on both an unowned organization
+// Y and a organization Z owned by a different actor — guarding against a
 // mis-parameterized query that ignores the target id (the failure mode that
 // would make the own-arm allow everything, not just the actor's own row).
 func TestInteg_OwnerPredicate_DoesNotLeakAcrossEntities(t *testing.T) {
 	ownerID := seedUser(t, "owner-s9d@example.com", false)
 	otherOwnerID := seedUser(t, "other-owner-s9d@example.com", false)
-	ownedID := seedOwnedCorporation(t, ownerID, "Acme Corp S9D Owned")
-	unownedID := seedUnownedCorporation(t, "Acme Corp S9D Unowned")
-	otherOwnedID := seedOwnedCorporation(t, otherOwnerID, "Acme Corp S9D OtherOwned")
+	ownedID := seedOwnedOrg(t, ownerID, "Acme Corp S9D Owned")
+	unownedID := seedUnownedOrg(t, "Acme Corp S9D Unowned")
+	otherOwnedID := seedOwnedOrg(t, otherOwnerID, "Acme Corp S9D OtherOwned")
 	ctx := actorCtx(ownerID)
 
 	if err := integAZ.Authorize(ctx, "read", &ownedID); err != nil {
@@ -829,9 +652,9 @@ func TestInteg_OwnerPredicate_DoesNotLeakAcrossEntities(t *testing.T) {
 }
 
 // TestInteg_OwnerPredicate_ListSingleRowSymmetry is the plan's headline
-// claim: for the owned corporation, single-row Authorize("read", &owned)
+// claim: for the owned organization, single-row Authorize("read", &owned)
 // succeeds, and the SAME row is returned by the list-side
-// accessible_corporation_ids_for_actor access function. wireServices
+// accessible_organization_ids_for_actor access function. wireServices
 // installs the REAL generic four-arm function body via
 // setup.ApplyFuncs/GrantTableGenerator (not the empty-set stub
 // 0099_access_function_stubs.sql ships, which app startup normally replaces
@@ -840,7 +663,7 @@ func TestInteg_OwnerPredicate_DoesNotLeakAcrossEntities(t *testing.T) {
 func TestInteg_OwnerPredicate_ListSingleRowSymmetry(t *testing.T) {
 	t.Run("ownership", func(t *testing.T) {
 		ownerID := seedUser(t, "owner-s9e@example.com", false)
-		corpID := seedOwnedCorporation(t, ownerID, "Acme Corp S9E")
+		corpID := seedOwnedOrg(t, ownerID, "Acme Corp S9E")
 		ctx := actorCtx(ownerID)
 
 		if err := integAZ.Authorize(ctx, "read", &corpID); err != nil {
@@ -852,7 +675,7 @@ func TestInteg_OwnerPredicate_ListSingleRowSymmetry(t *testing.T) {
 			t.Fatalf("list/single-row symmetry: SatisfiedBy(read): %v", err)
 		}
 
-		const accessSQL = `SELECT entity_id FROM accessible_corporation_ids_for_actor($1, $2)`
+		const accessSQL = `SELECT entity_id FROM accessible_organization_ids_for_actor($1, $2)`
 		rows, err := integPool.Query(context.Background(), accessSQL, ownerID, readOpIDs)
 		if err != nil {
 			t.Fatalf("list/single-row symmetry: query access function: %v", err)
@@ -873,7 +696,7 @@ func TestInteg_OwnerPredicate_ListSingleRowSymmetry(t *testing.T) {
 			t.Fatalf("list/single-row symmetry: rows: %v", err)
 		}
 		if !found {
-			t.Errorf("list/single-row symmetry: accessible_corporation_ids_for_actor(%d, ...) did not include owned corporation %d — single-row Authorize and the list-side access function disagree", ownerID, corpID)
+			t.Errorf("list/single-row symmetry: accessible_organization_ids_for_actor(%d, ...) did not include owned organization %d — single-row Authorize and the list-side access function disagree", ownerID, corpID)
 		}
 	})
 	t.Run("type grants", testTypeGrantListSingleRowSymmetry)
@@ -882,7 +705,7 @@ func TestInteg_OwnerPredicate_ListSingleRowSymmetry(t *testing.T) {
 // symmetrySlugs are the production list functions the type-grant symmetry
 // subtests cover. "type" is excluded: production never generates
 // accessible_type_ids_for_actor.
-var symmetrySlugs = []string{"corporation", "natural_person", "legal_entity"}
+var symmetrySlugs = []string{"organization", "natural_person", "legal_entity"}
 
 // accessibleIDs returns the set of entity ids that
 // accessible_<slug>_ids_for_actor(actor, readOpIDs) lists. slug comes from the
@@ -932,7 +755,7 @@ func typeIsUnderSlug(t *testing.T, entityID int64, slug string) bool {
 // Each fixture also pins the expected Authorize outcome for the instance
 // candidates, so a fixture cannot pass vacuously with both sides empty.
 func testTypeGrantListSingleRowSymmetry(t *testing.T) {
-	corpTE := typeEntityIDForSlug(t, "corporation")
+	corpTE := typeEntityIDForSlug(t, "organization")
 	npTE := typeEntityIDForSlug(t, "natural_person")
 	leTE := typeEntityIDForSlug(t, "legal_entity")
 
@@ -941,8 +764,8 @@ func testTypeGrantListSingleRowSymmetry(t *testing.T) {
 		t.Fatalf("SatisfiedBy(read): %v", err)
 	}
 
-	corpBefore := seedUnownedCorporation(t, "Symmetry Corp Before")
-	npOther := seedGrantHolder(t, "sym-other-np")
+	corpBefore := seedUnownedOrg(t, "Symmetry Corp Before")
+	npOther := seedNaturalPerson2(t)
 
 	type candidate struct {
 		name string
@@ -958,26 +781,26 @@ func testTypeGrantListSingleRowSymmetry(t *testing.T) {
 		noTypeEntities bool
 	}
 	fixtures := []fixture{
-		{"read directly on corporation type entity", func(a int64) { targetedGrant(t, a, corpTE, "read") },
-			map[string]bool{"corp-before": true, "corp-after": true, "actor": true}, false},
-		{"list directly on corporation type entity", func(a int64) { targetedGrant(t, a, corpTE, "list") },
-			map[string]bool{"corp-before": true, "corp-after": true, "actor": true}, false},
-		{"read on type-only target group holding corporation type entity via actor group", func(a int64) {
+		{"read directly on organization type entity", func(a int64) { targetedGrant(t, a, corpTE, "read") },
+			map[string]bool{"corp-before": true, "corp-after": true}, false},
+		{"list directly on organization type entity", func(a int64) { targetedGrant(t, a, corpTE, "list") },
+			map[string]bool{"corp-before": true, "corp-after": true}, false},
+		{"read on type-only target group holding organization type entity via actor group", func(a int64) {
 			ag := seedActorGroup(t, "sym-actor-group")
 			addActorGroupMember(t, ag, a)
 			g := seedTargetGroup(t, "sym-target-group")
 			addTargetGroupMember(t, g, corpTE)
 			targetedGrant(t, ag, g, "read")
-		}, map[string]bool{"corp-before": true, "corp-after": true, "actor": true}, false},
+		}, map[string]bool{"corp-before": true, "corp-after": true}, false},
 		{"manage directly on natural_person type entity", func(a int64) { targetedGrant(t, a, npTE, "manage") },
-			map[string]bool{"np-other": true, "actor": true}, false},
+			map[string]bool{"np-other": true}, false},
 		{"read on legal_entity type entity (exact type only)", func(a int64) { targetedGrant(t, a, leTE, "read") },
-			map[string]bool{"actor": true}, false},
-		{"create on corporation type entity (operation does not satisfy read)", func(a int64) { targetedGrant(t, a, corpTE, "create") },
-			map[string]bool{"actor": true}, false},
-		{"no grants (control)", func(int64) {}, map[string]bool{"actor": true}, false},
+			map[string]bool{}, false},
+		{"create on organization type entity (operation does not satisfy read)", func(a int64) { targetedGrant(t, a, corpTE, "create") },
+			map[string]bool{}, false},
+		{"no grants (control)", func(int64) {}, map[string]bool{}, false},
 		{"read on the sentinel type entity (reaches no type entity)", func(a int64) { targetedGrant(t, a, typeEntityIDForSlug(t, "type"), "read") },
-			map[string]bool{"actor": true}, true},
+			map[string]bool{}, true},
 	}
 
 	for _, fx := range fixtures {
@@ -985,14 +808,14 @@ func testTypeGrantListSingleRowSymmetry(t *testing.T) {
 			actor := seedGrantHolder(t, "sym-actor")
 			fx.setup(actor)
 			// Created after the grant: future instances must be covered.
-			corpAfter := seedUnownedCorporation(t, "Symmetry Corp After")
+			corpAfter := seedUnownedOrg(t, "Symmetry Corp After")
 
 			candidates := []candidate{
 				{"corp-before", corpBefore},
 				{"corp-after", corpAfter},
 				{"actor", actor},
 				{"np-other", npOther},
-				{"corporation type entity", corpTE},
+				{"organization type entity", corpTE},
 				{"legal_entity type entity", leTE},
 				{"natural_person type entity", npTE},
 			}
