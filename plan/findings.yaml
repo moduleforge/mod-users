@@ -6,8 +6,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: deploy/k8s/base/deployment.yaml and deploy/cloudrun/service.yaml still inject JWT_SECRET from a required secret (users-api-secrets/jwt-secret) and never wire JWT_SIGNING_KEY or JWT_SIGNING_KID. After the EdDSA-only change in api/internal/config (config.Load, loadJWTSigning, bootstrapSigningKeyFromDB), JWT_SECRET is optional and keys only the OAuth state HMAC (api/internal/auth/derived_keys.go OAuthStateKey), and access tokens are signed by JWT_SIGNING_KEY or, when it is unset, a key persisted in mod_users.auth_signing_keys. The manifests should make jwt-secret optional and show how to supply JWT_SIGNING_KEY (and JWT_VERIFY_PUBLIC_KEYS for rotation) from a secret, with the new AUTH_* lifetime and audience variables where a deployment needs non-default values.
     - title: Identifier delete blocked by cred FKs
       id: oi9B
