@@ -180,4 +180,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Confirm the mod-authz phase 13 merge: the agent could not confirm it by commit; the composed schema contains the MF501 grant triggers the fixtures satisfy. Task 010 can re-run the authz suite if the phase 13 merge is treated as unconfirmed.'
+    - title: Remove the leftover throwaway Postgres contai
+      id: w9CQ
+      date: "2026-10-24"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Remove the leftover throwaway Postgres container mod-users-authz-integ-t009 (port 49420) from the interrupted run: docker rm -f mod-users-authz-integ-t009.'
 closed: []
