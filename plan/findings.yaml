@@ -18,15 +18,6 @@ items:
         - priority:medium
         - effort:small
       text: 'Decision needed: password reset does not copy old credential party authorizations, so a party profile with credential_rule ''authorized'' locks after reset until re-authorized. Decide whether a later task should copy them.'
-    - title: 'Task 010: rewrite handlers/auth/oidc_test.go'
-      id: Oczs
-      date: "2026-10-23"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Task 010: rewrite handlers/auth/oidc_test.go and oidc_linkmode_test.go, which still target the removed OIDCHandler API.'
     - title: 'Decision needed: link does not confine the ne'
       id: wZsk
       date: "2026-10-23"
@@ -1036,4 +1027,12 @@ closed:
         /credentials/oidc/{provider}/start under /v1/me. main.go:429 mounts StepUpStart under
         /v1/session. main.go:396 sets ProvidersDeps.Parties to coreQueries, and
         api/internal/handlers/oidc_providers.go:77 consumes it.
+      date: "2026-10-24"
+    - id: Oczs
+      title: 'Task 010: rewrite handlers/auth/oidc_test.go'
+      disposition: dismissed
+      reason: |-
+        Already fixed. oidc_linkmode_test.go no longer exists under api/internal/handlers/auth/.
+        oidc_test.go compiles against the current OIDCHandler API: `go vet ./internal/handlers/...`
+        passes.
       date: "2026-10-24"
