@@ -107,7 +107,7 @@ phases:
           slug: db-invariant-integration-tests
           title: DB Invariant Integration Tests
           path: phase-06-users-identity-core/009-db-invariant-integration-tests.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Rewrote and added DB invariant integration suites (MF101/MF102/MF103, availability, session_acr and liveness, cooldown concurrency) and adapted authz integration suites to the profile model. Shared fixtures in fixtures_integration_test.go. Authz integration suite passes against a throwaway Postgres; go vet and unit tests pass with and without the integration tag. jwtsecret_bootstrap integration test left for task 010.
           git:
