@@ -24,8 +24,8 @@ items:
       tags:
         - type:ambiguity
         - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
+        - priority:high
+        - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
     - title: Task 008 must call UserService.WithSelfServic
       id: LKRp
