@@ -1428,3 +1428,27 @@ items:
         - plan/phase:users-identity-core
         - plan/slug:identity-model-impl
       text: api/internal/handlers/auth/oidc_flows.go createManagedUser re-implements the entity, principal, users-row and party-profile steps of service.UserService.CreateManagedUserInTx because that primitive authorizes `create user` as an acting profile, and the OIDC callback has no actor before the new idp_jit profile exists. Add a trusted service primitive (for example CreateManagedJITUserInTx on UserService) that creates the managed user with its active idp_jit party profile and observes `create user` as that profile, then switch createManagedUser to it so the invariants live in one place. The managed path was written without a live database to exercise it.
+    - title: DeleteExpired (challenges), DeleteExpiredRef…
+      id: lfAN
+      date: "2026-10-24"
+      tags:
+        - type:optimization
+        - priority:medium
+        - effort:medium
+        - plan/phase:users-identity-core
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/service/challenge_service.go
+        lines: 377-384
+        severity: major
+        confidence: medium
+        concerns: efficiency
+        description:
+          DeleteExpired (challenges), DeleteExpiredRefreshTokens and any session cleanup have no non-test
+          caller. session_refresh_tokens gains a row on every refresh rotation and used rows are never
+          deleted; auth_challenges and expired/revoked sessions also accumulate. Growth is driven by user
+          input (login, code requests, refresh).
+        recommendation:
+          Wire a periodic purge job for challenges, refresh tokens and dead sessions, with expires_at indexes
+          (the delete predicates "expires_at < cutoff" currently seq-scan both tables).
