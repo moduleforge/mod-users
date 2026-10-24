@@ -45,15 +45,6 @@ items:
         - priority:high
         - effort:small
       text: model/Makefile's compose target (which feeds make dev.start, migrate.up and the integration suites) copies only the mod-core and mod-authz migrations plus mod-users' own, so schema/migrations has no audit_log table. api/cmd/server/main.go puts mod-audit's observer (auditservice.New) in the observer group, so the first sign-in or other observed write against a database built from that composed directory fails with "relation audit_log does not exist". Add mod-audit's model/migrations (0400_audit_log.sql) to compose, resolved the same way as CORE_DIR and AUTHZ_DIR (go list -m github.com/moduleforge/audit-model, falling back to the sibling path). api/internal/integration/harness_integration_test.go currently works around it by copying the composed directory and adding the audit migration to a temporary copy; it can then drop that copy.
-    - title: Aggregate make build, make test and make lint
-      id: CHws
-      date: "2026-10-24"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-core
-        - priority:unspecified
-        - effort:unspecified
-      text: Aggregate make build, make test and make lint fail in gui/ because @moduleforge/core-gui cannot resolve (mod-core/gui unbuilt in the linked sibling). Rebuild mod-core/gui in an environment where that is allowed and re-run the aggregates. mod-core not touched by this task.
     - title: Integration suite requires a Postgres whose c
       id: t7jz
       date: "2026-10-24"
@@ -1028,4 +1019,14 @@ closed:
       reason: |-
         Already fixed. `docker ps -a` on this host lists no container named
         mod-users-authz-integ-t009, so the leftover container is gone.
+      date: "2026-10-24"
+    - id: CHws
+      title: Aggregate make build, make test and make lint
+      disposition: dismissed
+      reason: |-
+        Not actionable in mod-users. The failure was an environment precondition:
+        @moduleforge/core-gui did not resolve because the sibling mod-core/gui was unbuilt. No
+        mod-users change fixes it, and the agent noted that mod-core was not touched. The sibling
+        build output now exists (/Users/zane/playground/moduleforge/mod-core/gui/dist holds
+        index.css and index.d.ts). The aggregate gui build is re-run by 9/001's validation.
       date: "2026-10-24"
