@@ -1,0 +1,251 @@
+//go:build integration
+
+package authz_test
+
+// availability_integration_test.go proves mod_users.profile_availability and
+// mod_users.credential_profile_availability (through the shared
+// profile_availability_for rule): every lock reason, confinement over every
+// factor, the credential_rule values, the outside-collaborator confirmation
+// that exempts the credential rule but never min_acr, the personal-profile
+// bypass of the party gate, and the impersonation bypass.
+
+import (
+	"context"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+)
+
+func sessionAvail(t *testing.T, sessionID, profileID int64) string {
+	t.Helper()
+	var s string
+	if err := integPool.QueryRow(context.Background(), `SELECT mod_users.profile_availability($1, $2)`, sessionID, profileID).Scan(&s); err != nil {
+		t.Fatalf("profile_availability: %v", err)
+	}
+	return s
+}
+
+func credAvail(t *testing.T, credID, profileID int64) string {
+	t.Helper()
+	var s string
+	if err := integPool.QueryRow(context.Background(), `SELECT mod_users.credential_profile_availability($1, $2)`, credID, profileID).Scan(&s); err != nil {
+		t.Fatalf("credential_profile_availability: %v", err)
+	}
+	return s
+}
+
+func wantAvail(t *testing.T, got, want, what string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("%s: availability %q, want %q", what, got, want)
+	}
+}
+
+// member is a bring-your-own user with a personal profile and an active profile
+// in a party.
+type member struct {
+	User, Personal, PartyProfile, Party int64
+}
+
+func seedMember(t *testing.T, party int64) member {
+	t.Helper()
+	m := member{Party: party}
+	fxMustTx(t, func(tx pgx.Tx) {
+		m.User, m.Personal = fxUser(t, tx, userOpts{})
+		m.PartyProfile = fxPartyProfile(t, tx, m.User, party, "active")
+	})
+	return m
+}
+
+func confine(t *testing.T, credID, party int64) {
+	t.Helper()
+	fxExec(t, integPool, "confine credential", `UPDATE mod_users.credentials SET confined_to_party_id = $2 WHERE id = $1`, credID, party)
+}
+
+// sessionWith creates a session of the user holding the given credentials as
+// factors, with the given stored acr.
+func sessionWith(t *testing.T, user int64, acr int, creds ...int64) int64 {
+	t.Helper()
+	id, _ := fxSession(t, integPool, user, sessionOpts{ACR: acr})
+	for _, c := range creds {
+		fxFactor(t, integPool, id, c, nil)
+	}
+	return id
+}
+
+func TestInteg_Availability_LockReasons(t *testing.T) {
+	party := seedOrg(t, "Avail party")
+	m := seedMember(t, party)
+	cred := fxPassword(t, integPool, m.User, nil)
+	s := sessionWith(t, m.User, 1, cred)
+
+	wantAvail(t, sessionAvail(t, s, m.Personal), "available", "personal profile")
+	wantAvail(t, sessionAvail(t, s, m.PartyProfile), "available", "party profile, no policy")
+
+	t.Run("not_held", func(t *testing.T) {
+		other := seedMember(t, party)
+		wantAvail(t, sessionAvail(t, s, other.Personal), "not_held", "another user's profile")
+		wantAvail(t, sessionAvail(t, s, 999999999), "not_held", "unknown profile")
+		wantAvail(t, sessionAvail(t, 999999999, m.Personal), "not_held", "unknown session")
+		wantAvail(t, credAvail(t, cred, other.Personal), "not_held", "credential, another user's profile")
+		wantAvail(t, credAvail(t, 999999999, m.Personal), "not_held", "unknown credential")
+	})
+
+	t.Run("inactive", func(t *testing.T) {
+		mm := seedMember(t, party)
+		c := fxPassword(t, integPool, mm.User, nil)
+		ss := sessionWith(t, mm.User, 1, c)
+		fxExec(t, integPool, "suspend party profile", `UPDATE profiles SET status = 'suspended' WHERE entity_id = $1`, mm.PartyProfile)
+		wantAvail(t, sessionAvail(t, ss, mm.PartyProfile), "inactive", "suspended party profile")
+		wantAvail(t, credAvail(t, c, mm.PartyProfile), "inactive", "credential, suspended party profile")
+		fxExec(t, integPool, "suspend personal profile", `UPDATE profiles SET status = 'suspended' WHERE entity_id = $1`, mm.Personal)
+		wantAvail(t, sessionAvail(t, ss, mm.Personal), "inactive", "suspended personal profile")
+	})
+
+	t.Run("invited profile is inactive", func(t *testing.T) {
+		mm := seedMember(t, party)
+		invitedParty := seedOrg(t, "Avail invite party")
+		var invited int64
+		fxMustTx(t, func(tx pgx.Tx) { invited = fxPartyProfile(t, tx, mm.User, invitedParty, "invited") })
+		ss := sessionWith(t, mm.User, 1, fxPassword(t, integPool, mm.User, nil))
+		wantAvail(t, sessionAvail(t, ss, invited), "inactive", "invited profile")
+	})
+
+	t.Run("principal_disabled", func(t *testing.T) {
+		mm := seedMember(t, party)
+		c := fxPassword(t, integPool, mm.User, nil)
+		ss := sessionWith(t, mm.User, 1, c)
+		fxExec(t, integPool, "disable principal", `UPDATE principals SET disabled_at = now() WHERE entity_id = $1`, mm.User)
+		wantAvail(t, sessionAvail(t, ss, mm.Personal), "principal_disabled", "disabled principal, personal profile")
+		wantAvail(t, sessionAvail(t, ss, mm.PartyProfile), "principal_disabled", "disabled principal, party profile")
+		wantAvail(t, credAvail(t, c, mm.Personal), "principal_disabled", "credential, disabled principal")
+	})
+}
+
+func TestInteg_Availability_ConfinementOverEveryFactor(t *testing.T) {
+	partyA := seedOrg(t, "Confine A")
+	partyB := seedOrg(t, "Confine B")
+	m := seedMember(t, partyA)
+	var inB int64
+	fxMustTx(t, func(tx pgx.Tx) { inB = fxPartyProfile(t, tx, m.User, partyB, "active") })
+
+	free := fxPassword(t, integPool, m.User, nil)
+	confinedA := fxOIDC(t, integPool, m.User, "https://"+fxTag("iss"), "p", fxTag("sub"))
+	confine(t, confinedA, partyA)
+
+	// One confined factor among several confines the whole session.
+	both := sessionWith(t, m.User, 2, free, confinedA)
+	wantAvail(t, sessionAvail(t, both, m.PartyProfile), "available", "party A profile, factor confined to A")
+	wantAvail(t, sessionAvail(t, both, inB), "confined", "party B profile, one factor confined to A")
+	wantAvail(t, sessionAvail(t, both, m.Personal), "confined", "personal profile hidden by any confinement")
+
+	onlyFree := sessionWith(t, m.User, 1, free)
+	wantAvail(t, sessionAvail(t, onlyFree, inB), "available", "unconfined factor reaches party B")
+	wantAvail(t, sessionAvail(t, onlyFree, m.Personal), "available", "unconfined factor reaches the personal profile")
+
+	wantAvail(t, credAvail(t, confinedA, inB), "confined", "credential confined to A, B profile")
+	wantAvail(t, credAvail(t, confinedA, m.Personal), "confined", "credential confined to A, personal profile")
+	wantAvail(t, credAvail(t, confinedA, m.PartyProfile), "available", "credential confined to A, A profile")
+}
+
+func TestInteg_Availability_CredentialRuleAuthorized(t *testing.T) {
+	party := seedOrg(t, "Authorized rule party")
+	fxMustTx(t, func(tx pgx.Tx) { fxPolicy(t, tx, party, "authorized", nil, 1) })
+	m := seedMember(t, party)
+	admin := seedMember(t, party)
+
+	cred := fxPassword(t, integPool, m.User, nil)
+	s := sessionWith(t, m.User, 1, cred)
+	wantAvail(t, sessionAvail(t, s, m.PartyProfile), "credential_not_authorized", "unauthorized credential")
+	wantAvail(t, credAvail(t, cred, m.PartyProfile), "credential_not_authorized", "credential path, unauthorized")
+	wantAvail(t, sessionAvail(t, s, m.Personal), "available", "personal profile skips the party gate")
+
+	fxExec(t, integPool, "authorize credential",
+		`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
+		cred, party, admin.PartyProfile)
+	wantAvail(t, sessionAvail(t, s, m.PartyProfile), "available", "authorized credential")
+	wantAvail(t, credAvail(t, cred, m.PartyProfile), "available", "credential path, authorized")
+
+	// A credential confined to the party also satisfies the rule.
+	conf := fxOIDC(t, integPool, m.User, "https://"+fxTag("iss"), "p", fxTag("sub"))
+	confine(t, conf, party)
+	wantAvail(t, sessionAvail(t, sessionWith(t, m.User, 1, conf), m.PartyProfile), "available", "credential confined to the party")
+
+	// One authorized factor among unauthorized ones is enough.
+	other, _ := fxSSHKey(t, integPool, m.User, "SHA256:"+fxTag("fp"))
+	wantAvail(t, sessionAvail(t, sessionWith(t, m.User, 2, other, cred), m.PartyProfile), "available", "one authorized factor of two")
+}
+
+func TestInteg_Availability_CredentialRuleProvider(t *testing.T) {
+	party := seedOrg(t, "Provider rule party")
+	provider := "mf-" + fxTag("prov")
+	other := "mf-" + fxTag("prov")
+	fxMustTx(t, func(tx pgx.Tx) {
+		fxOIDCProvider(t, tx, provider, false)
+		fxOIDCProvider(t, tx, other, false)
+		fxPolicy(t, tx, party, "provider", &provider, 1)
+	})
+	m := seedMember(t, party)
+
+	pw := fxPassword(t, integPool, m.User, nil)
+	wrong := fxOIDC(t, integPool, m.User, "https://"+fxTag("iss"), other, fxTag("sub"))
+	right := fxOIDC(t, integPool, m.User, "https://"+fxTag("iss"), provider, fxTag("sub"))
+
+	wantAvail(t, sessionAvail(t, sessionWith(t, m.User, 1, pw), m.PartyProfile), "provider_required", "password only")
+	wantAvail(t, sessionAvail(t, sessionWith(t, m.User, 1, wrong), m.PartyProfile), "provider_required", "oidc of another provider")
+	wantAvail(t, sessionAvail(t, sessionWith(t, m.User, 1, right), m.PartyProfile), "available", "oidc of the required provider")
+	wantAvail(t, sessionAvail(t, sessionWith(t, m.User, 2, pw, right), m.PartyProfile), "available", "required provider among several factors")
+	wantAvail(t, credAvail(t, right, m.PartyProfile), "available", "credential path, required provider")
+	wantAvail(t, credAvail(t, pw, m.PartyProfile), "provider_required", "credential path, password")
+}
+
+func TestInteg_Availability_MinACRAndConfirmations(t *testing.T) {
+	party := seedOrg(t, "Min acr party")
+	provider := "mf-" + fxTag("prov")
+	fxMustTx(t, func(tx pgx.Tx) {
+		fxOIDCProvider(t, tx, provider, false)
+		fxPolicy(t, tx, party, "provider", &provider, 2)
+	})
+	confirmer := seedMember(t, party)
+	m := seedMember(t, party)
+
+	pw := fxPassword(t, integPool, m.User, nil)
+	oidc := fxOIDC(t, integPool, m.User, "https://"+fxTag("iss"), provider, fxTag("sub"))
+
+	// min_acr applies on top of the credential rule.
+	low := sessionWith(t, m.User, 1, oidc)
+	wantAvail(t, sessionAvail(t, low, m.PartyProfile), "acr_too_low", "right provider, session acr 1 below min_acr 2")
+	high := sessionWith(t, m.User, 2, oidc)
+	wantAvail(t, sessionAvail(t, high, m.PartyProfile), "available", "right provider, session acr 2")
+	wantAvail(t, credAvail(t, oidc, m.PartyProfile), "acr_too_low", "credential path: base_acr 1 is below min_acr 2")
+
+	// The personal profile is not subject to the party's min_acr.
+	wantAvail(t, sessionAvail(t, low, m.Personal), "available", "personal profile skips min_acr")
+
+	// An outside-collaborator confirmation exempts the credential rule only.
+	pwLow := sessionWith(t, m.User, 1, pw)
+	wantAvail(t, sessionAvail(t, pwLow, m.PartyProfile), "provider_required", "wrong factor before confirmation")
+	fxExec(t, integPool, "confirm profile",
+		`INSERT INTO profile_policy_confirmations (profile_id, party_id, confirmed_by_profile_id) VALUES ($1, $2, $3)`,
+		m.PartyProfile, party, confirmer.PartyProfile)
+	wantAvail(t, sessionAvail(t, pwLow, m.PartyProfile), "acr_too_low", "confirmed profile still meets min_acr")
+	pwHigh := sessionWith(t, m.User, 2, pw)
+	wantAvail(t, sessionAvail(t, pwHigh, m.PartyProfile), "available", "confirmed profile with sufficient acr")
+}
+
+func TestInteg_Availability_ImpersonationSkipsCredentialRule(t *testing.T) {
+	party := seedOrg(t, "Impersonation party")
+	fxMustTx(t, func(tx pgx.Tx) { fxPolicy(t, tx, party, "authorized", nil, 1) })
+	target := seedMember(t, party)
+	admin, _ := seedUserEntity(t)
+	parent, _ := fxSession(t, integPool, admin, sessionOpts{})
+
+	// The target's own session fails the credential rule; the impersonation
+	// session, which has no factors of its own, skips it.
+	own := sessionWith(t, target.User, 1, fxPassword(t, integPool, target.User, nil))
+	wantAvail(t, sessionAvail(t, own, target.PartyProfile), "credential_not_authorized", "target's own session")
+
+	imp, _ := fxSession(t, integPool, target.User, sessionOpts{ParentID: &parent, ImpersonateProfile: &target.PartyProfile})
+	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "available", "impersonation session skips the credential rule")
+	wantAvail(t, sessionAvail(t, imp, target.Personal), "not_held", "impersonation reaches only the impersonated profile")
+}

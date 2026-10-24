@@ -43,18 +43,18 @@ func requireForbidden(t *testing.T, ctx context.Context, op string, target int64
 }
 
 func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
-	corpEnt := typeEntityIDForSlug(t, "corporation")
+	corpEnt := typeEntityIDForSlug(t, "organization")
 	npEnt := typeEntityIDForSlug(t, "natural_person")
 	legalEnt := typeEntityIDForSlug(t, "legal_entity")
 	sentinelEnt := typeEntityIDForSlug(t, "type")
-	corp := seedUnownedCorporation(t, "Instance Semantics Corp")
-	otherUser := seedGrantHolder(t, "is-other-user")
+	corp := seedUnownedOrg(t, "Instance Semantics Corp")
+	otherUser := seedNaturalPerson2(t)
 
 	t.Run("read on type entity reads instances of exactly that type", func(t *testing.T) {
 		u := seedGrantHolder(t, "is-read")
 		targetedGrant(t, u, corpEnt, "read")
 		ctx := actorCtx(u)
-		requireAllowed(t, ctx, "read", corp, "read on corporation's type entity")
+		requireAllowed(t, ctx, "read", corp, "read on organization's type entity")
 		requireForbidden(t, ctx, "update", corp, "read does not imply update")
 		requireForbidden(t, ctx, "read", otherUser, "natural_person instance is a different type")
 	})
@@ -62,16 +62,16 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 	t.Run("list implies read", func(t *testing.T) {
 		u := seedGrantHolder(t, "is-list")
 		targetedGrant(t, u, corpEnt, "list")
-		requireAllowed(t, actorCtx(u), "read", corp, "list on corporation's type entity")
+		requireAllowed(t, actorCtx(u), "read", corp, "list on organization's type entity")
 	})
 
 	t.Run("manage on natural_person type entity confers assume of any user", func(t *testing.T) {
 		u := seedGrantHolder(t, "is-manage-np")
 		targetedGrant(t, u, npEnt, "manage")
 		ctx := actorCtx(u)
-		requireAllowed(t, ctx, "assume", otherUser, "manage on natural_person's type entity")
+		requireAllowed(t, ctx, "impersonate", otherUser, "manage on natural_person's type entity")
 		requireAllowed(t, ctx, "grant", otherUser, "manage implies grant over every instance")
-		requireForbidden(t, ctx, "assume", corp, "natural_person grant does not reach a corporation")
+		requireForbidden(t, ctx, "impersonate", corp, "natural_person grant does not reach a organization")
 	})
 
 	t.Run("type-only target group", func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 		addTargetGroupMember(t, g, corpEnt)
 		targetedGrant(t, u, g, "read")
 		ctx := actorCtx(u)
-		requireAllowed(t, ctx, "read", corp, "read on a type-only group holding corporation's entity")
+		requireAllowed(t, ctx, "read", corp, "read on a type-only group holding organization's entity")
 		requireForbidden(t, ctx, "read", otherUser, "group does not hold natural_person's entity")
 	})
 
@@ -98,7 +98,7 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 		u := seedGrantHolder(t, "is-noparent")
 		targetedGrant(t, u, legalEnt, "read")
 		ctx := actorCtx(u)
-		requireForbidden(t, ctx, "read", corp, "read on legal_entity, instance of corporation")
+		requireForbidden(t, ctx, "read", corp, "read on legal_entity, instance of organization")
 		requireForbidden(t, ctx, "read", otherUser, "read on legal_entity, instance of natural_person")
 	})
 
@@ -141,8 +141,8 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 		targetedGrant(t, u, sentinelEnt, "grant")
 		targetedGrant(t, u, sentinelEnt, "read")
 		ctx := actorCtx(u)
-		requireForbidden(t, ctx, "grant", corpEnt, "grant on the sentinel type's entity, target corporation's type entity")
-		requireForbidden(t, ctx, "read", corpEnt, "read on the sentinel type's entity, target corporation's type entity")
+		requireForbidden(t, ctx, "grant", corpEnt, "grant on the sentinel type's entity, target organization's type entity")
+		requireForbidden(t, ctx, "read", corpEnt, "read on the sentinel type's entity, target organization's type entity")
 		requireForbidden(t, ctx, "read", npEnt, "read on the sentinel type's entity, target natural_person's type entity")
 		// The sentinel entity itself is a type entity, so it is excluded too,
 		// but a direct grant on it still applies to it (existing path).
@@ -153,7 +153,7 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 		u := seedGrantHolder(t, "is-sentinel-manage")
 		targetedGrant(t, u, sentinelEnt, "manage")
 		ctx := actorCtx(u)
-		for name, ent := range map[string]int64{"corporation": corpEnt, "natural_person": npEnt, "legal_entity": legalEnt} {
+		for name, ent := range map[string]int64{"organization": corpEnt, "natural_person": npEnt, "legal_entity": legalEnt} {
 			for _, op := range []string{"read", "grant", "manage"} {
 				requireForbidden(t, ctx, op, ent, op+" over type entity "+name)
 			}
@@ -171,15 +171,15 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 		targetedGrant(t, u, corp, "create")
 		targetedGrant(t, u, corp, "list")
 		ctx := actorCtx(u)
-		requireTypeForbidden(t, ctx, "create", typeIDForSlug(t, "corporation"), "instance grant, AuthorizeType(create)")
-		requireTypeForbidden(t, ctx, "list", typeIDForSlug(t, "corporation"), "instance grant, AuthorizeType(list)")
+		requireTypeForbidden(t, ctx, "create", typeIDForSlug(t, "organization"), "instance grant, AuthorizeType(create)")
+		requireTypeForbidden(t, ctx, "list", typeIDForSlug(t, "organization"), "instance grant, AuthorizeType(list)")
 	})
 
 	t.Run("type grant stays type-level and instance-level only for its exact type", func(t *testing.T) {
 		u := seedGrantHolder(t, "is-type-both")
 		targetedGrant(t, u, corpEnt, "create")
 		ctx := actorCtx(u)
-		requireTypeAllowed(t, ctx, "create", typeIDForSlug(t, "corporation"), "type-level check")
+		requireTypeAllowed(t, ctx, "create", typeIDForSlug(t, "organization"), "type-level check")
 		requireAllowed(t, ctx, "create", corp, "same grant now confers create over instances")
 	})
 
@@ -212,14 +212,14 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 
 // TestInteg_InstanceSemantics_TestOnlyType proves the seed joins through
 // types.entity_id and not types.id: the test type's types.id differs from its
-// type entity's id, and a corporation instance placed at id == types.id is not
+// type entity's id, and a organization instance placed at id == types.id is not
 // covered by a grant on the test type's entity.
 func TestInteg_InstanceSemantics_TestOnlyType(t *testing.T) {
 	testTypeID, testTypeEntity := registerTestType(t, "instsem")
 
 	instance := seedInstanceOfType(t, testTypeID)
 
-	// A corporation instance at id == testType.types.id.
+	// A organization instance at id == testType.types.id.
 	seedEntityWithExplicitID(t, testTypeID, nil)
 
 	u := seedGrantHolder(t, "is-testtype")
@@ -227,7 +227,7 @@ func TestInteg_InstanceSemantics_TestOnlyType(t *testing.T) {
 	ctx := actorCtx(u)
 
 	requireAllowed(t, ctx, "read", instance, "instance of the test type")
-	requireForbidden(t, ctx, "read", testTypeID, "corporation instance at id == testType.types.id")
+	requireForbidden(t, ctx, "read", testTypeID, "organization instance at id == testType.types.id")
 	requireForbidden(t, ctx, "update", instance, "read does not imply update")
 	// The test type's type entity is itself a type entity: direct grant only.
 	requireAllowed(t, ctx, "read", testTypeEntity, "direct grant on the type entity")

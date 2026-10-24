@@ -73,7 +73,7 @@ func entityOwnerIsNull(t *testing.T, id int64) bool {
 	return unowned
 }
 
-// seedEntityWithExplicitID inserts a corporation-typed entity with an explicit
+// seedEntityWithExplicitID inserts a organization-typed entity with an explicit
 // id, then advances the entities id sequence so later inserts cannot collide
 // with the explicit id. The sequence is never moved backwards. A nil ownerID
 // leaves the entity unowned; otherwise owner_id is set at insert time (it is
@@ -83,7 +83,11 @@ func seedEntityWithExplicitID(t *testing.T, id int64, ownerID *int64) {
 	ctx := context.Background()
 
 	const insertSQL = `INSERT INTO entities (id, fundamental_type_id, owner_id) VALUES ($1, $2, $3)`
-	if _, err := integPool.Exec(ctx, insertSQL, id, corporationTypeID(t), ownerID); err != nil {
+	if ownerID != nil {
+		subject := ownerSubject(t, *ownerID)
+		ownerID = &subject
+	}
+	if _, err := integPool.Exec(ctx, insertSQL, id, organizationTypeID(t), ownerID); err != nil {
 		t.Fatalf("seedEntityWithExplicitID: insert entity %d: %v", id, err)
 	}
 
@@ -123,7 +127,7 @@ func TestInteg_TypeTarget_EntityAuthorityDoesNotAnswerTypeCheck(t *testing.T) {
 			if !entityExists(t, typeID) {
 				t.Skipf("no entity has id %d (= types.id of %q); nothing to confuse with the type id", typeID, slug)
 			}
-			userU := seedUser(t, "typetarget-u-"+slug+"@example.com", false)
+			userU := seedGrantHolder(t, "typetarget-u-"+slug)
 			targetedGrant(t, userU, typeID, "create")
 			ctxU := actorCtx(userU)
 
@@ -185,7 +189,7 @@ func requireNoTypeRow(t *testing.T, id int64) {
 }
 
 // TestInteg_TypeTarget_OwnershipArm_Deterministic creates a fresh
-// corporation-typed entity owned by the user, then uses that entity's own
+// organization-typed entity owned by the user, then uses that entity's own
 // (real) id as the "type id" passed to AuthorizeType. It now exercises the
 // unknown-type-id path: type entities consume low entity ids, and a fresh
 // entity's id is beyond every types.id, so no types row has that id (asserted
@@ -193,7 +197,7 @@ func requireNoTypeRow(t *testing.T, id int64) {
 // forbidden, while Authorize (entity semantics) allows the same call.
 func TestInteg_TypeTarget_OwnershipArm_Deterministic(t *testing.T) {
 	userU := seedUser(t, "typetarget-own-u@example.com", false)
-	ownedID := seedOwnedCorporation(t, userU, "Type Target Ownership Corp")
+	ownedID := seedOwnedOrg(t, userU, "Type Target Ownership Corp")
 	requireNoTypeRow(t, ownedID)
 	ctxU := actorCtx(userU)
 
@@ -231,10 +235,10 @@ func TestInteg_TypeTarget_TargetedGrantArm_Deterministic(t *testing.T) {
 func TestInteg_TypeTarget_WildcardHolders_Allowed(t *testing.T) {
 	typeID := typeIDForSlug(t, "authz_actor_group")
 
-	manager := seedUser(t, "typetarget-wc-manage@example.com", true) // wildcard manage
-	creator := seedUser(t, "typetarget-wc-create@example.com", false)
+	manager := seedUser(t, "typetarget-wc-manage", true) // operator with wildcard manage
+	creator := seedGrantHolder(t, "typetarget-wc-create")
 	seedWildcardGrant(t, creator, "create")
-	reader := seedUser(t, "typetarget-wc-read@example.com", false)
+	reader := seedGrantHolder(t, "typetarget-wc-read")
 	seedWildcardGrant(t, reader, "read")
 
 	if err := integAZ.AuthorizeType(actorCtx(manager), "create", typeID); err != nil {

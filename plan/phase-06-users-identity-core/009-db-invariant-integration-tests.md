@@ -86,3 +86,10 @@ unit tests must compile). Parallel-eligible with tasks 004 to 008.
 - After the MF101 to MF103 suites.
 - After the availability, `session_acr` and liveness suites.
 - After migrating or deleting the existing integration suites.
+
+## Status
+
+- Outcome: succeeded (2026-10-24).
+- Validation: `go test -tags=integration -p 1 -count=1 ./internal/authz/...` green against a throwaway Postgres with mod-core, mod-authz and mod-audit linked to their plan worktrees; the mod-authz grant triggers (MF501 operator trigger) were present in the composed schema. `ls api/internal/authz | grep -E 'displaced_guard|user_account_'` returns nothing.
+- Requirement mapping: R1 `TestInteg_MF103_*` (users_invariants_integration_test.go); R2 `TestInteg_MF102_*` (credentials_invariants_integration_test.go); R3 `TestInteg_MF101_*` (sessions_invariants_integration_test.go); R4 `TestInteg_Availability_*` (availability_integration_test.go); R5 `TestInteg_SessionACR`, `TestInteg_SessionLiveness`, `TestInteg_CredentialLiveness` (assurance_liveness_integration_test.go); R6 `TestInteg_Cooldown_*` (challenges_integration_test.go).
+- Migrated: anonymous_actor, challenges, ssh_keys rewritten on SQL; displaced_guard, user_account_*, shape_self_update deleted; authz, type_grant, type_target, instance_semantics adapted to profiles of `mod_users.users` (shared fixtures in fixtures_integration_test.go).
