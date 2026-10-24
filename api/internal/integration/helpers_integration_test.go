@@ -6,14 +6,15 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"golang.org/x/crypto/ssh"
 )
 
-// newSSHPublicKey returns a fresh ed25519 key in authorized_keys format.
-func newSSHPublicKey(t *testing.T) string {
+// newSSHKey returns a fresh ed25519 key and its authorized_keys line.
+func newSSHKey(t *testing.T) (ssh.PublicKey, string) {
 	t.Helper()
 	pub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -23,7 +24,14 @@ func newSSHPublicKey(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub)))
+	return sshPub, strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub)))
+}
+
+// newSSHPublicKey returns a fresh ed25519 key in authorized_keys format.
+func newSSHPublicKey(t *testing.T) string {
+	t.Helper()
+	_, line := newSSHKey(t)
+	return line
 }
 
 // identifierUUID returns the uuid of the account's email identifier.
@@ -55,3 +63,25 @@ func (s *stack) verifyRegisteredEmail(t *testing.T, a account) {
 	s.do(t, http.MethodPost, "/v1/me/identifiers/"+id+"/verify", a.tk.access(), map[string]string{"code": code}).
 		wantStatus(t, http.StatusOK)
 }
+
+// doRaw issues a GET-style request with explicit headers.
+func (s *stack) doRaw(t *testing.T, method, path string, headers map[string]string) *resp {
+	t.Helper()
+	req := newRequest(method, path, "")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	rec := newRecorder()
+	s.handler.ServeHTTP(rec, req)
+	return &resp{status: rec.Code, header: rec.Header(), raw: rec.Body.Bytes()}
+}
+
+func newRequest(method, path, token string) *http.Request {
+	req := httptest.NewRequest(method, path, nil)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return req
+}
+
+func newRecorder() *httptest.ResponseRecorder { return httptest.NewRecorder() }
