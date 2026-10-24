@@ -18,15 +18,6 @@ items:
         - priority:medium
         - effort:small
       text: 'Decision needed: password reset does not copy old credential party authorizations, so a party profile with credential_rule ''authorized'' locks after reset until re-authorized. Decide whether a later task should copy them.'
-    - title: Managed JIT user creation duplicates service
-      id: ApCx
-      date: "2026-10-23"
-      tags:
-        - type:enhancement
-        - plan/phase:users-identity-core
-        - priority:low
-        - effort:medium
-      text: api/internal/handlers/auth/oidc_flows.go createManagedUser re-implements the entity, principal, users-row and party-profile steps of service.UserService.CreateManagedUserInTx because that primitive authorizes `create user` as an acting profile, and the OIDC callback has no actor before the new idp_jit profile exists. Add a trusted service primitive (for example CreateManagedJITUserInTx on UserService) that creates the managed user with its active idp_jit party profile and observes `create user` as that profile, then switch createManagedUser to it so the invariants live in one place. The managed path was written without a live database to exercise it.
     - title: Server-error literal check has stale count
       id: EyHp
       date: "2026-10-23"
@@ -1041,4 +1032,9 @@ closed:
         session.RegisterSessionRoutes and main.go:429 mounts the OIDC step-up start on /v1/session.
         api/openapi.yaml documents device_token (lines 276 and 425), the lock remedy (351-360) and
         users.app_login_not_granted (113 and 1078).
+      date: "2026-10-24"
+    - id: ApCx
+      title: Managed JIT user creation duplicates service
+      disposition: promoted
+      ref: ApCx
       date: "2026-10-24"
