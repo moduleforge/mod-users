@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 7
+    tasks_added: 8
 phases:
     - number: 6
       slug: users-identity-core
@@ -385,7 +385,7 @@ phases:
       title: Remediation Round 1
       kind: remediation
       security_review: required
-      tasks_added: 7
+      tasks_added: 8
       remediates_phase: 6
       tasks:
         - number: 1
@@ -469,6 +469,18 @@ phases:
           findings:
             - 86kP
             - Pjuz
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 8
+          slug: update-deploy-manifests-signing-key
+          title: Update Deploy Manifests For EdDSA Signing Key
+          path: phase-12-remediation-01/008-update-deploy-manifests-signing-key.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - CLi0
           git:
             branch: null
             commit: []
