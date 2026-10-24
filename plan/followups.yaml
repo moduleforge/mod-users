@@ -1476,3 +1476,27 @@ items:
         recommendation:
           Compute factor ids/acr once and call profile_availability_for directly; batch the app-gate check
           if the authorization engine supports it.
+    - title: session_liveness (hot path) performs about t…
+      id: yyDp
+      date: "2026-10-24"
+      tags:
+        - type:optimization
+        - priority:low
+        - effort:medium
+        - plan/phase:users-identity-core
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: model/migrations/sql/0100_baseline.sql
+        lines: 1255-1327
+        severity: suggestion
+        confidence: medium
+        concerns: efficiency
+        description:
+          session_liveness (hot path) performs about ten index lookups in plpgsql: session, profile via
+          entities, parent, principal uuid, then profile_availability re-reads the session and factors.
+          Plus the per-request email-verified EXISTS and public.apps slug lookup in the Go SQL. Within
+          the one-round-trip design and indexed, so acceptable; not a regression.
+        recommendation:
+          Optionally have session_liveness call profile_availability_for with the already-loaded session
+          and factors, and index public.apps(slug) if not already unique.
