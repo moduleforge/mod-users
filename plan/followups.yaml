@@ -1418,3 +1418,13 @@ items:
         - plan/phase:users-identity-core
         - plan/slug:identity-model-impl
       text: 'model/sqlc.yaml points sqlc''s schema at ./migrations/sql only, so a query in model/queries/ that reads a mod-core relation (public.profiles, public.principals, public.entities, public.natural_persons, public.profile_policy_confirmations) fails `sqlc compile` / `make verify` with ''relation "profiles" does not exist'' (verified with sqlc v1.31.1). mod-users queries over the new mod_users schema routinely need those joins (directory summaries, profile lists, principal disable/enable, session revocation by profile). Options: add the composed mod-core migrations to the sqlc schema list (for example the schema/migrations directory `make compose` assembles, or $(SIBLINGS_DIR)/mod-core/model/migrations), or keep such reads in Go over coredb. Two related sqlc behaviors when wrapping the model/migrations/sql/0100_baseline.sql functions: a function declared RETURNS TABLE is not typed (sqlc returns interface{}), which is why mod_users.session_liveness and mod_users.credential_liveness use OUT parameters; and the TEXT[] OUT parameter amr of session_liveness is generated as pgtype.Text, so a wrapper query needs an explicit cast or a column override to get []string.'
+    - title: Managed JIT user creation duplicates service
+      id: ApCx
+      date: "2026-10-23"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/phase:users-identity-core
+        - plan/slug:identity-model-impl
+      text: api/internal/handlers/auth/oidc_flows.go createManagedUser re-implements the entity, principal, users-row and party-profile steps of service.UserService.CreateManagedUserInTx because that primitive authorizes `create user` as an acting profile, and the OIDC callback has no actor before the new idp_jit profile exists. Add a trusted service primitive (for example CreateManagedJITUserInTx on UserService) that creates the managed user with its active idp_jit party profile and observes `create user` as that profile, then switch createManagedUser to it so the invariants live in one place. The managed path was written without a live database to exercise it.
