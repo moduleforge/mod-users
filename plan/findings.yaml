@@ -207,4 +207,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Aggregate make build, make test and make lint fail in gui/ because @moduleforge/core-gui cannot resolve (mod-core/gui unbuilt in the linked sibling). Rebuild mod-core/gui in an environment where that is allowed and re-run the aggregates. mod-core not touched by this task.
+    - title: Integration suite requires a Postgres whose c
+      id: t7jz
+      date: "2026-10-24"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-core
+        - priority:unspecified
+        - effort:unspecified
+      text: Integration suite requires a Postgres whose clock is within 10s of the host; the phase-close re-run must satisfy this.
 closed: []
