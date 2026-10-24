@@ -123,7 +123,7 @@ phases:
           tier: sonnet-high
           digest: Cleared stale test packages in internal/service, internal/handlers and handlers/auth; rewrote OIDC handler tests for the new API; added HTTP-level integration suite in api/internal/integration covering requirements 2 to 8, plus U27 and U23/U24 tests. Integration suite green against throwaway Postgres 16; make build/lint/test pass for model and api. No implementation defects found.
           git:
-            branch: null
+            branch: plan/identity-model-impl-06-010
             commit: []
             merge: null
     - number: 7
