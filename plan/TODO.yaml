@@ -586,6 +586,6 @@ phases:
           findings:
             - nD8J
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-014
             commit: []
             merge: null
