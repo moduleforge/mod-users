@@ -558,7 +558,7 @@ phases:
           findings:
             - 1xmT
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-012
             commit: []
             merge: null
         - number: 13
