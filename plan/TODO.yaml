@@ -485,7 +485,8 @@ phases:
             - Pjuz
           git:
             branch: plan/identity-model-impl-12-007
-            commit: []
+            commit:
+                - eb61cb6
             merge: null
         - number: 8
           slug: update-deploy-manifests-signing-key
