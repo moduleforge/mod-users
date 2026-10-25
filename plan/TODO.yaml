@@ -442,7 +442,8 @@ phases:
             - UT68
           git:
             branch: plan/identity-model-impl-12-004
-            commit: []
+            commit:
+                - 327645a
             merge: null
         - number: 5
           slug: compose-mod-audit-migrations
