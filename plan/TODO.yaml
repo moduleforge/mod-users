@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 2
-    tasks_added: 14
+    tasks_added: 15
 phases:
     - number: 6
       slug: users-identity-core
@@ -594,5 +594,19 @@ phases:
       slug: remediation-02
       title: Remediation Round 2
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 6
-      tasks: []
+      tasks:
+        - number: 1
+          slug: guard-active-password-identifier-unbind
+          title: Guard Active Passwords Against Identifier Unbinding
+          path: phase-13-remediation-02/001-guard-active-password-identifier-unbind.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - fDFi
+          git:
+            branch: null
+            commit: []
+            merge: null
