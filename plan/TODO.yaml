@@ -568,6 +568,7 @@ phases:
           path: phase-12-remediation-01/013-bind-handoff-code-to-verifier.md
           done: false
           tier: sonnet-high
+          digest: Bound the OIDC handoff code to a browser-held S256 verifier. Challenge travels in signed state and is stored on the login_handoff challenge. Exchange verifies verifier in constant time inside the consuming transaction. Schema, API, openapi and docs updated; unit and integration tests pass.
           findings:
             - z443
           git:
