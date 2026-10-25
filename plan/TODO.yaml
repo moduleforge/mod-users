@@ -399,7 +399,7 @@ phases:
           findings:
             - TrRi
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-001
             commit: []
             merge: null
         - number: 2
