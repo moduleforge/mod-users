@@ -540,6 +540,7 @@ phases:
           path: phase-12-remediation-01/011-identifier-removal-set-null-fks.md
           done: false
           tier: sonnet-high
+          digest: cred_password and cred_email_otp identifier_id now nullable with ON DELETE SET NULL, plus CHECK cred_email_otp_active_needs_identifier. RemoveIdentifierInTx unchanged (revoke-first). Integration tests added and existing 409 test updated to 204.
           findings:
             - aA5K
           git:
