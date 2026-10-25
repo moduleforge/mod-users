@@ -435,13 +435,15 @@ phases:
           slug: harden-audience-token-claims
           title: Harden Audience Token Claims
           path: phase-12-remediation-01/004-harden-audience-token-claims.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Audience tokens can no longer be given acr, amr or auth_time through extra. They now carry the aud+jwt typ header, and the access-token verifier rejects that header. Tests and docs note included.
           findings:
             - UT68
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-004
+            commit:
+                - 327645a
             merge: null
         - number: 5
           slug: compose-mod-audit-migrations
