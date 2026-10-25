@@ -470,7 +470,8 @@ phases:
             - xgGT
           git:
             branch: plan/identity-model-impl-12-006
-            commit: []
+            commit:
+                - 7ffcc83
             merge: null
         - number: 7
           slug: index-credential-and-challenge-lookups
