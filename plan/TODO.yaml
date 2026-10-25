@@ -205,7 +205,7 @@ phases:
           tier: sonnet-med
           digest: Added ProfileService.AdmitInTx and AdmitInput in api/internal/service/profile_admit.go. ErrProfileSuspended (409 users.profile_suspended) is new; all three are re-exported from api/usersservice. Locks the users row via GetUserByEntityIDForUpdate, then locks and re-reads the holder's open profile; reuses checkAdmissible, createInTx and transitionLocked. AGENTS.md and README.md updated.
           git:
-            branch: null
+            branch: plan/identity-model-impl-07-007
             commit: []
             merge: null
     - number: 8
