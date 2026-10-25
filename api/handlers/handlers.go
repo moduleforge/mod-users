@@ -155,13 +155,14 @@ func RegisterPrincipalRoutes(r chi.Router, h *PrincipalsHandler) {
 }
 
 // NewPartiesHandler constructs the party-administration handler over the
-// profile service.
-func NewPartiesHandler(profiles *usersservice.ProfileService) *PartiesHandler {
-	return innerparties.NewPartiesHandler(profiles)
+// profile service and the party gating service.
+func NewPartiesHandler(profiles *usersservice.ProfileService, policy *usersservice.PartyPolicyService) *PartiesHandler {
+	return innerparties.NewPartiesHandler(profiles, policy)
 }
 
-// RegisterPartyRoutes mounts the /v1/parties routes on r (a party's profiles
-// and managed users); the caller applies auth.NewRequireAuth first.
+// RegisterPartyRoutes mounts the /v1/parties routes on r (a party's profiles,
+// managed users, authentication policy, credential authorizations and
+// confinements); the caller applies auth.NewRequireAuth first.
 func RegisterPartyRoutes(r chi.Router, h *PartiesHandler) {
 	innerparties.RegisterPartyRoutes(r, h)
 }

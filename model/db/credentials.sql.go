@@ -607,6 +607,32 @@ func (q *Queries) GetCredentialByUUID(ctx context.Context, argUuid uuid.UUID) (C
 	return i, err
 }
 
+const getCredentialByUUIDForUpdate = `-- name: GetCredentialByUUIDForUpdate :one
+SELECT id, uuid, principal_id, kind, confined_to_party_id, default_profile_id, expires_at, label, revoke_reason, revoked_at, created_at, created_by_profile_id, last_used_at FROM mod_users.credentials WHERE uuid = $1 FOR UPDATE
+`
+
+// Locks the row, serializing confinement and authorization writes on it.
+func (q *Queries) GetCredentialByUUIDForUpdate(ctx context.Context, argUuid uuid.UUID) (Credential, error) {
+	row := q.db.QueryRow(ctx, getCredentialByUUIDForUpdate, argUuid)
+	var i Credential
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.PrincipalID,
+		&i.Kind,
+		&i.ConfinedToPartyID,
+		&i.DefaultProfileID,
+		&i.ExpiresAt,
+		&i.Label,
+		&i.RevokeReason,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.CreatedByProfileID,
+		&i.LastUsedAt,
+	)
+	return i, err
+}
+
 const getCredentialKind = `-- name: GetCredentialKind :one
 SELECT kind, amr, base_acr, class, factor, phishing_resistant, service_allowed FROM mod_users.credential_kinds WHERE kind = $1
 `

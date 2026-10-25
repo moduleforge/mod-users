@@ -166,6 +166,20 @@ provides:
         - service:credentialService
         - service:sessionService
 
+    # partyPolicyService — how a party gates its profiles: the authentication
+    # policy (/v1/parties/{party_uuid}/authn-policy), the credentials authorized
+    # for it (/credential-authorizations) and those confined to it
+    # (/confinements).
+    - name: partyPolicyService
+      type: "*usersservice.PartyPolicyService"
+      constructor: usersservice.NewPartyPolicyService
+      args:
+        - infra:pool
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+        - service:userService
+
     # directoryService — batch display lookups for other modules; does no
     # authorization (callers authorize first).
     - name: directoryService
@@ -271,13 +285,15 @@ provides:
       args:
         - service:userService
 
-    # partiesHandler — party administration: /v1/parties/{party_uuid}/profiles
-    # and /managed-users, and PATCH /v1/profiles/{uuid}.
+    # partiesHandler — party administration: /v1/parties/{party_uuid}/profiles,
+    # /managed-users, /authn-policy, /credential-authorizations and
+    # /confinements, and PATCH /v1/profiles/{uuid}.
     - name: partiesHandler
       type: "*handlers.PartiesHandler"
       constructor: handlers.NewPartiesHandler
       args:
         - service:profileService
+        - service:partyPolicyService
 
     # sshKeyResolver — resolves a candidate SSH public key to the credential
     # that registered it (docs/architecture/ssh-keys.md D11). A composing app

@@ -65,8 +65,14 @@ A party (an organization or a natural person) admits users through profiles. All
 | `GET /v1/parties/{party_uuid}/profiles` | List a party's profiles (`status`, `limit`, `offset`); needs `read` on profiles in the party |
 | `POST /v1/parties/{party_uuid}/profiles` | Invite a user by `holder_email` or `holder_user_uuid` (status `invited`; no account is created, no email is sent); needs `create` on profiles in the party |
 | `POST /v1/parties/{party_uuid}/managed-users` | Create a user owned and managed by the party, with an active party profile and an initial password |
+| `GET`, `PUT /v1/parties/{party_uuid}/authn-policy` | Read (needs `read` on profiles in the party) or set (needs `update` on the party and a fresh authentication) the party's credential rule (`any`, `authorized`, `provider`) and `min_acr`; a party with no policy is `any`, `min_acr` 1 |
+| `GET /v1/parties/{party_uuid}/credential-authorizations` | List the credentials authorized for the party; needs `update` on the party |
+| `PUT`, `DELETE /v1/parties/{party_uuid}/credential-authorizations/{credential_uuid}` | Authorize or deauthorize a credential for the party's `authorized` rule |
+| `PUT`, `DELETE /v1/parties/{party_uuid}/confinements/{credential_uuid}` | Confine a credential to the party, or clear that (only when it names this party) |
 | `PATCH /v1/profiles/{uuid}` | Suspend, resume or end a party profile (`status`, `end_reason`); needs `update` and a fresh authentication |
 | `POST /v1/me/profiles/{uuid}/accept`, `/decline`, `/leave` | The holder's own actions; an invitation appears in `GET /v1/me/profiles` |
+
+Authorizations and confinements are written by a party administrator (`update` on the party) or by the credential's own holder acting through a session that already satisfies the party's gate through another factor; the evaluation excluding the credential is `mod_users.profile_availability_excluding`, so a credential never authorizes itself. A caller that is neither gets `403`, or the masked `404` when it cannot read the party; every write needs a fresh authentication. Availability changes take effect on the holders' next request.
 
 Ending a profile (an administrator ending it, or the holder declining or leaving) deletes the holder's credential authorizations for the party, revokes the holder's credentials confined to it, and disables a managed user left with no open profile. `ProfileService.AdmitInTx` is the trusted, in-transaction admission another module (mod-billing seats) calls once the holder and party have consented: it returns the holder's active profile in the party, activating an invited one or creating an active one, and refuses a suspended one with `users.profile_suspended`; it has no HTTP route. Other modules react to creations and status changes with `ProfileService.AddLifecycleObserver` (in-transaction). See `api/openapi.yaml` for the request and response shapes.
 

@@ -169,6 +169,14 @@ DELETE FROM mod_users.session_refresh_tokens WHERE expires_at < $1;
 -- confined, credential_not_authorized, provider_required, acr_too_low).
 SELECT mod_users.profile_availability(@session_id::bigint, @profile_id::bigint)::text AS availability;
 
+-- name: ProfileAvailabilityExcluding :one
+-- ProfileAvailability evaluated as if the session did not hold the credential
+-- (its factor and its contribution to the acr left out): whether the session
+-- satisfies the profile's party gate through another factor.
+SELECT mod_users.profile_availability_excluding(
+    @session_id::bigint, @profile_id::bigint, @exclude_credential_id::bigint
+)::text AS availability;
+
 -- name: CredentialProfileAvailability :one
 SELECT mod_users.credential_profile_availability(@credential_id::bigint, @profile_id::bigint)::text AS availability;
 

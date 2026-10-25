@@ -34,9 +34,15 @@ func walk(t *testing.T, r chi.Router) string {
 func TestRegisterRoutes(t *testing.T) {
 	t.Parallel()
 	parties := chi.NewRouter()
-	RegisterPartyRoutes(parties, NewPartiesHandler(nil))
+	RegisterPartyRoutes(parties, NewPartiesHandler(nil, nil))
 	want := []string{
 		"GET /{party_uuid}/profiles", "POST /{party_uuid}/profiles", "POST /{party_uuid}/managed-users",
+		"GET /{party_uuid}/authn-policy", "PUT /{party_uuid}/authn-policy",
+		"GET /{party_uuid}/credential-authorizations",
+		"PUT /{party_uuid}/credential-authorizations/{credential_uuid}",
+		"DELETE /{party_uuid}/credential-authorizations/{credential_uuid}",
+		"PUT /{party_uuid}/confinements/{credential_uuid}",
+		"DELETE /{party_uuid}/confinements/{credential_uuid}",
 	}
 	sort.Strings(want)
 	if got := walk(t, parties); got != strings.Join(want, "\n") {
@@ -44,7 +50,7 @@ func TestRegisterRoutes(t *testing.T) {
 	}
 
 	profiles := chi.NewRouter()
-	RegisterProfileRoutes(profiles, NewPartiesHandler(nil))
+	RegisterProfileRoutes(profiles, NewPartiesHandler(nil, nil))
 	if got := walk(t, profiles); got != "PATCH /{uuid}" {
 		t.Fatalf("profile routes = %q", got)
 	}
@@ -53,7 +59,7 @@ func TestRegisterRoutes(t *testing.T) {
 func TestRoutesRefuseCallsOutsideRequireAuth(t *testing.T) {
 	t.Parallel()
 	r := chi.NewRouter()
-	h := NewPartiesHandler(nil) // nil service: never reached
+	h := NewPartiesHandler(nil, nil) // nil service: never reached
 	RegisterPartyRoutes(r, h)
 	RegisterProfileRoutes(r, h)
 	id := uuid.New().String()
@@ -62,6 +68,13 @@ func TestRoutesRefuseCallsOutsideRequireAuth(t *testing.T) {
 		{http.MethodPost, "/" + id + "/profiles"},
 		{http.MethodPost, "/" + id + "/managed-users"},
 		{http.MethodPatch, "/" + id},
+		{http.MethodGet, "/" + id + "/authn-policy"},
+		{http.MethodPut, "/" + id + "/authn-policy"},
+		{http.MethodGet, "/" + id + "/credential-authorizations"},
+		{http.MethodPut, "/" + id + "/credential-authorizations/" + id},
+		{http.MethodDelete, "/" + id + "/credential-authorizations/" + id},
+		{http.MethodPut, "/" + id + "/confinements/" + id},
+		{http.MethodDelete, "/" + id + "/confinements/" + id},
 	} {
 		req := httptest.NewRequest(rt.method, rt.path, strings.NewReader(`{}`))
 		rec := httptest.NewRecorder()

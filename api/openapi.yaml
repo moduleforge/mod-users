@@ -1132,6 +1132,99 @@ components:
         profile:
           $ref: "#/components/schemas/PartyProfileView"
 
+    PartyAuthnPolicy:
+      type: object
+      required: [party_uuid, credential_rule, required_oidc_provider_id, min_acr, is_default, updated_at]
+      properties:
+        party_uuid:
+          type: string
+          format: uuid
+        credential_rule:
+          type: string
+          enum: [any, authorized, provider]
+          description: |
+            `any`: every credential passes. `authorized`: a session factor must
+            be authorized for the party or confined to it. `provider`: a session
+            factor must be an OIDC credential of `required_oidc_provider_id`.
+            An outside collaborator's confirmed profile is exempt from the
+            credential rule, never from `min_acr`.
+        required_oidc_provider_id:
+          type: string
+          nullable: true
+          description: Set exactly when `credential_rule` is `provider`.
+        min_acr:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: The minimum session assurance (NIST AAL) a party profile requires.
+        is_default:
+          type: boolean
+          description: True when the party has no policy row (`any`, `min_acr` 1).
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    PutPartyAuthnPolicyRequest:
+      type: object
+      required: [credential_rule]
+      properties:
+        credential_rule:
+          type: string
+          enum: [any, authorized, provider]
+        required_oidc_provider_id:
+          type: string
+          nullable: true
+          description: Required with `provider`, refused otherwise. The provider must exist.
+        min_acr:
+          type: integer
+          minimum: 1
+          maximum: 3
+          default: 1
+
+    CredentialAuthorization:
+      type: object
+      required: [credential_uuid, kind, label, holder_uuid, authorized_by_profile_uuid, authorized_at]
+      properties:
+        credential_uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        label:
+          type: string
+        holder_uuid:
+          type: string
+          format: uuid
+          description: The principal holding the credential.
+        authorized_by_profile_uuid:
+          type: string
+          format: uuid
+          description: The profile that acted when the credential was authorized.
+        authorized_at:
+          type: string
+          format: date-time
+
+    CredentialAuthorizationList:
+      type: object
+      required: [authorizations]
+      properties:
+        authorizations:
+          type: array
+          items:
+            $ref: "#/components/schemas/CredentialAuthorization"
+
+    CredentialConfinement:
+      type: object
+      required: [credential_uuid, party_uuid]
+      properties:
+        credential_uuid:
+          type: string
+          format: uuid
+        party_uuid:
+          type: string
+          format: uuid
+
     UpdateProfileStatusRequest:
       type: object
       required: [status]
@@ -1211,6 +1304,14 @@ components:
       in: path
       required: true
       description: The uuid of the party (an organization or a natural person).
+      schema:
+        type: string
+        format: uuid
+    CredentialUUID:
+      name: credential_uuid
+      in: path
+      required: true
+      description: The uuid of a credential (as listed by `GET /v1/me/credentials`).
       schema:
         type: string
         format: uuid
@@ -2723,6 +2824,235 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ManagedUserView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/parties/{party_uuid}/authn-policy:
+    parameters:
+      - $ref: "#/components/parameters/PartyUUID"
+    get:
+      summary: Get a party's effective authentication policy
+      description: |
+        A party with no policy row has `credential_rule` `any`, `min_acr` 1 and
+        `is_default` true. Needs the party-scoped read gate (`read` on profiles
+        in the party); a party the caller may not read is 404.
+      tags: [Parties]
+      operationId: getPartyAuthnPolicy
+      responses:
+        "200":
+          description: The effective policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyAuthnPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      summary: Set a party's authentication policy
+      description: |
+        Creates or replaces the policy. Needs `update` on the party entity (404
+        when the caller cannot read the party, 403 otherwise) and a fresh
+        authentication (409 `users.step_up_required`). The availability of every
+        profile of the party follows the new policy on its holders' next
+        request. 400 for an unknown rule, a `min_acr` outside 1 to 3, a provider
+        given without the `provider` rule or missing with it, and a provider that
+        does not exist (`users.oidc_provider_unknown`).
+      tags: [Parties]
+      operationId: putPartyAuthnPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutPartyAuthnPolicyRequest"
+      responses:
+        "200":
+          description: The stored policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyAuthnPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/parties/{party_uuid}/credential-authorizations:
+    parameters:
+      - $ref: "#/components/parameters/PartyUUID"
+    get:
+      summary: List the credentials authorized for a party
+      description: |
+        Needs `update` on the party entity (404 when the caller cannot read the
+        party, 403 otherwise), because the list exposes members' credential
+        labels.
+      tags: [Parties]
+      operationId: listPartyCredentialAuthorizations
+      responses:
+        "200":
+          description: The authorized credentials, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialAuthorizationList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/parties/{party_uuid}/credential-authorizations/{credential_uuid}:
+    parameters:
+      - $ref: "#/components/parameters/PartyUUID"
+      - $ref: "#/components/parameters/CredentialUUID"
+    put:
+      summary: Authorize a credential for a party
+      description: |
+        Idempotent; an existing authorization is returned unchanged.
+        Who may write: a party administrator (`update` on the party), or the
+        credential's own holder acting through a session that already satisfies
+        the party's gate through another factor (the current profile is an
+        active profile of this party, `profile_availability` is `available`, and
+        stays `available` with the credential excluded from the session's
+        factors, so a credential never authorizes itself). Every other caller is
+        refused: 404 when the caller cannot read the party, 403 otherwise. The
+        credential must be a live credential of a principal holding a profile in
+        the party that is not ended (404 otherwise). Needs a fresh authentication
+        (409 `users.step_up_required`, checked after authorization).
+      tags: [Parties]
+      operationId: authorizePartyCredential
+      responses:
+        "200":
+          description: The authorization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialAuthorization"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+    delete:
+      summary: Remove a credential's authorization for a party
+      description: |
+        404 as well when the credential has no authorization for the party.
+        Who may write: a party administrator (`update` on the party), or the
+        credential's own holder acting through a session that already satisfies
+        the party's gate through another factor (the current profile is an
+        active profile of this party, `profile_availability` is `available`, and
+        stays `available` with the credential excluded from the session's
+        factors, so a credential never authorizes itself). Every other caller is
+        refused: 404 when the caller cannot read the party, 403 otherwise. The
+        credential must be a live credential of a principal holding a profile in
+        the party that is not ended (404 otherwise). Needs a fresh authentication
+        (409 `users.step_up_required`, checked after authorization).
+      tags: [Parties]
+      operationId: deauthorizePartyCredential
+      responses:
+        "204":
+          description: Removed.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/parties/{party_uuid}/confinements/{credential_uuid}:
+    parameters:
+      - $ref: "#/components/parameters/PartyUUID"
+      - $ref: "#/components/parameters/CredentialUUID"
+    put:
+      summary: Confine a credential to a party
+      description: |
+        Sets the credential's confinement to this party; idempotent. A confined
+        credential can act only in its party, and satisfies the party's
+        `authorized` credential rule. A credential confined to another party is
+        409 `users.credential_confined`.
+        Who may write: a party administrator (`update` on the party), or the
+        credential's own holder acting through a session that already satisfies
+        the party's gate through another factor (the current profile is an
+        active profile of this party, `profile_availability` is `available`, and
+        stays `available` with the credential excluded from the session's
+        factors, so a credential never authorizes itself). Every other caller is
+        refused: 404 when the caller cannot read the party, 403 otherwise. The
+        credential must be a live credential of a principal holding a profile in
+        the party that is not ended (404 otherwise). Needs a fresh authentication
+        (409 `users.step_up_required`, checked after authorization).
+      tags: [Parties]
+      operationId: confinePartyCredential
+      responses:
+        "200":
+          description: The confinement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialConfinement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+    delete:
+      summary: Clear a credential's confinement to a party
+      description: |
+        Clears the confinement only when it currently names this party: 409
+        `users.credential_confined` for a credential confined to another party,
+        404 for one that is not confined.
+        Who may write: a party administrator (`update` on the party), or the
+        credential's own holder acting through a session that already satisfies
+        the party's gate through another factor (the current profile is an
+        active profile of this party, `profile_availability` is `available`, and
+        stays `available` with the credential excluded from the session's
+        factors, so a credential never authorizes itself). Every other caller is
+        refused: 404 when the caller cannot read the party, 403 otherwise. The
+        credential must be a live credential of a principal holding a profile in
+        the party that is not ended (404 otherwise). Needs a fresh authentication
+        (409 `users.step_up_required`, checked after authorization).
+      tags: [Parties]
+      operationId: unconfinePartyCredential
+      responses:
+        "204":
+          description: Cleared.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":

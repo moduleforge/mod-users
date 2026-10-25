@@ -269,6 +269,28 @@ func TestOIDC_JIT_BYOIsRefusedWhenThePlatformDisallowsIt(t *testing.T) {
 	env.wantRedirectError(t, provider, "no_account")
 }
 
+func TestOIDC_JIT_BYOFromAPartyBoundProviderConfinesTheCredentialToTheParty(t *testing.T) {
+	party := env.seedParty(t, "BYO Confine Org "+uniq("p"))
+	provider := env.addProvider(t, config.Provider{JITMode: config.JITModeBYO, PartyID: party})
+	email := uniq("byoparty") + "@example.test"
+	id := idpIdentity(email, true)
+	env.idpReturns(t, id, auth.StatePayload{})
+
+	if status, _, loc := env.callback(t, provider); status != http.StatusFound {
+		t.Fatalf("callback = %d %q", status, loc)
+	}
+	uid := env.principalID(t, email)
+	if n := env.count(t, "confined oidc credential", `SELECT count(*) FROM mod_users.credentials c JOIN mod_users.cred_oidc o ON o.credential_id = c.id
+		WHERE c.principal_id = $1 AND c.revoked_at IS NULL AND o.issuer = $2 AND o.subject = $3 AND c.confined_to_party_id = $4`,
+		uid, id.Issuer, id.Subject, party); n != 1 {
+		t.Errorf("credentials confined to the provider party = %d, want 1", n)
+	}
+	// It is still a plain bring-your-own user.
+	if n := env.count(t, "is_guest", `SELECT count(*) FROM mod_users.users WHERE entity_id = $1 AND NOT is_guest AND managing_party_id IS NULL`, uid); n != 1 {
+		t.Errorf("created user is not a plain bring-your-own user")
+	}
+}
+
 func TestOIDC_JIT_ManagedCreatesAConfinedCredentialAndAnIdPJITProfile(t *testing.T) {
 	party := env.seedParty(t, "Managed Org "+uniq("p"))
 	provider := env.addProvider(t, config.Provider{JITMode: config.JITModeManaged, PartyID: party})

@@ -207,26 +207,27 @@ func (m *mailbox) codeAfter(t *testing.T, to string, seen int) string {
 
 // stack is the composed module under test.
 type stack struct {
-	pool     *pgxpool.Pool
-	cfg      *config.Config
-	signer   *auth.Signer
-	signKey  ed25519.PrivateKey
-	handler  http.Handler
-	obs      *recorder
-	group    *observer.ObserverGroup
-	mail     *mailbox
-	oauth    *auth.OAuth
-	az       *localAuthz.Authorizer
-	authn    *auth.Authenticator
-	users    *svc.UserService
-	profiles *svc.ProfileService
-	creds    *svc.CredentialService
-	sessions *svc.SessionService
-	chal     *svc.ChallengeService
-	dir      *svc.DirectoryService
-	q        *db.Queries
-	coreQ    *coredb.Queries
-	opReg    *authzapi.OperationRegistry
+	pool        *pgxpool.Pool
+	cfg         *config.Config
+	signer      *auth.Signer
+	signKey     ed25519.PrivateKey
+	handler     http.Handler
+	obs         *recorder
+	group       *observer.ObserverGroup
+	mail        *mailbox
+	oauth       *auth.OAuth
+	az          *localAuthz.Authorizer
+	authn       *auth.Authenticator
+	users       *svc.UserService
+	profiles    *svc.ProfileService
+	partyPolicy *svc.PartyPolicyService
+	creds       *svc.CredentialService
+	sessions    *svc.SessionService
+	chal        *svc.ChallengeService
+	dir         *svc.DirectoryService
+	q           *db.Queries
+	coreQ       *coredb.Queries
+	opReg       *authzapi.OperationRegistry
 
 	// auditApplied is true when mod-audit's audit_log table is part of the
 	// database and its observer is in the group.
@@ -501,7 +502,8 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 		r.Use(requireAuth)
 		principals.RegisterPrincipalRoutes(r, principals.NewPrincipalsHandler(users))
 	})
-	partiesH := parties.NewPartiesHandler(profiles)
+	partyPolicy := svc.NewPartyPolicyService(pool, coreQueries, az, group, users)
+	partiesH := parties.NewPartiesHandler(profiles, partyPolicy)
 	r.Route("/v1/parties", func(r chi.Router) {
 		r.Use(requireAuth)
 		parties.RegisterPartyRoutes(r, partiesH)
@@ -522,7 +524,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 
 	return &stack{
 		pool: pool, cfg: cfg, signer: signer, signKey: key, handler: r, obs: rec, group: group,
-		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, creds: creds,
+		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, partyPolicy: partyPolicy, creds: creds,
 		sessions: sessions, chal: chal, dir: dir, q: queries, coreQ: coreQueries, opReg: opReg,
 		auditApplied: auditApplied,
 	}, nil

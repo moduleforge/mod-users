@@ -190,6 +190,27 @@ func NewProfileService(
 	return inner.NewProfileService(pool, q, coreQ, az, obs, users, creds, sessions)
 }
 
+// PartyPolicyService administers how a party gates its profiles: its
+// authentication policy, the credentials authorized for it and the credentials
+// confined to it.
+type PartyPolicyService = inner.PartyPolicyService
+
+// ErrCredentialConfinedElsewhere: users.credential_confined (409), a credential
+// confined to another party.
+var ErrCredentialConfinedElsewhere = inner.ErrCredentialConfinedElsewhere
+
+// NewPartyPolicyService constructs a PartyPolicyService. users must have been
+// wired with UserService.WithSelfService (it supplies the freshness gate).
+func NewPartyPolicyService(
+	pool *pgxpool.Pool,
+	coreQ coredb.Querier,
+	az coreAuthz.Authorizer,
+	obs *observer.ObserverGroup,
+	users *UserService,
+) *PartyPolicyService {
+	return inner.NewPartyPolicyService(pool, coreQ, az, obs, users)
+}
+
 // DirectoryService answers batch display lookups for other modules. It does no
 // authorization: callers authorize first.
 type DirectoryService = inner.DirectoryService
