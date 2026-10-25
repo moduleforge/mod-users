@@ -142,15 +142,20 @@ UPDATE mod_users.cred_password SET hash = $2 WHERE credential_id = $1;
 -- ---------------------------------------------------------------------------
 
 -- name: CreateEmailOTPCredential :one
+-- The identifier is required on creation (the column is nullable only so the
+-- row survives identifier removal as a revoked credential).
 INSERT INTO mod_users.cred_email_otp (credential_id, identifier_id)
-VALUES ($1, $2)
+VALUES ($1, sqlc.arg(identifier_id)::bigint)
 RETURNING *;
 
 -- name: GetActiveEmailOTPByIdentifier :one
-SELECT sqlc.embed(c), o.identifier_id
+-- identifier_id is nullable (SET NULL on identifier removal), but an active
+-- email_otp always has one and the lookup is by it, so the row's value is
+-- non-null.
+SELECT sqlc.embed(c), o.identifier_id::bigint AS identifier_id
 FROM mod_users.cred_email_otp o
 JOIN mod_users.credentials c ON c.id = o.credential_id
-WHERE o.identifier_id = $1
+WHERE o.identifier_id = sqlc.arg(identifier_id)::bigint
   AND o.active
   AND (c.expires_at IS NULL OR c.expires_at > now());
 

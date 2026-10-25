@@ -140,7 +140,7 @@ func (q *Queries) CreateCredential(ctx context.Context, arg CreateCredentialPara
 const createEmailOTPCredential = `-- name: CreateEmailOTPCredential :one
 
 INSERT INTO mod_users.cred_email_otp (credential_id, identifier_id)
-VALUES ($1, $2)
+VALUES ($1, $2::bigint)
 RETURNING credential_id, identifier_id, active
 `
 
@@ -152,6 +152,8 @@ type CreateEmailOTPCredentialParams struct {
 // ---------------------------------------------------------------------------
 // email_otp
 // ---------------------------------------------------------------------------
+// The identifier is required on creation (the column is nullable only so the
+// row survives identifier removal as a revoked credential).
 func (q *Queries) CreateEmailOTPCredential(ctx context.Context, arg CreateEmailOTPCredentialParams) (CredEmailOtp, error) {
 	row := q.db.QueryRow(ctx, createEmailOTPCredential, arg.CredentialID, arg.IdentifierID)
 	var i CredEmailOtp
@@ -344,10 +346,10 @@ func (q *Queries) GetActiveAnonByTokenHash(ctx context.Context, tokenHash string
 }
 
 const getActiveEmailOTPByIdentifier = `-- name: GetActiveEmailOTPByIdentifier :one
-SELECT c.id, c.uuid, c.principal_id, c.kind, c.confined_to_party_id, c.default_profile_id, c.expires_at, c.label, c.revoke_reason, c.revoked_at, c.created_at, c.created_by_profile_id, c.last_used_at, o.identifier_id
+SELECT c.id, c.uuid, c.principal_id, c.kind, c.confined_to_party_id, c.default_profile_id, c.expires_at, c.label, c.revoke_reason, c.revoked_at, c.created_at, c.created_by_profile_id, c.last_used_at, o.identifier_id::bigint AS identifier_id
 FROM mod_users.cred_email_otp o
 JOIN mod_users.credentials c ON c.id = o.credential_id
-WHERE o.identifier_id = $1
+WHERE o.identifier_id = $1::bigint
   AND o.active
   AND (c.expires_at IS NULL OR c.expires_at > now())
 `
@@ -357,6 +359,9 @@ type GetActiveEmailOTPByIdentifierRow struct {
 	IdentifierID int64      `json:"identifier_id"`
 }
 
+// identifier_id is nullable (SET NULL on identifier removal), but an active
+// email_otp always has one and the lookup is by it, so the row's value is
+// non-null.
 func (q *Queries) GetActiveEmailOTPByIdentifier(ctx context.Context, identifierID int64) (GetActiveEmailOTPByIdentifierRow, error) {
 	row := q.db.QueryRow(ctx, getActiveEmailOTPByIdentifier, identifierID)
 	var i GetActiveEmailOTPByIdentifierRow

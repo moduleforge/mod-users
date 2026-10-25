@@ -25,3 +25,12 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `aA5K` in this plan's `plan/findings.yaml` (bug, high): removing an identifier is blocked by RESTRICT foreign keys from `cred_password` and `cred_email_otp`.
+
+## Status
+
+Outcome: succeeded (2026-10-25). Validation: both new integration tests pass against a throwaway Postgres 16; `make build`, `make test` and `make lint` pass in `model/` and `api/`; the authz, config and integration suites pass.
+
+- `cred_password.identifier_id` and `cred_email_otp.identifier_id` are nullable with `ON DELETE SET NULL`; `cred_email_otp` gains `cred_email_otp_active_needs_identifier` (`identifier_id IS NOT NULL OR NOT active`). Baseline edited in place, no new migration. The existing partial indexes and the subtable trigger already tolerated NULL.
+- `GetActiveEmailOTPByIdentifier` and `CreateEmailOTPCredential` cast the identifier to `bigint` so the Go types stay `int64`; sqlc output regenerated.
+- `RemoveIdentifierInTx` already revoked bound credentials before the delete; only its comments changed. `ErrIdentifierInUse` is kept for a restricting foreign key from outside this module.
+- Tests: `api/internal/integration/credentials_integration_test.go`.

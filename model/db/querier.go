@@ -61,6 +61,8 @@ type Querier interface {
 	// ---------------------------------------------------------------------------
 	// email_otp
 	// ---------------------------------------------------------------------------
+	// The identifier is required on creation (the column is nullable only so the
+	// row survives identifier removal as a revoked credential).
 	CreateEmailOTPCredential(ctx context.Context, arg CreateEmailOTPCredentialParams) (CredEmailOtp, error)
 	// Queries over mod_users.user_identifiers. value_canon is canonicalized by the
 	// caller (an email: trimmed and lowercased); the table checks it.
@@ -129,6 +131,9 @@ type Querier interface {
 	// client_credentials grant lookup; revoked or expired keys never match.
 	GetActiveAPIKeyByClientID(ctx context.Context, clientID string) (GetActiveAPIKeyByClientIDRow, error)
 	GetActiveAnonByTokenHash(ctx context.Context, tokenHash string) (GetActiveAnonByTokenHashRow, error)
+	// identifier_id is nullable (SET NULL on identifier removal), but an active
+	// email_otp always has one and the lookup is by it, so the row's value is
+	// non-null.
 	GetActiveEmailOTPByIdentifier(ctx context.Context, identifierID int64) (GetActiveEmailOTPByIdentifierRow, error)
 	// The known-identity login path; it never matches by email.
 	GetActiveOIDCByIssuerSubject(ctx context.Context, arg GetActiveOIDCByIssuerSubjectParams) (GetActiveOIDCByIssuerSubjectRow, error)

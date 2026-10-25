@@ -55,9 +55,11 @@ var ErrPasswordExists = apiresp.Conflict(apiresp.FieldError{
 	Field: "password", Code: CodePasswordExists, Message: "an active password already exists",
 })
 
-// ErrIdentifierInUse is returned when an identifier cannot be removed because
-// credentials ever bound to it still reference it (credential rows are revoked,
-// never deleted). users.identifier_in_use, 409.
+// ErrIdentifierInUse is returned when an identifier cannot be removed because a
+// restricting foreign key from outside this module's credential tables still
+// references it. Credentials bound to the identifier do not block removal: they
+// are revoked and their identifier_id is set to NULL. users.identifier_in_use,
+// 409.
 var ErrIdentifierInUse = apiresp.Conflict(apiresp.FieldError{
 	Field: "identifier", Code: CodeIdentifierInUse, Message: "the identifier is bound to credentials and cannot be removed",
 })
