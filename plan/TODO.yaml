@@ -545,7 +545,8 @@ phases:
             - aA5K
           git:
             branch: plan/identity-model-impl-12-011
-            commit: []
+            commit:
+                - 3d38718
             merge: null
         - number: 12
           slug: copy-party-authorizations-on-supersede
