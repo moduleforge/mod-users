@@ -158,7 +158,7 @@ phases:
             branch: plan/identity-model-impl-07-002
             commit:
                 - 3abab2b
-            merge: null
+            merge: d01cdf7e931d7a17893c9f008e3c5129710a8a81
         - number: 3
           slug: outside-collaborators-and-compliance
           title: Outside Collaborators and Continuous Compliance
