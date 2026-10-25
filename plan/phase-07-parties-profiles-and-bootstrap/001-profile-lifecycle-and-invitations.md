@@ -148,3 +148,28 @@ architectural_impact: true
 - After the service and its unit tests.
 - After the parties and profiles handlers and route tests.
 - After wiring, OpenAPI and docs rows.
+
+## Status
+
+Outcome: succeeded (2026-10-25).
+
+Validation: `make build`, `make test` and `make lint` pass; the integration suites (`api/internal/authz`, `api/internal/config`, `api/internal/integration`) pass against a throwaway Postgres 16, including the new `profiles_integration_test.go` and the `TestOrder_PartyRoutes` and `TestOrder_MeProfileRoutes` route-order tests. No query changed, so `cd model && make verify` was not needed. The wiring grep and the `checkInvitePolicyMismatch` seam grep show the expected lines. `api/openapi.yaml` parses, every `$ref` resolves, and spectral's `spectral:oas` ruleset reports the same 14 pre-existing problems before and after.
+
+Affected sources:
+
+- `api/internal/service/profile_service.go`, `profile_admin.go`, `profile_holder.go` (new), with `profile_service_test.go`
+- `api/internal/service/principal_admin.go` (`disablePrincipalInTx` extracted from `DisablePrincipal`), `helpers.go` (`users.profile_exists` mapping)
+- `api/internal/handlers/parties/handler.go` (new), `api/internal/handlers/me/handler.go`
+- `api/usersservice/service.go`, `api/handlers/handlers.go`, `api/cmd/server/main.go`, `moduleforge.module.yaml`
+- `api/openapi.yaml`, `AGENTS.md`, `README.md`
+- integration harness and tests under `api/internal/integration/`
+
+Decisions (no `## Assumptions` entry was contradicted):
+
+- Party-scoped routes mask with one check, `AuthorizeTypeIn(read, profile, party)`, answered 404 on refusal. It is deliberately not a read of the party entity, which an owned-scope grant does not confer. The operation then needs its own authority (403): `create` on the profile type (and the user type for a managed user), or `update` on the profile entity. The list route uses `read`.
+- Holder actions (accept, decline, leave) authorize on the session principal, refuse impersonation and client-credentials callers, and are not behind the freshness gate; only the administrator's suspend, resume and end are.
+- The managed user's initial credential is a password bound to an unverified primary email (the administrator supplies the password), because an `email_otp` credential exists only for a verified address.
+- Administrator responses use `PartyProfileView`: the `ProfileView` identity fields plus the holder, source and timestamps, without `available` and `lock` (those are per holder session). The holder's accept responds with the section 7 `ProfileView`.
+- `PATCH /v1/profiles/{uuid}` is mounted by a second route entry on `partiesHandler` (`RegisterProfileRoutes`, an addition to the binding names).
+- `EndInTx` performs no authorization and is idempotent for an ended profile.
+- `NewMeHandler` gained the profile service parameter.

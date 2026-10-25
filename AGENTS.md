@@ -184,6 +184,8 @@ This repo uses git worktrees for isolated plan branches. When working in a workt
 | `bun.lock` | Workspace lockfile (committed) |
 | `.env.example` | Template for required environment variables |
 | `api/openapi.yaml` | Authoritative REST API specification |
+| `api/internal/service/profile_service.go`, `profile_admin.go`, `profile_holder.go` | `ProfileService`: the party profile lifecycle (`InviteInTx`, `EndInTx` with departure cleanup, `AddLifecycleObserver`, managed-user provisioning) and the HTTP-facing methods behind the party and `/v1/me/profiles/{uuid}/...` routes. `checkInvitePolicyMismatch` is the seam for the invitation policy-mismatch confirmation. |
+| `api/internal/handlers/parties/` | `PartiesHandler`: `RegisterPartyRoutes` mounts `/v1/parties/{party_uuid}/profiles` (list, invite) and `/managed-users`, and is where the party authentication-policy, credential-authorization and confinement routes register; `RegisterProfileRoutes` mounts `PATCH /v1/profiles/{uuid}`. The holder's `accept`, `decline` and `leave` are on `MeHandler`. |
 | `api/handlers/handlers.go` | Public facade re-exporting handler types/constructors/route-registration functions from `api/internal/handlers/` — the only handlers package external modules (host apps) can import. See Conventions below. |
 | `model/schema/` | Postgres schema definitions (source of truth for table structure) |
 | `model/migrations/sql/` | goose migration files (numbered, in order) |

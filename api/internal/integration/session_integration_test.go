@@ -359,7 +359,7 @@ FROM mod_users.sessions s WHERE s.uuid = $1::uuid`, tk.Session.UUID).Scan(&s); e
 		t.Errorf("switch wrote observations %v, want none", obs)
 	}
 	// An unavailable target is 401 profile_unavailable.
-	env.exec(t, "suspend", `UPDATE profiles SET status = 'suspended' WHERE entity_id = (SELECT entity_id FROM entities WHERE uuid = $1::uuid)`, partyProfile)
+	env.exec(t, "suspend", `UPDATE profiles SET status = 'suspended' WHERE entity_id = (SELECT id FROM entities WHERE uuid = $1::uuid)`, partyProfile)
 	env.do(t, http.MethodPost, "/v1/session/switch", tk.access(), map[string]string{"profile_uuid": partyProfile}).
 		wantError(t, http.StatusUnauthorized, "users.profile_unavailable", "")
 }

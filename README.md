@@ -56,6 +56,20 @@ Access tokens are EdDSA (Ed25519) JWTs that carry a server-side session or non-i
 
 CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and any entry containing `*` is rejected at startup outside local mode. Entries are bare `scheme://host[:port]` origins (no trailing slash or path), matched case-insensitively. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
 
+## Party profiles and managed users
+
+A party (an organization or a natural person) admits users through profiles. All routes are bearer-authenticated; a party or profile the caller may not read answers `404`, the same as an unknown one, before any `403`.
+
+| Route | Purpose |
+|---|---|
+| `GET /v1/parties/{party_uuid}/profiles` | List a party's profiles (`status`, `limit`, `offset`); needs `read` on profiles in the party |
+| `POST /v1/parties/{party_uuid}/profiles` | Invite a user by `holder_email` or `holder_user_uuid` (status `invited`; no account is created, no email is sent); needs `create` on profiles in the party |
+| `POST /v1/parties/{party_uuid}/managed-users` | Create a user owned and managed by the party, with an active party profile and an initial password |
+| `PATCH /v1/profiles/{uuid}` | Suspend, resume or end a party profile (`status`, `end_reason`); needs `update` and a fresh authentication |
+| `POST /v1/me/profiles/{uuid}/accept`, `/decline`, `/leave` | The holder's own actions; an invitation appears in `GET /v1/me/profiles` |
+
+Ending a profile (an administrator ending it, or the holder declining or leaving) deletes the holder's credential authorizations for the party, revokes the holder's credentials confined to it, and disables a managed user left with no open profile. Other modules react to creations and status changes with `ProfileService.AddLifecycleObserver` (in-transaction). See `api/openapi.yaml` for the request and response shapes.
+
 ## Additional documentation
 
 - [AGENTS.md](./AGENTS.md) — build, test, and development commands for contributors and AI agents

@@ -29,6 +29,11 @@ info:
     - Step-up (`409 users.step_up_required`, an action-required response) comes
       after the 400 shape checks and before authorization on the self-service
       writes and the principal disable and enable.
+    - Party administration masks existence: a party or profile the caller may
+      not read answers 404, the same as an unknown one, before any 403. The
+      403 is for an operation the caller may see but not perform (inviting,
+      creating a managed user, changing a profile's status). The profile
+      status change checks step-up after that authorization.
 
     Every JSON body route decodes strictly: unknown fields, trailing data
     and an empty body give 400 (`invalid_json_body`), and a body over 1 MiB
@@ -61,6 +66,14 @@ tags:
       The caller's own user record, identifiers, credentials and sessions.
   - name: Principals
     description: Administration of users and service accounts.
+  - name: Parties
+    description: >-
+      Party administration: the profiles of a party (invitations) and its
+      managed users.
+  - name: Profiles
+    description: >-
+      The status of a party profile (suspend, resume, end). The holder's own
+      accept, decline and leave are under `/v1/me/profiles`.
   - name: Audit
     description: Audit log reads (served by the audit module).
 
@@ -977,6 +990,164 @@ components:
           maxLength: 500
           description: Free text recorded on the principal.
 
+    # -- Parties and party profiles --
+
+    ProfileHolder:
+      type: object
+      required: [uuid, display_name, managed]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          description: The holder principal's uuid.
+        display_name:
+          type: string
+        managed:
+          type: boolean
+          description: True for a managed user of the party.
+
+    PartyProfileView:
+      type: object
+      description: |
+        The administration view of a party profile. It has the identity fields
+        of `ProfileView` (`uuid`, `kind`, `party`, `status`, `display_name`) and
+        leaves out `available` and `lock`, which describe a profile relative to
+        one holder session.
+      required:
+        - uuid
+        - kind
+        - party
+        - status
+        - display_name
+        - holder
+        - source
+        - invited_by_profile_uuid
+        - started_at
+        - ended_at
+        - end_reason
+        - created_at
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [party]
+        party:
+          $ref: "#/components/schemas/PartyView"
+        status:
+          type: string
+          enum: [invited, active, suspended, ended]
+        display_name:
+          type: string
+          description: "`<holder> @ <party>`."
+        holder:
+          $ref: "#/components/schemas/ProfileHolder"
+        source:
+          type: string
+          enum: [manual, idp_jit, scim]
+        invited_by_profile_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the profile first became active.
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    PartyProfilePage:
+      type: object
+      required: [profiles, total, limit, offset]
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartyProfileView"
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+
+    InviteProfileRequest:
+      type: object
+      description: Exactly one of `holder_email` and `holder_user_uuid`.
+      properties:
+        holder_email:
+          type: string
+          format: email
+          description: |
+            The canonical value of an email identifier of an existing user
+            (trimmed, case-insensitive). An unknown address is 404; an
+            invitation never creates an account.
+        holder_user_uuid:
+          type: string
+          format: uuid
+        confirm_policy_mismatch:
+          type: boolean
+          description: |
+            Confirms an invitation whose holder's credentials cannot meet the
+            party's authentication policy. Accepted and carried through; the
+            mismatch check itself is not yet enforced.
+
+    CreateManagedUserRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: The user's sign-in address, stored as an unverified primary email.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+          description: |
+            The initial password of the user's password credential, bound to
+            the email identifier. The administrator conveys it out of band.
+            An email-code credential exists only for a verified address, so
+            the managed user gets one when they verify the address.
+
+    ManagedUserView:
+      type: object
+      required: [user, profile]
+      properties:
+        user:
+          $ref: "#/components/schemas/PrincipalView"
+        profile:
+          $ref: "#/components/schemas/PartyProfileView"
+
+    UpdateProfileStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, suspended, ended]
+          description: |
+            `suspended` from `active`; `active` (resume) from `suspended`;
+            `ended` from any open status (it withdraws an invitation too).
+            Accepting an invitation is the holder's alone. `ended` is terminal.
+        end_reason:
+          type: string
+          maxLength: 500
+          description: Required with `ended` and refused otherwise.
+
     # -- Audit schemas --
 
     AuditEntry:
@@ -1032,6 +1203,14 @@ components:
       name: uuid
       in: path
       required: true
+      schema:
+        type: string
+        format: uuid
+    PartyUUID:
+      name: party_uuid
+      in: path
+      required: true
+      description: The uuid of the party (an organization or a natural person).
       schema:
         type: string
         format: uuid
@@ -1881,6 +2060,91 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/me/profiles/{uuid}/accept:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Accept an invitation to a party
+      description: |
+        `invited` to `active`. Authorized by "session principal = profile
+        holder", from any of the holder's sessions (not grants); refused while
+        impersonating. Responds with the profile as the caller's session sees
+        it, so a profile the party's policy locks for this session carries its
+        lock reason and remedy. 404 for a profile the caller does not hold;
+        409 `users.profile_transition_invalid` when it is not an invitation.
+      tags: [Me]
+      operationId: acceptProfile
+      responses:
+        "200":
+          description: The accepted profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/profiles/{uuid}/decline:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Decline an invitation to a party
+      description: |
+        `invited` to `ended` with end reason `declined`, running the departure
+        cleanup. Authorized like accept.
+      tags: [Me]
+      operationId: declineProfile
+      responses:
+        "204":
+          description: Declined.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/me/profiles/{uuid}/leave:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Leave a party
+      description: |
+        `active` or `suspended` to `ended` with end reason `left`. Departure
+        cleanup: the caller's credential authorizations for the party are
+        deleted, their credentials confined to the party are revoked (which ends
+        the sessions holding them), and a managed user left with no open profile
+        is disabled. Authorized like accept. 409
+        `users.profile_transition_invalid` for an invitation (decline it) or an
+        ended profile.
+      tags: [Me]
+      operationId: leaveProfile
+      responses:
+        "204":
+          description: Left.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
   /v1/me/identifiers:
     get:
       summary: List the caller's identifiers
@@ -2347,6 +2611,156 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PrincipalView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  # -- Parties and party profiles (bearer) --
+
+  /v1/parties/{party_uuid}/profiles:
+    parameters:
+      - $ref: "#/components/parameters/PartyUUID"
+    get:
+      summary: List a party's profiles
+      description: |
+        Oldest first. Authorized as `read` on the profile type within the party
+        (`AuthorizeTypeIn`); a caller without it, and an unknown party, get 404.
+        Lists the profiles that are not ended unless `status` names one.
+      tags: [Parties]
+      operationId: listPartyProfiles
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [invited, active, suspended, ended]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: A page of profiles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyProfilePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      summary: Invite a user to a party
+      description: |
+        Creates a profile with status `invited`, source `manual`, owned by the
+        party and invited by the caller's acting profile. The invitee sees it in
+        `GET /v1/me/profiles` and accepts or declines it. Authorized as `create`
+        on the profile type within the party, after the read check that masks
+        the party. 404 for an unknown email or user. 409:
+        `users.profile_exists` (an open profile already exists),
+        `users.guest_upgrade_required` (a guest), `users.holder_not_admissible`
+        (a managed user of another party, or a principal that is not a user).
+        No email notification is sent.
+      tags: [Parties]
+      operationId: inviteToParty
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteProfileRequest"
+      responses:
+        "201":
+          description: The invited profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyProfileView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/parties/{party_uuid}/managed-users:
+    parameters:
+      - $ref: "#/components/parameters/PartyUUID"
+    post:
+      summary: Create a managed user
+      description: |
+        In one transaction: a user owned and managed by the party (no personal
+        profile, no person record), an unverified primary email identifier, an
+        active party profile (source `manual`) and an initial password
+        credential bound to the identifier, whose landing profile is that party
+        profile. Authorized as `create` on the user type and on the profile type
+        within the party, after the read check that masks the party. 409
+        `users.identifier_taken` when the address is registered.
+      tags: [Parties]
+      operationId: createManagedUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManagedUserRequest"
+      responses:
+        "201":
+          description: The user and its profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedUserView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/profiles/{uuid}:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    patch:
+      summary: Suspend, resume or end a party profile
+      description: |
+        Needs `update` on the profile and a fresh authentication (409
+        `users.step_up_required`, checked after authorization). A profile the
+        caller may not read, an unknown profile and a personal profile are 404.
+        Ending runs the departure cleanup of `POST /v1/me/profiles/{uuid}/leave`.
+        409 `users.profile_transition_invalid` for a status the profile cannot
+        move to from its current one.
+      tags: [Profiles]
+      operationId: updateProfileStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileStatusRequest"
+      responses:
+        "200":
+          description: The updated profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyProfileView"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
