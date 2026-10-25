@@ -407,13 +407,15 @@ phases:
           slug: exclude-revoked-factors-from-availability
           title: Exclude Revoked Factors From Profile Availability
           path: phase-12-remediation-01/002-exclude-revoked-factors-from-availability.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: profile_availability now joins session_factors to credentials with revoked_at IS NULL. RevokeCredentialsOfPrincipal and RevokeCredentialsConfinedToParty were removed as uncalled; sqlc regenerated. Integration test TestInteg_Availability_RevokedFactorDoesNotCount added.
           findings:
             - WpsB
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-002
+            commit:
+                - 476468a
             merge: null
         - number: 3
           slug: bind-oidc-login-to-provider
