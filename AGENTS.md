@@ -27,7 +27,7 @@ This file is the canonical reference for contributors and AI agents working on t
    cd mod-users
    bun install          # installs root workspace deps (includes gui/)
    ```
-   Initialize the `docs/mf-standards` submodule in every new checkout and worktree, including plan and task worktrees: `git submodule update --init docs/mf-standards`. This file and the docs link into `docs/mf-standards/`, which dangles when the submodule is uninitialized.
+   Initialize the `docs/mf-standards` submodule in every new checkout and worktree, including plan and task worktrees: `git submodule update --init docs/mf-standards` (`make preflight` also does this automatically and only warns on failure). This file and the docs link into `docs/mf-standards/`, which dangles when the submodule is uninitialized.
 
 2. **Copy the env file:**
    ```sh

@@ -29,11 +29,12 @@ SUBPROJECTS := model api gui
 # ---------------------------------------------------------------------------
 
 .PHONY: preflight
-preflight: preflight.siblings preflight.model preflight.api preflight.gui ## Verify tools and fix stale deps
+preflight: preflight.siblings preflight.submodules preflight.model preflight.api preflight.gui ## Verify tools and fix stale deps
 	@echo "  preflight complete."
 
-.PHONY: preflight.siblings preflight.model preflight.api preflight.gui
+.PHONY: preflight.siblings preflight.submodules preflight.model preflight.api preflight.gui
 preflight.siblings: ; @bash scripts/link-siblings.sh
+preflight.submodules: ; @if git submodule status docs/mf-standards 2>/dev/null | grep -q '^-'; then git submodule update --init docs/mf-standards || echo "WARNING: could not initialize docs/mf-standards (offline or no GitHub SSH access?); documentation links into it will dangle. Run: git submodule update --init docs/mf-standards" >&2; fi
 preflight.model:     ; @$(MAKE) -C model   preflight
 preflight.api:       ; @$(MAKE) -C api     preflight
 preflight.gui:       ; @$(MAKE) -C gui     preflight
