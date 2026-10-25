@@ -487,7 +487,7 @@ phases:
             branch: plan/identity-model-impl-12-007
             commit:
                 - eb61cb6
-            merge: null
+            merge: 891392e
         - number: 8
           slug: update-deploy-manifests-signing-key
           title: Update Deploy Manifests For EdDSA Signing Key
