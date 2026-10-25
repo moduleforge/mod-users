@@ -421,7 +421,7 @@ phases:
           slug: bind-oidc-login-to-provider
           title: Bind OIDC Sign-In To The Credential Provider
           path: phase-12-remediation-01/003-bind-oidc-login-to-provider.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Added a provider_id comparison to OIDCResolver.Resolve so a credential presented through a different provider with the same issuer and subject is refused with RedirectErrAuthFailed. Unit test covers it.
           findings:
