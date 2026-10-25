@@ -582,6 +582,7 @@ phases:
           path: phase-12-remediation-01/014-exclude-archived-apps-from-audience.md
           done: false
           tier: sonnet-low
+          digest: Both audience-liveness queries now exclude apps whose entity row is archived. Integration test covers active-accepted and archived-rejected cases; spec notes the policy.
           findings:
             - nD8J
           git:
