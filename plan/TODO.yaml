@@ -455,7 +455,7 @@ phases:
           findings:
             - LPl2
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-005
             commit: []
             merge: null
         - number: 6
