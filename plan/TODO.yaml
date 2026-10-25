@@ -531,7 +531,8 @@ phases:
             - Nobq
           git:
             branch: plan/identity-model-impl-12-010
-            commit: []
+            commit:
+                - eb6bdea
             merge: null
         - number: 11
           slug: identifier-removal-set-null-fks
