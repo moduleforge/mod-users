@@ -525,6 +525,7 @@ phases:
           path: phase-12-remediation-01/010-confine-party-bound-oidc-link.md
           done: false
           tier: sonnet-med
+          digest: Linked OIDC credentials from a party-bound provider are now confined to that party. Party-less providers unchanged. Both cases have integration route tests and a docs note.
           findings:
             - wZsk
             - Nobq
