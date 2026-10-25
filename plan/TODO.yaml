@@ -554,6 +554,7 @@ phases:
           path: phase-12-remediation-01/012-copy-party-authorizations-on-supersede.md
           done: false
           tier: sonnet-med
+          digest: Added CopyCredentialPartyAuthorizations query and CredentialService.SupersedePasswordInTx; password reset now revokes old credential, creates replacement, and copies party authorizations atomically. Integration tests added.
           findings:
             - 1xmT
           git:
