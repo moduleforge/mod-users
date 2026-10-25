@@ -423,6 +423,7 @@ phases:
           path: phase-12-remediation-01/003-bind-oidc-login-to-provider.md
           done: false
           tier: sonnet-med
+          digest: Added a provider_id comparison to OIDCResolver.Resolve so a credential presented through a different provider with the same issuer and subject is refused with RedirectErrAuthFailed. Unit test covers it.
           findings:
             - VxMT
           git:
