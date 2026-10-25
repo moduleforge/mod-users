@@ -414,7 +414,8 @@ phases:
             - WpsB
           git:
             branch: plan/identity-model-impl-12-002
-            commit: []
+            commit:
+                - 476468a
             merge: null
         - number: 3
           slug: bind-oidc-login-to-provider
