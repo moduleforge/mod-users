@@ -609,6 +609,6 @@ phases:
           findings:
             - fDFi
           git:
-            branch: null
+            branch: plan/identity-model-impl-13-001
             commit: []
             merge: null
