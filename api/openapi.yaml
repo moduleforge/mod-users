@@ -1263,6 +1263,8 @@ paths:
         one anonymous credential) and its session, answering 201 with the token
         response and the new `device_token`. With a `device_token` it signs that guest
         back in (200, no new device token). Upgrade a guest with `POST /v1/me/upgrade`.
+        Both are refused with 403 `users.byo_identity_disabled` when the platform does
+        not allow bring-your-own identities.
       tags: [Auth]
       operationId: anonymousSignIn
       security: []
@@ -2178,7 +2180,8 @@ paths:
       description: |
         Turns the calling guest into a registered user. The guest's anonymous credential is
         revoked, which ends the guest's sessions, so the client signs in again with the
-        email and password it just registered.
+        email and password it just registered. 403 `users.byo_identity_disabled` when the
+        platform does not allow bring-your-own identities.
       tags: [Me]
       operationId: upgradeGuest
       requestBody:
