@@ -9,41 +9,6 @@ items:
         - priority:high
         - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
-    - title: RemoveIdentifierInTx (reached from SelfRemov…
-      id: aA5K
-      date: "2026-10-24"
-      tags:
-        - type:bug
-        - plan/phase:users-identity-core
-        - priority:high
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/user_service.go
-        lines: 572-637
-        severity: major
-        confidence: high
-        concerns: correctness
-        description:
-          RemoveIdentifierInTx (reached from SelfRemoveIdentifier, DELETE /v1/me/identifiers/{uuid})
-          revokes the credentials bound to the identifier and then DELETEs the identifier. cred_password.
-          identifier_id and cred_email_otp.identifier_id reference user_identifiers ON DELETE RESTRICT
-          (baseline 0100) and credentials are never deleted, so the DELETE hits a foreign-key violation
-          for every identifier that has ever had a bound credential. Registration always binds a
-          password to the primary email, and verifying an email always creates an email_otp, so such an
-          identifier can never be removed: the savepoint rolls back the revocations and the caller gets
-          409 users.identifier_in_use (a code not in API surface section 7). Only identifiers that never
-          had a credential (an added, never verified or password-bound secondary email) can be removed.
-          Task 004 requirement 2 lists 'remove' for identifiers and the surface note lists the route as
-          supported. The task agent noted this as a finding; it is recorded here because it makes the
-          route effectively non-functional for the common case. The savepoint behavior against the real FK
-          is untested by the unit fakes.
-        recommendation:
-          Decide the contract: either change the schema (for example soft-delete identifiers with a
-          removed_at column excluded from the unique index and lookups, or drop the RESTRICT for revoked
-          credentials), or narrow the requirement and document that only never-bound identifiers are
-          removable and give the route a section 7 error code. Add a real-database test for removing a
-          verified identifier.
     - title: ListActivePasswordsByPrincipal filters cred_…
       id: 86kP
       date: "2026-10-24"
@@ -956,4 +921,9 @@ closed:
       title: Compose omits mod-audit audit_log migration
       disposition: dismissed
       reason: Already fixed by phase 12 task 005 (merge fc07a3a). model/Makefile:9 resolves AUDIT_DIR through go list -m github.com/moduleforge/audit-model with the sibling fallback, and the compose target (line 33) copies $(AUDIT_DIR)/migrations/*.sql into schema/migrations; the integration harness now applies the composed directory directly (harness_integration_test.go:350).
+      date: "2026-10-25"
+    - id: aA5K
+      title: RemoveIdentifierInTx (reached from SelfRemov…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 011 (merge 2729fe4), per the owner decision for nullable FK with SET NULL. model/migrations/sql/0100_baseline.sql:538 (cred_password.identifier_id) and :563 (cred_email_otp.identifier_id) now use ON DELETE SET NULL, and removeIdentifier (api/internal/service/user_service.go:605-637) revokes bound credentials and then deletes, so verified identifiers can be removed. The integrity gap this change opened for active passwords is tracked separately as fDFi, and the stale error message as JWO3.
       date: "2026-10-25"
