@@ -465,6 +465,7 @@ phases:
           path: phase-12-remediation-01/006-register-display-renderers-in-manifest.md
           done: false
           tier: sonnet-med
+          digest: Manifest now registers the user and profile display renderers via NewUserServiceWithSelfService taking a trailing display.Registry; main.go uses the facade. Unit test added.
           findings:
             - xgGT
           git:
