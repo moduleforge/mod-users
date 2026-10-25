@@ -22,3 +22,11 @@ Suggested role: `plugins/flow/roles/developer-sql.md`
 
 - Finding `86kP` in this plan's `plan/findings.yaml` (optimization, medium): the only `principal_id` index on `cred_password` is partial on unbound rows, so `ListActivePasswordsByPrincipal` seq-scans.
 - Finding `Pjuz` in this plan's `plan/findings.yaml` (optimization, medium): `auth_challenges` has no usable index on its four foreign-key columns.
+
+## Status
+
+Outcome: succeeded (2026-10-25).
+
+- Added `cred_password_principal_id_idx` (partial on `active`) and four partial `auth_challenges` FK indexes in `model/migrations/sql/0100_baseline.sql`.
+- Rewrote `GetLatestOpenChallenge` and `ConsumeOpenChallengesBySubject` in `model/queries/challenges.sql` to the `COALESCE(col, 0) = COALESCE(arg, 0)` form that `auth_challenges_cooldown_idx` serves; regenerated `model/db/`.
+- Validation: `make verify` passed; authz, config and integration suites passed against a throwaway Postgres; EXPLAIN shows index scans (`cred_password_principal_id_idx`, `auth_challenges_cooldown_idx`). The password plan needed `enable_seqscan=off` because the seeded table has only 91 rows.

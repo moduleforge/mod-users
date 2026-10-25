@@ -30,12 +30,13 @@ SELECT * FROM mod_users.auth_challenges WHERE uuid = $1;
 
 -- name: GetLatestOpenChallenge :one
 -- The newest unconsumed, unexpired challenge of a subject, for code
--- verification. Subject columns match with NULLs equal.
+-- verification. Subject columns match with NULLs equal (COALESCE to 0; ids are never 0),
+-- the form auth_challenges_cooldown_idx serves.
 SELECT * FROM mod_users.auth_challenges
 WHERE kind = @kind
-  AND principal_id IS NOT DISTINCT FROM sqlc.narg(principal_id)::bigint
-  AND identifier_id IS NOT DISTINCT FROM sqlc.narg(identifier_id)::bigint
-  AND session_id IS NOT DISTINCT FROM sqlc.narg(session_id)::bigint
+  AND COALESCE(principal_id, 0) = COALESCE(sqlc.narg(principal_id)::bigint, 0)
+  AND COALESCE(identifier_id, 0) = COALESCE(sqlc.narg(identifier_id)::bigint, 0)
+  AND COALESCE(session_id, 0) = COALESCE(sqlc.narg(session_id)::bigint, 0)
   AND consumed_at IS NULL
   AND expires_at > now()
 ORDER BY created_at DESC, id DESC
@@ -81,8 +82,8 @@ RETURNING *;
 UPDATE mod_users.auth_challenges
 SET consumed_at = now()
 WHERE kind = @kind
-  AND principal_id IS NOT DISTINCT FROM sqlc.narg(principal_id)::bigint
-  AND identifier_id IS NOT DISTINCT FROM sqlc.narg(identifier_id)::bigint
+  AND COALESCE(principal_id, 0) = COALESCE(sqlc.narg(principal_id)::bigint, 0)
+  AND COALESCE(identifier_id, 0) = COALESCE(sqlc.narg(identifier_id)::bigint, 0)
   AND consumed_at IS NULL;
 
 -- name: DeleteExpiredChallenges :execrows

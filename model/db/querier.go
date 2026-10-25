@@ -147,7 +147,8 @@ type Querier interface {
 	GetIdentifierByKindValue(ctx context.Context, arg GetIdentifierByKindValueParams) (UserIdentifier, error)
 	GetIdentifierByUUID(ctx context.Context, argUuid uuid.UUID) (UserIdentifier, error)
 	// The newest unconsumed, unexpired challenge of a subject, for code
-	// verification. Subject columns match with NULLs equal.
+	// verification. Subject columns match with NULLs equal (COALESCE to 0; ids are never 0),
+	// the form auth_challenges_cooldown_idx serves.
 	GetLatestOpenChallenge(ctx context.Context, arg GetLatestOpenChallengeParams) (AuthChallenge, error)
 	GetOIDCByCredentialID(ctx context.Context, credentialID int64) (CredOidc, error)
 	GetOIDCConfig(ctx context.Context) (GetOIDCConfigRow, error)

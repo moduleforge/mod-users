@@ -90,8 +90,8 @@ const consumeOpenChallengesBySubject = `-- name: ConsumeOpenChallengesBySubject 
 UPDATE mod_users.auth_challenges
 SET consumed_at = now()
 WHERE kind = $1
-  AND principal_id IS NOT DISTINCT FROM $2::bigint
-  AND identifier_id IS NOT DISTINCT FROM $3::bigint
+  AND COALESCE(principal_id, 0) = COALESCE($2::bigint, 0)
+  AND COALESCE(identifier_id, 0) = COALESCE($3::bigint, 0)
   AND consumed_at IS NULL
 `
 
@@ -256,9 +256,9 @@ func (q *Queries) GetChallengeByUUID(ctx context.Context, argUuid uuid.UUID) (Au
 const getLatestOpenChallenge = `-- name: GetLatestOpenChallenge :one
 SELECT id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, consumed_at, expires_at, failed_attempts, kind, created_at FROM mod_users.auth_challenges
 WHERE kind = $1
-  AND principal_id IS NOT DISTINCT FROM $2::bigint
-  AND identifier_id IS NOT DISTINCT FROM $3::bigint
-  AND session_id IS NOT DISTINCT FROM $4::bigint
+  AND COALESCE(principal_id, 0) = COALESCE($2::bigint, 0)
+  AND COALESCE(identifier_id, 0) = COALESCE($3::bigint, 0)
+  AND COALESCE(session_id, 0) = COALESCE($4::bigint, 0)
   AND consumed_at IS NULL
   AND expires_at > now()
 ORDER BY created_at DESC, id DESC
@@ -273,7 +273,8 @@ type GetLatestOpenChallengeParams struct {
 }
 
 // The newest unconsumed, unexpired challenge of a subject, for code
-// verification. Subject columns match with NULLs equal.
+// verification. Subject columns match with NULLs equal (COALESCE to 0; ids are never 0),
+// the form auth_challenges_cooldown_idx serves.
 func (q *Queries) GetLatestOpenChallenge(ctx context.Context, arg GetLatestOpenChallengeParams) (AuthChallenge, error) {
 	row := q.db.QueryRow(ctx, getLatestOpenChallenge,
 		arg.Kind,
