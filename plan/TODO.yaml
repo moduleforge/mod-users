@@ -409,6 +409,7 @@ phases:
           path: phase-12-remediation-01/002-exclude-revoked-factors-from-availability.md
           done: false
           tier: sonnet-med
+          digest: profile_availability now joins session_factors to credentials with revoked_at IS NULL. RevokeCredentialsOfPrincipal and RevokeCredentialsConfinedToParty were removed as uncalled; sqlc regenerated. Integration test TestInteg_Availability_RevokedFactorDoesNotCount added.
           findings:
             - WpsB
           git:
