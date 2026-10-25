@@ -395,6 +395,7 @@ phases:
           path: phase-12-remediation-01/001-enforce-byo-identity-on-guest-paths.md
           done: false
           tier: sonnet-med
+          digest: Added the allow_byo_identity check to POST /v1/auth/anonymous (create and device_token sign-in) and to SelfUpgradeGuest. Both return 403 users.byo_identity_disabled, with an integration test and openapi.yaml docs.
           findings:
             - TrRi
           git:
