@@ -26,7 +26,7 @@ func (f fakeResolverQuerier) GetActiveOIDCByIssuerSubject(_ context.Context, arg
 	if !ok {
 		return usersdb.GetActiveOIDCByIssuerSubjectRow{}, pgx.ErrNoRows
 	}
-	return usersdb.GetActiveOIDCByIssuerSubjectRow{Credential: c, Issuer: arg.Issuer, Subject: arg.Subject}, nil
+	return usersdb.GetActiveOIDCByIssuerSubjectRow{Credential: c, ProviderID: "p", Issuer: arg.Issuer, Subject: arg.Subject}, nil
 }
 
 func (f fakeResolverQuerier) GetIdentifierByKindValue(_ context.Context, arg usersdb.GetIdentifierByKindValueParams) (usersdb.UserIdentifier, error) {
@@ -54,6 +54,7 @@ func TestOIDCResolver_Resolve(t *testing.T) {
 		wantRefusal string
 	}{
 		{"known identity logs in", ExternalIdentity{Issuer: "https://idp", Subject: "known", Email: "x@example.com"}, byo, ActionLogin, ""},
+		{"known identity through a different provider is refused", ExternalIdentity{Issuer: "https://idp", Subject: "known", Email: "x@example.com"}, ProviderPolicy{ProviderID: "other", JITMode: config.JITModeBYO}, ActionRefuse, RedirectErrAuthFailed},
 		{"known identity logs in without email", ExternalIdentity{Issuer: "https://idp", Subject: "known"}, none, ActionLogin, ""},
 		{"known identity beats an unrelated email match", ExternalIdentity{Issuer: "https://idp", Subject: "known", Email: "taken@example.com"}, byo, ActionLogin, ""},
 		{"unknown identity with a taken email is never linked", ExternalIdentity{Issuer: "https://idp", Subject: "new", Email: "taken@example.com"}, byo, ActionRefuse, RedirectErrAccountExists},
