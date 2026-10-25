@@ -70,6 +70,12 @@ from the token header:
   one (a single-PEM `JWT_VERIFY_PUBLIC_KEYS`).
 - Issuer (`iss`) and expiry (`exp`, required) are checked on every path.
 
+Audience tokens (`IssueAudienceToken`) carry the JWS header `typ: aud+jwt`
+and share the access-token signing key and issuer. Offline verifiers should
+check `typ` to tell them apart: the access-token `Authenticator` rejects any
+token with `typ: aud+jwt`, and audience tokens cannot carry `acr`, `amr` or
+`auth_time`.
+
 **Behavior change:** the legacy `auth.NewVerifier(ctx, issuerURL, clientID,
 jwtSecret, localIssuer)` called with an empty `jwtSecret` now accepts *no* HS256
 tokens (previously an empty HMAC key was usable). Callers relying on that were

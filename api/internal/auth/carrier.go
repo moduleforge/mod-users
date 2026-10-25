@@ -1,10 +1,12 @@
 package auth
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -199,15 +201,21 @@ func IssueClientCredentialsToken(s *Signer, p ClientCredentialsTokenParams, now 
 var audienceReservedClaims = map[string]struct{}{
 	claimIssuer: {}, claimSubject: {}, claimAudience: {}, claimIssuedAt: {},
 	claimExpiresAt: {}, claimNotBefore: {}, claimSessionID: {}, claimCredential: {},
-	claimProfile: {}, claimActor: {},
+	claimProfile: {}, claimActor: {}, claimACR: {}, claimAMR: {}, claimAuthTime: {},
 }
+
+// audienceTokenTyp is the JWS "typ" header of an audience token. It separates
+// audience tokens from access tokens, which share the signing key and issuer;
+// the access-token Authenticator rejects it.
+const audienceTokenTyp = "aud+jwt"
 
 // IssueAudienceToken signs an audience-bound token for an offline verifier (a
 // managed app acting as a relying party, a relay): iss, sub = principal uuid,
 // aud, iat and exp = iat + ttl, plus the caller's extra claims. It carries no
 // sid or cid, so it is never accepted as a bearer token by this module's own
 // Authenticator. extra may not set any reserved claim (iss, sub, aud, iat,
-// exp, nbf, sid, cid, prof, act).
+// exp, nbf, sid, cid, prof, act, acr, amr, auth_time). The JWS typ header is
+// "aud+jwt", which the access-token verifier rejects.
 func IssueAudienceToken(s *Signer, issuer string, principalUUID uuid.UUID, audience string,
 	ttl time.Duration, extra map[string]any,
 ) (string, error) {
@@ -238,7 +246,7 @@ func IssueAudienceToken(s *Signer, issuer string, principalUUID uuid.UUID, audie
 	claims[claimIssuedAt] = now.Unix()
 	claims[claimExpiresAt] = now.Add(ttl).Unix()
 
-	signed, err := s.Sign(claims)
+	signed, err := s.signTyped(claims, audienceTokenTyp)
 	if err != nil {
 		return "", fmt.Errorf("carrier: sign audience token: %w", err)
 	}
@@ -320,6 +328,9 @@ func (v *Verifier) verifyCarrier(rawToken string, now time.Time) (*carrier, erro
 	if err != nil {
 		return nil, err
 	}
+	if rawTokenTyp(rawToken) == audienceTokenTyp {
+		return nil, errors.New("audience token not accepted")
+	}
 	var p carrierPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return nil, errors.New("invalid jwt payload")
@@ -363,6 +374,26 @@ func (v *Verifier) verifyCarrier(rawToken string, now time.Time) (*carrier, erro
 		c.AuthTime = c.IssuedAt
 	}
 	return c, nil
+}
+
+// rawTokenTyp returns the JWS "typ" header of an already signature-verified
+// token, or "" when absent or not a string.
+func rawTokenTyp(rawToken string) string {
+	parts := strings.Split(rawToken, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	b, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return ""
+	}
+	var h struct {
+		Typ string `json:"typ"`
+	}
+	if json.Unmarshal(b, &h) != nil {
+		return ""
+	}
+	return h.Typ
 }
 
 // audiencePolicy is the bearer-token audience rule: AUTH_ACCEPTED_AUDIENCES

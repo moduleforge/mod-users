@@ -284,7 +284,14 @@ func TestIssueAudienceToken(t *testing.T) {
 		t.Errorf("unexpected claims %v", claims)
 	}
 
-	for _, reserved := range []string{"iss", "sub", "aud", "exp", "iat", "nbf", "sid", "cid", "prof", "act"} {
+	if typ := rawTokenTyp(tok); typ != "aud+jwt" {
+		t.Errorf("typ header = %q, want aud+jwt", typ)
+	}
+	if _, err := v.verifyCarrier(tok, time.Now()); err == nil {
+		t.Error("access-token verifier should reject an audience token")
+	}
+
+	for _, reserved := range []string{"iss", "sub", "aud", "exp", "iat", "nbf", "sid", "cid", "prof", "act", "acr", "amr", "auth_time"} {
 		if _, err := IssueAudienceToken(s, testIssuer, principal, "app-x", time.Minute, map[string]any{reserved: "x"}); err == nil {
 			t.Errorf("extra claim %q should be refused", reserved)
 		}

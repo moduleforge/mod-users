@@ -22,3 +22,7 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `UT68` in this plan's `plan/findings.yaml` (security, medium): `audienceReservedClaims` omits `acr`, `amr` and `auth_time`, and audience tokens share the access-token key and issuer.
+
+## Status
+
+succeeded, 2026-10-25. `audienceReservedClaims` now includes acr, amr, auth_time; `IssueAudienceToken` stamps `typ: aud+jwt` (via new `Signer.signTyped`); `verifyCarrier` rejects it. Tests extended in `api/internal/auth/carrier_test.go`; `docs/jwt-eddsa.md` notes the typ distinction. `make build`, `make test`, `make lint` in `api/` pass (log: `.flow/validation-logs/02-make.log`).

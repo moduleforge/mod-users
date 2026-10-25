@@ -46,10 +46,19 @@ func (s *Signer) Alg() string { return jwt.SigningMethodEdDSA.Alg() }
 
 // Sign serializes and signs claims. Errors never include key material.
 func (s *Signer) Sign(claims jwt.Claims) (string, error) {
+	return s.signTyped(claims, "")
+}
+
+// signTyped signs claims and, when typ is non-empty, overrides the JWS "typ"
+// header with it.
+func (s *Signer) signTyped(claims jwt.Claims, typ string) (string, error) {
 	if s == nil || len(s.key) != ed25519.PrivateKeySize {
 		return "", errors.New("signer: nil signer")
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	if typ != "" {
+		token.Header["typ"] = typ
+	}
 	if s.kid != "" {
 		token.Header["kid"] = s.kid
 	}
