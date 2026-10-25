@@ -21,13 +21,17 @@ and 005.
    `selection_required`/return-path flow. Remove the JWT-shape check and `completeExternalLogin`.
    Render readable messages for the OIDC redirect error codes `account_exists_sign_in_and_link`
    (explain signing in with the existing method and linking from account settings), `no_account`,
-   `authentication_failed` and `missing_email`.
+   `authentication_failed` and `missing_email`. `completeHandoff(code)` supplies the verifier stored
+   by the task 001 client (finding `z443`); a missing or mismatched verifier shows a readable
+   "sign-in must be completed in the same browser tab" message.
 2. **`login-form.tsx`, `register-form.tsx`, `auth-page.tsx`**: use the new login and register
    calls; when the token response has `selection_required: true`, navigate to the selection route
    from task 001 instead of the return path; map `users.invalid_credentials`,
    `users.byo_identity_disabled`, `users.app_login_not_granted` and
    `users.profile_unavailable` to readable messages; keep the OIDC provider buttons on
-   `GET /v1/auth/providers` and `GET /v1/auth/oidc/{provider}/start`. If the app is configured with
+   `GET /v1/auth/providers` and `GET /v1/auth/oidc/{provider}/start`. The OIDC provider buttons
+   start the flow through the task 001 client helper that generates the verifier and passes the
+   challenge on `GET /v1/auth/oidc/{provider}/start`. If the app is configured with
    an app slug, pass it as `app` on login.
 3. **`email-code-page.tsx`**: request and verify through `/v1/auth/email-code/*`; establish the
    session through the auth context (replacing `setTokenAndUser`).
@@ -43,7 +47,8 @@ and 005.
    return path survives the provider round trip as it does today).
 8. **Tests and stories**: update `auth-page.test.tsx`, `login-return-path.test.tsx`,
    `credential-401.test.tsx`, `verify-email-page.test.tsx`, add an OIDC callback test (handoff
-   success, single exchange, error codes, fragment stripped), and update the `LoginForm`,
+   success, single exchange, error codes, fragment stripped, verifier supplied, and missing-verifier
+   error), and update the `LoginForm`,
    `RegisterForm`, `AuthPage`, `EmailCodePage`, `ForgotPasswordPage`, `ResetPasswordPage` and
    `VerifyEmailPage` stories. Update this task's component exports in `gui/src/index.ts` (own
    section only).
@@ -79,6 +84,9 @@ architectural_impact: false
   response, error codes, OIDC redirect error codes.
 - [Decision U7](../notes/decisions-and-resolutions.md) — the `#handoff=` code.
 - [Work packages, phase `users-gui-and-frontend-contract` item 3](../notes/work-packages.md).
+- Finding `z443` and remediation task
+  [phase-12-remediation-01/013-bind-handoff-code-to-verifier.md](../phase-12-remediation-01/013-bind-handoff-code-to-verifier.md)
+  (server side) — handoff code bound to a client verifier.
 
 ## Checkpoint hints
 

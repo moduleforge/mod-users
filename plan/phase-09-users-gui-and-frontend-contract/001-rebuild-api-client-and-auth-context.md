@@ -64,7 +64,15 @@ No standard skill covers this task; follow the Procedure below. Suggested role:
    undefined (tests, SSR).
 5. **Handoff.** Provide `completeHandoff(code)` in the auth context: one call to
    `POST /v1/auth/handoff`, then store the token response like a login. Replaces
-   `completeExternalLogin(token)`.
+   `completeExternalLogin(token)`. The handoff code is bound to the initiating browser tab with a
+   PKCE-style verifier (finding `z443`):
+   - The client generates a cryptographically random verifier per OIDC sign-in attempt and stores it
+     in `sessionStorage` (per tab), keyed to the attempt.
+   - It sends the verifier's SHA-256 (base64url) as the handoff challenge parameter on the OIDC
+     start request (`GET /v1/auth/oidc/{provider}/start`).
+   - `completeHandoff(code)` sends the stored verifier in the `POST /v1/auth/handoff` body and
+     clears it afterwards.
+   - A missing verifier fails the exchange with a readable error.
 6. **Auth context (`gui/src/lib/auth-context.tsx`).** Expose, at minimum: the current session view,
    the active `ProfileView`, the profile list, `selectionRequired`, `selectProfile(uuid)` (refresh
    grant with the chosen profile), `switchProfile(uuid)` (`POST /v1/session/switch`, replaces only
@@ -104,6 +112,8 @@ No standard skill covers this task; follow the Procedure below. Suggested role:
 ## Validation
 
 - `make -C gui build` succeeds.
+- Tests cover verifier generation, the challenge sent on the OIDC start request, and the verifier
+  sent on handoff and cleared afterwards.
 - `make -C gui test` passes for every test under `gui/src/lib/`.
 - `make -C gui lint` (tsc): errors are allowed only in the component files owned by tasks 002 to 005
   (`sidebar-nav.tsx`, `require-auth.tsx`, `client-layout.tsx`, `login-form.tsx`,
@@ -146,6 +156,9 @@ architectural_impact: true
 - mod-core plan worktree `plan/notes/mod-core-api-surface.md` section 7.8 and decision D17 —
   core-gui per-tab storage and `credentials: 'omit'`.
 - Followups `HPJi` (hard 401 navigation) and `PRvD` (apps client body shape).
+- Finding `z443` and remediation task
+  [phase-12-remediation-01/013-bind-handoff-code-to-verifier.md](../phase-12-remediation-01/013-bind-handoff-code-to-verifier.md)
+  (server side) — handoff code bound to a client verifier.
 
 ## Procedure
 
