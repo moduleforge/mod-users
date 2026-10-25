@@ -481,6 +481,47 @@ func TestGuest_AnonymousSignInAndUpgrade(t *testing.T) {
 	}).wantError(t, http.StatusConflict, "conflict", "users.not_guest")
 }
 
+func TestGuest_BYODisabledByPlatformSettingIsRefused(t *testing.T) {
+	deviceID := uniq("device")
+	var guest tokens
+	env.do(t, http.MethodPost, "/v1/auth/anonymous", "", map[string]string{"device_id": deviceID}).
+		wantStatus(t, http.StatusCreated).into(t, &guest)
+
+	var prev bool
+	if err := env.pool.QueryRow(context.Background(), `SELECT allow_byo_identity FROM platform_settings`).Scan(&prev); err != nil {
+		t.Fatal(err)
+	}
+	env.exec(t, "disable byo", `UPDATE platform_settings SET allow_byo_identity = false`)
+	defer env.exec(t, "restore byo", `UPDATE platform_settings SET allow_byo_identity = $1`, prev)
+
+	countGuests := func() int {
+		var n int
+		if err := env.pool.QueryRow(context.Background(), `SELECT count(*) FROM mod_users.users WHERE is_guest`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := countGuests()
+
+	// Guest creation and device-token sign-in are both refused; no user is created.
+	env.do(t, http.MethodPost, "/v1/auth/anonymous", "", map[string]string{"device_id": uniq("device")}).
+		wantError(t, http.StatusForbidden, "users.byo_identity_disabled", "")
+	env.do(t, http.MethodPost, "/v1/auth/anonymous", "", map[string]string{"device_id": deviceID, "device_token": guest.DeviceToken}).
+		wantError(t, http.StatusForbidden, "users.byo_identity_disabled", "")
+	if after := countGuests(); after != before {
+		t.Fatalf("guest count %d -> %d, want unchanged", before, after)
+	}
+
+	// Upgrade is refused and the guest stays a guest.
+	env.do(t, http.MethodPost, "/v1/me/upgrade", guest.access(), map[string]string{
+		"email": uniq("grace") + "@example.test", "password": testPassword, "given_name": "Grace", "family_name": "Hopper",
+	}).wantError(t, http.StatusForbidden, "users.byo_identity_disabled", "")
+	me := env.do(t, http.MethodGet, "/v1/me", guest.access(), nil).wantStatus(t, http.StatusOK).obj(t)
+	if me["is_guest"] != true {
+		t.Fatalf("guest /v1/me after refused upgrade = %v", me)
+	}
+}
+
 func TestRegister_BYODisabledByPlatformSettingIsRefused(t *testing.T) {
 	var prev bool
 	if err := env.pool.QueryRow(context.Background(), `SELECT allow_byo_identity FROM platform_settings`).Scan(&prev); err != nil {

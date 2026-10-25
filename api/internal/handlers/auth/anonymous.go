@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -34,7 +35,8 @@ type anonymousResponse struct {
 // device_token it creates a guest user (personal profile, no person, one
 // anon credential) and its session, answering 201 with the token response
 // and the new device_token. With a device_token it signs that guest back in
-// (200); an unknown token, or one registered for another device, is 401
+// (200); both are 403 users.byo_identity_disabled when the platform does not
+// allow bring-your-own identities. An unknown token, or one registered for another device, is 401
 // users.invalid_credentials.
 func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 	var req anonymousRequest
@@ -45,6 +47,19 @@ func (h *Handler) Anonymous(w http.ResponseWriter, r *http.Request) {
 		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
 			Field: "device_id", Code: "users.device_id_required", Message: "device_id is required",
 		}))
+		return
+	}
+
+	// Guests are bring-your-own users with a personal profile, so both creating
+	// a guest and signing an existing one back in are refused when the platform
+	// does not allow bring-your-own identities (tenant-strict).
+	settings, err := h.coreQ.GetPlatformSettings(r.Context())
+	if err != nil {
+		writeError(w, r, fmt.Errorf("anonymous: load platform settings: %w", err))
+		return
+	}
+	if !settings.AllowByoIdentity {
+		writeError(w, r, svc.ErrBYOIdentityDisabled)
 		return
 	}
 

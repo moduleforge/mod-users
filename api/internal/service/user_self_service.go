@@ -511,7 +511,8 @@ type UpgradeGuestInput struct {
 //
 // The personal profile already exists: a guest is a bring-your-own user. An
 // already registered caller is ErrNotGuest; an email that is taken is
-// ErrIdentifierTaken. Observations: `update` `user` (the upgrade), plus the
+// ErrIdentifierTaken. ErrBYOIdentityDisabled when the platform does not allow
+// bring-your-own identities; nothing is written. Observations: `update` `user` (the upgrade), plus the
 // `create` and `revoke` events of the identifier, credential, person and
 // sessions it touches.
 func (s *UserService) SelfUpgradeGuest(ctx context.Context, in UpgradeGuestInput) (UserView, error) {
@@ -556,6 +557,13 @@ func (s *UserService) SelfUpgradeGuest(ctx context.Context, in UpgradeGuestInput
 		}
 		if !user.IsGuest {
 			return ErrNotGuest
+		}
+		settings, err := cq.GetPlatformSettings(ctx)
+		if err != nil {
+			return fmt.Errorf("users: load platform settings: %w", err)
+		}
+		if !settings.AllowByoIdentity {
+			return ErrBYOIdentityDisabled
 		}
 		userEnt, err := cq.GetEntityByID(ctx, userID)
 		if err != nil {

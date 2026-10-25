@@ -23,3 +23,7 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `TrRi` in this plan's `plan/findings.yaml` (security, high): `POST /v1/auth/anonymous` and `SelfUpgradeGuest` do not check `allow_byo_identity`.
+
+## Status
+
+Outcome: succeeded (2026-10-25). Existing-guest device-token sign-in is refused as well (tenant-strict), decided and documented in `api/openapi.yaml`. Changes: `api/internal/handlers/auth/anonymous.go`, `api/internal/service/user_self_service.go`, `api/openapi.yaml`, `api/internal/integration/credentials_integration_test.go`. Validation: new integration test `TestGuest_BYODisabledByPlatformSettingIsRefused` and the existing guest/upgrade tests pass against a throwaway Postgres; `make build`, `make test`, `make lint` in `api/` pass.
