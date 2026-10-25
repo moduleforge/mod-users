@@ -117,7 +117,8 @@ type ResolverQuerier interface {
 // reads: the callback performs the writes the decision calls for. The decision
 // table:
 //
-//	known active oidc credential (issuer, subject)        -> ActionLogin
+//	known active oidc credential (issuer, subject), same provider -> ActionLogin
+//	known credential recorded for a different provider    -> refuse auth_failed
 //	unknown, email matches an existing identifier         -> refuse account_exists_sign_in_and_link
 //	unknown, jit_mode none                                -> refuse no_account
 //	unknown, jit_mode byo, no email                       -> refuse missing_email
@@ -145,6 +146,11 @@ func (r *OIDCResolver) Resolve(ctx context.Context, id ExternalIdentity, policy 
 		Issuer: id.Issuer, Subject: id.Subject,
 	})
 	if err == nil {
+		// A credential belongs to one provider's configuration; presenting it
+		// through another provider that shares issuer and subject is refused.
+		if known.ProviderID != policy.ProviderID {
+			return Resolution{Action: ActionRefuse, Refusal: RedirectErrAuthFailed}, nil
+		}
 		return Resolution{Action: ActionLogin, Credential: known.Credential}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {

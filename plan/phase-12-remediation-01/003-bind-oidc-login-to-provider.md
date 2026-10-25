@@ -21,3 +21,7 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `VxMT` in this plan's `plan/findings.yaml` (security, medium): `OIDCResolver.Resolve` returns `ActionLogin` for any active (issuer, subject) match and never compares `provider_id`.
+
+## Status
+
+Outcome: succeeded (2026-10-25). `OIDCResolver.Resolve` now refuses with `RedirectErrAuthFailed` when the matched credential's `provider_id` differs from `policy.ProviderID`; the resolver is read-only so no session or observation is written. Unit test case added in `api/internal/auth/resolver_test.go` (fake querier now returns provider `p`). `make build`, `make test`, `make lint` in `api/` passed (siblings via MODULEFORGE_SIBLINGS_DIR). Source: `api/internal/auth/resolver.go`.
