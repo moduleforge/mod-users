@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'Decision needed: link does not confine the ne'
-      id: wZsk
-      date: "2026-10-23"
-      tags:
-        - type:security
-        - plan/phase:users-identity-core
-        - priority:high
-        - effort:small
-      text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
     - title: callbackLink adds the verified external iden…
       id: Nobq
       date: "2026-10-24"
@@ -645,4 +636,9 @@ closed:
       title: platform_settings.allow_byo_identity is enfo…
       disposition: fixed
       ref: phase-12-remediation-01/001-enforce-byo-identity-on-guest-paths.md
+      date: "2026-10-25"
+    - id: wZsk
+      title: 'Decision needed: link does not confine the ne'
+      disposition: fixed
+      ref: phase-12-remediation-01/010-confine-party-bound-oidc-link.md
       date: "2026-10-25"
