@@ -24,3 +24,7 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 
 - Finding `wZsk` in this plan's `plan/findings.yaml` (ambiguity): owner decided to confine linked OIDC credentials to the provider party now.
 - Finding `Nobq` in this plan's `plan/findings.yaml` (security, high): `callbackLink` links OIDC credentials without the provider's party confinement that `createManagedUser` applies.
+
+## Status
+
+Outcome: succeeded (2026-10-25). `callbackLink` now loads `h.oauth.PolicyFor(providerID)` and passes `ConfinedToPartyID` when `policy.PartyID > 0`; party-less providers link unconfined. Validation: new route test `TestOIDC_Link_ConfinesTheCredentialToTheProviderParty` (bound and unbound cases) passed against a throwaway Postgres; `make build`, `make test`, `make lint` in `api/` passed. Changed: `api/internal/handlers/auth/oidc_flows.go`, `api/internal/integration/oidc_integration_test.go`, `docs/architecture.md`.

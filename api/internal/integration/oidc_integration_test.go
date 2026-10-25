@@ -477,6 +477,40 @@ func TestOIDC_Link_BindsTheIdentityToTheSessionPrincipalOnly(t *testing.T) {
 	}
 }
 
+func TestOIDC_Link_ConfinesTheCredentialToTheProviderParty(t *testing.T) {
+	party := env.seedParty(t, "Link Confine Org "+uniq("p"))
+	cases := []struct {
+		name     string
+		provider config.Provider
+		confined bool
+	}{
+		{"party-bound provider", config.Provider{JITMode: config.JITModeNone, PartyID: party}, true},
+		{"unbound provider", config.Provider{JITMode: config.JITModeNone}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := env.register(t)
+			uid := env.principalID(t, a.Email)
+			tk := env.login(t, a)
+			provider := env.addProvider(t, tc.provider)
+			id := idpIdentity(uniq("linkc")+"@example.test", true)
+			env.idpReturns(t, id, env.stateFor(t, auth.FlowLink, tk.Session.UUID, uid))
+			if status, frag, loc := env.callback(t, provider); status != http.StatusFound || frag.Get("linked") != "1" {
+				t.Fatalf("link callback = %d %q", status, loc)
+			}
+			const q = `SELECT count(*) FROM mod_users.credentials c JOIN mod_users.cred_oidc o ON o.credential_id = c.id
+				WHERE c.principal_id = $1 AND o.issuer = $2 AND o.subject = $3 AND c.revoked_at IS NULL AND `
+			if tc.confined {
+				if n := env.count(t, "confined", q+`c.confined_to_party_id = $4`, uid, id.Issuer, id.Subject, party); n != 1 {
+					t.Errorf("credentials confined to the provider party = %d, want 1", n)
+				}
+			} else if n := env.count(t, "unconfined", q+`c.confined_to_party_id IS NULL`, uid, id.Issuer, id.Subject); n != 1 {
+				t.Errorf("unconfined credentials = %d, want 1", n)
+			}
+		})
+	}
+}
+
 func TestOIDC_Link_NeverLinksToGuestsManagedUsersOrStaleSessions(t *testing.T) {
 	provider := env.addProvider(t, config.Provider{JITMode: config.JITModeNone})
 
