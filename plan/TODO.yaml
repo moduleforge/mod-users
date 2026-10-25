@@ -416,7 +416,7 @@ phases:
             branch: plan/identity-model-impl-12-002
             commit:
                 - 476468a
-            merge: null
+            merge: 1d45242
         - number: 3
           slug: bind-oidc-login-to-provider
           title: Bind OIDC Sign-In To The Credential Provider
