@@ -2,7 +2,7 @@ slug: identity-model-impl
 version: 1
 title: ""
 remediation:
-    rounds: 1
+    rounds: 2
     tasks_added: 14
 phases:
     - number: 6
@@ -590,3 +590,9 @@ phases:
             commit:
                 - 042c198
             merge: 640b50f
+    - number: 13
+      slug: remediation-02
+      title: Remediation Round 2
+      kind: remediation
+      remediates_phase: 6
+      tasks: []
