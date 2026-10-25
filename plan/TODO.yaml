@@ -449,13 +449,15 @@ phases:
           slug: compose-mod-audit-migrations
           title: Compose Mod-Audit Migrations Into The Model Schema
           path: phase-12-remediation-01/005-compose-mod-audit-migrations.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Compose now includes the mod-audit migrations, and the integration harness uses the composed directory directly. Integration suite passes.
           findings:
             - LPl2
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-005
+            commit:
+                - 5e56852
             merge: null
         - number: 6
           slug: register-display-renderers-in-manifest
