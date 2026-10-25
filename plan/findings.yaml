@@ -9,28 +9,6 @@ items:
         - priority:high
         - effort:small
       text: 'Decision needed: link does not confine the new credential to the party of a party-bound provider; deferred to the later party-gating work. Confirm whether it should be confined now.'
-    - title: ListActivePasswordsByPrincipal filters cred_…
-      id: 86kP
-      date: "2026-10-24"
-      tags:
-        - type:optimization
-        - plan/phase:users-identity-core
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0100_baseline.sql
-        lines: 530-546
-        severity: major
-        confidence: medium
-        concerns: efficiency
-        description:
-          ListActivePasswordsByPrincipal filters cred_password by "principal_id = $1 AND active". The only
-          principal_id index is partial (active AND identifier_id IS NULL), so identifier-bound passwords
-          (the normal case) have no usable index and the query seq-scans cred_password (O(users)). It runs
-          on step-up, password reset, register/upgrade and identifier removal (warm paths).
-        recommendation:
-          Add CREATE INDEX cred_password_principal_id_idx ON mod_users.cred_password (principal_id) WHERE active.
     - title: auth_challenges has FK columns credential_id…
       id: Pjuz
       date: "2026-10-24"
@@ -926,4 +904,9 @@ closed:
       title: RemoveIdentifierInTx (reached from SelfRemov…
       disposition: dismissed
       reason: Already fixed by phase 12 task 011 (merge 2729fe4), per the owner decision for nullable FK with SET NULL. model/migrations/sql/0100_baseline.sql:538 (cred_password.identifier_id) and :563 (cred_email_otp.identifier_id) now use ON DELETE SET NULL, and removeIdentifier (api/internal/service/user_service.go:605-637) revokes bound credentials and then deletes, so verified identifiers can be removed. The integrity gap this change opened for active passwords is tracked separately as fDFi, and the stale error message as JWO3.
+      date: "2026-10-25"
+    - id: 86kP
+      title: ListActivePasswordsByPrincipal filters cred_…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 007 (merge 891392e). model/migrations/sql/0100_baseline.sql:553-554 adds cred_password_principal_id_idx ON mod_users.cred_password (principal_id) WHERE active.
       date: "2026-10-25"
