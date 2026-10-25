@@ -224,37 +224,6 @@ items:
           explicitly from a verified session. Also stamp a distinct JWS typ header
           on audience tokens (for example "aud+jwt"), so offline verifiers can tell
           the two token classes apart.
-    - title: ErrIdentifierInUse keeps the client-facing m…
-      id: JWO3
-      date: "2026-10-25"
-      tags:
-        - type:bug
-        - plan/phase:remediation-01
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/errors.go
-        lines: 58-65
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          ErrIdentifierInUse keeps the client-facing message "the identifier is bound to
-          credentials and cannot be removed", but after task 011 bound credentials no
-          longer block removal (they are revoked and their identifier_id set to NULL);
-          the 409 now means only that a restricting foreign key from outside the module
-          references the identifier. The unit subtest in
-          api/internal/service/user_service_test.go (line 550) is still named "a
-          credential still referencing the identifier is ErrIdentifierInUse and rolls
-          back". There is no integration coverage of the 409 path (the only integration
-          assertion of it was converted to expect 204), and no in-module FK can produce
-          it, so it is exercised only through a fake returning SQLSTATE 23503.
-        recommendation:
-          Reword the message to describe the surviving cause (referenced by another
-          record) and rename the unit subtest accordingly. Optionally add an integration
-          test that creates a throwaway table with a RESTRICT FK to user_identifiers and
-          asserts 409 users.identifier_in_use plus rollback of the credential revocations.
     - title: profile_availability now joins session_facto…
       id: 3rM6
       date: "2026-10-25"
@@ -812,4 +781,9 @@ closed:
       title: The audience registration check (EXISTS SELE…
       disposition: dismissed
       reason: Already fixed by phase 12 task 014 (merge 640b50f), per the owner decision to exclude archived apps. Both audience liveness queries in api/internal/auth/authenticator.go now require AND ae.archived_at IS NULL (lines 246 and 269).
+      date: "2026-10-25"
+    - id: JWO3
+      title: ErrIdentifierInUse keeps the client-facing m…
+      disposition: promoted
+      ref: JWO3
       date: "2026-10-25"
