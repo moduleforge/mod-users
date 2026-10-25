@@ -654,6 +654,19 @@ BEGIN
     END IF;
   END IF;
 
+  -- An active password must not lose its identifier: unbinding it would collide
+  -- with (or silently join) the principal's unbound password slot. Only a revoked
+  -- password may be unbound, which is what ON DELETE SET NULL does to history
+  -- rows. 23503 makes the cascade from user_identifiers fail as a foreign-key
+  -- violation, which the identifier-removal flow maps to ErrIdentifierInUse.
+  -- Nested, not one AND chain: OLD.identifier_id is only valid on cred_password.
+  IF TG_TABLE_NAME = 'cred_password' AND TG_OP = 'UPDATE' THEN
+    IF OLD.identifier_id IS NOT NULL AND NEW.identifier_id IS NULL AND v_revoked_at IS NULL THEN
+      RAISE EXCEPTION '%: active password % cannot be unbound from identifier %', TG_TABLE_NAME, NEW.credential_id, OLD.identifier_id
+        USING ERRCODE = '23503';
+    END IF;
+  END IF;
+
   IF TG_TABLE_NAME IN ('cred_password', 'cred_email_otp', 'cred_oidc', 'cred_ssh_key') THEN
     NEW.active := v_revoked_at IS NULL;
   END IF;

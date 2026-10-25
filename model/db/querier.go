@@ -219,6 +219,10 @@ type Querier interface {
 	// Batch read for directory lookups; unknown ids are simply absent.
 	ListUsersByEntityIDs(ctx context.Context, entityIds []int64) ([]User, error)
 	ListUsersByPerson(ctx context.Context, personID pgtype.Int8) ([]User, error)
+	// Row-locks the identifier so a concurrent password create or reset that binds
+	// it (whose foreign-key check takes a shared lock on this row) serializes
+	// behind a removal in progress.
+	LockIdentifierForUpdate(ctx context.Context, arg LockIdentifierForUpdateParams) (UserIdentifier, error)
 	// Idempotent: keeps the first verification time.
 	MarkIdentifierVerified(ctx context.Context, id int64) (UserIdentifier, error)
 	// ---------------------------------------------------------------------------

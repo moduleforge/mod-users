@@ -15,6 +15,12 @@ SELECT * FROM mod_users.user_identifiers WHERE uuid = $1;
 -- name: GetIdentifierByID :one
 SELECT * FROM mod_users.user_identifiers WHERE id = $1;
 
+-- name: LockIdentifierForUpdate :one
+-- Row-locks the identifier so a concurrent password create or reset that binds
+-- it (whose foreign-key check takes a shared lock on this row) serializes
+-- behind a removal in progress.
+SELECT * FROM mod_users.user_identifiers WHERE id = $1 AND user_id = $2 FOR UPDATE;
+
 -- name: GetIdentifierByKindValue :one
 SELECT * FROM mod_users.user_identifiers WHERE kind = $1 AND value_canon = $2;
 

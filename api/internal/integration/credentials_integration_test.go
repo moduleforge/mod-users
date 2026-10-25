@@ -304,6 +304,38 @@ func TestIdentifiers_RemoveRevokesBoundCredentialsAndNullsTheirIdentifier(t *tes
 	}
 }
 
+// An active password must stay bound to its identifier: deleting the identifier
+// directly would cascade ON DELETE SET NULL onto it, which cred_subtable_check
+// refuses with a foreign-key violation (23503). The password stays bound and
+// active.
+func TestIdentifiers_DirectDeleteWhileActivePasswordBoundIsRefused(t *testing.T) {
+	a := env.register(t)
+	ctx := context.Background()
+
+	var identifierID int64
+	if err := env.pool.QueryRow(ctx,
+		`SELECT identifier_id FROM mod_users.cred_password WHERE principal_id = $1 AND active AND identifier_id IS NOT NULL`,
+		env.principalID(t, a.Email)).Scan(&identifierID); err != nil {
+		t.Fatalf("bound active password: %v", err)
+	}
+
+	_, err := env.pool.Exec(ctx, `DELETE FROM mod_users.user_identifiers WHERE id = $1`, identifierID)
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
+		t.Fatalf("delete identifier under an active password: err = %v, want SQLSTATE 23503", err)
+	}
+
+	var stillBound, active bool
+	if err := env.pool.QueryRow(ctx,
+		`SELECT identifier_id = $1, active FROM mod_users.cred_password WHERE identifier_id = $1`,
+		identifierID).Scan(&stillBound, &active); err != nil {
+		t.Fatalf("password after refused delete: %v", err)
+	}
+	if !stillBound || !active {
+		t.Errorf("password bound=%v active=%v after refused delete, want both true", stillBound, active)
+	}
+}
+
 // An active email_otp credential must keep its identifier: the CHECK rejects a
 // NULL identifier_id on an active row, while a revoked one may have it.
 func TestCredEmailOTP_ActiveRowRequiresIdentifier(t *testing.T) {

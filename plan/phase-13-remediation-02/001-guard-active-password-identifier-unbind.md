@@ -19,3 +19,10 @@ This task addresses finding fDFi, a finding recorded in this plan's plan/finding
 
 ## References
 - fDFi: a finding in this plan's plan/findings.yaml.
+
+## Status
+- Outcome: succeeded (2026-10-25).
+- Trigger: `cred_subtable_check()` in `model/migrations/sql/0100_baseline.sql` now refuses a non-NULL to NULL `identifier_id` change on an unrevoked `cred_password` row (ERRCODE 23503). The `ON DELETE SET NULL` cascade fires the BEFORE UPDATE trigger (confirmed by the integration test).
+- Lock: new sqlc query `LockIdentifierForUpdate` (`model/queries/identifiers.sql`, `model/db` regenerated), called at the start of `removeIdentifier` in `api/internal/service/user_service.go`, before `ListActivePasswordsByPrincipal`.
+- Tests: `TestIdentifiers_DirectDeleteWhileActivePasswordBoundIsRefused` (integration), lock-before-list unit subtest in `TestRemoveIdentifierInTx`; the existing `TestIdentifiers_RemoveRevokesBoundCredentialsAndNullsTheirIdentifier` covers the 204 and revoked/NULL case.
+- Validation: unit, lint, and integration suites (authz, config, integration) pass.
