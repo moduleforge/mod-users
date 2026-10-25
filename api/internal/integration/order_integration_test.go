@@ -68,7 +68,7 @@ func (s *stack) orderRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Route("/v1/me", func(r chi.Router) {
 		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
-		me.RegisterMeRoutes(r, me.NewMeHandler(s.users))
+		me.RegisterMeRoutes(r, me.NewMeHandler(s.users, s.profiles))
 	})
 	r.Route("/v1/principals", func(r chi.Router) {
 		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)

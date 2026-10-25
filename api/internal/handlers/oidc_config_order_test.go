@@ -248,7 +248,7 @@ func TestOrderOIDC_ComposedRouter_NoRequireAuth(t *testing.T) {
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/me", func(r chi.Router) {
 			r.Use(requireAuth)
-			me.RegisterMeRoutes(r, me.NewMeHandler(nil))
+			me.RegisterMeRoutes(r, me.NewMeHandler(nil, nil))
 		})
 		r.Route("/principals", func(r chi.Router) {
 			r.Use(requireAuth)

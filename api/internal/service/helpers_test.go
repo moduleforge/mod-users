@@ -76,6 +76,7 @@ func TestMapUniqueViolation(t *testing.T) {
 		{IdentifierKindValueIndex, ErrIdentifierTaken},
 		{OIDCActiveIssuerSubjectIndex, ErrOIDCIdentityInUse},
 		{SSHKeyActiveFingerprintIndex, ErrSSHKeyInUse},
+		{ProfilesOneOpenPerHolderParty, ErrProfileExists},
 	}
 	for _, tc := range tests {
 		err := mapUniqueViolation(&pgconn.PgError{Code: "23505", ConstraintName: tc.constraint})

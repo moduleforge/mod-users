@@ -20,7 +20,7 @@ import (
 func TestRegisterMeRoutes(t *testing.T) {
 	t.Parallel()
 	r := chi.NewRouter()
-	RegisterMeRoutes(r, NewMeHandler(nil))
+	RegisterMeRoutes(r, NewMeHandler(nil, nil))
 	var got []string
 	err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		got = append(got, method+" "+route)
@@ -31,6 +31,7 @@ func TestRegisterMeRoutes(t *testing.T) {
 	}
 	want := []string{
 		"GET /", "PUT /", "GET /profiles",
+		"POST /profiles/{uuid}/accept", "POST /profiles/{uuid}/decline", "POST /profiles/{uuid}/leave",
 		"GET /identifiers", "POST /identifiers", "POST /identifiers/{uuid}/verify",
 		"POST /identifiers/{uuid}/verification", "PUT /identifiers/{uuid}/primary", "DELETE /identifiers/{uuid}",
 		"GET /credentials", "POST /credentials/password", "POST /credentials/ssh-keys",
@@ -47,7 +48,7 @@ func TestRegisterMeRoutes(t *testing.T) {
 func TestRoutesRefuseCallsOutsideRequireAuthAndNonInteractiveCallers(t *testing.T) {
 	t.Parallel()
 	r := chi.NewRouter()
-	RegisterMeRoutes(r, NewMeHandler(nil)) // nil service: never reached
+	RegisterMeRoutes(r, NewMeHandler(nil, nil)) // nil service: never reached
 	cases := []struct {
 		name string
 		id   *localauth.Identity

@@ -17,6 +17,7 @@ import (
 	"github.com/moduleforge/mod-users/api/config"
 	inner "github.com/moduleforge/mod-users/api/internal/handlers"
 	innerme "github.com/moduleforge/mod-users/api/internal/handlers/me"
+	innerparties "github.com/moduleforge/mod-users/api/internal/handlers/parties"
 	innerprincipals "github.com/moduleforge/mod-users/api/internal/handlers/principals"
 	innersession "github.com/moduleforge/mod-users/api/internal/handlers/session"
 	"github.com/moduleforge/mod-users/api/usersservice"
@@ -35,6 +36,9 @@ type (
 	SessionHandler = innersession.SessionHandler
 	// PrincipalsHandler serves the /v1/principals routes.
 	PrincipalsHandler = innerprincipals.PrincipalsHandler
+	// PartiesHandler serves the /v1/parties/{party_uuid} routes and
+	// PATCH /v1/profiles/{uuid}.
+	PartiesHandler = innerparties.PartiesHandler
 )
 
 // NewOIDCConfigHandler constructs the OIDC config handler from individual
@@ -93,9 +97,10 @@ func RegisterOIDCConfigRoutes(r chi.Router, h *OIDCConfigHandler, p *ProvidersHa
 }
 
 // NewMeHandler constructs the /v1/me handler over the user service, which
-// must have been wired with UserService.WithSelfService.
-func NewMeHandler(users *usersservice.UserService) *MeHandler {
-	return innerme.NewMeHandler(users)
+// must have been wired with UserService.WithSelfService, and the profile
+// service that serves the holder's accept, decline and leave actions.
+func NewMeHandler(users *usersservice.UserService, profiles *usersservice.ProfileService) *MeHandler {
+	return innerme.NewMeHandler(users, profiles)
 }
 
 // OIDCLinkStarter is the OIDC handler's start of the link-a-credential flow,
@@ -147,6 +152,24 @@ func NewPrincipalsHandler(users *usersservice.UserService) *PrincipalsHandler {
 // applies auth.NewRequireAuth first.
 func RegisterPrincipalRoutes(r chi.Router, h *PrincipalsHandler) {
 	innerprincipals.RegisterPrincipalRoutes(r, h)
+}
+
+// NewPartiesHandler constructs the party-administration handler over the
+// profile service.
+func NewPartiesHandler(profiles *usersservice.ProfileService) *PartiesHandler {
+	return innerparties.NewPartiesHandler(profiles)
+}
+
+// RegisterPartyRoutes mounts the /v1/parties routes on r (a party's profiles
+// and managed users); the caller applies auth.NewRequireAuth first.
+func RegisterPartyRoutes(r chi.Router, h *PartiesHandler) {
+	innerparties.RegisterPartyRoutes(r, h)
+}
+
+// RegisterProfileRoutes mounts the /v1/profiles routes on r (a party profile's
+// status); the caller applies auth.NewRequireAuth first.
+func RegisterProfileRoutes(r chi.Router, h *PartiesHandler) {
+	innerparties.RegisterProfileRoutes(r, h)
 }
 
 // Live is the liveness health-check handler.

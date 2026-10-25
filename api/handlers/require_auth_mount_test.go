@@ -58,6 +58,14 @@ func requireAuthMountRouter(t *testing.T) (http.Handler, []mountRoute) {
 			r.Use(requireAuth)
 			handlers.RegisterPrincipalRoutes(r, &handlers.PrincipalsHandler{})
 		})
+		r.Route("/parties", func(r chi.Router) {
+			r.Use(requireAuth)
+			handlers.RegisterPartyRoutes(r, &handlers.PartiesHandler{})
+		})
+		r.Route("/profiles", func(r chi.Router) {
+			r.Use(requireAuth)
+			handlers.RegisterProfileRoutes(r, &handlers.PartiesHandler{})
+		})
 	})
 
 	var routes []mountRoute
@@ -75,6 +83,7 @@ func requireAuthMountRouter(t *testing.T) (http.Handler, []mountRoute) {
 
 func concretePath(pattern string) string {
 	p := strings.ReplaceAll(pattern, "{uuid}", mountUUID)
+	p = strings.ReplaceAll(p, "{party_uuid}", mountUUID)
 	p = strings.ReplaceAll(p, "{provider}", "google")
 	return strings.TrimSuffix(p, "/*")
 }
@@ -107,6 +116,9 @@ func TestRequireAuthMount_EveryRouteAnswers401First(t *testing.T) {
 		"POST /v1/me/credentials/oidc/{provider}/start",
 		"GET /v1/session/", "POST /v1/session/switch", "POST /v1/session/step-up/oidc/{provider}/start",
 		"GET /v1/principals/", "POST /v1/principals/{uuid}/disable",
+		"POST /v1/me/profiles/{uuid}/accept", "POST /v1/me/profiles/{uuid}/decline", "POST /v1/me/profiles/{uuid}/leave",
+		"GET /v1/parties/{party_uuid}/profiles", "POST /v1/parties/{party_uuid}/profiles",
+		"POST /v1/parties/{party_uuid}/managed-users", "PATCH /v1/profiles/{uuid}",
 	} {
 		found := false
 		for _, rt := range routes {
@@ -140,8 +152,9 @@ func TestRequireAuthMount_EveryRouteAnswers401First(t *testing.T) {
 				assertUnauthorized(t, rec)
 			}
 			// A malformed path uuid is still 401 first.
-			if strings.Contains(rt.pattern, "{uuid}") {
+			if strings.Contains(rt.pattern, "{uuid}") || strings.Contains(rt.pattern, "{party_uuid}") {
 				bad := strings.ReplaceAll(rt.pattern, "{uuid}", "not-a-uuid")
+				bad = strings.ReplaceAll(bad, "{party_uuid}", "not-a-uuid")
 				bad = strings.ReplaceAll(bad, "{provider}", "google")
 				req := httptest.NewRequest(rt.method, bad, strings.NewReader(`{}`))
 				rec := httptest.NewRecorder()

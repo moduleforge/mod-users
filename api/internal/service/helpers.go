@@ -179,6 +179,8 @@ func mapUniqueViolation(err error) error {
 		return ErrOIDCIdentityInUse
 	case CodeSSHKeyInUse:
 		return ErrSSHKeyInUse
+	case CodeProfileExists:
+		return ErrProfileExists
 	}
 	return err
 }

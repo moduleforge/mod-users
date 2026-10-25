@@ -133,6 +133,57 @@ func NewSessionService(
 	return inner.NewSessionService(pool, q, coreQ, az, obs, signer, challenges, cfg)
 }
 
+// ProfileService owns the lifecycle of party profiles: invitation, acceptance,
+// suspension, resumption and ending (with departure cleanup), managed users and
+// the lifecycle observers.
+type ProfileService = inner.ProfileService
+
+// InviteInput is the input of ProfileService.InviteInTx. Exactly one of
+// HolderUserID and HolderEmail names the holder.
+type InviteInput = inner.InviteInput
+
+// Profile is the service-layer view of a party profile.
+type Profile = inner.Profile
+
+// ProfileStatusChange describes one profile creation or status change. From is
+// empty when the profile was just created.
+type ProfileStatusChange = inner.ProfileStatusChange
+
+// ProfileLifecycleObserver is told of every profile creation and status change,
+// inside the transaction that makes it; an error aborts the transaction.
+type ProfileLifecycleObserver = inner.ProfileLifecycleObserver
+
+// Errors of the profile lifecycle, re-exported as the same values as the inner
+// package's so errors.Is matches across the facade boundary. The HTTP layer
+// renders each as 409 with the named code.
+var (
+	// ErrGuestMustUpgrade: users.guest_upgrade_required.
+	ErrGuestMustUpgrade = inner.ErrGuestMustUpgrade
+	// ErrHolderNotAdmissible: users.holder_not_admissible.
+	ErrHolderNotAdmissible = inner.ErrHolderNotAdmissible
+	// ErrProfileExists: users.profile_exists.
+	ErrProfileExists = inner.ErrProfileExists
+	// ErrProfileTransition: users.profile_transition_invalid.
+	ErrProfileTransition = inner.ErrProfileTransition
+)
+
+// NewProfileService constructs a ProfileService. users must have been wired
+// with UserService.WithSelfService; creds revokes the credentials confined to a
+// party the holder leaves; sessions renders the holder's profile view after an
+// accept. Register mod-billing style observers with AddLifecycleObserver.
+func NewProfileService(
+	pool *pgxpool.Pool,
+	q usersdb.Querier,
+	coreQ coredb.Querier,
+	az coreAuthz.Authorizer,
+	obs *observer.ObserverGroup,
+	users *UserService,
+	creds *CredentialService,
+	sessions *SessionService,
+) *ProfileService {
+	return inner.NewProfileService(pool, q, coreQ, az, obs, users, creds, sessions)
+}
+
 // DirectoryService answers batch display lookups for other modules. It does no
 // authorization: callers authorize first.
 type DirectoryService = inner.DirectoryService

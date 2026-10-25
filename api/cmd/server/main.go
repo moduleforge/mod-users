@@ -38,6 +38,7 @@ import (
 	"github.com/moduleforge/mod-users/api/internal/handlers"
 	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
 	"github.com/moduleforge/mod-users/api/internal/handlers/me"
+	"github.com/moduleforge/mod-users/api/internal/handlers/parties"
 	"github.com/moduleforge/mod-users/api/internal/handlers/principals"
 	"github.com/moduleforge/mod-users/api/internal/handlers/session"
 	"github.com/moduleforge/mod-users/api/internal/observability"
@@ -381,6 +382,11 @@ func main() {
 		sessionSvc, challengeSvc, opReg, cfg.Auth.SelfServiceMaxAuthAge, displayReg,
 	)
 
+	// The party profile lifecycle: invitations, managed users, departure
+	// cleanup. Other modules (mod-billing seats) subscribe with
+	// profileSvc.AddLifecycleObserver.
+	profileSvc := usersservice.NewProfileService(pool, queries, coreQueries, az, observerGroup, userSvc, credSvc, sessionSvc)
+
 	// Handlers.
 	authHandler := authhandlers.New(
 		pool, queries, coreQueries, userSvc, credSvc, challengeSvc, sessionSvc, oauth, emailSender, cfg.Server.GUIBaseURL,
@@ -389,9 +395,10 @@ func main() {
 		pool, queries, coreQueries, oauth, auth.NewOIDCResolver(queries),
 		userSvc, credSvc, challengeSvc, sessionSvc, observerGroup, cfg,
 	)
-	meHandler := me.NewMeHandler(userSvc)
+	meHandler := me.NewMeHandler(userSvc, profileSvc)
 	sessionHandler := session.NewSessionHandler(sessionSvc)
 	principalsHandler := principals.NewPrincipalsHandler(userSvc)
+	partiesHandler := parties.NewPartiesHandler(profileSvc)
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
 		Queries:      queries,
 		EnvRegistry:  cfg.Providers,
@@ -446,6 +453,20 @@ func main() {
 		r.Use(requireConfirmed)
 		r.Use(requireAuth)
 		principals.RegisterPrincipalRoutes(r, principalsHandler)
+	})
+
+	// Party administration: a party's profiles and managed users, and the
+	// status of a party profile. Authorization is enforced at the service
+	// layer.
+	r.Route("/v1/parties", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		parties.RegisterPartyRoutes(r, partiesHandler)
+	})
+	r.Route("/v1/profiles", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		parties.RegisterProfileRoutes(r, partiesHandler)
 	})
 
 	r.Route("/v1", func(r chi.Router) {
