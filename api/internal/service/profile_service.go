@@ -152,6 +152,7 @@ const (
 	CodeHolderNotAdmissible = "users.holder_not_admissible"
 	CodeProfileTransition   = "users.profile_transition_invalid"
 	CodeProfileEndReason    = "users.end_reason_required"
+	CodeProfileSuspended    = "users.profile_suspended"
 )
 
 // ErrHolderNotAdmissible is returned when the intended holder cannot take a
@@ -160,6 +161,13 @@ const (
 // reuses it (decision U22).
 var ErrHolderNotAdmissible = apiresp.Conflict(apiresp.FieldError{
 	Field: "holder", Code: CodeHolderNotAdmissible, Message: "this account cannot hold a profile in this party",
+})
+
+// ErrProfileSuspended is returned by the trusted admission path (AdmitInTx)
+// when the holder's open profile in the party is suspended
+// (users.profile_suspended, 409). Admission never lifts a suspension.
+var ErrProfileSuspended = apiresp.Conflict(apiresp.FieldError{
+	Field: "holder", Code: CodeProfileSuspended, Message: "the account's profile in this party is suspended",
 })
 
 // ErrProfileExists is returned when the holder already has an open (not ended)
@@ -263,15 +271,19 @@ func (s *ProfileService) notify(ctx context.Context, tx pgx.Tx, ch ProfileStatus
 
 // lockProfileSQL reads a profile row and locks it, serializing the status
 // changes of one profile.
-const lockProfileSQL = `
-SELECT entity_id, holder_id, party_id, status, source, invited_by_profile_id,
-       started_at, ended_at, end_reason, created_at, updated_at
+const lockProfileSQL = `SELECT ` + profileColumns + `
   FROM public.profiles WHERE entity_id = $1 FOR UPDATE`
 
-// lockProfile loads and locks the profile; a missing one is apiresp.ErrNotFound.
-func lockProfile(ctx context.Context, tx pgx.Tx, id int64) (coredb.Profile, error) {
+// profileColumns is the column list lockProfileSQL and lockOpenProfileSQL
+// select, in the order scanProfile reads them.
+const profileColumns = `entity_id, holder_id, party_id, status, source, invited_by_profile_id,
+       started_at, ended_at, end_reason, created_at, updated_at`
+
+// scanProfile reads one row selected with profileColumns. A missing row is
+// apiresp.ErrNotFound.
+func scanProfile(row pgx.Row) (coredb.Profile, error) {
 	var p coredb.Profile
-	err := tx.QueryRow(ctx, lockProfileSQL, id).Scan(
+	err := row.Scan(
 		&p.EntityID, &p.HolderID, &p.PartyID, &p.Status, &p.Source, &p.InvitedByProfileID,
 		&p.StartedAt, &p.EndedAt, &p.EndReason, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -281,6 +293,11 @@ func lockProfile(ctx context.Context, tx pgx.Tx, id int64) (coredb.Profile, erro
 		return coredb.Profile{}, fmt.Errorf("users: lock profile: %w", err)
 	}
 	return p, nil
+}
+
+// lockProfile loads and locks the profile; a missing one is apiresp.ErrNotFound.
+func lockProfile(ctx context.Context, tx pgx.Tx, id int64) (coredb.Profile, error) {
+	return scanProfile(tx.QueryRow(ctx, lockProfileSQL, id))
 }
 
 func toProfile(p coredb.Profile, id uuid.UUID) Profile {

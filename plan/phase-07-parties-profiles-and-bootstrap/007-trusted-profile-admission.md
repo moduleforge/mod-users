@@ -126,3 +126,18 @@ Dependencies:
 
 - After `AdmitInTx` and its unit tests.
 - After the concurrency integration test and the facade.
+
+## Status
+
+Succeeded, 2026-10-25. `make build`, `make test`, `make lint` pass; the integration suites (`api/internal/authz`, `config`, `integration`) pass on a throwaway Postgres with mod-core, mod-authz and mod-audit linked through the shared siblings dir. No query changed, so `model verify` was not needed. No binding name changed.
+
+Source: `api/internal/service/profile_admit.go` (AdmitInTx, AdmitInput), `api/internal/service/profile_service.go` (ErrProfileSuspended, shared `scanProfile`), `api/usersservice/service.go` (facade).
+
+Requirement 7 test map:
+
+- Each requirement 2 branch: `TestAdmitInTx_CreatesAnActiveProfile`, `TestAdmitInTx_NullInviterWhenZero`, `TestAdmitInTx_ActiveProfileIsReturnedAsIs`, `TestAdmitInTx_InvitedProfileBecomesActive`, `TestAdmitInTx_SuspendedProfileIsRefused`, `TestAdmitInTx_EndedProfileIsReplacedByANewOne` (integration); `TestAdmitActionFor` (unit).
+- Each requirement 4 refusal: `TestAdmitInTx_Refusals` (integration), `TestAdmitInTx_RefusalsBeforeAnyWrite` (unit); the MF103 mapping is the existing `mapProfileInsertError` (`TestMapProfileInsertError`).
+- Observer error and rollback: `TestAdmitInTx_ObserverErrorAbortsTheTransaction`, `TestAdmitInTx_InvitedActivationRollsBackWithTheObserver`.
+- No observation or observer call for an active profile: `TestAdmitInTx_ActiveProfileIsReturnedAsIs`.
+- Concurrency: `TestAdmitInTx_ConcurrentAdmissionsYieldOneProfile`.
+- Appears in `GET /v1/me/profiles`: `TestAdmitInTx_CreatesAnActiveProfile`.
