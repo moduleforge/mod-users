@@ -469,7 +469,7 @@ phases:
           findings:
             - xgGT
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-006
             commit: []
             merge: null
         - number: 7
