@@ -573,7 +573,8 @@ phases:
             - z443
           git:
             branch: plan/identity-model-impl-12-013
-            commit: []
+            commit:
+                - 5bd0bba
             merge: null
         - number: 14
           slug: exclude-archived-apps-from-audience
