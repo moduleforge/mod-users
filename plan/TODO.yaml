@@ -492,13 +492,15 @@ phases:
           slug: update-deploy-manifests-signing-key
           title: Update Deploy Manifests For EdDSA Signing Key
           path: phase-12-remediation-01/008-update-deploy-manifests-signing-key.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Updated both deploy manifests to the EdDSA signing-key configuration, with JWT_SECRET optional and comments on the DB fallback and AUTH_* variables; manifests parse.
           findings:
             - CLi0
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-008
+            commit:
+                - 603c765
             merge: null
         - number: 9
           slug: link-unreachable-readmes
