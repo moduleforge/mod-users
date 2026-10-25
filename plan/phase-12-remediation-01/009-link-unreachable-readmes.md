@@ -22,3 +22,7 @@ Suggested role: `plugins/flow/roles/tech-writer.md`
 - Finding `Kkmz` in this plan's `plan/findings.yaml` (documentation, low): `deploy/local/README.md` is not reachable from `README.md`.
 - Finding `fWsd` in this plan's `plan/findings.yaml` (documentation, low): `deploy/serverless/README.md` is not reachable from `README.md`.
 - Finding `xqMm` in this plan's `plan/findings.yaml` (documentation, low): `model/README.md` is not reachable from `README.md`.
+
+## Status
+
+Succeeded, 2026-10-25. Added four documentation-list links (`model/README.md`, `deploy/local/README.md`, `deploy/k8s/README.md`, `deploy/serverless/README.md`) to `README.md`. Validation: all four relative link targets exist and are linked from `README.md`.
