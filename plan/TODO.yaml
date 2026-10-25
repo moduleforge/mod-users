@@ -479,6 +479,7 @@ phases:
           path: phase-12-remediation-01/007-index-credential-and-challenge-lookups.md
           done: false
           tier: sonnet-low
+          digest: Added five missing indexes to the baseline migration and rewrote NULL-equal subject predicates in the two challenge queries to the COALESCE form so the cooldown index serves them. Verify, integration and EXPLAIN pass.
           findings:
             - 86kP
             - Pjuz
