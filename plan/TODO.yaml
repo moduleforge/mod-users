@@ -402,7 +402,7 @@ phases:
             branch: plan/identity-model-impl-12-001
             commit:
                 - 050fd51
-            merge: null
+            merge: 1af9df6
         - number: 2
           slug: exclude-revoked-factors-from-availability
           title: Exclude Revoked Factors From Profile Availability
