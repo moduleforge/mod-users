@@ -42,7 +42,7 @@ import (
 	"github.com/moduleforge/mod-users/api/internal/handlers/session"
 	"github.com/moduleforge/mod-users/api/internal/observability"
 	"github.com/moduleforge/mod-users/api/internal/server"
-	usersservice "github.com/moduleforge/mod-users/api/internal/service"
+	"github.com/moduleforge/mod-users/api/usersservice"
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
@@ -244,7 +244,6 @@ func main() {
 	// not from inside users-module.
 	displayReg := display.NewRegistry(coredb.New(pool))
 	coreservice.RegisterBuiltins(displayReg, coredb.New(pool))
-	usersservice.RegisterDisplayRenderers(displayReg, pool)
 
 	// Build the TypeResolver (startup-time slug→typeID cache) and EntityResolver
 	// (UUID→internal ID lookup with 403-on-missing policy). Both are required by
@@ -372,11 +371,15 @@ func main() {
 	// session and challenge services.
 	challengeSvc := usersservice.NewChallengeService(queries, emailSender)
 	credSvc := usersservice.NewCredentialService(queries, coreQueries, az, observerGroup, auth.HashPassword)
-	userSvc := usersservice.NewUserService(queries, coreQueries, az, observerGroup, coreSvcs.NaturalPerson, credSvc)
 	sessionSvc := usersservice.NewSessionService(
 		pool, queries, coreQueries, az, observerGroup, jwtSigner, challengeSvc, usersservice.SessionConfigFrom(cfg),
 	)
-	userSvc.WithSelfService(pool, sessionSvc, challengeSvc, opReg, cfg.Auth.SelfServiceMaxAuthAge)
+	// The constructor also registers the user and profile display renderers on
+	// displayReg, the same path the generated composition root takes.
+	userSvc := usersservice.NewUserServiceWithSelfService(
+		pool, queries, coreQueries, az, observerGroup, coreSvcs.NaturalPerson, credSvc,
+		sessionSvc, challengeSvc, opReg, cfg.Auth.SelfServiceMaxAuthAge, displayReg,
+	)
 
 	// Handlers.
 	authHandler := authhandlers.New(

@@ -21,3 +21,13 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `xgGT` in this plan's `plan/findings.yaml` (bug, medium): `moduleforge.module.yaml` has no path to `RegisterDisplayRenderers`, so generated apps render no user or profile names.
+
+## Status
+
+Outcome: succeeded (2026-10-25).
+
+- `NewUserServiceWithSelfService` (api/usersservice/service.go) takes a trailing `*display.Registry` and registers the user and profile renderers on it; nil skips.
+- `moduleforge.module.yaml`: `userService` passes `service:displayRegistry`; `requires.services` declares `displayRegistry`.
+- `api/cmd/server/main.go` now builds the user service through the same facade constructor (import switched to `api/usersservice`); the separate `RegisterDisplayRenderers` call is removed.
+- Test: api/usersservice/display_registration_test.go.
+- Validation: `make build`, `make test`, `make lint` pass (SIBLINGS_DIR=/Users/zane/playground/.flow/siblings/mod-users). Full mfgen dry run not performed (needs an app manifest).
