@@ -523,14 +523,16 @@ phases:
           slug: confine-party-bound-oidc-link
           title: Confine Linked OIDC Credentials To The Provider Party
           path: phase-12-remediation-01/010-confine-party-bound-oidc-link.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Linked OIDC credentials from a party-bound provider are now confined to that party. Party-less providers unchanged. Both cases have integration route tests and a docs note.
           findings:
             - wZsk
             - Nobq
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-010
+            commit:
+                - eb6bdea
             merge: null
         - number: 11
           slug: identifier-removal-set-null-fks
