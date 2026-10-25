@@ -21,3 +21,11 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `nD8J` in this plan's `plan/findings.yaml` (bug, low): the audience liveness queries do not exclude archived apps, so tokens addressed to archived apps are accepted.
+
+## Status
+
+- Outcome: succeeded (2026-10-25).
+- Both liveness audience queries in `api/internal/auth/authenticator.go` now join `public.entities` and require `archived_at IS NULL` (apps carry no `archived_at` of their own; it lives on the entity row). The baseline liveness functions do not reference apps, so no SQL migration change was needed.
+- Test: `TestApp_ArchivedAppIsNotAnAcceptedAudience` in `api/internal/integration/app_integration_test.go` (active app token 200, archived 401) passes against a throwaway Postgres.
+- Docs: "App audiences" bullet added to Security requirements in `docs/mod-users-spec.md`.
+- `make build`, `make test`, `make lint` in `api/` pass.
