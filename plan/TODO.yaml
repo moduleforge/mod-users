@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 10
+    tasks_added: 11
 phases:
     - number: 6
       slug: users-identity-core
@@ -385,7 +385,7 @@ phases:
       title: Remediation Round 1
       kind: remediation
       security_review: required
-      tasks_added: 10
+      tasks_added: 11
       remediates_phase: 6
       tasks:
         - number: 1
@@ -509,6 +509,18 @@ phases:
           findings:
             - wZsk
             - Nobq
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 11
+          slug: identifier-removal-set-null-fks
+          title: Make Identifier Removal Work With Nullable Credential FKs
+          path: phase-12-remediation-01/011-identifier-removal-set-null-fks.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - aA5K
           git:
             branch: null
             commit: []
