@@ -516,7 +516,8 @@ phases:
             - xqMm
           git:
             branch: plan/identity-model-impl-12-009
-            commit: []
+            commit:
+                - ab8ccb6
             merge: null
         - number: 10
           slug: confine-party-bound-oidc-link
