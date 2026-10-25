@@ -21,3 +21,7 @@ Suggested role: `plugins/flow/roles/developer-sql.md`
 ## References
 
 - Finding `WpsB` in this plan's `plan/findings.yaml` (security, medium): `profile_availability` passes revoked credential ids to `profile_availability_for`, and the bulk revocation queries revoke without revoking sessions.
+
+## Status
+
+Succeeded (2026-10-25). `profile_availability` now counts only unrevoked credentials (edited in place in `model/migrations/sql/0100_baseline.sql`). The uncalled `RevokeCredentialsOfPrincipal` and `RevokeCredentialsConfinedToParty` queries were removed from `model/queries/credentials.sql` and sqlc regenerated (`model/db/`). Added `TestInteg_Availability_RevokedFactorDoesNotCount` in `api/internal/authz/availability_integration_test.go`. Validation: `make verify`, `make build`, `make test.unit` and the authz/config/integration suites pass.

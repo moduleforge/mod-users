@@ -218,11 +218,6 @@ type Querier interface {
 	ProfileAvailability(ctx context.Context, arg ProfileAvailabilityParams) (string, error)
 	// Idempotent guard: only an unrevoked credential is revoked (no row otherwise).
 	RevokeCredential(ctx context.Context, arg RevokeCredentialParams) (Credential, error)
-	// Departure cleanup: a holder's credentials confined to the party they left.
-	RevokeCredentialsConfinedToParty(ctx context.Context, arg RevokeCredentialsConfinedToPartyParams) ([]Credential, error)
-	// Bulk revoke (guest upgrade supersedes the anon credentials, a disabled
-	// principal); returns the revoked rows so the caller can observe each.
-	RevokeCredentialsOfPrincipal(ctx context.Context, arg RevokeCredentialsOfPrincipalParams) ([]Credential, error)
 	// Ends the impersonation sessions started from a parent session.
 	RevokeImpersonationChildren(ctx context.Context, arg RevokeImpersonationChildrenParams) ([]Session, error)
 	// Only an unrevoked session is revoked (no row otherwise).

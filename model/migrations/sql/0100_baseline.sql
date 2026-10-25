@@ -1195,7 +1195,7 @@ $$;
 -- +goose StatementEnd
 
 -- profile_availability(p_session_id, p_profile_id): whether the session may
--- act as the profile, with every session factor counted and sessions.acr as
+-- act as the profile, with every unrevoked session factor counted and sessions.acr as
 -- the assurance. Used by login landing, profile switch, refresh, per-request
 -- liveness and the profile list.
 -- +goose StatementBegin
@@ -1209,7 +1209,11 @@ AS $$
     SELECT mod_users.profile_availability_for(
              s.principal_id,
              s.impersonated_profile_id,
-             ARRAY(SELECT f.credential_id FROM mod_users.session_factors f WHERE f.session_id = s.id),
+             ARRAY(SELECT f.credential_id
+                     FROM mod_users.session_factors f
+                     JOIN mod_users.credentials c ON c.id = f.credential_id
+                    WHERE f.session_id = s.id
+                      AND c.revoked_at IS NULL),
              s.acr,
              p_profile_id)
       FROM mod_users.sessions s
