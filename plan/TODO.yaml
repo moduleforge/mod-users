@@ -538,13 +538,15 @@ phases:
           slug: identifier-removal-set-null-fks
           title: Make Identifier Removal Work With Nullable Credential FKs
           path: phase-12-remediation-01/011-identifier-removal-set-null-fks.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: cred_password and cred_email_otp identifier_id now nullable with ON DELETE SET NULL, plus CHECK cred_email_otp_active_needs_identifier. RemoveIdentifierInTx unchanged (revoke-first). Integration tests added and existing 409 test updated to 204.
           findings:
             - aA5K
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-011
+            commit:
+                - 3d38718
             merge: null
         - number: 12
           slug: copy-party-authorizations-on-supersede
