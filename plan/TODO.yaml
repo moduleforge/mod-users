@@ -506,7 +506,7 @@ phases:
           slug: link-unreachable-readmes
           title: Link Deploy And Model READMEs From Root README
           path: phase-12-remediation-01/009-link-unreachable-readmes.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Added four README links from the root README to model, deploy/local, deploy/k8s and deploy/serverless. Docs-only.
           findings:
