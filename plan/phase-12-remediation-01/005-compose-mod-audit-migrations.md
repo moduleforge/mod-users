@@ -21,3 +21,7 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `LPl2` in this plan's `plan/findings.yaml` (bug, high): the compose target omits the mod-audit migrations that the API server's observer needs, so migrated databases fail on the first observed write.
+
+## Status
+
+Succeeded, 2026-10-25. `model/Makefile` now resolves `AUDIT_DIR` and `compose` copies the audit migrations; `api/internal/integration/harness_integration_test.go` drops the temp-copy workaround and applies the composed directory directly. Validation: `make -C model compose` yields `0400_audit_log.sql`; the api integration suite passed against a throwaway Postgres.

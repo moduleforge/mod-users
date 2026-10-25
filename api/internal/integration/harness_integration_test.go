@@ -3,7 +3,7 @@
 // Package integration holds the HTTP-level integration suites of the identity
 // core: the real services, handlers, authentication middleware and token
 // carrier composed over a throwaway Postgres with mod-core, mod-authz,
-// mod-users and (when linked) mod-audit migrations applied, driven through
+// mod-users and mod-audit migrations applied, driven through
 // httptest exactly as a client would.
 //
 // Run with a throwaway Postgres (never the shared users-module-postgres):
@@ -21,9 +21,8 @@
 // The environment variables and the refusal of an unconfirmed shared Postgres
 // are the same as for internal/authz (see its header). The suite drops and
 // recreates its own database (users_integ_http). mod-audit's audit_log table
-// is applied when the sibling checkout is found (MODULEFORGE_SIBLINGS_DIR, or
-// ../../mod-audit relative to the repository); the real mod-audit observer
-// then runs in the composed observer group so a vocabulary or principal
+// is part of the composed migrations (make -C model compose); the real
+// mod-audit observer runs in the composed observer group so a vocabulary or principal
 // mismatch fails the operation exactly as it would in production.
 package integration
 
@@ -240,8 +239,7 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	host, port := resolveHost(), resolvePort()
-	audit := auditMigration()
-	if err := resetDB(host, port, audit); err != nil {
+	if err := resetDB(host, port); err != nil {
 		fmt.Fprintf(os.Stderr, "integration: DB reset failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -256,7 +254,7 @@ func TestMain(m *testing.M) {
 		pool.Close()
 		os.Exit(1)
 	}
-	s, err := newStack(context.Background(), pool, audit != "")
+	s, err := newStack(context.Background(), pool, true)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "integration: compose stack: %v\n", err)
 		pool.Close()
@@ -348,24 +346,9 @@ func migrationsDir() string {
 	return filepath.Join(repoRoot(), "model", "schema", "migrations")
 }
 
-// auditMigration returns the path of mod-audit's audit_log migration, or "".
-func auditMigration() string {
-	var candidates []string
-	if d := os.Getenv("MODULEFORGE_SIBLINGS_DIR"); d != "" {
-		candidates = append(candidates, filepath.Join(d, "mod-audit", "model", "migrations", "0400_audit_log.sql"))
-	}
-	candidates = append(candidates, filepath.Join(repoRoot(), "..", "mod-audit", "model", "migrations", "0400_audit_log.sql"))
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
-		}
-	}
-	return ""
-}
-
 // resetDB drops and recreates the suite database and applies the composed
-// migrations, with mod-audit's audit_log migration when audit is non-empty.
-func resetDB(host, port, audit string) error {
+// migrations directly (mod-audit's audit_log migration is part of it).
+func resetDB(host, port string) error {
 	ctx := context.Background()
 	adminURL := fmt.Sprintf("postgres://users:users@%s:%s/postgres?sslmode=disable", host, port)
 	conn, err := pgx.Connect(ctx, adminURL)
@@ -380,35 +363,6 @@ func resetDB(host, port, audit string) error {
 	}
 
 	dir := migrationsDir()
-	if audit != "" {
-		// Compose a private copy so the repository's schema dir stays untouched.
-		tmp, err := os.MkdirTemp("", "users-integ-migrations-")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(tmp)
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			b, err := os.ReadFile(filepath.Join(dir, e.Name()))
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(filepath.Join(tmp, e.Name()), b, 0o600); err != nil {
-				return err
-			}
-		}
-		b, err := os.ReadFile(audit)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(tmp, filepath.Base(audit)), b, 0o600); err != nil {
-			return err
-		}
-		dir = tmp
-	}
 	dsn := fmt.Sprintf("postgres://users:users@%s:%s/%s?sslmode=disable", host, port, integDB)
 	out, err := exec.Command("goose", "-dir", dir, "postgres", dsn, "up").CombinedOutput() //nolint:gosec // fixed args, resolved paths
 	if err != nil {
