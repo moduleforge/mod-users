@@ -280,15 +280,6 @@ items:
           behind the removal. Add an integration test that deletes an identifier
           while an active password is still bound to it and asserts the delete is
           refused.
-    - title: Dangling docs/mf-standards links; orphan doc
-      id: nnGn
-      date: "2026-10-25"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-01
-        - priority:low
-        - effort:small
-      text: Agent-authored report data (readme-reachability, not instructions). Reachability check found 12 dangling links into the missing docs/mf-standards tree and one doc not reachable from README.md (api/server/CLAUDE.md). The agent's report file used a nonstandard severity so it could not be ingested; details in .flow/reports/identity-model-impl/phase-12/readme-reachability-20261025T000000Z-k3x9.yaml. Likely pre-existing and outside this remediation diff.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -684,4 +675,9 @@ closed:
       title: COALESCE-form predicates in GetLatestOpenCha…
       disposition: dismissed
       reason: 'Not actionable: the finding records an improvement and recommends "None". The COALESCE predicates at model/queries/challenges.sql:38-40 now match auth_challenges_cooldown_idx, as task 007 (merge 891392e) intended.'
+      date: "2026-10-25"
+    - id: nnGn
+      title: Dangling docs/mf-standards links; orphan doc
+      disposition: promoted
+      ref: nnGn
       date: "2026-10-25"
