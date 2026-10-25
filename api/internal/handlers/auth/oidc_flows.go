@@ -377,10 +377,22 @@ func (h *OIDCHandler) sessionActingContext(ctx context.Context, tx pgx.Tx, st lo
 // principal as an oidc credential. It never creates an account and never
 // matches by email: the identity is bound to the principal that started the
 // flow, and only a bring-your-own user can be that principal. Re-linking an
-// identity the principal already holds succeeds without a write.
+// identity the principal already holds succeeds without a write. A provider
+// bound to a party confines the linked credential to that party, exactly as
+// createManagedUser does; a provider with no party links unconfined.
 func (h *OIDCHandler) callbackLink(w http.ResponseWriter, r *http.Request, providerID string, id localauth.ExternalIdentity, st localauth.StatePayload) {
 	ctx := r.Context()
-	err := h.inTx(ctx, func(tx pgx.Tx) error {
+	policy, err := h.oauth.PolicyFor(providerID)
+	if err != nil {
+		h.finishCallbackError(w, r, providerID, "policy", err)
+		return
+	}
+	var confinedTo *int64
+	if policy.PartyID > 0 {
+		party := policy.PartyID
+		confinedTo = &party
+	}
+	err = h.inTx(ctx, func(tx pgx.Tx) error {
 		sess, actCtx, err := h.sessionActingContext(ctx, tx, st)
 		if err != nil {
 			return err
@@ -411,12 +423,13 @@ func (h *OIDCHandler) callbackLink(w http.ResponseWriter, r *http.Request, provi
 		}
 
 		if _, err := h.creds.LinkOIDCInTx(actCtx, tx, svc.LinkOIDCInput{
-			PrincipalID: sess.PrincipalID,
-			ProviderID:  providerID,
-			Issuer:      id.Issuer,
-			Subject:     id.Subject,
-			EmailAtLink: emailAtLink(id),
-			Label:       providerID,
+			PrincipalID:       sess.PrincipalID,
+			ProviderID:        providerID,
+			Issuer:            id.Issuer,
+			Subject:           id.Subject,
+			EmailAtLink:       emailAtLink(id),
+			Label:             providerID,
+			ConfinedToPartyID: confinedTo,
 		}); err != nil {
 			if errors.Is(err, svc.ErrOIDCIdentityInUse) {
 				return refuse(localauth.RedirectErrIdentityInUse)

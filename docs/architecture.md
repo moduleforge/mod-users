@@ -143,6 +143,8 @@ Every anonymous request shares the same actor id, so actor-based rate limiting i
    - No match, email matches an existing account → link the identity (merge); issue JWT.
    - No match, no email match → create new `user_account` + `auth_oidc_identities` row; issue JWT.
 
+**Party confinement of linked credentials.** A provider bound to a party (its policy `PartyID` is greater than zero) confines every OIDC credential created through it to that party: just-in-time managed-user creation and the authenticated link callback both set the credential's `confined_to_party_id` to the provider's party. A provider with no party links unconfined credentials.
+
 Provider configuration is loaded from environment variables (`AUTH_PROVIDER_<PROVIDER>_CLIENT_ID` / `_CLIENT_SECRET`) and can be overridden by rows in the `oidc_providers` table. In local dev, Authelia acts as the default IdP and is wired automatically by Docker Compose.
 
 OIDC issuer discovery and JWKS fetches verify the issuer's TLS certificate by default. Skipping verification requires the explicit, local-development-only `WithInsecureSkipTLSVerify()` verifier option (passed to `NewVerifierWithOptions` alongside `WithOIDC`), which applies only to an `https://` issuer and logs a warning naming the issuer host. Consumer migration steps are in [docs/consumer-upgrade-notes.md](./consumer-upgrade-notes.md#oidc-issuer-tls-verification).
