@@ -231,7 +231,7 @@ func (s *UserService) SelfSetPrimaryIdentifier(ctx context.Context, identifierUU
 // SelfRemoveIdentifier removes the caller's identifier
 // (DELETE /v1/me/identifiers/{uuid}), first revoking the credentials bound to
 // it. Removing the last interactive credential is ErrLastCredential, and an
-// identifier that ever had a bound credential is ErrIdentifierInUse.
+// identifier still referenced by a restricting foreign key is ErrIdentifierInUse.
 // Observation: `delete` `user_identifier`.
 func (s *UserService) SelfRemoveIdentifier(ctx context.Context, identifierUUID uuid.UUID) error {
 	ac, err := s.selfWrite(ctx)

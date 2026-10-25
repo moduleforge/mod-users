@@ -45,9 +45,9 @@ type CredApiKey struct {
 }
 
 type CredEmailOtp struct {
-	CredentialID int64 `json:"credential_id"`
-	IdentifierID int64 `json:"identifier_id"`
-	Active       bool  `json:"active"`
+	CredentialID int64       `json:"credential_id"`
+	IdentifierID pgtype.Int8 `json:"identifier_id"`
+	Active       bool        `json:"active"`
 }
 
 type CredOidc struct {

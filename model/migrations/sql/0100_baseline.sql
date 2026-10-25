@@ -529,10 +529,13 @@ CREATE TRIGGER credentials_validate_invariants
 
 -- argon2id-encoded hash. identifier_id NULL: an unbound password (at most one
 -- active per principal); otherwise bound to the identifier it logs in with (at
--- most one active per identifier).
+-- most one active per identifier). Deleting the bound identifier sets the
+-- column to NULL (ON DELETE SET NULL); the identifier-removal flow revokes the
+-- credential first, so the row left behind is a revoked, unbound history row
+-- and the active-unbound index below never sees it.
 CREATE TABLE mod_users.cred_password (
   credential_id BIGINT PRIMARY KEY REFERENCES mod_users.credentials(id) ON DELETE CASCADE,
-  identifier_id BIGINT REFERENCES mod_users.user_identifiers(id) ON DELETE RESTRICT,
+  identifier_id BIGINT REFERENCES mod_users.user_identifiers(id) ON DELETE SET NULL,
   hash          TEXT NOT NULL,
   -- Mirrors, maintained by trigger.
   active        BOOLEAN NOT NULL DEFAULT true,
@@ -551,12 +554,17 @@ CREATE INDEX cred_password_principal_id_idx
   ON mod_users.cred_password (principal_id) WHERE active;
 
 -- A one-time code sent to the bound identifier; created when the identifier is
--- verified, so passwordless login keeps working.
+-- verified, so passwordless login keeps working. Deleting the identifier sets
+-- identifier_id to NULL (ON DELETE SET NULL), which is only legal for a revoked
+-- credential: an active email_otp must keep its identifier (the CHECK below).
+-- The identifier-removal flow revokes the credential before deleting.
 CREATE TABLE mod_users.cred_email_otp (
   credential_id BIGINT PRIMARY KEY REFERENCES mod_users.credentials(id) ON DELETE CASCADE,
-  identifier_id BIGINT NOT NULL REFERENCES mod_users.user_identifiers(id) ON DELETE RESTRICT,
+  identifier_id BIGINT REFERENCES mod_users.user_identifiers(id) ON DELETE SET NULL,
   -- Mirror, maintained by trigger.
-  active        BOOLEAN NOT NULL DEFAULT true
+  active        BOOLEAN NOT NULL DEFAULT true,
+  CONSTRAINT cred_email_otp_active_needs_identifier
+    CHECK (identifier_id IS NOT NULL OR NOT active)
 );
 
 CREATE UNIQUE INDEX cred_email_otp_active_identifier_uq

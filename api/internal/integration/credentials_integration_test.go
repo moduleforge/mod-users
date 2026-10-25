@@ -8,11 +8,15 @@ package integration
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/moduleforge/mod-users/api/internal/service"
 )
@@ -232,15 +236,96 @@ func TestIdentifiers_AddVerifySetPrimaryAndRemove(t *testing.T) {
 		t.Errorf("email_otp credentials for the identifier = %d, want 1", n)
 	}
 
-	// Make it primary, then remove the original (a password is bound to it, so
-	// the schema keeps it: removal is refused).
+	// Make it primary, then remove the original: the password bound to it is
+	// revoked and the identifier is deleted (see
+	// TestIdentifiers_RemoveRevokesBoundCredentialsAndNullsTheirIdentifier).
 	primary := env.do(t, http.MethodPut, "/v1/me/identifiers/"+id+"/primary", a.tk.access(), nil).wantStatus(t, http.StatusOK).obj(t)
 	if primary["is_primary"] != true {
 		t.Fatalf("identifier after set-primary = %v", primary)
 	}
 	orig := env.identifierUUID(t, a.tk.access(), a.Email)
-	env.do(t, http.MethodDelete, "/v1/me/identifiers/"+orig, a.tk.access(), nil).
-		wantError(t, http.StatusConflict, "conflict", "users.identifier_in_use")
+	env.do(t, http.MethodDelete, "/v1/me/identifiers/"+orig, a.tk.access(), nil).wantStatus(t, http.StatusNoContent)
+	if n := env.scanInt64(t, "removed identifier rows", `SELECT count(*) FROM mod_users.user_identifiers WHERE uuid = $1::uuid`, orig); n != 0 {
+		t.Errorf("identifier rows after removal = %d, want 0", n)
+	}
+}
+
+// Removing a verified identifier with a bound password and a bound email_otp
+// succeeds: both credentials are revoked, kept as history, and their
+// identifier_id is NULL (ON DELETE SET NULL).
+func TestIdentifiers_RemoveRevokesBoundCredentialsAndNullsTheirIdentifier(t *testing.T) {
+	a := env.register(t)
+	env.verifyRegisteredEmail(t, a) // creates the email_otp bound to the registration email
+
+	// A second verified identifier keeps an interactive credential alive, so the
+	// last-credential guard permits removing the first.
+	second := uniq("second") + "@example.test"
+	added := env.do(t, http.MethodPost, "/v1/me/identifiers", a.tk.access(), map[string]string{"value": second}).
+		wantStatus(t, http.StatusCreated).obj(t)
+	id := added["uuid"].(string)
+	seen := env.mail.count(second)
+	env.do(t, http.MethodPost, "/v1/me/identifiers/"+id+"/verification", a.tk.access(), nil).wantStatus(t, http.StatusNoContent)
+	code := env.mail.codeAfter(t, second, seen)
+	env.do(t, http.MethodPost, "/v1/me/identifiers/"+id+"/verify", a.tk.access(), map[string]string{"code": code}).
+		wantStatus(t, http.StatusOK)
+
+	orig := env.identifierUUID(t, a.tk.access(), a.Email)
+	boundCreds := `SELECT c.id FROM mod_users.credentials c
+		 JOIN mod_users.cred_%s x ON x.credential_id = c.id
+		 JOIN mod_users.user_identifiers i ON i.id = x.identifier_id
+		 WHERE i.uuid = $1::uuid`
+	var pwID, otpID int64
+	if err := env.pool.QueryRow(context.Background(), fmt.Sprintf(boundCreds, "password"), orig).Scan(&pwID); err != nil {
+		t.Fatalf("bound password: %v", err)
+	}
+	if err := env.pool.QueryRow(context.Background(), fmt.Sprintf(boundCreds, "email_otp"), orig).Scan(&otpID); err != nil {
+		t.Fatalf("bound email_otp: %v", err)
+	}
+
+	env.do(t, http.MethodDelete, "/v1/me/identifiers/"+orig, a.tk.access(), nil).wantStatus(t, http.StatusNoContent)
+
+	if n := env.scanInt64(t, "removed identifier rows", `SELECT count(*) FROM mod_users.user_identifiers WHERE uuid = $1::uuid`, orig); n != 0 {
+		t.Errorf("identifier rows after removal = %d, want 0", n)
+	}
+	for _, tc := range []struct {
+		table string
+		id    int64
+	}{{"cred_password", pwID}, {"cred_email_otp", otpID}} {
+		var revoked, nullID bool
+		if err := env.pool.QueryRow(context.Background(),
+			`SELECT c.revoked_at IS NOT NULL, x.identifier_id IS NULL
+			   FROM mod_users.credentials c JOIN mod_users.`+tc.table+` x ON x.credential_id = c.id
+			  WHERE c.id = $1`, tc.id).Scan(&revoked, &nullID); err != nil {
+			t.Fatalf("%s row for credential %d: %v", tc.table, tc.id, err)
+		}
+		if !revoked || !nullID {
+			t.Errorf("%s credential %d: revoked=%v identifier_id NULL=%v, want both true", tc.table, tc.id, revoked, nullID)
+		}
+	}
+}
+
+// An active email_otp credential must keep its identifier: the CHECK rejects a
+// NULL identifier_id on an active row, while a revoked one may have it.
+func TestCredEmailOTP_ActiveRowRequiresIdentifier(t *testing.T) {
+	a := env.register(t)
+	uid := env.principalID(t, a.Email)
+	ctx := context.Background()
+
+	// A fresh active email_otp credential row with no identifier is rejected.
+	tx, err := env.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var credID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO mod_users.credentials (principal_id, kind) VALUES ($1, 'email_otp') RETURNING id`, uid).Scan(&credID); err != nil {
+		t.Fatalf("insert credential: %v", err)
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO mod_users.cred_email_otp (credential_id, identifier_id) VALUES ($1, NULL)`, credID)
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "cred_email_otp_active_needs_identifier" {
+		t.Fatalf("active email_otp with NULL identifier_id: err = %v, want check violation cred_email_otp_active_needs_identifier", err)
+	}
 }
 
 func TestSSHKey_AddListRevokeAndResolve(t *testing.T) {

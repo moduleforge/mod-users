@@ -571,13 +571,16 @@ func (s *UserService) SetPrimaryIdentifierInTx(ctx context.Context, tx pgx.Tx, u
 
 // RemoveIdentifierInTx removes an identifier. Credentials bound to it (a
 // password, an email_otp) are revoked first with reason `user`, honoring the
-// last-interactive-credential rule (ErrLastCredential), and then the row is
-// deleted. Credential rows are revoked, never deleted, and keep referencing the
-// identifier they were bound to, so an identifier that ever had a bound
-// credential cannot be deleted: that fails with ErrIdentifierInUse and the
-// whole removal (including the revocations) is rolled back to a savepoint, so
-// the caller's transaction stays usable. Observation: `delete`
-// `user_identifier`, target the user.
+// last-interactive-credential rule (ErrLastCredential); the revocation is what
+// lets the row be deleted, because an active email_otp must keep its identifier
+// (cred_email_otp_active_needs_identifier). The identifier is then hard-deleted
+// and the foreign keys from cred_password and cred_email_otp set the revoked
+// credentials' identifier_id to NULL; the credential rows stay as history. A
+// foreign key from elsewhere (another module referencing the identifier) that
+// still restricts the delete fails with ErrIdentifierInUse, and the whole
+// removal (including the revocations) is rolled back to a savepoint, so the
+// caller's transaction stays usable. Observation: `delete` `user_identifier`,
+// target the user.
 func (s *UserService) RemoveIdentifierInTx(ctx context.Context, tx pgx.Tx, userID, identifierID int64) error {
 	q := s.usersQ(tx)
 	row, err := s.loadIdentifier(ctx, q, userID, identifierID)
