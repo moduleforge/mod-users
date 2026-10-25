@@ -11,8 +11,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
+	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/email"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 )
@@ -55,13 +57,16 @@ var (
 // Challenge is the service-layer view of an auth_challenges row. Ids of
 // related rows are 0 when the column is NULL.
 type Challenge struct {
-	ID             int64
-	UUID           uuid.UUID
-	Kind           string
-	PrincipalID    int64
-	IdentifierID   int64
-	CredentialID   int64
-	SessionID      int64
+	ID           int64
+	UUID         uuid.UUID
+	Kind         string
+	PrincipalID  int64
+	IdentifierID int64
+	CredentialID int64
+	SessionID    int64
+	// BindingHash is the verifier challenge of a login_handoff; "" for any other
+	// kind.
+	BindingHash    string
 	ExpiresAt      time.Time
 	ConsumedAt     *time.Time
 	FailedAttempts int32
@@ -72,7 +77,8 @@ func toChallenge(r usersdb.AuthChallenge) Challenge {
 		ID: r.ID, UUID: r.Uuid, Kind: r.Kind,
 		PrincipalID: r.PrincipalID.Int64, IdentifierID: r.IdentifierID.Int64,
 		CredentialID: r.CredentialID.Int64, SessionID: r.SessionID.Int64,
-		ExpiresAt: r.ExpiresAt.Time, ConsumedAt: r.ConsumedAt, FailedAttempts: r.FailedAttempts,
+		BindingHash: r.BindingHash.String,
+		ExpiresAt:   r.ExpiresAt.Time, ConsumedAt: r.ConsumedAt, FailedAttempts: r.FailedAttempts,
 	}
 }
 
@@ -196,15 +202,23 @@ type IssueTokenInput struct {
 	// (60 s, decision U7) whatever TTL says; zero means PasswordResetTTL for a
 	// password_reset.
 	TTL time.Duration
+	// BindingHash is the browser's handoff challenge (base64url SHA-256 of its
+	// verifier). Required for, and only used by, a login_handoff token.
+	BindingHash string
 }
 
 // IssueTokenInTx mints a 256-bit opaque token. A login_handoff token is
 // single use and lives 60 s; it is created without a cooldown (one per OIDC
-// callback). A password_reset token goes through the cooldown function with
+// callback) and carries in.BindingHash, the challenge its redeemer must answer
+// with a verifier (ExchangeHandoff); a login_handoff without a valid challenge
+// is refused. A password_reset token goes through the cooldown function with
 // CodeCooldown (ErrChallengeCooldown inside the window).
 func (s *ChallengeService) IssueTokenInTx(ctx context.Context, tx pgx.Tx, in IssueTokenInput) (IssuedChallenge, error) {
 	if !tokenKinds[in.Kind] {
 		return IssuedChallenge{}, invalidField("kind", "users.challenge_kind_invalid", "unsupported challenge kind")
+	}
+	if in.Kind == ChallengeLoginHandoff && !localauth.ValidHandoffChallenge(in.BindingHash) {
+		return IssuedChallenge{}, invalidField("binding_hash", "users.handoff_challenge_invalid", "a handoff requires a valid challenge")
 	}
 	token, err := randomHex(32)
 	if err != nil {
@@ -222,6 +236,7 @@ func (s *ChallengeService) IssueTokenInTx(ctx context.Context, tx pgx.Tx, in Iss
 			SessionID:    nullableInt8(nullIfZero(in.Subject.SessionID)),
 			CodeHash:     hash,
 			ExpiresAt:    timestamptz(s.now().Add(HandoffTTL)),
+			BindingHash:  pgtype.Text{String: in.BindingHash, Valid: true},
 		})
 	} else {
 		ttl := in.TTL

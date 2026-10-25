@@ -406,9 +406,16 @@ var ErrStateValidation = errors.New("oauth: state validation failed")
 // testMode is passed through to the StatePayload so the callback knows to skip
 // the resolver and session creation and redirect to a test-result URL; the
 // authorize URL itself is identical for test vs real (the IdP has no notion of
-// "test me").
-func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool) (authorizeURL, stateToken string, err error) {
-	return o.authorize(providerID, returnPath, StatePayload{TestMode: testMode})
+// "test me"). handoffChallenge is the browser's PKCE-style handoff challenge,
+// carried in the signed state; a real sign-in requires a valid one
+// (ErrInvalidHandoffChallenge otherwise), a test-mode flow creates no handoff
+// and ignores it.
+func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool, handoffChallenge string) (authorizeURL, stateToken string, err error) {
+	payload := StatePayload{TestMode: testMode}
+	if !testMode {
+		payload.HandoffChallenge = handoffChallenge
+	}
+	return o.authorize(providerID, returnPath, payload)
 }
 
 // SessionAuthorizeURL builds the authorization URL of a link or step-up flow
@@ -433,6 +440,13 @@ func (o *OAuth) authorize(providerID, returnPath string, payload StatePayload) (
 	returnPath, err = validateReturnPath(returnPath)
 	if err != nil {
 		return "", "", err
+	}
+
+	// A sign-in mints a handoff code, which must be bound to the browser's
+	// verifier. Checked after the provider and return path so those refusals
+	// keep their own answers.
+	if payload.Flow == FlowLogin && !payload.TestMode && !ValidHandoffChallenge(payload.HandoffChallenge) {
+		return "", "", ErrInvalidHandoffChallenge
 	}
 
 	nonce, err := randomBase64(32)

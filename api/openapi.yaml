@@ -509,11 +509,20 @@ components:
 
     HandoffRequest:
       type: object
-      required: [code]
+      required: [code, verifier]
       properties:
         code:
           type: string
           description: The one-time code the OIDC callback redirect carried in `#handoff=`.
+        verifier:
+          type: string
+          minLength: 43
+          maxLength: 128
+          pattern: "^[A-Za-z0-9._~-]{43,128}$"
+          description: |
+            The random verifier whose SHA-256 (unpadded base64url) challenge the
+            browser sent to `GET /v1/auth/oidc/{provider}/start`. The code is
+            redeemable only with it.
 
     # -- Session requests --
 
@@ -1440,8 +1449,13 @@ paths:
       summary: Exchange an OIDC handoff code for tokens
       description: |
         Exchanges the one-time code an OIDC callback redirect carried
-        (`#handoff=<code>`) for the token response, once. A spent, expired or unknown
-        code is 401 `users.invalid_credentials`.
+        (`#handoff=<code>`) for the token response, once. The request must also carry
+        the `verifier` whose challenge the same browser sent to the OIDC start: the
+        code is bound to that challenge and cannot be redeemed without the
+        verifier. A missing `code` or `verifier` is 400; a spent, expired or unknown
+        code, or a wrong or malformed verifier, is 401 `users.invalid_credentials`
+        (the causes are indistinguishable). A wrong verifier does not spend the
+        code.
       tags: [Auth]
       operationId: handoff
       security: []
@@ -1505,12 +1519,32 @@ paths:
         Generates a signed state token, writes it to the `oidc_state` cookie
         (scoped to the OIDC route prefix), and 302-redirects the browser to the
         provider's authorization endpoint.
+
+        The handoff code the callback later issues is bound to the browser that
+        starts the flow (PKCE style, S256). The browser generates a random
+        verifier (43 to 128 characters of `[A-Za-z0-9-._~]`), keeps it, and sends
+        only its challenge here; the challenge is carried in the signed state. A
+        missing or malformed challenge is refused with 400
+        `users.handoff_challenge_invalid` (an unknown provider or a bad `return`
+        keeps its own refusal). `mode=test` creates no handoff and needs no
+        challenge.
       tags: [Auth]
       security: []
       operationId: startOIDC
       parameters:
         - $ref: "#/components/parameters/Provider"
         - $ref: "#/components/parameters/ReturnPath"
+        - in: query
+          name: handoff_challenge
+          required: true
+          description: |
+            The unpadded base64url SHA-256 digest of the client-generated random
+            verifier (43 characters). Required for a sign-in.
+          schema:
+            type: string
+            minLength: 43
+            maxLength: 43
+            pattern: "^[A-Za-z0-9_-]{43}$"
       responses:
         "302":
           description: Redirect to the provider's authorization endpoint.
@@ -1538,7 +1572,8 @@ paths:
         - sign-in: creates (or, for a just-in-time provider, creates then uses)
           the session and a one-time handoff code, and redirects to the
           frontend return URL with `#handoff=<code>`; the client exchanges the
-          code at `POST /v1/auth/handoff`. No token is placed in the redirect.
+          code, with the verifier behind the challenge it sent at start, at
+          `POST /v1/auth/handoff`. No token is placed in the redirect.
         - link: links the identity as an `oidc` credential of the calling
           session's principal and redirects with an outcome.
         - step-up: raises the calling session's factors and redirects with an

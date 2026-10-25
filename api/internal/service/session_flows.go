@@ -329,10 +329,22 @@ func (s *SessionService) revokeForReuse(ctx context.Context, tx pgx.Tx, q usersd
 // for the tab and runs the landing chain (the session's factor credential's
 // default profile, the user's default, the personal profile, the only
 // available profile). The `login` observation was written when the session
-// was created (CreateSessionInTx). Errors: ErrInvalidCredentials for an
-// unknown, expired or spent code; ErrSessionRevoked when the session is no
-// longer live.
-func (s *SessionService) ExchangeHandoff(ctx context.Context, code string) (TokenResponse, error) {
+// was created (CreateSessionInTx).
+//
+// The code is bound to the browser that started the flow: the challenge stored
+// with it is the SHA-256 of a verifier only that browser holds, and the exchange
+// must present the verifier. The verifier is checked, in constant time, inside
+// the same transaction as the consumption, so a missing or wrong verifier rolls
+// the consumption back: the code is spent only by a successful exchange, and a
+// holder of the bare code cannot burn it for the legitimate browser.
+//
+// Errors: ErrInvalidCredentials for an unknown, expired or spent code, or a
+// missing, malformed or wrong verifier (indistinguishable); ErrSessionRevoked
+// when the session is no longer live.
+func (s *SessionService) ExchangeHandoff(ctx context.Context, code, verifier string) (TokenResponse, error) {
+	if verifier == "" {
+		return TokenResponse{}, ErrInvalidCredentials
+	}
 	var resp TokenResponse
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		q := s.usersQ(tx)
@@ -342,6 +354,9 @@ func (s *SessionService) ExchangeHandoff(ctx context.Context, code string) (Toke
 				return ErrInvalidCredentials
 			}
 			return err
+		}
+		if !localauth.VerifyHandoff(verifier, ch.BindingHash) {
+			return ErrInvalidCredentials
 		}
 		if ch.SessionID == 0 {
 			return ErrInvalidCredentials

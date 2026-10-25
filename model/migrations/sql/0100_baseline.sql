@@ -948,7 +948,9 @@ CREATE INDEX session_refresh_tokens_lineage_uuid_idx
 --   step_up           : adds or re-verifies a factor in session_id;
 --   login_handoff     : the single-use, 60 s code the OIDC callback redirect
 --                       carries instead of a token (exchanged at
---                       POST /v1/auth/handoff).
+--                       POST /v1/auth/handoff). Its binding_hash is the PKCE-style
+--                       challenge (base64url SHA-256 of a browser-held verifier)
+--                       the exchange must answer with the verifier.
 CREATE TABLE mod_users.auth_challenges (
   id              BIGSERIAL PRIMARY KEY,
   uuid            UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
@@ -957,6 +959,7 @@ CREATE TABLE mod_users.auth_challenges (
   principal_id    BIGINT REFERENCES public.principals(entity_id) ON DELETE CASCADE,
   session_id      BIGINT REFERENCES mod_users.sessions(id) ON DELETE CASCADE,
   code_hash       TEXT NOT NULL,
+  binding_hash    TEXT,
   consumed_at     TIMESTAMPTZ,
   expires_at      TIMESTAMPTZ NOT NULL,
   failed_attempts INT NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),

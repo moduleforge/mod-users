@@ -25,6 +25,15 @@ import (
 
 const idpIssuer = "https://idp.example.test"
 
+// handoffVerifier is the browser-held verifier the sign-in tests present at the
+// handoff exchange; its challenge is what idpReturns puts in a sign-in state.
+const handoffVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+
+// handoffBody is the POST /v1/auth/handoff body for code with the right verifier.
+func handoffBody(code string) map[string]string {
+	return map[string]string{"code": code, "verifier": handoffVerifier}
+}
+
 // addProvider registers an initialized provider with the stack's OAuth
 // orchestrator and returns its id.
 func (s *stack) addProvider(t *testing.T, p config.Provider) string {
@@ -58,6 +67,10 @@ func (s *stack) addProvider(t *testing.T, p config.Provider) string {
 func (s *stack) idpReturns(t *testing.T, id auth.ExternalIdentity, payload auth.StatePayload) {
 	t.Helper()
 	prev := s.oauth.ExchangeFn
+	if payload.Flow == auth.FlowLogin && !payload.TestMode && payload.HandoffChallenge == "" {
+		// /start requires the browser's challenge for a sign-in; stand in for it.
+		payload.HandoffChallenge = auth.HandoffChallenge(handoffVerifier)
+	}
 	s.oauth.ExchangeFn = func(_ context.Context, providerID, _, _, _ string) (auth.ExternalIdentity, auth.StatePayload, error) {
 		p := payload
 		p.Provider = providerID
@@ -108,7 +121,7 @@ func (s *stack) signIn(t *testing.T, providerID string) tokens {
 	if status != http.StatusFound || code == "" {
 		t.Fatalf("callback = %d %q, want a redirect with a handoff code", status, loc)
 	}
-	return s.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": code}).wantStatus(t, http.StatusOK).tok(t)
+	return s.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(code)).wantStatus(t, http.StatusOK).tok(t)
 }
 
 func idpIdentity(email string, verified bool) auth.ExternalIdentity {
@@ -165,7 +178,7 @@ func TestOIDC_JIT_BYOCreatesAUserAndSignsInAgainOnTheKnownPath(t *testing.T) {
 			t.Errorf("redirect %q carries %q", loc, bad)
 		}
 	}
-	tk := env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": frag.Get("handoff")}).wantStatus(t, http.StatusOK).tok(t)
+	tk := env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(frag.Get("handoff"))).wantStatus(t, http.StatusOK).tok(t)
 	if tk.Profile == nil || tk.Profile.Kind != "personal" || tk.RefreshToken == nil {
 		t.Fatalf("handoff token response = %+v", tk)
 	}
@@ -312,9 +325,9 @@ func TestOIDC_Handoff_IsSingleUseAndExpires(t *testing.T) {
 	if code == "" {
 		t.Fatal("no handoff code")
 	}
-	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": code}).wantStatus(t, http.StatusOK)
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(code)).wantStatus(t, http.StatusOK)
 	// Spent.
-	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": code}).
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(code)).
 		wantError(t, http.StatusUnauthorized, "users.invalid_credentials", "")
 
 	// A fresh code that expired is refused like an unknown one.
@@ -331,21 +344,97 @@ SELECT expires_at - created_at FROM mod_users.auth_challenges WHERE kind = 'logi
 	}
 	env.exec(t, "expire handoff", `UPDATE mod_users.auth_challenges SET expires_at = now() - interval '1 second'
 		WHERE id = (SELECT max(id) FROM mod_users.auth_challenges WHERE kind = 'login_handoff')`)
-	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": expired}).
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(expired)).
 		wantError(t, http.StatusUnauthorized, "users.invalid_credentials", "")
 
 	// Unknown and empty codes.
-	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": "nope"}).
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody("nope")).
 		wantError(t, http.StatusUnauthorized, "users.invalid_credentials", "")
 	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{}).wantStatus(t, http.StatusBadRequest)
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": "x"}).wantStatus(t, http.StatusBadRequest)
 
 	// A code whose session was revoked before redemption is refused as a dead session.
 	env.idpReturns(t, idpIdentity(uniq("handoff")+"@example.test", true), auth.StatePayload{})
 	_, frag3, _ := env.callback(t, provider)
 	env.exec(t, "revoke session", `UPDATE mod_users.sessions SET revoked_at = now(), revoke_reason = 'logout'
 		WHERE id = (SELECT session_id FROM mod_users.auth_challenges WHERE kind = 'login_handoff' ORDER BY id DESC LIMIT 1)`)
-	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": frag3.Get("handoff")}).
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(frag3.Get("handoff"))).
 		wantError(t, http.StatusUnauthorized, "users.session_revoked", "")
+}
+
+func TestOIDC_Handoff_RequiresTheBrowserVerifier(t *testing.T) {
+	provider := env.addProvider(t, config.Provider{JITMode: config.JITModeBYO})
+	env.idpReturns(t, idpIdentity(uniq("bound")+"@example.test", true), auth.StatePayload{})
+
+	_, frag, _ := env.callback(t, provider)
+	code := frag.Get("handoff")
+	if code == "" {
+		t.Fatal("no handoff code")
+	}
+	var stored string
+	if err := env.pool.QueryRow(context.Background(), `
+SELECT binding_hash FROM mod_users.auth_challenges WHERE kind = 'login_handoff' ORDER BY id DESC LIMIT 1`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if want := auth.HandoffChallenge(handoffVerifier); stored != want {
+		t.Fatalf("stored binding_hash = %q, want the verifier's challenge %q", stored, want)
+	}
+
+	// The bare code does not redeem: no verifier, a wrong one, a malformed one,
+	// and the challenge itself (what an observer of /start sees) are all refused.
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": code}).wantStatus(t, http.StatusBadRequest)
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": code, "verifier": ""}).wantStatus(t, http.StatusBadRequest)
+	for _, v := range []string{
+		strings.Repeat("a", 43),                // wrong
+		"short",                                // malformed
+		auth.HandoffChallenge(handoffVerifier), // the challenge, not the verifier
+	} {
+		env.do(t, http.MethodPost, "/v1/auth/handoff", "", map[string]string{"code": code, "verifier": v}).
+			wantError(t, http.StatusUnauthorized, "users.invalid_credentials", "")
+	}
+
+	// None of those spent the code: the legitimate browser still redeems it, once.
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(code)).wantStatus(t, http.StatusOK)
+	env.do(t, http.MethodPost, "/v1/auth/handoff", "", handoffBody(code)).
+		wantError(t, http.StatusUnauthorized, "users.invalid_credentials", "")
+}
+
+func TestOIDC_Start_RequiresAHandoffChallenge(t *testing.T) {
+	provider := env.addProvider(t, config.Provider{JITMode: config.JITModeBYO})
+	start := func(query string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/oidc/"+provider+"/start"+query, nil)
+		rec := httptest.NewRecorder()
+		env.handler.ServeHTTP(rec, req)
+		return rec
+	}
+	for name, q := range map[string]string{
+		"missing":   "",
+		"malformed": "?handoff_challenge=short",
+		"verifier":  "?handoff_challenge=" + handoffVerifier + "x",
+	} {
+		if rec := start(q); rec.Code != http.StatusBadRequest || rec.Header().Get("Location") != "" {
+			t.Errorf("%s: start = %d, want 400 and no redirect", name, rec.Code)
+		}
+	}
+	rec := start("?handoff_challenge=" + auth.HandoffChallenge(handoffVerifier))
+	if rec.Code != http.StatusFound || !strings.HasPrefix(rec.Header().Get("Location"), "https://idp.example.test/authorize") {
+		t.Errorf("start with a challenge = %d %q, want a redirect to the provider", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestOIDC_Callback_RefusesASignInStateWithoutAChallenge(t *testing.T) {
+	provider := env.addProvider(t, config.Provider{JITMode: config.JITModeBYO})
+	id := idpIdentity(uniq("nochallenge")+"@example.test", true)
+	prev := env.oauth.ExchangeFn
+	env.oauth.ExchangeFn = func(_ context.Context, providerID, _, _, _ string) (auth.ExternalIdentity, auth.StatePayload, error) {
+		return id, auth.StatePayload{Provider: providerID, Expires: time.Now().Add(5 * time.Minute).Unix()}, nil
+	}
+	t.Cleanup(func() { env.oauth.ExchangeFn = prev })
+	users := env.count(t, "users", `SELECT count(*) FROM mod_users.users`)
+	env.wantRedirectError(t, provider, "authentication_failed")
+	if got := env.count(t, "users", `SELECT count(*) FROM mod_users.users`); got != users {
+		t.Errorf("a refused callback created a user")
+	}
 }
 
 func TestOIDC_ProviderAndStateErrors(t *testing.T) {
@@ -366,7 +455,7 @@ func TestOIDC_ProviderAndStateErrors(t *testing.T) {
 
 	// The unauthenticated start redirects to the provider with a signed state
 	// cookie; a return path outside the site is refused.
-	start := env.doRaw(t, http.MethodGet, "/v1/auth/oidc/"+provider+"/start?return=/home", nil)
+	start := env.doRaw(t, http.MethodGet, "/v1/auth/oidc/"+provider+"/start?return=/home&handoff_challenge="+auth.HandoffChallenge(handoffVerifier), nil)
 	if start.status != http.StatusFound || !strings.HasPrefix(start.header.Get("Location"), "https://idp.example.test/authorize") {
 		t.Fatalf("start = %d %q", start.status, start.header.Get("Location"))
 	}

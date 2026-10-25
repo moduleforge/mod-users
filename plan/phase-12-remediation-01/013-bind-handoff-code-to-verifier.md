@@ -25,3 +25,9 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `z443` in this plan's `plan/findings.yaml` (security, medium): the OIDC handoff code is not bound to a browser verifier, so an intercepted code can be redeemed without the originating client.
+
+## Status
+
+Outcome: succeeded (2026-10-25). Validation: `make build`, `make test`, `make lint` pass in the worktree; the authz, config and integration suites pass against a throwaway Postgres 16 (container removed). Sibling links resolved through `MODULEFORGE_SIBLINGS_DIR=/Users/zane/playground/.flow/siblings/mod-users` (mod-core, mod-authz, mod-audit plan worktrees).
+
+Changes: `auth_challenges.binding_hash` column and `CreateChallenge` query (regenerated `model/db`); `api/internal/auth/handoff_challenge.go` (S256 challenge, verifier shape, constant-time `VerifyHandoff`); the challenge is carried in the signed state (`hc`) and required by `/start` for sign-ins (`handoff_challenge`, 400 `users.handoff_challenge_invalid`); the callback stores it on the `login_handoff` challenge; `SessionService.ExchangeHandoff(code, verifier)` verifies inside the consuming transaction, so a wrong verifier rolls back and does not spend the code; `POST /v1/auth/handoff` requires `verifier`. `api/openapi.yaml`, `docs/mod-users-spec.md` and `docs/architecture.md` updated.

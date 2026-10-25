@@ -135,7 +135,7 @@ Every anonymous request shares the same actor id, so actor-based rate limiting i
 **Step-up code.** The step-up endpoints (`POST /v1/self/credential/step-up` and `.../step-up/verify`) reuse the same `email_codes` table with purpose `credential_change` and enforce the same limits as above: 5 attempts per code, a 60 s any-state cooldown through `create_email_code_with_cooldown`, and single-use consumption with the same fail-closed exhaustion boundary. `step-up` always answers `204`; `step-up/verify` answers `401` for a wrong, expired, or exhausted code and otherwise returns a short-lived step-up token.
 
 **OIDC (Google, Microsoft, Authelia, and others).** The OIDC flow is:
-1. Client calls `GET /v1/auth/oidc/{provider}/start` → API returns an authorization URL.
+1. Client generates a random verifier and calls `GET /v1/auth/oidc/{provider}/start?handoff_challenge=<base64url SHA-256 of the verifier>` → API carries the challenge in the signed state and redirects to the authorization URL. The callback's one-time handoff code is redeemable at `POST /v1/auth/handoff` only with that verifier.
 2. User authenticates at the IdP. IdP redirects to `GET /v1/auth/oidc/{provider}/callback`.
 3. API exchanges the code for an id_token, validates it with `go-oidc`, and extracts `sub` + `email`.
 4. API looks up `auth_oidc_identities` by `(provider, sub)`.

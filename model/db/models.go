@@ -19,6 +19,7 @@ type AuthChallenge struct {
 	PrincipalID    pgtype.Int8        `json:"principal_id"`
 	SessionID      pgtype.Int8        `json:"session_id"`
 	CodeHash       string             `json:"code_hash"`
+	BindingHash    pgtype.Text        `json:"binding_hash"`
 	ConsumedAt     *time.Time         `json:"consumed_at"`
 	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
 	FailedAttempts int32              `json:"failed_attempts"`

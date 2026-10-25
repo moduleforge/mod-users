@@ -18,7 +18,7 @@ SET consumed_at = now()
 WHERE id = $1
   AND consumed_at IS NULL
   AND expires_at > now()
-RETURNING id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, consumed_at, expires_at, failed_attempts, kind, created_at
+RETURNING id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, binding_hash, consumed_at, expires_at, failed_attempts, kind, created_at
 `
 
 // Single-use: only an unconsumed, unexpired challenge is consumed (no row
@@ -34,6 +34,7 @@ func (q *Queries) ConsumeChallenge(ctx context.Context, id int64) (AuthChallenge
 		&i.PrincipalID,
 		&i.SessionID,
 		&i.CodeHash,
+		&i.BindingHash,
 		&i.ConsumedAt,
 		&i.ExpiresAt,
 		&i.FailedAttempts,
@@ -56,7 +57,7 @@ WHERE id = (
     LIMIT 1
     FOR UPDATE
 )
-RETURNING id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, consumed_at, expires_at, failed_attempts, kind, created_at
+RETURNING id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, binding_hash, consumed_at, expires_at, failed_attempts, kind, created_at
 `
 
 type ConsumeChallengeByCodeHashParams struct {
@@ -77,6 +78,7 @@ func (q *Queries) ConsumeChallengeByCodeHash(ctx context.Context, arg ConsumeCha
 		&i.PrincipalID,
 		&i.SessionID,
 		&i.CodeHash,
+		&i.BindingHash,
 		&i.ConsumedAt,
 		&i.ExpiresAt,
 		&i.FailedAttempts,
@@ -113,11 +115,11 @@ func (q *Queries) ConsumeOpenChallengesBySubject(ctx context.Context, arg Consum
 
 const createChallenge = `-- name: CreateChallenge :one
 INSERT INTO mod_users.auth_challenges (
-    kind, principal_id, identifier_id, credential_id, session_id, code_hash, expires_at
+    kind, principal_id, identifier_id, credential_id, session_id, code_hash, expires_at, binding_hash
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8::text
 )
-RETURNING id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, consumed_at, expires_at, failed_attempts, kind, created_at
+RETURNING id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, binding_hash, consumed_at, expires_at, failed_attempts, kind, created_at
 `
 
 type CreateChallengeParams struct {
@@ -128,10 +130,12 @@ type CreateChallengeParams struct {
 	SessionID    pgtype.Int8        `json:"session_id"`
 	CodeHash     string             `json:"code_hash"`
 	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	BindingHash  pgtype.Text        `json:"binding_hash"`
 }
 
 // Direct insert for challenges without a cooldown (login_handoff, step_up
-// bound to a credential).
+// bound to a credential). binding_hash is the login_handoff verifier challenge;
+// NULL for every other kind.
 func (q *Queries) CreateChallenge(ctx context.Context, arg CreateChallengeParams) (AuthChallenge, error) {
 	row := q.db.QueryRow(ctx, createChallenge,
 		arg.Kind,
@@ -141,6 +145,7 @@ func (q *Queries) CreateChallenge(ctx context.Context, arg CreateChallengeParams
 		arg.SessionID,
 		arg.CodeHash,
 		arg.ExpiresAt,
+		arg.BindingHash,
 	)
 	var i AuthChallenge
 	err := row.Scan(
@@ -151,6 +156,7 @@ func (q *Queries) CreateChallenge(ctx context.Context, arg CreateChallengeParams
 		&i.PrincipalID,
 		&i.SessionID,
 		&i.CodeHash,
+		&i.BindingHash,
 		&i.ConsumedAt,
 		&i.ExpiresAt,
 		&i.FailedAttempts,
@@ -162,7 +168,7 @@ func (q *Queries) CreateChallenge(ctx context.Context, arg CreateChallengeParams
 
 const createChallengeWithCooldown = `-- name: CreateChallengeWithCooldown :one
 
-SELECT id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, consumed_at, expires_at, failed_attempts, kind, created_at FROM mod_users.create_challenge_with_cooldown(
+SELECT id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, binding_hash, consumed_at, expires_at, failed_attempts, kind, created_at FROM mod_users.create_challenge_with_cooldown(
     $1::text,
     $2::bigint,
     $3::bigint,
@@ -207,6 +213,7 @@ func (q *Queries) CreateChallengeWithCooldown(ctx context.Context, arg CreateCha
 		&i.PrincipalID,
 		&i.SessionID,
 		&i.CodeHash,
+		&i.BindingHash,
 		&i.ConsumedAt,
 		&i.ExpiresAt,
 		&i.FailedAttempts,
@@ -230,7 +237,7 @@ func (q *Queries) DeleteExpiredChallenges(ctx context.Context, expiresAt pgtype.
 }
 
 const getChallengeByUUID = `-- name: GetChallengeByUUID :one
-SELECT id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, consumed_at, expires_at, failed_attempts, kind, created_at FROM mod_users.auth_challenges WHERE uuid = $1
+SELECT id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, binding_hash, consumed_at, expires_at, failed_attempts, kind, created_at FROM mod_users.auth_challenges WHERE uuid = $1
 `
 
 func (q *Queries) GetChallengeByUUID(ctx context.Context, argUuid uuid.UUID) (AuthChallenge, error) {
@@ -244,6 +251,7 @@ func (q *Queries) GetChallengeByUUID(ctx context.Context, argUuid uuid.UUID) (Au
 		&i.PrincipalID,
 		&i.SessionID,
 		&i.CodeHash,
+		&i.BindingHash,
 		&i.ConsumedAt,
 		&i.ExpiresAt,
 		&i.FailedAttempts,
@@ -254,7 +262,7 @@ func (q *Queries) GetChallengeByUUID(ctx context.Context, argUuid uuid.UUID) (Au
 }
 
 const getLatestOpenChallenge = `-- name: GetLatestOpenChallenge :one
-SELECT id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, consumed_at, expires_at, failed_attempts, kind, created_at FROM mod_users.auth_challenges
+SELECT id, uuid, credential_id, identifier_id, principal_id, session_id, code_hash, binding_hash, consumed_at, expires_at, failed_attempts, kind, created_at FROM mod_users.auth_challenges
 WHERE kind = $1
   AND COALESCE(principal_id, 0) = COALESCE($2::bigint, 0)
   AND COALESCE(identifier_id, 0) = COALESCE($3::bigint, 0)
@@ -291,6 +299,7 @@ func (q *Queries) GetLatestOpenChallenge(ctx context.Context, arg GetLatestOpenC
 		&i.PrincipalID,
 		&i.SessionID,
 		&i.CodeHash,
+		&i.BindingHash,
 		&i.ConsumedAt,
 		&i.ExpiresAt,
 		&i.FailedAttempts,
