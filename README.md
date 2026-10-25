@@ -68,7 +68,7 @@ A party (an organization or a natural person) admits users through profiles. All
 | `PATCH /v1/profiles/{uuid}` | Suspend, resume or end a party profile (`status`, `end_reason`); needs `update` and a fresh authentication |
 | `POST /v1/me/profiles/{uuid}/accept`, `/decline`, `/leave` | The holder's own actions; an invitation appears in `GET /v1/me/profiles` |
 
-Ending a profile (an administrator ending it, or the holder declining or leaving) deletes the holder's credential authorizations for the party, revokes the holder's credentials confined to it, and disables a managed user left with no open profile. Other modules react to creations and status changes with `ProfileService.AddLifecycleObserver` (in-transaction). See `api/openapi.yaml` for the request and response shapes.
+Ending a profile (an administrator ending it, or the holder declining or leaving) deletes the holder's credential authorizations for the party, revokes the holder's credentials confined to it, and disables a managed user left with no open profile. `ProfileService.AdmitInTx` is the trusted, in-transaction admission another module (mod-billing seats) calls once the holder and party have consented: it returns the holder's active profile in the party, activating an invited one or creating an active one, and refuses a suspended one with `users.profile_suspended`; it has no HTTP route. Other modules react to creations and status changes with `ProfileService.AddLifecycleObserver` (in-transaction). See `api/openapi.yaml` for the request and response shapes.
 
 ## Additional documentation
 

@@ -142,6 +142,10 @@ type ProfileService = inner.ProfileService
 // HolderUserID and HolderEmail names the holder.
 type InviteInput = inner.InviteInput
 
+// AdmitInput is the input of ProfileService.AdmitInTx, the trusted admission of
+// a user into a party. InvitedByProfileID is 0 when none.
+type AdmitInput = inner.AdmitInput
+
 // Profile is the service-layer view of a party profile.
 type Profile = inner.Profile
 
@@ -161,6 +165,8 @@ var (
 	ErrGuestMustUpgrade = inner.ErrGuestMustUpgrade
 	// ErrHolderNotAdmissible: users.holder_not_admissible.
 	ErrHolderNotAdmissible = inner.ErrHolderNotAdmissible
+	// ErrProfileSuspended: users.profile_suspended (AdmitInTx).
+	ErrProfileSuspended = inner.ErrProfileSuspended
 	// ErrProfileExists: users.profile_exists.
 	ErrProfileExists = inner.ErrProfileExists
 	// ErrProfileTransition: users.profile_transition_invalid.
