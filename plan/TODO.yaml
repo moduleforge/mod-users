@@ -146,7 +146,7 @@ phases:
             branch: plan/identity-model-impl-07-001
             commit:
                 - 796d296
-            merge: null
+            merge: 27fa2896ce3a6930978cb11265b8b013f4680e69
         - number: 2
           slug: party-gating-administration
           title: Party Gating Administration
