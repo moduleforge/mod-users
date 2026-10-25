@@ -463,7 +463,7 @@ phases:
           slug: register-display-renderers-in-manifest
           title: Register Display Renderers Through The Manifest
           path: phase-12-remediation-01/006-register-display-renderers-in-manifest.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Manifest now registers the user and profile display renderers via NewUserServiceWithSelfService taking a trailing display.Registry; main.go uses the facade. Unit test added.
           findings:
