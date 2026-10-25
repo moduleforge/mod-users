@@ -20,3 +20,9 @@ Suggested role: `plugins/flow/roles/developer.md`
 ## References
 
 - Finding `CLi0` in this plan's `plan/findings.yaml` (documentation, medium): `deploy/k8s/base/deployment.yaml` and `deploy/cloudrun/service.yaml` require `users-api-secrets/jwt-secret` and do not show the EdDSA signing-key variables.
+
+## Status
+
+- Outcome: succeeded (2026-10-25).
+- Validation: both manifests parse (`yq`, `kubectl kustomize deploy/k8s/base`); every variable set (`JWT_SIGNING_KEY`, `JWT_SIGNING_KID`, `JWT_VERIFY_PUBLIC_KEYS`, `JWT_SECRET`, `AUTH_*`) is read in `api/internal/config`.
+- Files: `deploy/k8s/base/deployment.yaml`, `deploy/cloudrun/service.yaml`.
