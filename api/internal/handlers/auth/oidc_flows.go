@@ -107,10 +107,17 @@ func (h *OIDCHandler) callbackLogin(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
+	// A sign-in state always carries the browser's handoff challenge (/start
+	// requires it); one without it is refused rather than minting an unbound code.
+	if !localauth.ValidHandoffChallenge(st.HandoffChallenge) {
+		h.finishCallbackError(w, r, providerID, "handoff", refuse(localauth.RedirectErrAuthFailed))
+		return
+	}
+
 	var code string
 	err = h.inTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		code, err = h.signInInTx(ctx, tx, res, id, policy)
+		code, err = h.signInInTx(ctx, tx, res, id, policy, st.HandoffChallenge)
 		return err
 	})
 	if err != nil {
@@ -122,9 +129,9 @@ func (h *OIDCHandler) callbackLogin(w http.ResponseWriter, r *http.Request, prov
 }
 
 // signInInTx performs the writes of one sign-in decision and returns the
-// handoff code. The principal is the credential's (login) or the user just
-// created (just-in-time).
-func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.Resolution, id localauth.ExternalIdentity, policy localauth.ProviderPolicy) (string, error) {
+// handoff code, bound to handoffChallenge. The principal is the credential's
+// (login) or the user just created (just-in-time).
+func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.Resolution, id localauth.ExternalIdentity, policy localauth.ProviderPolicy, handoffChallenge string) (string, error) {
 	var (
 		principalID    int64
 		credentialID   int64
@@ -164,6 +171,8 @@ func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.R
 	issued, err := h.challenges.IssueTokenInTx(ctx, tx, svc.IssueTokenInput{
 		Kind:    svc.ChallengeLoginHandoff,
 		Subject: svc.Subject{PrincipalID: principalID, SessionID: ref.ID},
+		// The code is redeemable only with the verifier this challenge commits to.
+		BindingHash: handoffChallenge,
 	})
 	if err != nil {
 		return "", err

@@ -37,6 +37,11 @@ const stateCookieName = "oidc_state"
 // stateCookieMaxAge mirrors the TTL baked into the state token itself.
 const stateCookieMaxAge = 300
 
+// handoffChallengeParam is the /start query parameter carrying the browser's
+// handoff challenge: the unpadded base64url SHA-256 of a client-generated
+// random verifier, which the browser presents again at POST /v1/auth/handoff.
+const handoffChallengeParam = "handoff_challenge"
+
 // OIDCHandler serves the OIDC authorization-code round trip: the public
 // start and callback of GET /v1/auth/oidc/{provider}/..., and the starts of
 // the two flows that need an authenticated session (link a credential, step
@@ -118,7 +123,7 @@ func (h *OIDCHandler) Start(w http.ResponseWriter, r *http.Request) {
 	// normal login), matching the "be generous in what you accept"
 	// spirit of OAuth start.
 	testMode := r.URL.Query().Get("mode") == "test"
-	authURL, state, err := h.oauth.AuthorizeURL(providerID, returnPath, testMode)
+	authURL, state, err := h.oauth.AuthorizeURL(providerID, returnPath, testMode, r.URL.Query().Get(handoffChallengeParam))
 	if err != nil {
 		h.writeStartError(w, r, providerID, err)
 		return
@@ -139,6 +144,13 @@ func (h *OIDCHandler) writeStartError(w http.ResponseWriter, r *http.Request, pr
 	if errors.Is(err, localauth.ErrInvalidReturnPath) {
 		slog.WarnContext(r.Context(), "oidc start: bad request", "error", err, "provider", providerID)
 		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{Field: "return", Code: "users.oidc_start_invalid", Message: "the start request is invalid"}))
+		return
+	}
+	if errors.Is(err, localauth.ErrInvalidHandoffChallenge) {
+		apiresp.WriteError(w, r, apiresp.InvalidInput(apiresp.FieldError{
+			Field: handoffChallengeParam, Code: "users.handoff_challenge_invalid",
+			Message: "handoff_challenge must be the base64url SHA-256 of the client verifier",
+		}))
 		return
 	}
 	// A sign or random-source failure is ours, not the client's.

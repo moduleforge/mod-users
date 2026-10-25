@@ -240,15 +240,37 @@ func TestIssueTokenInTx_HandoffIsSixtySeconds(t *testing.T) {
 
 	got, err := s.IssueTokenInTx(context.Background(), nil, IssueTokenInput{
 		Kind: ChallengeLoginHandoff, Subject: Subject{PrincipalID: 5, SessionID: 9}, TTL: time.Hour,
+		BindingHash: testHandoffChallenge,
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !captured.BindingHash.Valid || captured.BindingHash.String != testHandoffChallenge {
+		t.Errorf("binding_hash = %+v, want the verifier challenge", captured.BindingHash)
 	}
 	if want := fixed.Add(HandoffTTL); !captured.ExpiresAt.Time.Equal(want) {
 		t.Errorf("expires_at = %v, want %v (a handoff lives 60 s whatever TTL says)", captured.ExpiresAt.Time, want)
 	}
 	if captured.CodeHash != HashToken(got.Code) || len(got.Code) != 64 {
 		t.Errorf("token/hash mismatch: %q", got.Code)
+	}
+}
+
+// testHandoffChallenge is the challenge of the RFC 7636 example verifier.
+const testHandoffChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
+func TestIssueTokenInTx_HandoffRequiresAValidChallenge(t *testing.T) {
+	t.Parallel()
+	q := &handoffQ{onCreate: func(usersdb.CreateChallengeParams) { t.Error("an unbound handoff was inserted") }}
+	s := NewChallengeService(q, nil)
+	s.newQ = func(pgx.Tx) usersdb.Querier { return q }
+	for _, bad := range []string{"", "short", testHandoffChallenge + "="} {
+		_, err := s.IssueTokenInTx(context.Background(), nil, IssueTokenInput{
+			Kind: ChallengeLoginHandoff, Subject: Subject{PrincipalID: 5, SessionID: 9}, BindingHash: bad,
+		})
+		if err == nil {
+			t.Errorf("challenge %q: want a refusal", bad)
+		}
 	}
 }
 

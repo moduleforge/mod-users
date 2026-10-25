@@ -17,11 +17,12 @@ SELECT * FROM mod_users.create_challenge_with_cooldown(
 
 -- name: CreateChallenge :one
 -- Direct insert for challenges without a cooldown (login_handoff, step_up
--- bound to a credential).
+-- bound to a credential). binding_hash is the login_handoff verifier challenge;
+-- NULL for every other kind.
 INSERT INTO mod_users.auth_challenges (
-    kind, principal_id, identifier_id, credential_id, session_id, code_hash, expires_at
+    kind, principal_id, identifier_id, credential_id, session_id, code_hash, expires_at, binding_hash
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, sqlc.narg(binding_hash)::text
 )
 RETURNING *;
 

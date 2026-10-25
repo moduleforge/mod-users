@@ -106,23 +106,26 @@ func (h *Handler) clientCredentialsGrant(w http.ResponseWriter, r *http.Request,
 
 // handoffRequest is the body for POST /v1/auth/handoff.
 type handoffRequest struct {
-	Code string `json:"code"`
+	Code     string `json:"code"`
+	Verifier string `json:"verifier"`
 }
 
 // Handoff handles POST /v1/auth/handoff: it exchanges the one-time
 // login_handoff code an OIDC callback redirect carried (#handoff=<code>) for
-// the token response, once. A spent, expired or unknown code is 401
-// users.invalid_credentials.
+// the token response, once. The request must carry the verifier whose challenge
+// the browser sent to /start; a missing verifier is 400, and a spent, expired or
+// unknown code or a wrong verifier is 401 users.invalid_credentials (a wrong
+// verifier does not spend the code).
 func (h *Handler) Handoff(w http.ResponseWriter, r *http.Request) {
 	var req handoffRequest
 	if !server.Decode(w, r, &req) {
 		return
 	}
-	if details := required([2]string{"code", req.Code}); len(details) > 0 {
+	if details := required([2]string{"code", req.Code}, [2]string{"verifier", req.Verifier}); len(details) > 0 {
 		apiresp.WriteError(w, r, apiresp.InvalidInput(details...))
 		return
 	}
-	resp, err := h.sessions.ExchangeHandoff(r.Context(), req.Code)
+	resp, err := h.sessions.ExchangeHandoff(r.Context(), req.Code, req.Verifier)
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -65,7 +65,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Actor:** End user with an account at a configured OIDC provider (e.g. Google, Microsoft Entra ID).
 
-**Action:** Browser is directed to `GET /v1/auth/oidc/{provider}/start`, which generates a signed state token, sets a scoped cookie, and redirects to the provider's authorization endpoint. After the user authenticates at the provider, the browser is redirected back to `GET /v1/auth/oidc/{provider}/callback`.
+**Action:** Browser generates a random verifier and is directed to `GET /v1/auth/oidc/{provider}/start?handoff_challenge=<base64url SHA-256 of the verifier>`, which carries the challenge in a signed state token, sets a scoped cookie, and redirects to the provider's authorization endpoint. A sign-in start without a valid challenge is refused with `400`. After the user authenticates at the provider, the browser is redirected back to `GET /v1/auth/oidc/{provider}/callback`.
 
 **Outcome:** The callback handler validates the state cookie, exchanges the authorization code for an ID token, verifies the token (signature, issuer, audience), normalizes claims, and resolves or creates the user account. On success, the browser is redirected to the configured return URL with the JWT and return path in the URL fragment. On error, the redirect carries an error code in the query string. The `return` query parameter on the start endpoint restricts to site-relative paths to prevent open-redirect attacks.
 
@@ -335,6 +335,8 @@ App CRUD (`GET`/`POST /v1/apps`, `GET`/`PUT`/`DELETE /v1/apps/{uuid}`) is served
 - **Password storage:** Passwords are stored as argon2id encoded strings. Plaintext passwords are never persisted or logged.
 
 - **OIDC ID token verification:** On callback, the module verifies the ID token signature, issuer, audience, and nonce before trusting any claims. Provider client secrets are stored in environment variables or the `oidc_providers` DB table (plaintext, matching the env-var model); the GUI never reads client secrets back — only a `has_client_secret` boolean is surfaced. OIDC issuer discovery and JWKS fetches verify TLS certificates; skipping verification requires the explicit, local-development-only `WithInsecureSkipTLSVerify` verifier option (see [consumer upgrade notes](./consumer-upgrade-notes.md#oidc-issuer-tls-verification) and [OIDC troubleshooting](./oidc-troubleshooting.md#self-signed-issuer-certificate)).
+
+- **Handoff code binding:** The one-time code the OIDC callback puts in the redirect fragment (`#handoff=<code>`) is bound to the browser that started the flow, PKCE style (S256). The callback stores the challenge from the signed state on the `login_handoff` challenge; `POST /v1/auth/handoff` requires the matching `verifier`, hashes it and compares in constant time. A missing verifier is `400`; a wrong or malformed one is `401 users.invalid_credentials` and does not spend the code, so an intercepted code is useless without the verifier that never left the originating browser.
 
 - **Open-redirect prevention:** The `return` query parameter on `GET /v1/auth/oidc/{provider}/start` is restricted to site-relative paths (must begin with `/`). Absolute URLs and protocol-relative references are rejected with `400`.
 

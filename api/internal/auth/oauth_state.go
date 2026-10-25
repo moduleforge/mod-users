@@ -34,6 +34,11 @@ type StatePayload struct {
 	SessionUUID string `json:"s,omitempty"`
 	// PrincipalUUID is the uuid of the principal that owns SessionUUID.
 	PrincipalUUID string `json:"pu,omitempty"`
+	// HandoffChallenge is the PKCE-style challenge (base64url SHA-256 of a
+	// browser-held verifier) of a sign-in flow. The callback stores it on the
+	// login_handoff challenge so the code can be redeemed only with the verifier.
+	// Required for a sign-in; empty for a test-mode, link or step-up state.
+	HandoffChallenge string `json:"hc,omitempty"`
 }
 
 // Flow names what an OIDC round trip is for.
@@ -66,9 +71,15 @@ func (s StatePayload) validateFlow() error {
 		if s.SessionUUID == "" || s.PrincipalUUID == "" {
 			return errors.New("oauth state: authenticated flow without session")
 		}
+		if s.HandoffChallenge != "" {
+			return errors.New("oauth state: authenticated flow carries a handoff challenge")
+		}
 	case s.Flow == FlowLogin:
 		if s.SessionUUID != "" || s.PrincipalUUID != "" {
 			return errors.New("oauth state: sign-in flow carries a session")
+		}
+		if s.HandoffChallenge != "" && !ValidHandoffChallenge(s.HandoffChallenge) {
+			return errors.New("oauth state: malformed handoff challenge")
 		}
 	default:
 		return errors.New("oauth state: unknown flow")

@@ -44,7 +44,8 @@ type Querier interface {
 	// ---------------------------------------------------------------------------
 	CreateAnonCredential(ctx context.Context, arg CreateAnonCredentialParams) (CredAnon, error)
 	// Direct insert for challenges without a cooldown (login_handoff, step_up
-	// bound to a credential).
+	// bound to a credential). binding_hash is the login_handoff verifier challenge;
+	// NULL for every other kind.
 	CreateChallenge(ctx context.Context, arg CreateChallengeParams) (AuthChallenge, error)
 	// Queries over mod_users.auth_challenges: one-time codes and tokens. Only the
 	// hash of a code is stored. Challenges are not credentials.
