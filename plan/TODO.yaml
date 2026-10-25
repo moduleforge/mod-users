@@ -580,7 +580,7 @@ phases:
           slug: exclude-archived-apps-from-audience
           title: Exclude Archived Apps From Token Audience Checks
           path: phase-12-remediation-01/014-exclude-archived-apps-from-audience.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Both audience-liveness queries now exclude apps whose entity row is archived. Integration test covers active-accepted and archived-rejected cases; spec notes the policy.
           findings:
