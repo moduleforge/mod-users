@@ -167,7 +167,7 @@ phases:
           tier: sonnet-high
           digest: Filled the invite seam and added the outside-collaborator CollaboratorGate. Mismatch rule is one SQL function mod_users.holder_policy_mismatch in the 0100 baseline (rewritten in place), shared by invite and gate. Gate wired as trailing argument of authzservice.NewFromArgs in main.go; manifest provides collaboratorGate. Tests cover compliance behaviors and the HTTP flow through mod-authz's real route.
           git:
-            branch: null
+            branch: plan/identity-model-impl-07-003
             commit: []
             merge: null
         - number: 4
