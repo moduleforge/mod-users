@@ -156,7 +156,8 @@ phases:
           digest: Added PartyPolicyService and seven routes under /v1/parties/{party_uuid} (authn-policy GET/PUT, credential-authorizations GET, PUT/DELETE per credential, confinements PUT/DELETE). New SQL function mod_users.profile_availability_excluding; session_acr delegates to session_acr_excluding. Edited 0100_baseline.sql in place. Fixed byo JIT sign-up from a party-bound provider so it confines its credential; test added.
           git:
             branch: plan/identity-model-impl-07-002
-            commit: []
+            commit:
+                - 3abab2b
             merge: null
         - number: 3
           slug: outside-collaborators-and-compliance
