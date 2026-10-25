@@ -170,7 +170,7 @@ phases:
             branch: plan/identity-model-impl-07-003
             commit:
                 - 01fade3
-            merge: null
+            merge: 7b79af9ac19aee1954cd6a215b34c9d4fd3c352d
         - number: 4
           slug: setup-token-bootstrap
           title: Setup-Token Bootstrap
