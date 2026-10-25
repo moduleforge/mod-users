@@ -203,6 +203,7 @@ phases:
           path: phase-07-parties-profiles-and-bootstrap/007-trusted-profile-admission.md
           done: false
           tier: sonnet-med
+          digest: Added ProfileService.AdmitInTx and AdmitInput in api/internal/service/profile_admit.go. ErrProfileSuspended (409 users.profile_suspended) is new; all three are re-exported from api/usersservice. Locks the users row via GetUserByEntityIDForUpdate, then locks and re-reads the holder's open profile; reuses checkAdmissible, createInTx and transitionLocked. AGENTS.md and README.md updated.
           git:
             branch: null
             commit: []
