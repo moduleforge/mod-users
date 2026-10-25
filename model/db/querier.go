@@ -29,6 +29,10 @@ type Querier interface {
 	// Supersede earlier open challenges of a subject (for example the password
 	// reset challenges of a principal once one is used).
 	ConsumeOpenChallengesBySubject(ctx context.Context, arg ConsumeOpenChallengesBySubjectParams) (int64, error)
+	// Supersede: carries every party authorization of the old credential to its
+	// replacement (same authorizer and time), skipping parties the replacement is
+	// already authorized for.
+	CopyCredentialPartyAuthorizations(ctx context.Context, arg CopyCredentialPartyAuthorizationsParams) (int64, error)
 	// For the "last interactive credential" guard (409 users.last_credential).
 	CountActiveInteractiveCredentials(ctx context.Context, principalID int64) (int64, error)
 	// ---------------------------------------------------------------------------

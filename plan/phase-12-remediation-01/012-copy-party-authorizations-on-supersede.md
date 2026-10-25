@@ -23,3 +23,7 @@ Suggested role: `plugins/flow/roles/developer-go.md`
 ## References
 
 - Finding `1xmT` in this plan's `plan/findings.yaml` (ambiguity): owner decided that party authorizations are copied when a password is superseded.
+
+## Status
+
+Outcome: succeeded (2026-10-25). Added `CredentialService.SupersedePasswordInTx` (revoke old as superseded, create replacement, copy party authorizations via new sqlc query `CopyCredentialPartyAuthorizations`) in `api/internal/service/credential_service.go`; password reset in `api/internal/handlers/auth/reset.go` now uses it (the only password supersede path; self add-password refuses a second password and is not a supersede). Query in `model/queries/party_policies.sql`, regenerated `model/db`. Tests in `api/internal/integration/supersede_integration_test.go`. Validation: make build, lint, test pass in `api/`; integration suites (authz, config, integration) pass against a throwaway Postgres.

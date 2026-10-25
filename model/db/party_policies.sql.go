@@ -42,6 +42,32 @@ func (q *Queries) AuthorizeCredentialForParty(ctx context.Context, arg Authorize
 	return i, err
 }
 
+const copyCredentialPartyAuthorizations = `-- name: CopyCredentialPartyAuthorizations :execrows
+INSERT INTO mod_users.credential_party_authorizations (
+    credential_id, party_id, authorized_by_profile_id, authorized_at
+)
+SELECT $1::bigint, o.party_id, o.authorized_by_profile_id, o.authorized_at
+FROM mod_users.credential_party_authorizations o
+WHERE o.credential_id = $2::bigint
+ON CONFLICT (credential_id, party_id) DO NOTHING
+`
+
+type CopyCredentialPartyAuthorizationsParams struct {
+	NewCredentialID int64 `json:"new_credential_id"`
+	OldCredentialID int64 `json:"old_credential_id"`
+}
+
+// Supersede: carries every party authorization of the old credential to its
+// replacement (same authorizer and time), skipping parties the replacement is
+// already authorized for.
+func (q *Queries) CopyCredentialPartyAuthorizations(ctx context.Context, arg CopyCredentialPartyAuthorizationsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyCredentialPartyAuthorizations, arg.NewCredentialID, arg.OldCredentialID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteCredentialAuthorizationsForHolderParty = `-- name: DeleteCredentialAuthorizationsForHolderParty :execrows
 DELETE FROM mod_users.credential_party_authorizations a
 USING mod_users.credentials c

@@ -165,6 +165,7 @@ func (h *Handler) replacePassword(ctx context.Context, tx pgx.Tx, principalID, i
 		return fmt.Errorf("list passwords: %w", err)
 	}
 	in := svc.CreatePasswordInput{PrincipalID: principalID, IdentifierID: &identifierID, Password: password}
+	var oldIDs []int64
 	for _, p := range passwords {
 		if !p.IdentifierID.Valid || p.IdentifierID.Int64 != identifierID {
 			continue
@@ -178,12 +179,19 @@ func (h *Handler) replacePassword(ctx context.Context, tx pgx.Tx, principalID, i
 			id := p.Credential.ConfinedToPartyID.Int64
 			in.ConfinedToPartyID = &id
 		}
-		if err := h.creds.RevokeInTx(actCtx, tx, p.Credential.ID, svc.RevokeReasonSuperseded); err != nil {
+		oldIDs = append(oldIDs, p.Credential.ID)
+	}
+	if len(oldIDs) == 0 {
+		if _, err := h.creds.CreatePasswordInTx(actCtx, tx, in); err != nil {
 			return err
 		}
 	}
-	if _, err := h.creds.CreatePasswordInTx(actCtx, tx, in); err != nil {
-		return err
+	// At most one active password exists per identifier, so oldIDs holds at
+	// most one entry; the supersede copies its party authorizations.
+	for _, oldID := range oldIDs {
+		if _, err := h.creds.SupersedePasswordInTx(actCtx, tx, oldID, in); err != nil {
+			return err
+		}
 	}
 	if _, err := q.ConsumeOpenChallengesBySubject(ctx, usersdb.ConsumeOpenChallengesBySubjectParams{
 		Kind:         svc.ChallengePasswordReset,
