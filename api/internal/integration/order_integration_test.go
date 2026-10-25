@@ -27,6 +27,7 @@ import (
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/handlers/me"
+	"github.com/moduleforge/mod-users/api/internal/handlers/parties"
 	"github.com/moduleforge/mod-users/api/internal/handlers/principals"
 )
 
@@ -68,11 +69,20 @@ func (s *stack) orderRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Route("/v1/me", func(r chi.Router) {
 		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
-		me.RegisterMeRoutes(r, me.NewMeHandler(s.users))
+		me.RegisterMeRoutes(r, me.NewMeHandler(s.users, s.profiles))
 	})
 	r.Route("/v1/principals", func(r chi.Router) {
 		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
 		principals.RegisterPrincipalRoutes(r, principals.NewPrincipalsHandler(s.users))
+	})
+	partiesH := parties.NewPartiesHandler(s.profiles)
+	r.Route("/v1/parties", func(r chi.Router) {
+		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
+		parties.RegisterPartyRoutes(r, partiesH)
+	})
+	r.Route("/v1/profiles", func(r chi.Router) {
+		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
+		parties.RegisterProfileRoutes(r, partiesH)
 	})
 	return r
 }
@@ -304,4 +314,125 @@ func doAs(t *testing.T, h http.Handler, id ordertest.Identity, method, path stri
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return &resp{status: rec.Code, header: rec.Header(), raw: rec.Body.Bytes()}
+}
+
+func TestOrder_PartyRoutes(t *testing.T) {
+	h := env.orderRouter()
+	f := env.newParty(t)
+	operator := env.asSession(t, f.admin, f.adminProf)
+	missing := "22222222-2222-2222-2222-222222222222"
+
+	freshHolder := func() string { return env.register(t).Email }
+	invitedEmail := freshHolder()
+	env.inviteEmail(t, f, invitedEmail).wantStatus(t, http.StatusCreated)
+	takenEmail := env.register(t).Email
+
+	activeProfile := func() string {
+		uid := env.principalID(t, env.register(t).Email)
+		_, id := env.seedPartyProfile(t, uid, f.partyID, "active")
+		return id
+	}
+	endedProfile := func() string {
+		uid := env.principalID(t, env.register(t).Email)
+		pid, id := env.seedPartyProfile(t, uid, f.partyID, "active")
+		env.exec(t, "end profile", `UPDATE profiles SET status = 'ended', ended_at = now(), end_reason = 'seeded' WHERE entity_id = $1`, pid)
+		return id
+	}
+
+	ordertest.Run(t,
+		ordertest.Route{
+			Name: "GET /v1/parties/{uuid}/profiles", Handler: h, Method: http.MethodGet,
+			ExistingPath: f.profilesPath(), MissingPath: "/v1/parties/" + missing + "/profiles",
+			Authorized: operator,
+		},
+		ordertest.Route{
+			Name: "POST /v1/parties/{uuid}/profiles", Handler: h, Method: http.MethodPost,
+			ExistingPath: f.profilesPath(), MissingPath: "/v1/parties/" + missing + "/profiles",
+			GoodBody: []byte(`{"holder_email":"` + freshHolder() + `"}`), BadBody: []byte(`{"holder_email":`),
+			Authorized: operator,
+			Late: []ordertest.Late{
+				{Name: "profile exists", Path: f.profilesPath(), Body: []byte(`{"holder_email":"` + invitedEmail + `"}`), WantStatus: http.StatusConflict},
+			},
+		},
+		ordertest.Route{
+			Name: "POST /v1/parties/{uuid}/managed-users", Handler: h, Method: http.MethodPost,
+			ExistingPath: "/v1/parties/" + f.partyUUID + "/managed-users", MissingPath: "/v1/parties/" + missing + "/managed-users",
+			GoodBody: []byte(`{"email":"` + uniq("order") + `@example.test","password":"` + testPassword + `"}`), BadBody: []byte(`{"email":`),
+			Authorized: operator,
+			Late: []ordertest.Late{
+				{Name: "email taken", Path: "/v1/parties/" + f.partyUUID + "/managed-users",
+					Body: []byte(`{"email":"` + takenEmail + `","password":"` + testPassword + `"}`), WantStatus: http.StatusConflict},
+			},
+		},
+		ordertest.Route{
+			Name: "PATCH /v1/profiles/{uuid}", Handler: h, Method: http.MethodPatch,
+			ExistingPath: "/v1/profiles/" + activeProfile(), MissingPath: "/v1/profiles/" + missing,
+			GoodBody: []byte(`{"status":"suspended"}`), BadBody: []byte(`{"status":`),
+			Authorized: operator,
+			Late: []ordertest.Late{
+				{Name: "ended is terminal", Path: "/v1/profiles/" + endedProfile(), Body: []byte(`{"status":"active"}`), WantStatus: http.StatusConflict},
+			},
+		},
+	)
+}
+
+func TestOrder_MeProfileRoutes(t *testing.T) {
+	h := env.orderRouter()
+	a := env.register(t)
+	uid := env.principalID(t, a.Email)
+	self := env.asSession(t, a, env.personalProfileID(t, uid))
+	missing := "33333333-3333-3333-3333-333333333333"
+
+	// A fresh party profile of the account per call, since the authorized calls change it.
+	profile := func(status string) string {
+		party := env.seedParty(t, "Order Party "+uniq("p"))
+		_, id := env.seedPartyProfile(t, uid, party, status)
+		return "/v1/me/profiles/" + id
+	}
+
+	ordertest.Run(t,
+		ordertest.Route{
+			Name: "POST /v1/me/profiles/{uuid}/accept", Handler: h, Method: http.MethodPost,
+			ExistingPath: profile("invited") + "/accept", MissingPath: "/v1/me/profiles/" + missing + "/accept",
+			Authorized: self,
+			Late: []ordertest.Late{
+				{Name: "not an invitation", Path: profile("active") + "/accept", WantStatus: http.StatusConflict},
+			},
+		},
+		ordertest.Route{
+			Name: "POST /v1/me/profiles/{uuid}/decline", Handler: h, Method: http.MethodPost,
+			ExistingPath: profile("invited") + "/decline", MissingPath: "/v1/me/profiles/" + missing + "/decline",
+			Authorized: self,
+			Late: []ordertest.Late{
+				{Name: "not an invitation", Path: profile("active") + "/decline", WantStatus: http.StatusConflict},
+			},
+		},
+		ordertest.Route{
+			Name: "POST /v1/me/profiles/{uuid}/leave", Handler: h, Method: http.MethodPost,
+			ExistingPath: profile("active") + "/leave", MissingPath: "/v1/me/profiles/" + missing + "/leave",
+			Authorized: self,
+			Late: []ordertest.Late{
+				{Name: "still an invitation", Path: profile("invited") + "/leave", WantStatus: http.StatusConflict},
+			},
+		},
+	)
+
+	// Another account's profile is the same 404 as a missing one.
+	other := env.register(t)
+	foreign := profile("invited")
+	otherSession := env.asSession(t, other, env.personalProfileID(t, env.principalID(t, other.Email)))
+	for _, action := range []string{"/accept", "/decline", "/leave"} {
+		ex := doAs(t, h, otherSession, http.MethodPost, foreign+action, nil)
+		mi := doAs(t, h, otherSession, http.MethodPost, "/v1/me/profiles/"+missing+action, nil)
+		if ex.status != http.StatusNotFound || mi.status != http.StatusNotFound || string(ex.raw) != string(mi.raw) {
+			t.Errorf("%s: foreign = %d %s, missing = %d %s; want identical 404s", action, ex.status, ex.raw, mi.status, mi.raw)
+		}
+	}
+	// A malformed uuid is 400 for the authenticated and 401 for none.
+	if r := doAs(t, h, self, http.MethodPost, "/v1/me/profiles/not-a-uuid/accept", nil); r.status != http.StatusBadRequest {
+		t.Errorf("malformed uuid = %d, want 400", r.status)
+	}
+	if r := doAs(t, h, ordertest.Anonymous, http.MethodPost, "/v1/me/profiles/not-a-uuid/accept", nil); r.status != http.StatusUnauthorized {
+		t.Errorf("anonymous malformed uuid = %d, want 401", r.status)
+	}
 }

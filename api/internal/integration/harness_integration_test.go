@@ -68,6 +68,7 @@ import (
 	"github.com/moduleforge/mod-users/api/internal/config"
 	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
 	"github.com/moduleforge/mod-users/api/internal/handlers/me"
+	"github.com/moduleforge/mod-users/api/internal/handlers/parties"
 	"github.com/moduleforge/mod-users/api/internal/handlers/principals"
 	"github.com/moduleforge/mod-users/api/internal/handlers/session"
 	svc "github.com/moduleforge/mod-users/api/internal/service"
@@ -218,6 +219,7 @@ type stack struct {
 	az       *localAuthz.Authorizer
 	authn    *auth.Authenticator
 	users    *svc.UserService
+	profiles *svc.ProfileService
 	creds    *svc.CredentialService
 	sessions *svc.SessionService
 	chal     *svc.ChallengeService
@@ -475,6 +477,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 	users := svc.NewUserService(queries, coreQueries, az, group, coreSvcs.NaturalPerson, creds)
 	sessions := svc.NewSessionService(pool, queries, coreQueries, az, group, signer, chal, svc.SessionConfigFrom(cfg))
 	users.WithSelfService(pool, sessions, chal, opReg, cfg.Auth.SelfServiceMaxAuthAge)
+	profiles := svc.NewProfileService(pool, queries, coreQueries, az, group, users, creds, sessions)
 	dir := svc.NewDirectoryService(pool)
 
 	authH := authhandlers.New(pool, queries, coreQueries, users, creds, chal, sessions, oauth, mb, cfg.Server.GUIBaseURL)
@@ -491,12 +494,21 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 	})
 	r.Route("/v1/me", func(r chi.Router) {
 		r.Use(requireAuth)
-		me.RegisterMeRoutes(r, me.NewMeHandler(users))
+		me.RegisterMeRoutes(r, me.NewMeHandler(users, profiles))
 		r.Post("/credentials/oidc/{provider}/start", oidcH.LinkStart)
 	})
 	r.Route("/v1/principals", func(r chi.Router) {
 		r.Use(requireAuth)
 		principals.RegisterPrincipalRoutes(r, principals.NewPrincipalsHandler(users))
+	})
+	partiesH := parties.NewPartiesHandler(profiles)
+	r.Route("/v1/parties", func(r chi.Router) {
+		r.Use(requireAuth)
+		parties.RegisterPartyRoutes(r, partiesH)
+	})
+	r.Route("/v1/profiles", func(r chi.Router) {
+		r.Use(requireAuth)
+		parties.RegisterProfileRoutes(r, partiesH)
 	})
 	// /v1/probe reports what the middleware installed. /v1/probe-anon is the
 	// same behind ResolveOrAnonymous.
@@ -510,7 +522,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 
 	return &stack{
 		pool: pool, cfg: cfg, signer: signer, signKey: key, handler: r, obs: rec, group: group,
-		mail: mb, oauth: oauth, az: az, authn: authn, users: users, creds: creds,
+		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, creds: creds,
 		sessions: sessions, chal: chal, dir: dir, q: queries, coreQ: coreQueries, opReg: opReg,
 		auditApplied: auditApplied,
 	}, nil

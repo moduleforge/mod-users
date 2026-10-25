@@ -149,6 +149,23 @@ provides:
         - field:cfg.Auth.SelfServiceMaxAuthAge
         - service:displayRegistry       # *display.Registry from core-module
 
+    # profileService — the party profile lifecycle: invitations, acceptance,
+    # suspension, resumption and ending (with departure cleanup), managed users
+    # and the lifecycle observers other modules subscribe to
+    # (AddLifecycleObserver, in-transaction).
+    - name: profileService
+      type: "*usersservice.ProfileService"
+      constructor: usersservice.NewProfileService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+        - service:userService
+        - service:credentialService
+        - service:sessionService
+
     # directoryService — batch display lookups for other modules; does no
     # authorization (callers authorize first).
     - name: directoryService
@@ -231,12 +248,14 @@ provides:
         - queries:coredb
         - service:onboardingHandler
 
-    # meHandler — /v1/me: own user, identifiers, credentials and sessions.
+    # meHandler — /v1/me: own user, identifiers, credentials, sessions and the
+    # holder's profile actions (accept, decline, leave).
     - name: meHandler
       type: "*handlers.MeHandler"
       constructor: handlers.NewMeHandler
       args:
         - service:userService
+        - service:profileService
 
     # sessionHandler — /v1/session: current session, switch, fork, step-up, logout.
     - name: sessionHandler
@@ -251,6 +270,14 @@ provides:
       constructor: handlers.NewPrincipalsHandler
       args:
         - service:userService
+
+    # partiesHandler — party administration: /v1/parties/{party_uuid}/profiles
+    # and /managed-users, and PATCH /v1/profiles/{uuid}.
+    - name: partiesHandler
+      type: "*handlers.PartiesHandler"
+      constructor: handlers.NewPartiesHandler
+      args:
+        - service:profileService
 
     # sshKeyResolver — resolves a candidate SSH public key to the credential
     # that registered it (docs/architecture/ssh-keys.md D11). A composing app
@@ -339,7 +366,7 @@ provides:
         - requireAuth
 
     # /v1/me — own user, identifiers, credentials (including the OIDC link
-    # start) and sessions. Reachable to accounts with an UNVERIFIED email (so
+    # start), sessions and the holder's profile actions. Reachable to accounts with an UNVERIFIED email (so
     # the GUI can render the "verify your email" page), hence no
     # requireVerifiedEmail.
     - prefix: /v1/me
@@ -356,6 +383,25 @@ provides:
     - prefix: /v1/principals
       handler: principalsHandler
       register: handlers.RegisterPrincipalRoutes
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+
+    # /v1/parties — a party's profiles (list, invite) and managed users.
+    # Authorization is enforced at the service layer; a party the caller may not
+    # read is a 404. Later party administration routes (authentication policy,
+    # credential authorizations, confinements) register here too.
+    - prefix: /v1/parties
+      handler: partiesHandler
+      register: handlers.RegisterPartyRoutes
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+
+    # /v1/profiles — PATCH /{uuid}: suspend, resume or end a party profile.
+    - prefix: /v1/profiles
+      handler: partiesHandler
+      register: handlers.RegisterProfileRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth

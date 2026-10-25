@@ -367,35 +367,10 @@ func (s *UserService) DisablePrincipal(ctx context.Context, id uuid.UUID, reason
 	if err != nil {
 		return PrincipalView{}, err
 	}
-	if s.sessions == nil {
-		return PrincipalView{}, errors.New("users: no session service configured for principal administration")
-	}
 	var view PrincipalView
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		cq := s.coreQuerier(tx)
-		cur, err := cq.GetPrincipalByEntityID(ctx, sum.PrincipalID)
-		if err != nil {
-			return fmt.Errorf("users: load principal: %w", err)
-		}
-		if cur.DisabledAt == nil {
-			var reasonText pgtype.Text
-			var reasonPtr *string
-			if reason != "" {
-				reasonText = pgtype.Text{String: reason, Valid: true}
-				reasonPtr = &reason
-			}
-			if _, err := cq.SetPrincipalDisabled(ctx, coredb.SetPrincipalDisabledParams{
-				EntityID: sum.PrincipalID, DisabledReason: reasonText,
-			}); err != nil {
-				return fmt.Errorf("users: disable principal: %w", err)
-			}
-			if _, err := s.sessions.RevokePrincipalSessionsInTx(ctx, tx, sum.PrincipalID, SessionRevokePrincipalDisabled); err != nil {
-				return err
-			}
-			if err := observeInTx(ctx, s.obs, tx, opUpdate, principalResource(sum.Kind), sum.PrincipalID,
-				principalAudit(sum.PrincipalUUID, false, nil), principalAudit(sum.PrincipalUUID, true, reasonPtr)); err != nil {
-				return err
-			}
+		if err := s.disablePrincipalInTx(ctx, tx, sum, reason); err != nil {
+			return err
 		}
 		view, err = s.principalView(ctx, tx, sum.PrincipalID)
 		return err
@@ -404,6 +379,41 @@ func (s *UserService) DisablePrincipal(ctx context.Context, id uuid.UUID, reason
 		return PrincipalView{}, err
 	}
 	return view, nil
+}
+
+// disablePrincipalInTx disables the principal in the caller's transaction,
+// without authorization: sets principals.disabled_at, revokes every session of
+// the principal with reason `principal_disabled` and observes `update` on the
+// principal's resource. Disabling a disabled principal changes nothing. The
+// profile departure cleanup of a managed user's last profile uses it too.
+func (s *UserService) disablePrincipalInTx(ctx context.Context, tx pgx.Tx, sum PrincipalSummary, reason string) error {
+	if s.sessions == nil {
+		return errors.New("users: no session service configured for principal administration")
+	}
+	cq := s.coreQuerier(tx)
+	cur, err := cq.GetPrincipalByEntityID(ctx, sum.PrincipalID)
+	if err != nil {
+		return fmt.Errorf("users: load principal: %w", err)
+	}
+	if cur.DisabledAt != nil {
+		return nil
+	}
+	var reasonText pgtype.Text
+	var reasonPtr *string
+	if reason != "" {
+		reasonText = pgtype.Text{String: reason, Valid: true}
+		reasonPtr = &reason
+	}
+	if _, err := cq.SetPrincipalDisabled(ctx, coredb.SetPrincipalDisabledParams{
+		EntityID: sum.PrincipalID, DisabledReason: reasonText,
+	}); err != nil {
+		return fmt.Errorf("users: disable principal: %w", err)
+	}
+	if _, err := s.sessions.RevokePrincipalSessionsInTx(ctx, tx, sum.PrincipalID, SessionRevokePrincipalDisabled); err != nil {
+		return err
+	}
+	return observeInTx(ctx, s.obs, tx, opUpdate, principalResource(sum.Kind), sum.PrincipalID,
+		principalAudit(sum.PrincipalUUID, false, nil), principalAudit(sum.PrincipalUUID, true, reasonPtr))
 }
 
 // EnablePrincipal re-enables a disabled principal

@@ -8,9 +8,10 @@
 // ("session principal = target") and the auth_time freshness gate of decision
 // U8 live in those methods, not here, so no route can skip them.
 //
-// The /profiles/{uuid}/accept, /decline and /leave routes belong to phase
-// parties-profiles-and-bootstrap, and POST /credentials/oidc/{provider}/start
-// is the OIDC handler's; the composition root mounts both next to these.
+// The /profiles/{uuid}/accept, /decline and /leave routes are the holder's own
+// profile actions; they delegate to service.ProfileService and authorize on
+// "session principal = profile holder". POST /credentials/oidc/{provider}/start
+// is the OIDC handler's; the composition root mounts it next to these.
 package me
 
 import (
@@ -29,13 +30,15 @@ import (
 
 // MeHandler serves the /v1/me routes. Construct it with NewMeHandler.
 type MeHandler struct {
-	users *svc.UserService
+	users    *svc.UserService
+	profiles *svc.ProfileService
 }
 
 // NewMeHandler constructs the /v1/me handler over the user service, which must
-// have been wired with UserService.WithSelfService.
-func NewMeHandler(users *svc.UserService) *MeHandler {
-	return &MeHandler{users: users}
+// have been wired with UserService.WithSelfService, and the profile service
+// that serves the holder's profile actions.
+func NewMeHandler(users *svc.UserService, profiles *svc.ProfileService) *MeHandler {
+	return &MeHandler{users: users, profiles: profiles}
 }
 
 // RegisterMeRoutes mounts the /v1/me routes onto r. The caller applies the
@@ -44,6 +47,9 @@ func RegisterMeRoutes(r chi.Router, h *MeHandler) {
 	r.Get("/", h.Get)
 	r.Put("/", h.Put)
 	r.Get("/profiles", h.Profiles)
+	r.Post("/profiles/{uuid}/accept", h.AcceptProfile)
+	r.Post("/profiles/{uuid}/decline", h.DeclineProfile)
+	r.Post("/profiles/{uuid}/leave", h.LeaveProfile)
 
 	r.Get("/identifiers", h.ListIdentifiers)
 	r.Post("/identifiers", h.AddIdentifier)
@@ -216,4 +222,65 @@ func (h *MeHandler) Profiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apiresp.WriteJSON(w, http.StatusOK, map[string]any{"profiles": views})
+}
+
+// AcceptProfile handles POST /v1/me/profiles/{uuid}/accept: accepts an
+// invitation to a party (invited to active). 200 with the profile as the
+// caller's session sees it (a profile the party's policy locks for this session
+// carries its lock reason and remedy); 404 for a profile the caller does not
+// hold; 409 users.profile_transition_invalid when it is not an invitation.
+func (h *MeHandler) AcceptProfile(w http.ResponseWriter, r *http.Request) {
+	if !requireIdentity(w, r) {
+		return
+	}
+	id, err := pathUUID(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	view, err := h.profiles.AcceptInvitation(r.Context(), id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	apiresp.WriteJSON(w, http.StatusOK, view)
+}
+
+// DeclineProfile handles POST /v1/me/profiles/{uuid}/decline: declines an
+// invitation (invited to ended). 204; 404 for a profile the caller does not
+// hold; 409 users.profile_transition_invalid when it is not an invitation.
+func (h *MeHandler) DeclineProfile(w http.ResponseWriter, r *http.Request) {
+	if !requireIdentity(w, r) {
+		return
+	}
+	id, err := pathUUID(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := h.profiles.DeclineInvitation(r.Context(), id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// LeaveProfile handles POST /v1/me/profiles/{uuid}/leave: leaves a party
+// (active or suspended to ended) and removes what the profile granted the
+// caller there. 204; 404 for a profile the caller does not hold; 409
+// users.profile_transition_invalid when it is not open.
+func (h *MeHandler) LeaveProfile(w http.ResponseWriter, r *http.Request) {
+	if !requireIdentity(w, r) {
+		return
+	}
+	id, err := pathUUID(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if err := h.profiles.LeaveProfile(r.Context(), id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
