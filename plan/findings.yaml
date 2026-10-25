@@ -1,61 +1,5 @@
 version: 2
-items:
-    - title: mod_users.cred_password.identifier_id change…
-      id: fDFi
-      date: "2026-10-25"
-      tags:
-        - type:security
-        - plan/phase:remediation-01
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0100_baseline.sql
-        lines: 529-541
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          mod_users.cred_password.identifier_id changed from ON DELETE RESTRICT to
-          ON DELETE SET NULL. The email_otp side gained
-          cred_email_otp_active_needs_identifier, but cred_password has no
-          matching guard. cred_subtable_check() also does not refuse an UPDATE
-          that moves an active password's identifier_id from non-NULL to NULL.
-          Before this change, the database refused to delete an identifier that an
-          active password was bound to. Now it silently turns that password into
-          an active unbound password, and only the Go ordering in
-          UserService.removeIdentifier (api/internal/service/user_service.go)
-          keeps this from happening.
-          That ordering is not concurrency-safe. removeIdentifier lists active
-          passwords (ListActivePasswordsByPrincipal) and then runs DeleteIdentifier
-          without locking the identifier row. Meanwhile, an unauthenticated
-          password reset for the same identifier (Handler.replacePassword in
-          api/internal/handlers/auth/reset.go -> SupersedePasswordInTx /
-          CreatePasswordInTx) can insert a new active password bound to it.
-          Under READ COMMITTED the removal does not see that row; its DELETE waits
-          on the reset's FK key-share lock and then proceeds. The cascade leaves
-          an active password credential with identifier_id NULL. The result is an
-          active credential detached from any identifier: it is invisible to
-          identifier-scoped revocation and to the last-credential bookkeeping by
-          identifier. If the principal already has an unbound password, the
-          cascade instead fails with an unhandled unique violation
-          (cred_password_active_unbound_uq). No current login path reads unbound
-          passwords (GetActivePasswordLogin joins through the identifier, and
-          GetActiveUnboundPassword has no caller), so the detached credential is
-          not directly a sign-in vector. That is why this is rated minor, a
-          defense-in-depth gap.
-        recommendation:
-          Restore the database-level guarantee for active passwords. In
-          mod_users.cred_subtable_check() (0100_baseline.sql), for TG_OP = 'UPDATE'
-          on cred_password, raise when OLD.identifier_id IS NOT NULL AND
-          NEW.identifier_id IS NULL AND v_revoked_at IS NULL. Use ERRCODE '23503'
-          so removeIdentifier's existing foreign-key mapping returns
-          ErrIdentifierInUse instead of a 500. As an additional fix, lock the
-          identifier row (SELECT ... FOR UPDATE) at the start of removeIdentifier,
-          before listing the bound credentials, so a concurrent reset serializes
-          behind the removal. Add an integration test that deletes an identifier
-          while an active password is still bound to it and asserts the delete is
-          refused.
+items: []
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -491,4 +435,9 @@ closed:
       title: IssueAudienceToken signs offline-verifier to…
       disposition: fixed
       ref: phase-12-remediation-01/004-harden-audience-token-claims.md
+      date: "2026-10-25"
+    - id: fDFi
+      title: mod_users.cred_password.identifier_id change…
+      disposition: fixed
+      ref: phase-13-remediation-02/001-guard-active-password-identifier-unbind.md
       date: "2026-10-25"
