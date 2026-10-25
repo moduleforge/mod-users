@@ -530,7 +530,7 @@ phases:
             - wZsk
             - Nobq
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-010
             commit: []
             merge: null
         - number: 11
