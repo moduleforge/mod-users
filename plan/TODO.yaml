@@ -208,7 +208,7 @@ phases:
             branch: plan/identity-model-impl-07-007
             commit:
                 - a60cf76
-            merge: null
+            merge: 78aca5ad65cdadca255b68b90b8884cbd359a309
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
