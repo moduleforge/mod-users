@@ -545,6 +545,11 @@ CREATE UNIQUE INDEX cred_password_active_identifier_uq
 CREATE UNIQUE INDEX cred_password_active_unbound_uq
   ON mod_users.cred_password (principal_id) WHERE active AND identifier_id IS NULL;
 
+-- Serves ListActivePasswordsByPrincipal: every active password of a principal,
+-- bound or unbound (the unbound-only unique index above cannot).
+CREATE INDEX cred_password_principal_id_idx
+  ON mod_users.cred_password (principal_id) WHERE active;
+
 -- A one-time code sent to the bound identifier; created when the identifier is
 -- verified, so passwordless login keeps working.
 CREATE TABLE mod_users.cred_email_otp (
@@ -966,6 +971,16 @@ CREATE INDEX auth_challenges_cooldown_idx
     (COALESCE(session_id, 0)),
     created_at DESC
   );
+
+-- Foreign-key lookups: the ON DELETE CASCADE scans and open-challenge queries.
+CREATE INDEX auth_challenges_principal_id_idx
+  ON mod_users.auth_challenges (principal_id) WHERE principal_id IS NOT NULL;
+CREATE INDEX auth_challenges_identifier_id_idx
+  ON mod_users.auth_challenges (identifier_id) WHERE identifier_id IS NOT NULL;
+CREATE INDEX auth_challenges_session_id_idx
+  ON mod_users.auth_challenges (session_id) WHERE session_id IS NOT NULL;
+CREATE INDEX auth_challenges_credential_id_idx
+  ON mod_users.auth_challenges (credential_id) WHERE credential_id IS NOT NULL;
 
 -- create_challenge_with_cooldown mints at most one challenge per subject
 -- (kind, principal, identifier, session) per cooldown window, and returns the
