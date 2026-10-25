@@ -400,7 +400,8 @@ phases:
             - TrRi
           git:
             branch: plan/identity-model-impl-12-001
-            commit: []
+            commit:
+                - 050fd51
             merge: null
         - number: 2
           slug: exclude-revoked-factors-from-availability
