@@ -9,6 +9,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: api/internal/service/profile_service.go resolveInvitee resolves holder_email through mod_users.user_identifiers (kind email, canonical value) without requiring verified_at. Because (kind, value_canon) is unique across unverified identifiers (the retained squatting limit), a party that invites a colleague by email can invite whoever registered that address first without verifying it; that account then accepts and holds a party profile. The invitation still needs the invitee to accept and is gated by the party's authn policy and grants, so the exposure is bounded, but invitation by email is the case where address ownership matters most. Decide whether InviteInTx/InviteProfile should require a verified identifier (and return the not-found or a dedicated 409 for an unverified match), or whether invitations should stay address-agnostic. The behavior as implemented follows the spec wording (canonicalized email identifier) and has a test per path in api/internal/integration/profiles_integration_test.go.
+    - title: Request mod-core profile row-lock query
+      id: FAK8
+      date: "2026-10-25"
+      tags:
+        - type:enhancement
+        - plan/phase:parties-profiles-and-bootstrap
+        - priority:unspecified
+        - effort:unspecified
+      text: 'mod-core''s coredb has no way to read a profiles row with FOR UPDATE (GetProfileByEntityID is a plain read). api/internal/service/profile_service.go lockProfile therefore runs its own SELECT ... FROM public.profiles WHERE entity_id = $1 FOR UPDATE and scans into coredb.Profile, coupling mod-users to mod-core''s column list. Request for mod-core (finding only, not edited here): add a GetProfileByEntityIDForUpdate query to model/queries/profiles.sql so lockProfile can use the generated method and a column change in profiles fails the build instead of the scan at runtime.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
