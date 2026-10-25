@@ -458,7 +458,7 @@ phases:
             branch: plan/identity-model-impl-12-005
             commit:
                 - 5e56852
-            merge: null
+            merge: fc07a3a
         - number: 6
           slug: register-display-renderers-in-manifest
           title: Register Display Renderers Through The Manifest
