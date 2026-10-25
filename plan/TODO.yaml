@@ -139,7 +139,7 @@ phases:
           slug: profile-lifecycle-and-invitations
           title: Profile Lifecycle and Invitations
           path: phase-07-parties-profiles-and-bootstrap/001-profile-lifecycle-and-invitations.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Implemented ProfileService and its routes. Invite, accept, decline, leave, admin suspend/resume/end with step-up, departure cleanup, managed-user provisioning and lifecycle observers are in place, with the checkInvitePolicyMismatch seam for task 003. Wired through the manifest, main.go, the facades, api/openapi.yaml, AGENTS.md and README. Unit, integration and route-order tests pass, as do make build, make test and make lint. One latent test bug in session_integration_test.go that the new fixtures exposed was fixed.
           git:
