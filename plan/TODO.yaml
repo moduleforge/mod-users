@@ -451,6 +451,7 @@ phases:
           path: phase-12-remediation-01/005-compose-mod-audit-migrations.md
           done: false
           tier: sonnet-low
+          digest: Compose now includes the mod-audit migrations, and the integration harness uses the composed directory directly. Integration suite passes.
           findings:
             - LPl2
           git:
