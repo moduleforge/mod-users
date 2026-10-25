@@ -437,6 +437,7 @@ phases:
           path: phase-12-remediation-01/004-harden-audience-token-claims.md
           done: false
           tier: sonnet-low
+          digest: Audience tokens can no longer be given acr, amr or auth_time through extra. They now carry the aud+jwt typ header, and the access-token verifier rejects that header. Tests and docs note included.
           findings:
             - UT68
           git:
