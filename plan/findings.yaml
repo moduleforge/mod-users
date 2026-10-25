@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'Deploy manifests: signing key wiring'
-      id: CLi0
-      date: "2026-10-23"
-      tags:
-        - type:documentation
-        - plan/phase:users-identity-core
-        - priority:medium
-        - effort:small
-      text: deploy/k8s/base/deployment.yaml and deploy/cloudrun/service.yaml still inject JWT_SECRET from a required secret (users-api-secrets/jwt-secret) and never wire JWT_SIGNING_KEY or JWT_SIGNING_KID. After the EdDSA-only change in api/internal/config (config.Load, loadJWTSigning, bootstrapSigningKeyFromDB), JWT_SECRET is optional and keys only the OAuth state HMAC (api/internal/auth/derived_keys.go OAuthStateKey), and access tokens are signed by JWT_SIGNING_KEY or, when it is unset, a key persisted in mod_users.auth_signing_keys. The manifests should make jwt-secret optional and show how to supply JWT_SIGNING_KEY (and JWT_VERIFY_PUBLIC_KEYS for rotation) from a secret, with the new AUTH_* lifetime and audience variables where a deployment needs non-default values.
     - title: 'Decision needed: password reset does not copy'
       id: 1xmT
       date: "2026-10-23"
@@ -973,3 +964,8 @@ closed:
       disposition: promoted
       ref: o7LL
       date: "2026-10-24"
+    - id: CLi0
+      title: 'Deploy manifests: signing key wiring'
+      disposition: dismissed
+      reason: 'Already fixed by phase 12 task 008 (merge 0cfa2ab). deploy/k8s/base/deployment.yaml:33-64 now wires JWT_SIGNING_KEY (with optional JWT_SIGNING_KID / JWT_VERIFY_PUBLIC_KEYS) from a secret and marks JWT_SECRET optional: true; deploy/cloudrun/service.yaml:64-84 wires JWT_SIGNING_KEY and leaves JWT_SECRET as a commented optional entry. A leftover comment in deploy/k8s/base/configmap.yaml is tracked separately as QTuI.'
+      date: "2026-10-25"
