@@ -472,7 +472,7 @@ phases:
             branch: plan/identity-model-impl-12-006
             commit:
                 - 7ffcc83
-            merge: null
+            merge: b9d20b3
         - number: 7
           slug: index-credential-and-challenge-lookups
           title: Add Missing Password And Challenge Indexes
