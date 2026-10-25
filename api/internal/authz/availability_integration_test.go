@@ -176,6 +176,26 @@ func TestInteg_Availability_CredentialRuleAuthorized(t *testing.T) {
 	wantAvail(t, sessionAvail(t, sessionWith(t, m.User, 2, other, cred), m.PartyProfile), "available", "one authorized factor of two")
 }
 
+func TestInteg_Availability_RevokedFactorDoesNotCount(t *testing.T) {
+	party := seedOrg(t, "Revoked factor party")
+	fxMustTx(t, func(tx pgx.Tx) { fxPolicy(t, tx, party, "authorized", nil, 1) })
+	m := seedMember(t, party)
+	admin := seedMember(t, party)
+
+	cred := fxPassword(t, integPool, m.User, nil)
+	fxExec(t, integPool, "authorize credential",
+		`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
+		cred, party, admin.PartyProfile)
+	s := sessionWith(t, m.User, 1, cred)
+	wantAvail(t, sessionAvail(t, s, m.PartyProfile), "available", "authorized, unrevoked")
+
+	// Revoke the credential without revoking its session: the revoked factor
+	// no longer satisfies the rule.
+	fxExec(t, integPool, "revoke credential",
+		`UPDATE mod_users.credentials SET revoked_at = now(), revoke_reason = 'departure' WHERE id = $1`, cred)
+	wantAvail(t, sessionAvail(t, s, m.PartyProfile), "credential_not_authorized", "revoked authorized factor")
+}
+
 func TestInteg_Availability_CredentialRuleProvider(t *testing.T) {
 	party := seedOrg(t, "Provider rule party")
 	provider := "mf-" + fxTag("prov")

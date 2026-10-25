@@ -79,27 +79,6 @@ SET revoked_at = now(),
 WHERE id = $1 AND revoked_at IS NULL
 RETURNING *;
 
--- name: RevokeCredentialsOfPrincipal :many
--- Bulk revoke (guest upgrade supersedes the anon credentials, a disabled
--- principal); returns the revoked rows so the caller can observe each.
-UPDATE mod_users.credentials
-SET revoked_at = now(),
-    revoke_reason = @revoke_reason::text
-WHERE principal_id = @principal_id
-  AND revoked_at IS NULL
-  AND (sqlc.narg(kind)::text IS NULL OR kind = sqlc.narg(kind))
-RETURNING *;
-
--- name: RevokeCredentialsConfinedToParty :many
--- Departure cleanup: a holder's credentials confined to the party they left.
-UPDATE mod_users.credentials
-SET revoked_at = now(),
-    revoke_reason = 'departure'
-WHERE principal_id = $1
-  AND confined_to_party_id = $2
-  AND revoked_at IS NULL
-RETURNING *;
-
 -- name: RevokeSessionsHoldingCredential :many
 -- Revoke every unrevoked session holding the credential as a factor
 -- (revoke_reason 'credential_revoked'). Impersonation children end through
