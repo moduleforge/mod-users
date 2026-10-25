@@ -430,7 +430,7 @@ phases:
             branch: plan/identity-model-impl-12-003
             commit:
                 - baa0176
-            merge: null
+            merge: d343508
         - number: 4
           slug: harden-audience-token-claims
           title: Harden Audience Token Claims
