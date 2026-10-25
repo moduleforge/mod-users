@@ -477,14 +477,16 @@ phases:
           slug: index-credential-and-challenge-lookups
           title: Add Missing Password And Challenge Indexes
           path: phase-12-remediation-01/007-index-credential-and-challenge-lookups.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Added five missing indexes to the baseline migration and rewrote NULL-equal subject predicates in the two challenge queries to the COALESCE form so the cooldown index serves them. Verify, integration and EXPLAIN pass.
           findings:
             - 86kP
             - Pjuz
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-007
+            commit:
+                - eb61cb6
             merge: null
         - number: 8
           slug: update-deploy-manifests-signing-key
