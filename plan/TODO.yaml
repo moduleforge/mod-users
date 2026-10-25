@@ -566,13 +566,15 @@ phases:
           slug: bind-handoff-code-to-verifier
           title: Bind The OIDC Handoff Code To A Browser Verifier
           path: phase-12-remediation-01/013-bind-handoff-code-to-verifier.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Bound the OIDC handoff code to a browser-held S256 verifier. Challenge travels in signed state and is stored on the login_handoff challenge. Exchange verifies verifier in constant time inside the consuming transaction. Schema, API, openapi and docs updated; unit and integration tests pass.
           findings:
             - z443
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-12-013
+            commit:
+                - 5bd0bba
             merge: null
         - number: 14
           slug: exclude-archived-apps-from-audience
