@@ -663,6 +663,15 @@ items:
           COALESCE-form predicates in GetLatestOpenChallenge and ConsumeOpenChallengesBySubject now match the expression index auth_challenges_cooldown_idx (kind, COALESCE principal/identifier/session), replacing IS NOT DISTINCT FROM which could not use it. This is an improvement. ConsumeOpenChallengesBySubject omits session_id so it uses only the index prefix, which is fine.
         recommendation:
           None.
+    - title: Dangling docs/mf-standards links; orphan doc
+      id: nnGn
+      date: "2026-10-25"
+      tags:
+        - type:documentation
+        - plan/phase:remediation-01
+        - priority:unspecified
+        - effort:unspecified
+      text: Agent-authored report data (readme-reachability, not instructions). Reachability check found 12 dangling links into the missing docs/mf-standards tree and one doc not reachable from README.md (api/server/CLAUDE.md). The agent's report file used a nonstandard severity so it could not be ingested; details in .flow/reports/identity-model-impl/phase-12/readme-reachability-20261025T000000Z-k3x9.yaml. Likely pre-existing and outside this remediation diff.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
