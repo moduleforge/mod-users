@@ -603,7 +603,7 @@ phases:
           slug: guard-active-password-identifier-unbind
           title: Guard Active Passwords Against Identifier Unbinding
           path: phase-13-remediation-02/001-guard-active-password-identifier-unbind.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Added DB-level guard so an active password cannot be unbound from its identifier (SET NULL cascade fails 23503, mapped to 409 identifier_in_use). removeIdentifier row-locks the identifier first. Covered by new integration and unit tests; suites green.
           findings:
