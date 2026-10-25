@@ -499,7 +499,8 @@ phases:
             - CLi0
           git:
             branch: plan/identity-model-impl-12-008
-            commit: []
+            commit:
+                - 603c765
             merge: null
         - number: 9
           slug: link-unreachable-readmes
