@@ -75,7 +75,7 @@ func (s *stack) orderRouter() http.Handler {
 		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
 		principals.RegisterPrincipalRoutes(r, principals.NewPrincipalsHandler(s.users))
 	})
-	partiesH := parties.NewPartiesHandler(s.profiles)
+	partiesH := parties.NewPartiesHandler(s.profiles, s.partyPolicy)
 	r.Route("/v1/parties", func(r chi.Router) {
 		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
 		parties.RegisterPartyRoutes(r, partiesH)

@@ -151,6 +151,8 @@ type Querier interface {
 	GetChallengeByUUID(ctx context.Context, argUuid uuid.UUID) (AuthChallenge, error)
 	GetCredentialByID(ctx context.Context, id int64) (Credential, error)
 	GetCredentialByUUID(ctx context.Context, argUuid uuid.UUID) (Credential, error)
+	// Locks the row, serializing confinement and authorization writes on it.
+	GetCredentialByUUIDForUpdate(ctx context.Context, argUuid uuid.UUID) (Credential, error)
 	GetCredentialKind(ctx context.Context, kind string) (CredentialKind, error)
 	GetCredentialPartyAuthorization(ctx context.Context, arg GetCredentialPartyAuthorizationParams) (CredentialPartyAuthorization, error)
 	GetIdentifierByID(ctx context.Context, id int64) (UserIdentifier, error)
@@ -231,6 +233,10 @@ type Querier interface {
 	// 'available' or a lock reason (not_held, inactive, principal_disabled,
 	// confined, credential_not_authorized, provider_required, acr_too_low).
 	ProfileAvailability(ctx context.Context, arg ProfileAvailabilityParams) (string, error)
+	// ProfileAvailability evaluated as if the session did not hold the credential
+	// (its factor and its contribution to the acr left out): whether the session
+	// satisfies the profile's party gate through another factor.
+	ProfileAvailabilityExcluding(ctx context.Context, arg ProfileAvailabilityExcludingParams) (string, error)
 	// Idempotent guard: only an unrevoked credential is revoked (no row otherwise).
 	RevokeCredential(ctx context.Context, arg RevokeCredentialParams) (Credential, error)
 	// Ends the impersonation sessions started from a parent session.

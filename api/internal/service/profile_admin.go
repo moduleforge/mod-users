@@ -215,7 +215,14 @@ func loadPartyProfileView(ctx context.Context, db usersdb.DBTX, partyID, profile
 // uuid, an archived entity, an entity that is not a legal entity and a party
 // whose profiles the caller may not read are all apiresp.ErrNotFound.
 func (s *ProfileService) readableParty(ctx context.Context, partyUUID uuid.UUID) (int64, error) {
-	ent, err := s.coreQ.GetEntityByUUID(ctx, partyUUID)
+	return readablePartyID(ctx, s.coreQ, s.az, partyUUID)
+}
+
+// lookupParty resolves a party uuid to the id of a live legal entity, with no
+// authorization. An unknown uuid, an archived entity and an entity that is not
+// a legal entity are apiresp.ErrNotFound.
+func lookupParty(ctx context.Context, coreQ coredb.Querier, partyUUID uuid.UUID) (int64, error) {
+	ent, err := coreQ.GetEntityByUUID(ctx, partyUUID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, apiresp.ErrNotFound
 	}
@@ -225,18 +232,45 @@ func (s *ProfileService) readableParty(ctx context.Context, partyUUID uuid.UUID)
 	if ent.ArchivedAt != nil {
 		return 0, apiresp.ErrNotFound
 	}
-	if _, err := s.coreQ.GetLegalEntityByEntityID(ctx, ent.ID); err != nil {
+	if _, err := coreQ.GetLegalEntityByEntityID(ctx, ent.ID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, apiresp.ErrNotFound
 		}
 		return 0, fmt.Errorf("users: load party: %w", err)
 	}
-	profileType, err := s.coreQ.GetTypeBySlug(ctx, profileTypeSlug)
+	return ent.ID, nil
+}
+
+// partyReadable reports whether the caller may read the profiles of the party
+// (AuthorizeTypeIn(read, profile, party)). A refusal is (false, nil); any other
+// failure is returned.
+func partyReadable(ctx context.Context, coreQ coredb.Querier, az coreAuthz.Authorizer, partyID int64) (bool, error) {
+	profileType, err := coreQ.GetTypeBySlug(ctx, profileTypeSlug)
+	if err != nil {
+		return false, fmt.Errorf("users: resolve profile type: %w", err)
+	}
+	err = coreAuthz.AuthorizeTypeIn(ctx, az, opSlugRead, profileType.ID, &partyID)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, apiresp.ErrForbidden):
+		return false, nil
+	}
+	return false, err
+}
+
+// readablePartyID is lookupParty followed by the party-scoped read gate: a
+// party whose profiles the caller may not read is apiresp.ErrNotFound.
+func readablePartyID(ctx context.Context, coreQ coredb.Querier, az coreAuthz.Authorizer, partyUUID uuid.UUID) (int64, error) {
+	party, err := lookupParty(ctx, coreQ, partyUUID)
+	if err != nil {
+		return 0, err
+	}
+	profileType, err := coreQ.GetTypeBySlug(ctx, profileTypeSlug)
 	if err != nil {
 		return 0, fmt.Errorf("users: resolve profile type: %w", err)
 	}
-	party := ent.ID
-	if err := maskForbidden(coreAuthz.AuthorizeTypeIn(ctx, s.az, opSlugRead, profileType.ID, &party)); err != nil {
+	if err := maskForbidden(coreAuthz.AuthorizeTypeIn(ctx, az, opSlugRead, profileType.ID, &party)); err != nil {
 		return 0, err
 	}
 	return party, nil

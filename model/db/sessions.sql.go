@@ -494,6 +494,28 @@ func (q *Queries) ProfileAvailability(ctx context.Context, arg ProfileAvailabili
 	return availability, err
 }
 
+const profileAvailabilityExcluding = `-- name: ProfileAvailabilityExcluding :one
+SELECT mod_users.profile_availability_excluding(
+    $1::bigint, $2::bigint, $3::bigint
+)::text AS availability
+`
+
+type ProfileAvailabilityExcludingParams struct {
+	SessionID           int64 `json:"session_id"`
+	ProfileID           int64 `json:"profile_id"`
+	ExcludeCredentialID int64 `json:"exclude_credential_id"`
+}
+
+// ProfileAvailability evaluated as if the session did not hold the credential
+// (its factor and its contribution to the acr left out): whether the session
+// satisfies the profile's party gate through another factor.
+func (q *Queries) ProfileAvailabilityExcluding(ctx context.Context, arg ProfileAvailabilityExcludingParams) (string, error) {
+	row := q.db.QueryRow(ctx, profileAvailabilityExcluding, arg.SessionID, arg.ProfileID, arg.ExcludeCredentialID)
+	var availability string
+	err := row.Scan(&availability)
+	return availability, err
+}
+
 const revokeImpersonationChildren = `-- name: RevokeImpersonationChildren :many
 UPDATE mod_users.sessions
 SET revoked_at = now(),

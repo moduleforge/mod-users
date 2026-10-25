@@ -1083,16 +1083,18 @@ CREATE TABLE IF NOT EXISTS mod_users.auth_signing_keys (
 -- Assurance, availability and liveness
 -- ===========================================================================
 
--- session_acr(p_session_id): the session's acr (NIST AAL 1 to 3) derived from
--- its unrevoked factors: the highest effective acr of any factor, raised to 2
--- when factors of two distinct factor classes are present, capped at 3. A
--- factor's effective acr is its kind's base_acr, or for an oidc factor the
--- IdP's asserted acr when higher and the provider has trust_acr (env-only
--- providers never do). 3 is otherwise reserved for phishing-resistant
--- verification, which no seeded kind provides. NULL when the session has no
--- unrevoked factor (an impersonation session carries its parent's acr).
+-- session_acr_excluding(p_session_id, p_exclude_credential_id): the session's
+-- acr (NIST AAL 1 to 3) derived from its unrevoked factors, leaving out the
+-- credential p_exclude_credential_id when it is not NULL: the highest effective
+-- acr of any factor, raised to 2 when factors of two distinct factor classes
+-- are present, capped at 3. A factor's effective acr is its kind's base_acr,
+-- or for an oidc factor the IdP's asserted acr when higher and the provider
+-- has trust_acr (env-only providers never do). 3 is otherwise reserved for
+-- phishing-resistant verification, which no seeded kind provides. NULL when
+-- no unrevoked factor remains (an impersonation session carries its parent's
+-- acr). The exclusion serves profile_availability_excluding.
 -- +goose StatementBegin
-CREATE FUNCTION mod_users.session_acr(p_session_id BIGINT) RETURNS SMALLINT
+CREATE FUNCTION mod_users.session_acr_excluding(p_session_id BIGINT, p_exclude_credential_id BIGINT) RETURNS SMALLINT
 LANGUAGE sql
 STABLE
 SECURITY INVOKER
@@ -1110,7 +1112,21 @@ AS $$
     LEFT JOIN mod_users.cred_oidc o ON o.credential_id = c.id
     LEFT JOIN mod_users.oidc_providers op ON op.id = o.provider_id
    WHERE f.session_id = p_session_id
-     AND c.revoked_at IS NULL;
+     AND c.revoked_at IS NULL
+     AND (p_exclude_credential_id IS NULL OR c.id <> p_exclude_credential_id);
+$$;
+-- +goose StatementEnd
+
+-- session_acr(p_session_id): the session's acr from all its unrevoked factors
+-- (session_acr_excluding with nothing excluded).
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.session_acr(p_session_id BIGINT) RETURNS SMALLINT
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+  SELECT mod_users.session_acr_excluding(p_session_id, NULL);
 $$;
 -- +goose StatementEnd
 
@@ -1254,6 +1270,43 @@ AS $$
                     WHERE f.session_id = s.id
                       AND c.revoked_at IS NULL),
              s.acr,
+             p_profile_id)
+      FROM mod_users.sessions s
+     WHERE s.id = p_session_id
+  ), 'not_held');
+$$;
+-- +goose StatementEnd
+
+-- profile_availability_excluding(p_session_id, p_profile_id,
+-- p_exclude_credential_id): profile_availability evaluated as if the session
+-- did not hold the credential p_exclude_credential_id: it is left out of the
+-- factors and of the acr. It answers "does the session satisfy the party's
+-- gate through another factor", so a credential cannot authorize itself (a
+-- party admin or a gated session holder writing a credential_party_authorizations
+-- row). The rules themselves stay in profile_availability_for. An
+-- impersonation session keeps its stored acr (it holds no factors of its own).
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.profile_availability_excluding(
+  p_session_id BIGINT, p_profile_id BIGINT, p_exclude_credential_id BIGINT
+) RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+  SELECT COALESCE((
+    SELECT mod_users.profile_availability_for(
+             s.principal_id,
+             s.impersonated_profile_id,
+             ARRAY(SELECT f.credential_id
+                     FROM mod_users.session_factors f
+                     JOIN mod_users.credentials c ON c.id = f.credential_id
+                    WHERE f.session_id = s.id
+                      AND c.revoked_at IS NULL
+                      AND c.id <> p_exclude_credential_id),
+             CASE WHEN s.impersonated_profile_id IS NULL
+                  THEN mod_users.session_acr_excluding(s.id, p_exclude_credential_id)
+                  ELSE s.acr END,
              p_profile_id)
       FROM mod_users.sessions s
      WHERE s.id = p_session_id
@@ -1461,9 +1514,11 @@ DROP FUNCTION IF EXISTS public.accessible_user_ids_for_actor(BIGINT, INT[]);
 DROP FUNCTION IF EXISTS mod_users.credential_liveness(UUID, UUID, UUID);
 DROP FUNCTION IF EXISTS mod_users.session_liveness(UUID, UUID, UUID);
 DROP FUNCTION IF EXISTS mod_users.credential_profile_availability(BIGINT, BIGINT);
+DROP FUNCTION IF EXISTS mod_users.profile_availability_excluding(BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr(BIGINT);
+DROP FUNCTION IF EXISTS mod_users.session_acr_excluding(BIGINT, BIGINT);
 
 DROP TABLE IF EXISTS mod_users.auth_signing_keys;
 

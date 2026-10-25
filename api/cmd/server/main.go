@@ -386,6 +386,9 @@ func main() {
 	// cleanup. Other modules (mod-billing seats) subscribe with
 	// profileSvc.AddLifecycleObserver.
 	profileSvc := usersservice.NewProfileService(pool, queries, coreQueries, az, observerGroup, userSvc, credSvc, sessionSvc)
+	// partyPolicyService: the party authentication policy, credential
+	// authorizations and confinements behind /v1/parties/{party_uuid}.
+	partyPolicySvc := usersservice.NewPartyPolicyService(pool, coreQueries, az, observerGroup, userSvc)
 
 	// Handlers.
 	authHandler := authhandlers.New(
@@ -398,7 +401,7 @@ func main() {
 	meHandler := me.NewMeHandler(userSvc, profileSvc)
 	sessionHandler := session.NewSessionHandler(sessionSvc)
 	principalsHandler := principals.NewPrincipalsHandler(userSvc)
-	partiesHandler := parties.NewPartiesHandler(profileSvc)
+	partiesHandler := parties.NewPartiesHandler(profileSvc, partyPolicySvc)
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
 		Queries:      queries,
 		EnvRegistry:  cfg.Providers,

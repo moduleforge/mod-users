@@ -182,7 +182,8 @@ func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.R
 
 // createBYOUser creates the account of a bring-your-own just-in-time sign-in:
 // the user with its person and personal profile, the email identifier (verified
-// only when the IdP asserted email_verified) and the oidc credential. Every
+// only when the IdP asserted email_verified) and the oidc credential, confined
+// to the provider's party when the provider is bound to one. Every
 // observation runs as the new user's personal profile.
 func (h *OIDCHandler) createBYOUser(ctx context.Context, tx pgx.Tx, id localauth.ExternalIdentity, policy localauth.ProviderPolicy) (principalID, credentialID int64, err error) {
 	settings, err := coredb.New(tx).GetPlatformSettings(ctx)
@@ -212,13 +213,21 @@ func (h *OIDCHandler) createBYOUser(ctx context.Context, tx pgx.Tx, id localauth
 	}); err != nil {
 		return 0, 0, err
 	}
+	// A provider bound to a party confines the credential to it, exactly as
+	// the link flow and the managed path do.
+	var confinedTo *int64
+	if policy.PartyID > 0 {
+		party := policy.PartyID
+		confinedTo = &party
+	}
 	linked, err := h.creds.LinkOIDCInTx(actCtx, tx, svc.LinkOIDCInput{
-		PrincipalID: created.User.EntityID,
-		ProviderID:  policy.ProviderID,
-		Issuer:      id.Issuer,
-		Subject:     id.Subject,
-		EmailAtLink: emailAtLink(id),
-		Label:       policy.ProviderID,
+		PrincipalID:       created.User.EntityID,
+		ProviderID:        policy.ProviderID,
+		Issuer:            id.Issuer,
+		Subject:           id.Subject,
+		EmailAtLink:       emailAtLink(id),
+		Label:             policy.ProviderID,
+		ConfinedToPartyID: confinedTo,
 	})
 	if err != nil {
 		return 0, 0, err

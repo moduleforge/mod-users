@@ -24,6 +24,10 @@ SELECT * FROM mod_users.credentials WHERE uuid = $1;
 -- name: GetCredentialByID :one
 SELECT * FROM mod_users.credentials WHERE id = $1;
 
+-- name: GetCredentialByUUIDForUpdate :one
+-- Locks the row, serializing confinement and authorization writes on it.
+SELECT * FROM mod_users.credentials WHERE uuid = $1 FOR UPDATE;
+
 -- name: ListCredentialsByPrincipal :many
 -- Every credential of the principal, revoked ones included, newest first.
 SELECT * FROM mod_users.credentials

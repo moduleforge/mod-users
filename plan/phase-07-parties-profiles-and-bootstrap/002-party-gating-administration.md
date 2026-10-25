@@ -97,3 +97,21 @@ architectural_impact: true
 
 - After the service and the "excluding one factor" availability evaluation.
 - After the routes and tests.
+
+## Status
+
+Outcome: succeeded (2026-10-25).
+
+Validation: `make build`, `make test`, `make lint`, `cd model && make verify` pass; the integration suites (`api/internal/authz`, `api/internal/config`, `api/internal/integration`) pass against a throwaway Postgres 16 (database clock within 10s of the host). `api/openapi.yaml` lists the authn-policy (GET, PUT), credential-authorizations (GET), credential-authorizations/{credential_uuid} (PUT, DELETE) and confinements/{credential_uuid} (PUT, DELETE) routes. The "self-authorization using only the credential being authorized fails" test is `TestPartyPolicy_SelfAuthorizationUsingOnlyTheCredentialBeingAuthorizedFails`.
+
+Changed: `api/internal/service/party_policy.go` (`PartyPolicyService`), `api/internal/handlers/parties/policy_routes.go`, `model/migrations/sql/0100_baseline.sql` (`session_acr_excluding`, `profile_availability_excluding`; `session_acr` now delegates), `model/queries/{sessions,credentials}.sql` and regenerated `model/db`, `api/internal/handlers/auth/oidc_flows.go`, wiring in `moduleforge.module.yaml`, `api/cmd/server/main.go`, `api/usersservice/service.go`, `api/handlers/handlers.go`, plus `api/openapi.yaml`, `README.md`, `AGENTS.md`.
+
+Decisions:
+- Authority resource for the policy and the writes is `update` on the party entity (no `party_authn_policy` entity type is registered). GET of the policy needs only the party-scoped read gate; listing authorizations needs `update`.
+- The "excluding one factor" evaluation is the SQL function `mod_users.profile_availability_excluding(session, profile, credential)` over the shared `profile_availability_for`; the credential is also left out of the session acr (`session_acr_excluding`). The holder door requires both `profile_availability` and the excluding variant to be `available` (excluding a credential confined elsewhere could otherwise improve the result).
+- Every write (policy, authorization, confinement, both doors) needs the freshness gate (409 after authorization); writes under impersonation are 403.
+- A caller refused by both doors gets 404 when it cannot read the party (`AuthorizeTypeIn(read, profile, party)`), else 403.
+- DELETE of a missing authorization or of an unconfined credential is 404; confining an already-confined-here credential and re-authorizing are idempotent and observe nothing.
+- JIT confinement (requirement 5): the managed path and the link flow already confined; the `byo` JIT sign-up from a party-bound provider did not, now fixed in `createBYOUser`, with `TestOIDC_JIT_BYOFromAPartyBoundProviderConfinesTheCredentialToTheParty`.
+- `NewPartiesHandler` now takes the `PartyPolicyService` as a second argument.
+- No `DELETE /authn-policy` route (not in the requirements), so the `delete` op of `party_authn_policy` is not emitted by this task.

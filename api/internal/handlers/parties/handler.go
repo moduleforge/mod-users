@@ -10,9 +10,9 @@
 // them: a party or profile the caller may not read is a 404, the same as an
 // unknown one.
 //
-// PartiesHandler is the registration point the rest of the party
-// administration (authentication policy, credential authorizations,
-// confinements) extends: add the routes to RegisterPartyRoutes.
+// The party gating routes (authentication policy, credential authorizations
+// and confinements) live in policy_routes.go and are served by
+// service.PartyPolicyService; RegisterPartyRoutes mounts them with the rest.
 package parties
 
 import (
@@ -33,12 +33,13 @@ import (
 // NewPartiesHandler.
 type PartiesHandler struct {
 	profiles *svc.ProfileService
+	policy   *svc.PartyPolicyService
 }
 
 // NewPartiesHandler constructs the party-administration handler over the
-// profile service.
-func NewPartiesHandler(profiles *svc.ProfileService) *PartiesHandler {
-	return &PartiesHandler{profiles: profiles}
+// profile service and the party gating service.
+func NewPartiesHandler(profiles *svc.ProfileService, policy *svc.PartyPolicyService) *PartiesHandler {
+	return &PartiesHandler{profiles: profiles, policy: policy}
 }
 
 // RegisterPartyRoutes mounts the /v1/parties routes onto r. The caller applies
@@ -47,6 +48,14 @@ func RegisterPartyRoutes(r chi.Router, h *PartiesHandler) {
 	r.Get("/{party_uuid}/profiles", h.ListProfiles)
 	r.Post("/{party_uuid}/profiles", h.InviteProfile)
 	r.Post("/{party_uuid}/managed-users", h.CreateManagedUser)
+
+	r.Get("/{party_uuid}/authn-policy", h.GetAuthnPolicy)
+	r.Put("/{party_uuid}/authn-policy", h.PutAuthnPolicy)
+	r.Get("/{party_uuid}/credential-authorizations", h.ListCredentialAuthorizations)
+	r.Put("/{party_uuid}/credential-authorizations/{credential_uuid}", h.AuthorizeCredential)
+	r.Delete("/{party_uuid}/credential-authorizations/{credential_uuid}", h.DeauthorizeCredential)
+	r.Put("/{party_uuid}/confinements/{credential_uuid}", h.ConfineCredential)
+	r.Delete("/{party_uuid}/confinements/{credential_uuid}", h.UnconfineCredential)
 }
 
 // RegisterProfileRoutes mounts the /v1/profiles routes onto r. The caller
