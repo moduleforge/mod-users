@@ -163,11 +163,13 @@ phases:
           slug: outside-collaborators-and-compliance
           title: Outside Collaborators and Continuous Compliance
           path: phase-07-parties-profiles-and-bootstrap/003-outside-collaborators-and-compliance.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Filled the invite seam and added the outside-collaborator CollaboratorGate. Mismatch rule is one SQL function mod_users.holder_policy_mismatch in the 0100 baseline (rewritten in place), shared by invite and gate. Gate wired as trailing argument of authzservice.NewFromArgs in main.go; manifest provides collaboratorGate. Tests cover compliance behaviors and the HTTP flow through mod-authz's real route.
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-07-003
+            commit:
+                - 01fade3
             merge: null
         - number: 4
           slug: setup-token-bootstrap
