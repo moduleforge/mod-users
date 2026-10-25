@@ -518,7 +518,7 @@ phases:
             branch: plan/identity-model-impl-12-009
             commit:
                 - ab8ccb6
-            merge: null
+            merge: 7daac3e
         - number: 10
           slug: confine-party-bound-oidc-link
           title: Confine Linked OIDC Credentials To The Provider Party
