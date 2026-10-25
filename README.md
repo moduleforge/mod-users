@@ -66,6 +66,10 @@ CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact fron
 - [docs/cookie-path.md](./docs/cookie-path.md) — `USERS_COOKIE_PATH`, the `oidc_state` cookie Path, and the strip-prefix proxy example
 - [docs/consumer-upgrade-notes.md](./docs/consumer-upgrade-notes.md) — API, configuration and behaviour changes for consumers that compose, embed or verify tokens from this module, plus known limits
 - [docs/project-structure.md](./docs/project-structure.md) — directory layout and sub-project conventions
+- [model/README.md](./model/README.md) — Postgres schema, goose migrations, and sqlc-generated queries
+- [deploy/local/README.md](./deploy/local/README.md) — local development stack (Postgres, Authelia OIDC, Mailpit)
+- [deploy/k8s/README.md](./deploy/k8s/README.md) — Kubernetes deployment manifests (Kustomize and CloudNativePG)
+- [deploy/serverless/README.md](./deploy/serverless/README.md) — serverless deployment drafts (Cloud Run, App Runner, Fly)
 - [next-steps.md](./next-steps.md) — forward-looking residue: pending manual verification and deferred work
 - [.claude/CLAUDE.md](./.claude/CLAUDE.md) — Claude Code configuration and project-specific AI agent guidance
 
