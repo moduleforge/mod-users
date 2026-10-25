@@ -64,6 +64,22 @@ func TestApp_AudienceFollowsTheSessionsApp(t *testing.T) {
 	}
 }
 
+// An archived app is not an accepted token audience: a token addressed to an
+// app is accepted while the app is active and rejected once it is archived.
+func TestApp_ArchivedAppIsNotAnAcceptedAudience(t *testing.T) {
+	slug := uniq("aud-")
+	appID := env.seedApp(t, slug, false)
+	a := env.register(t)
+	tk := env.loginRaw(t, a.Email, a.Password, map[string]string{"app": slug}).wantStatus(t, http.StatusOK).tok(t)
+	if status, _ := env.probe(t, "/v1/probe", tk.access()); status != http.StatusOK {
+		t.Fatalf("token for an active app = %d, want 200", status)
+	}
+	env.exec(t, "archive app", `UPDATE entities SET archived_at = now() WHERE id = $1`, appID)
+	if status, _ := env.probe(t, "/v1/probe", tk.access()); status != http.StatusUnauthorized {
+		t.Fatalf("token for an archived app = %d, want 401", status)
+	}
+}
+
 func TestApp_InviteOnlyGate(t *testing.T) {
 	slug := uniq("invite-")
 	env.seedApp(t, slug, true)

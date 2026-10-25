@@ -219,7 +219,8 @@ func (a *Authenticator) Authenticate(r *http.Request) (*Identity, error) {
 
 // sessionLivenessSQL runs mod_users.session_liveness and, in the same
 // statement, reads the user flags the Identity needs and (when $4 is
-// non-empty) whether an audience value is a registered app slug. One round
+// non-empty) whether an audience value is a registered, non-archived app
+// slug (an app's archived_at lives on its entities row). One round
 // trip per request (decision U5).
 const sessionLivenessSQL = `
 SELECT l.status,
@@ -239,7 +240,10 @@ SELECT l.status,
                   AND i.kind = 'email'
                   AND i.verified_at IS NOT NULL),
        (cardinality($4::text[]) = 0
-        OR EXISTS (SELECT 1 FROM public.apps a WHERE a.slug = ANY($4::text[])))
+        OR EXISTS (SELECT 1 FROM public.apps a
+                   JOIN public.entities ae ON ae.id = a.id
+                   WHERE a.slug = ANY($4::text[])
+                     AND ae.archived_at IS NULL))
 FROM mod_users.session_liveness($1::uuid, $2::uuid, $3::uuid) l
 LEFT JOIN mod_users.users u ON u.entity_id = l.principal_id`
 
@@ -259,7 +263,10 @@ SELECT l.status,
                   AND i.kind = 'email'
                   AND i.verified_at IS NOT NULL),
        (cardinality($4::text[]) = 0
-        OR EXISTS (SELECT 1 FROM public.apps a WHERE a.slug = ANY($4::text[])))
+        OR EXISTS (SELECT 1 FROM public.apps a
+                   JOIN public.entities ae ON ae.id = a.id
+                   WHERE a.slug = ANY($4::text[])
+                     AND ae.archived_at IS NULL))
 FROM mod_users.credential_liveness($1::uuid, $2::uuid, $3::uuid) l
 LEFT JOIN mod_users.users u ON u.entity_id = l.principal_id`
 
