@@ -48,6 +48,11 @@ func NewUserService(
 // verification codes; ops resolves operation names to the op ids the principal
 // list passes to the accessible_*_ids_for_actor functions; maxAuthAge is
 // AUTH_SELF_SERVICE_MAX_AUTH_AGE (zero or negative selects the default).
+//
+// displayRegistry is the shared display registry: the constructor registers
+// the user and profile display renderers (RegisterDisplayRenderers) on it, so
+// a manifest-generated app and the dev server register them identically. A nil
+// displayRegistry skips registration.
 func NewUserServiceWithSelfService(
 	pool *pgxpool.Pool,
 	q usersdb.Querier,
@@ -60,7 +65,11 @@ func NewUserServiceWithSelfService(
 	challenges *ChallengeService,
 	ops coreAuthz.OpResolver,
 	maxAuthAge time.Duration,
+	displayRegistry *display.Registry,
 ) *UserService {
+	if displayRegistry != nil {
+		inner.RegisterDisplayRenderers(displayRegistry, pool)
+	}
 	return inner.NewUserService(q, coreQ, az, obs, np, creds).
 		WithSelfService(pool, sessions, challenges, ops, maxAuthAge)
 }

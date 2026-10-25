@@ -128,7 +128,10 @@ provides:
     # userService — user creation and the /v1/me and /v1/principals operations.
     # NewUserServiceWithSelfService is NewUserService followed by
     # UserService.WithSelfService (pool, sessions, challenges, op resolver and
-    # AUTH_SELF_SERVICE_MAX_AUTH_AGE).
+    # AUTH_SELF_SERVICE_MAX_AUTH_AGE). It also registers the user and profile
+    # display renderers (U19) on the shared displayRegistry from core-module;
+    # this is the manifest's only path to RegisterDisplayRenderers, and
+    # userService is reachable through the /v1/me and /v1/principals handlers.
     - name: userService
       type: "*usersservice.UserService"
       constructor: usersservice.NewUserServiceWithSelfService
@@ -144,6 +147,7 @@ provides:
         - service:challengeService
         - infra:opReg                   # *authzapi.OperationRegistry — op resolver
         - field:cfg.Auth.SelfServiceMaxAuthAge
+        - service:displayRegistry       # *display.Registry from core-module
 
     # directoryService — batch display lookups for other modules; does no
     # authorization (callers authorize first).
@@ -408,6 +412,7 @@ provides:
 requires:
   services:
     - name: naturalPersonService   # coreservice.NaturalPersonServicer from core-module
+    - name: displayRegistry        # *display.Registry from core-module
   infra:
     - name: pool                   # *pgxpool.Pool
     - name: opReg                  # *authzapi.OperationRegistry — infra singleton
