@@ -318,6 +318,30 @@ func (s *CredentialService) CreatePasswordInTx(ctx context.Context, tx pgx.Tx, i
 	return toCredential(row), nil
 }
 
+// SupersedePasswordInTx replaces the active password credential oldID with a
+// new one built from in. In the caller's transaction it revokes the old
+// credential with reason superseded, creates the replacement, and copies the
+// old credential's party authorizations to it, so party profiles with
+// credential rule 'authorized' stay available without re-authorization. Every
+// password supersede path uses it; any failure leaves the caller to roll the
+// transaction back, so the revoke, create and copy are atomic.
+func (s *CredentialService) SupersedePasswordInTx(ctx context.Context, tx pgx.Tx, oldID int64, in CreatePasswordInput) (Credential, error) {
+	if err := s.RevokeInTx(ctx, tx, oldID, RevokeReasonSuperseded); err != nil {
+		return Credential{}, err
+	}
+	created, err := s.CreatePasswordInTx(ctx, tx, in)
+	if err != nil {
+		return Credential{}, err
+	}
+	if _, err := s.usersQ(tx).CopyCredentialPartyAuthorizations(ctx, usersdb.CopyCredentialPartyAuthorizationsParams{
+		NewCredentialID: created.ID,
+		OldCredentialID: oldID,
+	}); err != nil {
+		return Credential{}, fmt.Errorf("credentials: copy party authorizations: %w", err)
+	}
+	return created, nil
+}
+
 // ---------------------------------------------------------------------------
 // email_otp
 // ---------------------------------------------------------------------------

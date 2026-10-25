@@ -66,3 +66,15 @@ USING mod_users.credentials c
 WHERE a.credential_id = c.id
   AND a.party_id = $1
   AND c.principal_id = $2;
+
+-- name: CopyCredentialPartyAuthorizations :execrows
+-- Supersede: carries every party authorization of the old credential to its
+-- replacement (same authorizer and time), skipping parties the replacement is
+-- already authorized for.
+INSERT INTO mod_users.credential_party_authorizations (
+    credential_id, party_id, authorized_by_profile_id, authorized_at
+)
+SELECT sqlc.arg(new_credential_id)::bigint, o.party_id, o.authorized_by_profile_id, o.authorized_at
+FROM mod_users.credential_party_authorizations o
+WHERE o.credential_id = sqlc.arg(old_credential_id)::bigint
+ON CONFLICT (credential_id, party_id) DO NOTHING;
