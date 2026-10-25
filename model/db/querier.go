@@ -185,6 +185,9 @@ type Querier interface {
 	GetUserByEntityIDForUpdate(ctx context.Context, entityID int64) (User, error)
 	// Resolve the user holding an identifier (kind, canonical value).
 	GetUserByIdentifier(ctx context.Context, arg GetUserByIdentifierParams) (User, error)
+	// Whether the holder's current credentials can meet the party's authentication
+	// policy (mod_users.holder_policy_mismatch). reason is NULL when they can.
+	HolderPolicyMismatch(ctx context.Context, arg HolderPolicyMismatchParams) (HolderPolicyMismatchRow, error)
 	// The attempt counter; the caller consumes the challenge once the budget is spent.
 	IncrementChallengeFailedAttempts(ctx context.Context, id int64) (int32, error)
 	// Concurrent first-boot callers race on the id = 1 primary key and all

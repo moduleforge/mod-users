@@ -1101,9 +1101,14 @@ components:
         confirm_policy_mismatch:
           type: boolean
           description: |
-            Confirms an invitation whose holder's credentials cannot meet the
-            party's authentication policy. Accepted and carried through; the
-            mismatch check itself is not yet enforced.
+            Confirms an invitation whose holder's current credentials cannot
+            meet the party's authentication policy. Without it such an
+            invitation is refused with 409 `users.policy_mismatch_confirmation_required`
+            and nothing is written. With it the profile is created and the
+            confirmation (the acting profile and the time) is recorded in the
+            same transaction. A confirmation exempts the profile from the
+            party's `credential_rule` only, never from `min_acr`. Ignored when
+            the holder meets the policy.
 
     CreateManagedUserRequest:
       type: object
@@ -2768,7 +2773,19 @@ paths:
         the party. 404 for an unknown email or user. 409:
         `users.profile_exists` (an open profile already exists),
         `users.guest_upgrade_required` (a guest), `users.holder_not_admissible`
-        (a managed user of another party, or a principal that is not a user).
+        (a managed user of another party, or a principal that is not a user),
+        and `users.policy_mismatch_confirmation_required` (the holder's current
+        interactive credentials cannot meet the party's authentication policy:
+        under `authorized`, none is authorized for or confined to the party;
+        under `provider`, none is an OIDC credential of the required provider;
+        or no combination of them reaches `min_acr`). The mismatch error has
+        two details: the first carries that code on field
+        `confirm_policy_mismatch`; the second names the failing rule (field
+        `credential_rule` with code `users.credential_not_authorized` or
+        `users.provider_required`, or field `min_acr` with code
+        `users.acr_too_low`) and its message states what the party requires
+        and what the holder has. Repeat the request with
+        `confirm_policy_mismatch: true` to proceed.
         No email notification is sent.
       tags: [Parties]
       operationId: inviteToParty

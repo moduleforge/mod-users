@@ -213,7 +213,8 @@ type InviteInput struct {
 	HolderEmail  string
 	// ConfirmPolicyMismatch confirms an invitation whose holder cannot meet the
 	// party's authentication policy with their current credentials. It is
-	// carried to the policy-mismatch seam (checkInvitePolicyMismatch).
+	// recorded as a profile_policy_confirmation when the holder's credentials
+	// mismatch (checkInvitePolicyMismatch).
 	ConfirmPolicyMismatch bool
 }
 
@@ -521,26 +522,42 @@ func (s *ProfileService) invite(ctx context.Context, tx pgx.Tx, req inviteReques
 	if err := checkAdmissible(holder, party); err != nil {
 		return Profile{}, err
 	}
-	if err := s.checkInvitePolicyMismatch(ctx, tx, in, holder.EntityID); err != nil {
+	confirmed, err := s.checkInvitePolicyMismatch(ctx, tx, in, holder.EntityID)
+	if err != nil {
 		return Profile{}, err
 	}
-	return s.createInTx(ctx, tx, newProfile{
+	p, err := s.createInTx(ctx, tx, newProfile{
 		HolderID: holder.EntityID, Holder: holder, PartyID: party,
 		Status: ProfileStatusInvited, Source: ProfileSourceManual, InvitedByProfileID: ac.ProfileID,
 	})
+	if err != nil {
+		return Profile{}, err
+	}
+	if confirmed {
+		if err := recordPolicyConfirmation(ctx, cq, p.ID, party, ac.ProfileID); err != nil {
+			return Profile{}, err
+		}
+	}
+	return p, nil
 }
 
-// checkInvitePolicyMismatch is the seam for the party-policy mismatch
-// confirmation of an invitation: refuse with 409
-// users.policy_mismatch_confirmation_required when the holder's credentials
-// cannot meet the party's authentication policy and in.ConfirmPolicyMismatch is
-// false, and record the confirmation otherwise.
-//
-// It is a no-op returning nil here. Phase task 003 (outside collaborators and
-// the policy-mismatch detection) owns it and fills it in; InviteInTx already
-// carries ConfirmPolicyMismatch to this single call site.
-func (s *ProfileService) checkInvitePolicyMismatch(ctx context.Context, tx pgx.Tx, in InviteInput, holderID int64) error {
-	return nil
+// checkInvitePolicyMismatch detects a mismatch between the party's
+// authentication policy and the invited holder's current credentials
+// (mod_users.holder_policy_mismatch). It returns nil, false when there is none.
+// On a mismatch it refuses with 409 users.policy_mismatch_confirmation_required
+// (details: the failing rule, what the party requires and what the holder has)
+// unless in.ConfirmPolicyMismatch is set, in which case it returns true: the
+// caller records the confirmation once the profile exists (the confirmation
+// references the profile), in the same transaction.
+func (s *ProfileService) checkInvitePolicyMismatch(ctx context.Context, tx pgx.Tx, in InviteInput, holderID int64) (confirmed bool, err error) {
+	mm, err := detectPolicyMismatch(ctx, s.usersQ(tx), holderID, in.PartyID)
+	if err != nil || mm == nil {
+		return false, err
+	}
+	if !in.ConfirmPolicyMismatch {
+		return false, mm.Conflict()
+	}
+	return true, nil
 }
 
 // requireParty reports apiresp.ErrNotFound unless partyID is a live legal

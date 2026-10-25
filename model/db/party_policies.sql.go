@@ -166,6 +166,39 @@ func (q *Queries) GetPartyAuthnPolicy(ctx context.Context, partyID int64) (Party
 	return i, err
 }
 
+const holderPolicyMismatch = `-- name: HolderPolicyMismatch :one
+SELECT reason, credential_rule, required_provider_id, min_acr, holder_acr
+FROM mod_users.holder_policy_mismatch($1::bigint, $2::bigint)
+`
+
+type HolderPolicyMismatchParams struct {
+	HolderID int64 `json:"holder_id"`
+	PartyID  int64 `json:"party_id"`
+}
+
+type HolderPolicyMismatchRow struct {
+	Reason             pgtype.Text `json:"reason"`
+	CredentialRule     pgtype.Text `json:"credential_rule"`
+	RequiredProviderID pgtype.Text `json:"required_provider_id"`
+	MinAcr             pgtype.Int2 `json:"min_acr"`
+	HolderAcr          pgtype.Int2 `json:"holder_acr"`
+}
+
+// Whether the holder's current credentials can meet the party's authentication
+// policy (mod_users.holder_policy_mismatch). reason is NULL when they can.
+func (q *Queries) HolderPolicyMismatch(ctx context.Context, arg HolderPolicyMismatchParams) (HolderPolicyMismatchRow, error) {
+	row := q.db.QueryRow(ctx, holderPolicyMismatch, arg.HolderID, arg.PartyID)
+	var i HolderPolicyMismatchRow
+	err := row.Scan(
+		&i.Reason,
+		&i.CredentialRule,
+		&i.RequiredProviderID,
+		&i.MinAcr,
+		&i.HolderAcr,
+	)
+	return i, err
+}
+
 const listConfinedCredentialsByParty = `-- name: ListConfinedCredentialsByParty :many
 SELECT id, uuid, principal_id, kind, confined_to_party_id, default_profile_id, expires_at, label, revoke_reason, revoked_at, created_at, created_by_profile_id, last_used_at FROM mod_users.credentials
 WHERE confined_to_party_id = $1 AND revoked_at IS NULL

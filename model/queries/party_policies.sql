@@ -78,3 +78,9 @@ SELECT sqlc.arg(new_credential_id)::bigint, o.party_id, o.authorized_by_profile_
 FROM mod_users.credential_party_authorizations o
 WHERE o.credential_id = sqlc.arg(old_credential_id)::bigint
 ON CONFLICT (credential_id, party_id) DO NOTHING;
+
+-- name: HolderPolicyMismatch :one
+-- Whether the holder's current credentials can meet the party's authentication
+-- policy (mod_users.holder_policy_mismatch). reason is NULL when they can.
+SELECT reason, credential_rule, required_provider_id, min_acr, holder_acr
+FROM mod_users.holder_policy_mismatch(@holder_id::bigint, @party_id::bigint);

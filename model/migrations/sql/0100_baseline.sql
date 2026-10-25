@@ -1249,6 +1249,101 @@ END;
 $$;
 -- +goose StatementEnd
 
+-- holder_policy_mismatch(p_holder_id, p_party_id): whether the holder's current
+-- credentials can meet the party's authentication policy, for the
+-- outside-collaborator check on an invitation or on adding a profile to a
+-- party's actor group (no profile exists yet, so profile_availability cannot
+-- answer). reason is NULL when they can, else the first failing lock reason in
+-- profile_availability_for's order:
+--
+--   credential_not_authorized the 'authorized' rule: no usable credential is
+--                             authorized for the party or confined to it;
+--   provider_required         the 'provider' rule: no usable oidc credential of
+--                             the required provider;
+--   acr_too_low               no combination of usable credentials reaches
+--                             min_acr.
+--
+-- Usable credentials are the holder's unrevoked, unexpired interactive
+-- credentials that are not confined to another party. holder_acr is the best
+-- acr they can reach by session_acr_excluding's composition rule (the highest
+-- base_acr, raised to 2 by two distinct factor classes, capped at 3; an IdP's
+-- asserted acr is per sign-in and not counted), NULL with none. A policy of
+-- 'any' with min_acr 1 never mismatches. The other columns echo the policy.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.holder_policy_mismatch(
+  p_holder_id                BIGINT,
+  p_party_id                 BIGINT,
+  OUT reason                 TEXT,
+  OUT credential_rule        TEXT,
+  OUT required_provider_id   TEXT,
+  OUT min_acr                SMALLINT,
+  OUT holder_acr             SMALLINT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+  SELECT pol.credential_rule, pol.required_oidc_provider_id, pol.min_acr
+    INTO credential_rule, required_provider_id, min_acr
+    FROM mod_users.party_authn_policies pol WHERE pol.party_id = p_party_id;
+  IF NOT FOUND THEN
+    credential_rule := 'any';
+    required_provider_id := NULL;
+    min_acr := 1;
+  END IF;
+
+  SELECT LEAST(3, GREATEST(max(k.base_acr), CASE WHEN count(DISTINCT k.factor) >= 2 THEN 2 ELSE 1 END))::SMALLINT
+    INTO holder_acr
+    FROM mod_users.credentials c
+    JOIN mod_users.credential_kinds k ON k.kind = c.kind
+   WHERE c.principal_id = p_holder_id
+     AND c.revoked_at IS NULL
+     AND (c.expires_at IS NULL OR c.expires_at > now())
+     AND k.class = 'interactive'
+     AND (c.confined_to_party_id IS NULL OR c.confined_to_party_id = p_party_id);
+
+  IF credential_rule = 'authorized' AND NOT EXISTS (
+    SELECT 1
+      FROM mod_users.credentials c
+      JOIN mod_users.credential_kinds k ON k.kind = c.kind
+     WHERE c.principal_id = p_holder_id
+       AND c.revoked_at IS NULL
+       AND (c.expires_at IS NULL OR c.expires_at > now())
+       AND k.class = 'interactive'
+       AND (c.confined_to_party_id = p_party_id
+            OR (c.confined_to_party_id IS NULL
+                AND EXISTS (
+                  SELECT 1 FROM mod_users.credential_party_authorizations cpa
+                   WHERE cpa.credential_id = c.id AND cpa.party_id = p_party_id
+                )))
+  ) THEN
+    reason := 'credential_not_authorized';
+    RETURN;
+  END IF;
+
+  IF credential_rule = 'provider' AND NOT EXISTS (
+    SELECT 1
+      FROM mod_users.credentials c
+      JOIN mod_users.cred_oidc o ON o.credential_id = c.id
+     WHERE c.principal_id = p_holder_id
+       AND c.revoked_at IS NULL
+       AND (c.expires_at IS NULL OR c.expires_at > now())
+       AND (c.confined_to_party_id IS NULL OR c.confined_to_party_id = p_party_id)
+       AND o.provider_id = required_provider_id
+  ) THEN
+    reason := 'provider_required';
+    RETURN;
+  END IF;
+
+  IF min_acr > 1 AND (holder_acr IS NULL OR holder_acr < min_acr) THEN
+    reason := 'acr_too_low';
+  END IF;
+END;
+$$;
+-- +goose StatementEnd
+
 -- profile_availability(p_session_id, p_profile_id): whether the session may
 -- act as the profile, with every unrevoked session factor counted and sessions.acr as
 -- the assurance. Used by login landing, profile switch, refresh, per-request
@@ -1516,6 +1611,7 @@ DROP FUNCTION IF EXISTS mod_users.session_liveness(UUID, UUID, UUID);
 DROP FUNCTION IF EXISTS mod_users.credential_profile_availability(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_excluding(BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability(BIGINT, BIGINT);
+DROP FUNCTION IF EXISTS mod_users.holder_policy_mismatch(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr(BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr_excluding(BIGINT, BIGINT);

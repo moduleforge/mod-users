@@ -317,15 +317,21 @@ func main() {
 	// Build authz-module services. These serve the admin authz management API
 	// under /v1/authz: operations, actor groups, target groups, and grants.
 	// typeResolver must be fully loaded before this point (it is, see above).
-	authzSvcs := authzservice.New(authzservice.Deps{
-		DB:           pool,
-		AuthzQ:       authzdb.New(pool),
-		CoreQ:        coredb.New(pool),
-		Az:           az,
-		Obs:          observerGroup,
-		TypeResolver: typeResolver,
-		OpReg:        opReg,
-	})
+	// The outside-collaborator gate is the trailing argument: a profile outside
+	// a party's own can join the party's actor groups or be named as a grant
+	// actor over its content only when its holder's credentials meet the
+	// party's authentication policy or the caller confirms the mismatch.
+	collaboratorGate := usersservice.NewCollaboratorGate()
+	authzSvcs := authzservice.NewFromArgs(
+		pool,
+		authzdb.New(pool),
+		coredb.New(pool),
+		az,
+		observerGroup,
+		typeResolver,
+		opReg,
+		collaboratorGate,
+	)
 
 	// Build core services and router. coreSvcs delegates entity CRUD to the
 	// service layer; coreRouter mounts /entities/* routes (including /self).

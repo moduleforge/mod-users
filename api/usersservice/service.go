@@ -146,6 +146,18 @@ type InviteInput = inner.InviteInput
 // a user into a party. InvitedByProfileID is 0 when none.
 type AdmitInput = inner.AdmitInput
 
+// CollaboratorGate decides whether a profile outside a party may join the
+// party's actor group or be named as a grant actor over its content. mod-authz
+// consumes it through its own authzservice.CollaboratorGate interface
+// (structural match; mod-authz does not import this module).
+type CollaboratorGate = inner.CollaboratorGate
+
+// NewCollaboratorGate constructs the CollaboratorGate that is passed as the
+// trailing argument of authzservice.NewFromArgs.
+func NewCollaboratorGate() *CollaboratorGate {
+	return inner.NewCollaboratorGate()
+}
+
 // Profile is the service-layer view of a party profile.
 type Profile = inner.Profile
 
