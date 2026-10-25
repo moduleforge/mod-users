@@ -456,7 +456,8 @@ phases:
             - LPl2
           git:
             branch: plan/identity-model-impl-12-005
-            commit: []
+            commit:
+                - 5e56852
             merge: null
         - number: 6
           slug: register-display-renderers-in-manifest
