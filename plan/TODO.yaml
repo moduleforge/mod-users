@@ -133,6 +133,7 @@ phases:
     - number: 7
       slug: parties-profiles-and-bootstrap
       title: Parties, Profiles and Bootstrap
+      diff_base: 2462d0057781d0c0dbde4725a4b871983107653c
       tasks:
         - number: 1
           slug: profile-lifecycle-and-invitations
