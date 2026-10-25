@@ -428,7 +428,8 @@ phases:
             - VxMT
           git:
             branch: plan/identity-model-impl-12-003
-            commit: []
+            commit:
+                - baa0176
             merge: null
         - number: 4
           slug: harden-audience-token-claims
