@@ -180,6 +180,18 @@ provides:
         - service:observerGroup
         - service:userService
 
+    # collaboratorGate — the outside-collaborator check mod-authz consults when
+    # a profile outside a party's own is added to the party's actor group or
+    # named as a grant actor: it compares the profile holder's credentials with
+    # the party's authentication policy and records the caller's confirmation of
+    # a mismatch (profile_policy_confirmations). mod-authz's manifest consumes it
+    # as optionalService:collaboratorGate and matches it structurally; it holds
+    # no state and needs no arguments.
+    - name: collaboratorGate
+      type: "*usersservice.CollaboratorGate"
+      constructor: usersservice.NewCollaboratorGate
+      args: []
+
     # directoryService — batch display lookups for other modules; does no
     # authorization (callers authorize first).
     - name: directoryService

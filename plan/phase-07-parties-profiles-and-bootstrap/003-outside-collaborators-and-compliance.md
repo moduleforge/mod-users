@@ -103,3 +103,12 @@ architectural_impact: true
   this task wires.
 - [Work packages](../notes/work-packages.md), phase `parties-profiles-and-bootstrap`, package 3.
 - mod-core ADR `docs/architecture/identity-model.md`, "Outside collaborators".
+
+## Status
+
+- Outcome: succeeded (2026-10-25).
+- Validation: `make build`, `make test`, `make lint` pass; integration suites (`internal/authz`, `internal/config`, `internal/integration`) pass against a throwaway Postgres 16.
+- Dependency: mod-authz's `CollaboratorGate` hook (phase 14 task 004) was present in the linked mod-authz plan worktree (`authzservice.CollaboratorGate`, `NewFromArgs` trailing variadic, manifest `optionalService:collaboratorGate`).
+- Implementation: the mismatch rule is the SQL function `mod_users.holder_policy_mismatch` in `model/migrations/sql/0100_baseline.sql` (sqlc query `HolderPolicyMismatch`); `api/internal/service/policy_mismatch.go` (detection, 409 body, idempotent confirmation write), `api/internal/service/collaborator_gate.go` (`CollaboratorGate`), `api/internal/service/profile_service.go` (`checkInvitePolicyMismatch` is no longer a no-op; the confirmation is written after the profile exists), `api/usersservice/service.go` (facade), `api/cmd/server/main.go` (gate passed to `authzservice.NewFromArgs`), `moduleforge.module.yaml` (`collaboratorGate`), `api/openapi.yaml`, `README.md`, `AGENTS.md`, `model/README.md`.
+- Tests: `api/internal/service/collaborator_gate_test.go`, `api/usersservice/collaborator_gate_test.go` (compile-time structural assertion), `api/internal/integration/collaborator_integration_test.go` (invite, rules, availability exemption, gate, mod-authz route, three compliance behaviors); the integration harness mounts mod-authz's routes with the gate.
+- Decisions: see the task report; usable credentials for the check are the holder's active, unexpired, interactive credentials not confined to another party; an IdP-asserted acr is per sign-in and not counted.

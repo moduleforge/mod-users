@@ -54,6 +54,8 @@ import (
 	auditservice "github.com/moduleforge/audit-api/service"
 	auditdb "github.com/moduleforge/audit-model/db"
 	authzapi "github.com/moduleforge/authz-api/authz"
+	authzhttpapi "github.com/moduleforge/authz-api/httpapi"
+	authzservice "github.com/moduleforge/authz-api/service"
 	authzdb "github.com/moduleforge/authz-model/db"
 	"github.com/moduleforge/core-api/authz/setup"
 	"github.com/moduleforge/core-api/entity"
@@ -221,6 +223,7 @@ type stack struct {
 	users       *svc.UserService
 	profiles    *svc.ProfileService
 	partyPolicy *svc.PartyPolicyService
+	gate        *svc.CollaboratorGate
 	creds       *svc.CredentialService
 	sessions    *svc.SessionService
 	chal        *svc.ChallengeService
@@ -512,6 +515,14 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 		r.Use(requireAuth)
 		parties.RegisterProfileRoutes(r, partiesH)
 	})
+	// mod-authz's routes with the outside-collaborator gate wired as the
+	// trailing argument of NewFromArgs, exactly as the dev server does.
+	gate := svc.NewCollaboratorGate()
+	authzSvcs := authzservice.NewFromArgs(pool, authzdb.New(pool), coreQueries, az, group, typeResolver, opReg, gate)
+	r.Route("/v1/authz", func(r chi.Router) {
+		r.Use(requireAuth)
+		authzhttpapi.RegisterRoutes(r, authzSvcs)
+	})
 	// /v1/probe reports what the middleware installed. /v1/probe-anon is the
 	// same behind ResolveOrAnonymous.
 	anon, err := auth.NewAnonymousActor(ctx, pool)
@@ -524,7 +535,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 
 	return &stack{
 		pool: pool, cfg: cfg, signer: signer, signKey: key, handler: r, obs: rec, group: group,
-		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, partyPolicy: partyPolicy, creds: creds,
+		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, partyPolicy: partyPolicy, gate: gate, creds: creds,
 		sessions: sessions, chal: chal, dir: dir, q: queries, coreQ: coreQueries, opReg: opReg,
 		auditApplied: auditApplied,
 	}, nil
