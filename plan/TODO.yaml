@@ -413,7 +413,7 @@ phases:
           findings:
             - WpsB
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-002
             commit: []
             merge: null
         - number: 3
