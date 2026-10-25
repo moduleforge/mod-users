@@ -30,8 +30,9 @@ var section101 = map[string]bool{
 	"create credential": true, "update credential": true, "revoke credential": true,
 	"login session": true, "update session": true, "revoke session": true,
 	"create profile": true, "update profile": true,
-	"create natural_person":  true,
-	"update service_account": true,
+	"delete credential_party_authorization": true,
+	"create natural_person":                 true,
+	"update service_account":                true,
 }
 
 // mod-audit's closed op set.
