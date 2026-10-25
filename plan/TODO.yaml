@@ -508,6 +508,7 @@ phases:
           path: phase-12-remediation-01/009-link-unreachable-readmes.md
           done: false
           tier: sonnet-low
+          digest: Added four README links from the root README to model, deploy/local, deploy/k8s and deploy/serverless. Docs-only.
           findings:
             - W55I
             - Kkmz
