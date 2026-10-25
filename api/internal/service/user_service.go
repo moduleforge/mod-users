@@ -606,6 +606,15 @@ func (s *UserService) removeIdentifier(ctx context.Context, tx pgx.Tx, row users
 	q := s.usersQ(tx)
 	userID := row.UserID
 
+	// Lock the identifier row before listing bound credentials, so a concurrent
+	// password create or reset that binds it serializes behind this removal.
+	if _, err := q.LockIdentifierForUpdate(ctx, usersdb.LockIdentifierForUpdateParams{ID: row.ID, UserID: userID}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apiresp.ErrNotFound
+		}
+		return fmt.Errorf("users: lock identifier: %w", err)
+	}
+
 	// Revoke the credentials bound to the identifier.
 	if otp, err := q.GetActiveEmailOTPByIdentifier(ctx, row.ID); err == nil {
 		if err := s.creds.RemoveInTx(ctx, tx, userID, otp.Credential.ID, RevokeReasonUser); err != nil {

@@ -243,6 +243,34 @@ func (q *Queries) ListIdentifiersByUsers(ctx context.Context, userIds []int64) (
 	return items, nil
 }
 
+const lockIdentifierForUpdate = `-- name: LockIdentifierForUpdate :one
+SELECT id, uuid, user_id, is_primary, kind, value_canon, verified_at, created_at FROM mod_users.user_identifiers WHERE id = $1 AND user_id = $2 FOR UPDATE
+`
+
+type LockIdentifierForUpdateParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Row-locks the identifier so a concurrent password create or reset that binds
+// it (whose foreign-key check takes a shared lock on this row) serializes
+// behind a removal in progress.
+func (q *Queries) LockIdentifierForUpdate(ctx context.Context, arg LockIdentifierForUpdateParams) (UserIdentifier, error) {
+	row := q.db.QueryRow(ctx, lockIdentifierForUpdate, arg.ID, arg.UserID)
+	var i UserIdentifier
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.UserID,
+		&i.IsPrimary,
+		&i.Kind,
+		&i.ValueCanon,
+		&i.VerifiedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const markIdentifierVerified = `-- name: MarkIdentifierVerified :one
 UPDATE mod_users.user_identifiers
 SET verified_at = COALESCE(verified_at, now())

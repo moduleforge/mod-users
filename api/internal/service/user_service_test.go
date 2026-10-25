@@ -547,6 +547,33 @@ func TestRemoveIdentifierInTx(t *testing.T) {
 		}
 	})
 
+	t.Run("locks the identifier row before listing bound passwords", func(t *testing.T) {
+		t.Parallel()
+		s, _, _ := build(nil, 1)
+		var order []string
+		s.newQ = func(pgx.Tx) usersdb.Querier {
+			return &deleteStore{
+				fakeUsersQ: &fakeUsersQ{
+					getUser: func(id int64) (usersdb.User, error) { return usersdb.User{EntityID: id}, nil },
+					getIdentifierByID: func(id int64) (usersdb.UserIdentifier, error) {
+						return identifierRow(id, 5, "a@b.example", false, true), nil
+					},
+					getActiveEmailOTP: func(int64) (usersdb.GetActiveEmailOTPByIdentifierRow, error) {
+						return usersdb.GetActiveEmailOTPByIdentifierRow{}, pgx.ErrNoRows
+					},
+				},
+				rows:  1,
+				order: &order,
+			}
+		}
+		if err := s.RemoveIdentifierInTx(actorCtx(42), &savepointTx{}, 5, 11); err != nil {
+			t.Fatal(err)
+		}
+		if len(order) < 2 || order[0] != "lock" || order[1] != "list" {
+			t.Errorf("call order = %v, want lock before list", order)
+		}
+	})
+
 	t.Run("a credential still referencing the identifier is ErrIdentifierInUse and rolls back", func(t *testing.T) {
 		t.Parallel()
 		s, _, rec := build(&pgconn.PgError{Code: "23503"}, 0)
@@ -567,6 +594,15 @@ type deleteStore struct {
 	*fakeUsersQ
 	err  error
 	rows int64
+	// order, when set, records the lock and list calls in call order.
+	order *[]string
+}
+
+func (d *deleteStore) LockIdentifierForUpdate(_ context.Context, a usersdb.LockIdentifierForUpdateParams) (usersdb.UserIdentifier, error) {
+	if d.order != nil {
+		*d.order = append(*d.order, "lock")
+	}
+	return identifierRow(a.ID, a.UserID, "a@b.example", false, true), nil
 }
 
 func (d *deleteStore) DeleteIdentifier(context.Context, usersdb.DeleteIdentifierParams) (int64, error) {
@@ -574,5 +610,8 @@ func (d *deleteStore) DeleteIdentifier(context.Context, usersdb.DeleteIdentifier
 }
 
 func (d *deleteStore) ListActivePasswordsByPrincipal(context.Context, int64) ([]usersdb.ListActivePasswordsByPrincipalRow, error) {
+	if d.order != nil {
+		*d.order = append(*d.order, "list")
+	}
 	return nil, nil
 }
