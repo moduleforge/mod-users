@@ -441,7 +441,7 @@ phases:
           findings:
             - UT68
           git:
-            branch: null
+            branch: plan/identity-model-impl-12-004
             commit: []
             merge: null
         - number: 5
