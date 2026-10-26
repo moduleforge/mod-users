@@ -18,6 +18,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-core''s Authorizer contract (core-api/authz/authz.go, the "Trust and assurance" paragraph of the Authorizer interface doc, and the AuthContext.ImpersonatorPrincipalID comment in core-api/opctx/opctx.go) says a conforming implementation applies only the operation-level assurance gate itself and trusts liveness and profile availability to the middleware. mod-users'' production engine (api/internal/authz/authz.go, authorizePrelude) now also enforces the owning party''s credential_rule and min_acr for acting profiles outside the target''s owning party (mod_users.session_meets_party_policy, refusal ErrForbidden), and OwnerScopedTypeAuthorizer''s doc lists only the four arms. The contract text should allow, or describe, an implementation-level owning-party gate in the prelude so consumers do not read an unexpected 403 for a wildcard or grant holder as a contract violation. Documentation-only change in mod-core.'
+    - title: Party gate adds a query per check
+      id: IIA3
+      date: "2026-10-26"
+      tags:
+        - type:optimization
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/internal/authz/authz.go authorizePrelude calls checkPartyPolicy (SELECT mod_users.session_meets_party_policy(...)) for every Authorize with a target and every AuthorizeTypeIn from a session or credential context, not only for cross-party ones: deciding whether the acting profile is outside the owner''s party needs the target''s owner_id, which is only known in SQL. That adds one round trip to every targeted check (three in total for Authorize: party gate, wildcard, grant-or-own). The function returns early without touching factors for in-party actors and owners without a restrictive policy, so the cost is the round trip, not the work. Folding the gate into the wildcard query (one statement returning both booleans) would remove the extra round trip without changing semantics.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
