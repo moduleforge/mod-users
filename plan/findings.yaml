@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'Optional: install pyyaml or spectral so make'
-      id: cKK9
-      date: "2026-10-26"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-05
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Optional: install pyyaml or spectral so make openapi.validate can run in this environment for task 003''s openapi edits.'
     - title: ErrLastOperatorAdmin is now also returned by…
       id: sDO1
       date: "2026-10-26"
@@ -1275,4 +1266,16 @@ closed:
         .flow/validation-logs/leavegate-race.log lines 1-4 (the -race run, PASS), and
         .flow/validation-logs/integration-full.log line 852 (the full integration
         package "ok", no SKIP or FAIL lines).
+      date: "2026-10-26"
+    - id: cKK9
+      title: 'Optional: install pyyaml or spectral so make'
+      disposition: dismissed
+      reason: |-
+        Reclassified from the default ambiguity stamp: it is an optional tooling
+        suggestion, not an open question. Not actionable: installing pyyaml or
+        spectral on one agent's machine is a local environment step. No change to
+        this repository resolves it, and the Makefile target make openapi.validate
+        already exists. Task 003's status records that the OpenAPI YAML parses and
+        that the validator could not run for lack of tooling. The sDO1 spec below
+        asks for make openapi.validate where the tooling is available.
       date: "2026-10-26"
