@@ -206,7 +206,7 @@ phases:
             branch: plan/identity-model-impl-07-006
             commit:
                 - 3a115f7
-            merge: null
+            merge: bb8dce9f127eb42b15bdafb2838beb3a0708aba0
         - number: 7
           slug: trusted-profile-admission
           title: Trusted Profile Admission
