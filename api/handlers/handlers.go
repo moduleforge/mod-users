@@ -39,16 +39,23 @@ type (
 	// PartiesHandler serves the /v1/parties/{party_uuid} routes and
 	// PATCH /v1/profiles/{uuid}.
 	PartiesHandler = innerparties.PartiesHandler
+	// BootstrapHandler serves the public /v1/bootstrap routes (first-run
+	// bootstrap of the operator account and its status).
+	BootstrapHandler = inner.BootstrapHandler
 )
 
 // NewOIDCConfigHandler constructs the OIDC config handler from individual
 // dependencies declared in the module manifest.
 //
 // envNoOIDCEnv and adminChecker were added after the original four params
-// (Phase 02 onboarding-boot-helpers task) so every existing positional
-// caller keeps working with only an append. adminChecker may be nil for
-// deployments with no admin-checker concept — inner tolerates a nil
-// AdminChecker (see OIDCConfigDeps.AdminChecker's doc comment).
+// (Phase 02 onboarding-boot-helpers task), and platform after those, so
+// every existing positional caller keeps working with only an append.
+// adminChecker is the operator-administrator check (NewOperatorAdminChecker);
+// it may be nil, in which case only the setup token authorizes the
+// configuration routes (see OIDCConfigDeps.AdminChecker's doc comment).
+// platform reads platform_settings so the setup token stays active while the
+// bootstrap is pending (decision U9); a nil platform treats the deployment as
+// bootstrapped.
 func NewOIDCConfigHandler(
 	queries *usersdb.Queries,
 	oauth *auth.OAuth,
@@ -56,15 +63,44 @@ func NewOIDCConfigHandler(
 	tokenDisplay config.TokenDisplay,
 	envNoOIDCEnv bool,
 	adminChecker func(r *http.Request) (bool, error),
+	platform coredb.Querier,
 ) *OIDCConfigHandler {
-	return inner.NewOIDCConfigHandler(inner.OIDCConfigDeps{
+	deps := inner.OIDCConfigDeps{
 		Queries:      queries,
 		OAuth:        oauth,
 		EnvRegistry:  envRegistry,
 		EnvNoOIDCEnv: envNoOIDCEnv,
 		TokenDisplay: tokenDisplay,
 		AdminChecker: adminChecker,
-	})
+	}
+	if platform != nil {
+		deps.Platform = platform
+	}
+	return inner.NewOIDCConfigHandler(deps)
+}
+
+// OperatorAdminCheck is the admin check NewOIDCConfigHandler's adminChecker
+// accepts: (true, nil) for an operator administrator, (false, nil) for any
+// other or no caller, an error for an internal fault.
+type OperatorAdminCheck func(r *http.Request) (bool, error)
+
+// NewOperatorAdminChecker returns the admin check of the OIDC configuration
+// routes: a bearer access token of a live, non-impersonating session whose
+// acting profile is an operator profile holding wildcard manage.
+func NewOperatorAdminChecker(authn *auth.Authenticator, boot *usersservice.BootstrapService) OperatorAdminCheck {
+	return inner.NewOperatorAdminChecker(authn, boot)
+}
+
+// NewBootstrapHandler constructs the /v1/bootstrap handler over the bootstrap
+// service and the OIDC config handler, which owns the setup token.
+func NewBootstrapHandler(boot *usersservice.BootstrapService, setup *OIDCConfigHandler) *BootstrapHandler {
+	return inner.NewBootstrapHandler(boot, setup)
+}
+
+// RegisterBootstrapRoutes mounts GET /status and POST / on r. The routes are
+// public: apply neither auth.NewRequireAuth nor auth.RequireOIDCConfirmed.
+func RegisterBootstrapRoutes(r chi.Router, h *BootstrapHandler) {
+	inner.RegisterBootstrapRoutes(r, h)
 }
 
 // NewProvidersHandler constructs the OIDC providers handler from individual

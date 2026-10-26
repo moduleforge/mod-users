@@ -223,6 +223,50 @@ func NewPartyPolicyService(
 	return inner.NewPartyPolicyService(pool, coreQ, az, obs, users)
 }
 
+// BootstrapService runs the first-run bootstrap of a deployment (the first
+// user, the operator party, the admin profile and its wildcard manage grant,
+// in one transaction with core_claim_operator_party as the single winner) and
+// answers the operator-administrator check.
+type BootstrapService = inner.BootstrapService
+
+// BootstrapInput, BootstrapOperator, BootstrapAdmin and BootstrapResult are
+// the input and outcome of BootstrapService.Bootstrap.
+type (
+	BootstrapInput    = inner.BootstrapInput
+	BootstrapOperator = inner.BootstrapOperator
+	BootstrapAdmin    = inner.BootstrapAdmin
+	BootstrapResult   = inner.BootstrapResult
+)
+
+// Operator party kinds of BootstrapOperator.Kind.
+const (
+	BootstrapOperatorOrganization  = inner.BootstrapOperatorOrganization
+	BootstrapOperatorNaturalPerson = inner.BootstrapOperatorNaturalPerson
+)
+
+// Errors of the bootstrap flow, the same values as the inner package's.
+var (
+	// ErrAlreadyBootstrapped: users.already_bootstrapped (409).
+	ErrAlreadyBootstrapped = inner.ErrAlreadyBootstrapped
+	// ErrSetupTokenInvalid: users.setup_token_invalid (401).
+	ErrSetupTokenInvalid = inner.ErrSetupTokenInvalid
+)
+
+// NewBootstrapService constructs a BootstrapService. users must have been
+// wired with UserService.WithSelfService; profiles supplies the internal
+// profile creation (lifecycle observers fire for the admin profile).
+func NewBootstrapService(
+	pool *pgxpool.Pool,
+	az coreAuthz.Authorizer,
+	obs *observer.ObserverGroup,
+	users *UserService,
+	creds *CredentialService,
+	sessions *SessionService,
+	profiles *ProfileService,
+) *BootstrapService {
+	return inner.NewBootstrapService(pool, az, obs, users, creds, sessions, profiles)
+}
+
 // DirectoryService answers batch display lookups for other modules. It does no
 // authorization: callers authorize first.
 type DirectoryService = inner.DirectoryService

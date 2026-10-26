@@ -33,6 +33,8 @@ var section101 = map[string]bool{
 	"delete credential_party_authorization": true,
 	"create natural_person":                 true,
 	"update service_account":                true,
+	"create bootstrap":                      true,
+	"grant grant":                           true,
 }
 
 // mod-audit's closed op set.

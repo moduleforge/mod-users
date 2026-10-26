@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -133,11 +132,14 @@ func main() {
 		"total_providers", len(oauth.AllProviders()),
 	)
 
-	// az is declared here so the AdminChecker closure can close over it. It is
-	// assigned after opReg is built (further below). The closure only runs at
-	// HTTP request time, well after all initialization completes, so az is
-	// always non-nil when the closure executes.
-	var az *localAuthz.Authorizer
+	// az is assigned after opReg is built (further below), and adminCheck
+	// after the bootstrap service. The AdminChecker closure only runs at
+	// HTTP request time, well after all initialization completes, so
+	// adminCheck is always non-nil when the closure executes.
+	var (
+		az         *localAuthz.Authorizer
+		adminCheck func(r *http.Request) (bool, error)
+	)
 
 	// Build the onboarding handler + state cache. The handler owns the
 	// oidc_config row and the derived BootState; RequireOIDCConfirmed
@@ -148,30 +150,20 @@ func main() {
 		EnvRegistry:  cfg.Providers,
 		EnvNoOIDCEnv: oauth.EnvNoOIDCAccounts(),
 		TokenDisplay: cfg.Onboarding.TokenDisplay,
-		// AdminChecker lets an authenticated operator re-confirm without
-		// fetching a fresh setup token (Phase 9.10a). Returns
-		// (false, nil) on missing/invalid auth so /confirm falls
-		// through to the setup-token check; surfaces internal faults
-		// as errors so they become 500 instead of being masked.
-		//
-		// The operator check is a wildcard manage grant held by the caller's
-		// acting profile.
+		// AdminChecker lets an operator administrator configure OIDC without
+		// a setup token: a session whose acting profile is an operator
+		// profile holding wildcard manage (handlers.NewOperatorAdminChecker).
+		// Returns (false, nil) on missing/invalid auth so /confirm falls
+		// through to the setup-token check (accepted only while the
+		// bootstrap or the OIDC confirmation is pending, decision U9);
+		// surfaces internal faults as errors so they become 500 instead of
+		// being masked.
 		AdminChecker: func(r *http.Request) (bool, error) {
-			id, err := authenticator.Authenticate(r)
-			if err != nil {
-				var notLive *auth.NotLiveError
-				if errors.Is(err, auth.ErrNoAuthHeader) ||
-					errors.Is(err, auth.ErrInvalidToken) ||
-					errors.As(err, &notLive) {
-					return false, nil
-				}
-				return false, err
-			}
-			// az is always non-nil here because HTTP serving starts after all
-			// initialization completes.
-			authErr := az.Authorize(auth.WithIdentity(r.Context(), id), "manage", nil)
-			return authErr == nil, nil
+			return adminCheck(r)
 		},
+		// Platform decides whether the bootstrap is pending: the setup token
+		// stays active until the operator party is set and OIDC is confirmed.
+		Platform: coreQueries,
 	})
 	if err := onboarding.RefreshState(ctx); err != nil {
 		slog.ErrorContext(ctx, "oidc_config: initial state load failed", "error", err)
@@ -184,10 +176,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup-token + state-display lifecycle. TOKEN_DISPLAY=none is the
-	// production-strict escape hatch — revert to Phase 9.1's fail-fast
-	// if state is unconfirmed; onboarding endpoints are NOT mounted
-	// regardless of whether this exits.
+	// Setup-token + state-display lifecycle. The one setup token serves the
+	// bootstrap and the OIDC configuration and is active while either is
+	// pending (decision U9). TOKEN_DISPLAY=none is the production-strict
+	// escape hatch — revert to Phase 9.1's fail-fast if the OIDC state is
+	// unconfirmed; onboarding endpoints are NOT mounted regardless of
+	// whether this exits.
 	if cfg.Onboarding.TokenDisplay == config.TokenDisplayNone {
 		if !onboarding.CurrentState().Confirmed() {
 			slog.ErrorContext(ctx, "TOKEN_DISPLAY=none and OIDC state is unconfirmed — exiting per fail-fast policy",
@@ -203,10 +197,15 @@ func main() {
 			}
 			os.Exit(1)
 		}
+		if !onboarding.Bootstrapped() {
+			slog.WarnContext(ctx, "bootstrap pending but TOKEN_DISPLAY=none: no setup token is shown, so POST /v1/bootstrap cannot succeed",
+				"bootstrap_pending", true,
+			)
+		}
 	} else {
 		// Ensure the setup token is active iff the state calls for
 		// it. EnsureSetupToken returns a non-empty plaintext in two
-		// cases: first-boot (no prior hash) and restart-with-unconfirmed
+		// cases: first-boot (no prior hash) and restart-while-active
 		// (prior hash present but the plaintext was unrecoverable, so
 		// the token is rotated to give ops a fresh recoverable value).
 		// Both cases should trigger a fresh banner.
@@ -222,8 +221,9 @@ func main() {
 			}
 			if cfg.Onboarding.TokenDisplay == config.TokenDisplayLocalhost {
 				// Structured log only; the banner is stderr-exclusive.
-				slog.ErrorContext(ctx, "oidc onboarding required: setup token ready (use /v1/oidc-config/setup-token from loopback)",
+				slog.ErrorContext(ctx, "first-run setup required: setup token ready for the bootstrap and OIDC configuration (use /v1/oidc-config/setup-token from loopback)",
 					"setup_token_required", true,
+					"bootstrap_route", "/v1/bootstrap",
 				)
 			}
 		}
@@ -395,6 +395,10 @@ func main() {
 	// partyPolicyService: the party authentication policy, credential
 	// authorizations and confinements behind /v1/parties/{party_uuid}.
 	partyPolicySvc := usersservice.NewPartyPolicyService(pool, coreQueries, az, observerGroup, userSvc)
+	// bootstrapService: the first-run bootstrap (POST /v1/bootstrap) and the
+	// operator-administrator check behind the OIDC configuration routes.
+	bootstrapSvc := usersservice.NewBootstrapService(pool, az, observerGroup, userSvc, credSvc, sessionSvc, profileSvc)
+	adminCheck = handlers.NewOperatorAdminChecker(authenticator, bootstrapSvc)
 
 	// Handlers.
 	authHandler := authhandlers.New(
@@ -408,6 +412,7 @@ func main() {
 	sessionHandler := session.NewSessionHandler(sessionSvc)
 	principalsHandler := principals.NewPrincipalsHandler(userSvc)
 	partiesHandler := parties.NewPartiesHandler(profileSvc, partyPolicySvc)
+	bootstrapHandler := handlers.NewBootstrapHandler(bootstrapSvc, onboarding)
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
 		Queries:      queries,
 		EnvRegistry:  cfg.Providers,
@@ -425,6 +430,13 @@ func main() {
 			handlers.RegisterOIDCConfigRoutes(r, onboarding, providersHandler)
 		})
 	}
+
+	// First-run bootstrap: public, outside RequireOIDCConfirmed (the bootstrap
+	// may precede the OIDC configuration) and outside RequireAuth (the
+	// X-Setup-Token header is the credential).
+	r.Route("/v1/bootstrap", func(r chi.Router) {
+		handlers.RegisterBootstrapRoutes(r, bootstrapHandler)
+	})
 
 	// Everything else on /v1 — including local + OIDC auth — is gated
 	// by RequireOIDCConfirmed. When TOKEN_DISPLAY=none the middleware
