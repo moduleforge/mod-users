@@ -982,6 +982,7 @@ phases:
           path: phase-17-remediation-06/002-scope-policy-lock-test-seam-and-assert-invite-time.md
           done: false
           tier: sonnet-med
+          digest: Replaced the package-level locker var and test init() with a per-instance nil-defaulting policyLock seam on CollaboratorGate and ProfileService. Non-opted-in tests run the fail-closed production locker. HolderPolicyMismatch fake captures params; InviteTime asserted for both paths; flips confirmed to fail their tests.
           findings:
             - Eqyx
             - inY7
