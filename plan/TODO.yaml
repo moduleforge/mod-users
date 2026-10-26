@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 19
+    tasks_added: 20
 phases:
     - number: 6
       slug: users-identity-core
@@ -633,7 +633,7 @@ phases:
       title: Remediation Round 3
       kind: remediation
       security_review: required
-      tasks_added: 4
+      tasks_added: 5
       remediates_phase: 7
       tasks:
         - number: 1
@@ -683,6 +683,19 @@ phases:
           findings:
             - oO0S
             - 5iFg
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 5
+          slug: fix-policy-sql-null-handling
+          title: Fix NULL Handling In Policy SQL Functions
+          path: phase-14-remediation-03/005-fix-policy-sql-null-handling.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - 4w6W
+            - iaJb
           git:
             branch: null
             commit: []
