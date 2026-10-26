@@ -916,7 +916,8 @@ phases:
             - 8bH2
           git:
             branch: plan/identity-model-impl-16-002
-            commit: []
+            commit:
+                - e69d2cd
             merge: null
         - number: 3
           slug: document-lock-order-and-phase-15-contracts
