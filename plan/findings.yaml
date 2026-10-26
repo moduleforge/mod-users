@@ -36,6 +36,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'The users.step_up_required action-required error is built twice from useraction.StepUpRequired: service.ErrStepUpRequired (api/internal/service/session_errors.go) and authz.ErrStepUpRequired (api/internal/authz/authz.go, the engine''s assurance-gate refusal). Both render identically through apiresp.WriteError, but they are distinct pointers, so errors.Is(err, service.ErrStepUpRequired) does not match an engine refusal and vice versa; callers have to match on errors.As(*apiresp.ActionRequiredError) plus Action().Code. internal/authz cannot import internal/service without pulling the whole service graph into the engine. Declaring the single shared value next to the action code in api/internal/useraction and aliasing it from both packages would give one identity.'
+    - title: '[decision] Are operator profiles subject to t'
+      id: JgvC
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: '[decision] Are operator profiles subject to the owning-party gate (requirement 13 literal reading)? Current implementation holds operator profiles to customer-party credential_rule and min_acr. 14 phase-7 scenarios in api/internal/integration (authorized_invite, collaborator, party_flows, party_policy, profiles) were skipped via skipOperatorUnderOwningPartyGate (message names task 002). Exempting operators means adding a core_is_operator_profile skip to mod_users.session_meets_party_policy and removing the skip helper; moving the gate after the wildcard arm alone is not enough. Risks: a party can lock platform operators out; operators cannot impersonate such a party''s members (affects task 003). Needs a user decision before task 002 proceeds.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
