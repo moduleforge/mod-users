@@ -353,9 +353,10 @@ func validatePolicyInput(in PutPartyAuthnPolicyInput) (pgtype.Text, error) {
 // /v1/parties/{party_uuid}/authn-policy). It needs `update` on the party (404
 // when the caller cannot read the party, 403 otherwise) and a fresh
 // authentication (409 users.step_up_required). A required provider that does
-// not exist is a 400 field error. Changing credential_rule (a party with no
-// policy row counts as `any`) deletes the party's profile_policy_confirmations
-// rows in the same transaction; a write that leaves the rule unchanged keeps them.
+// not exist is a 400 field error. Changing credential_rule or the required
+// provider (a party with no policy row counts as `any`, no provider) deletes the party's profile_policy_confirmations
+// rows in the same transaction; a write that leaves both unchanged keeps them.
+// The write holds the party's policy lock, so confirmation writers serialize with it.
 //
 // Observations: `create` or `update` `party_authn_policy` on the party; `delete`
 // `profile_policy_confirmation` on the party when confirmations were dropped.
@@ -390,6 +391,11 @@ func (s *PartyPolicyService) PutAuthnPolicy(ctx context.Context, partyUUID uuid.
 				return fmt.Errorf("users: load oidc provider: %w", err)
 			}
 		}
+		// Serialize with confirmation writers; the prior-policy read below
+		// then sees the row that stays locked until the purge commits.
+		if err := lockPartyPolicyExclusive(ctx, tx, partyID); err != nil {
+			return err
+		}
 		before, err := q.GetPartyAuthnPolicy(ctx, partyID)
 		existed := err == nil
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -406,12 +412,14 @@ func (s *PartyPolicyService) PutAuthnPolicy(ctx context.Context, partyUUID uuid.
 			return nil
 		}
 		oldRule := CredentialRuleAny // a party with no policy row gates by `any`
+		var oldProvider pgtype.Text
 		if existed {
-			oldRule = before.CredentialRule
+			oldRule, oldProvider = before.CredentialRule, before.RequiredOidcProviderID
 		}
-		if oldRule != row.CredentialRule {
+		if oldRule != row.CredentialRule || oldProvider != row.RequiredOidcProviderID {
 			// A confirmation exempts a profile from the credential rule it
-			// was given under; a different rule voids it.
+			// was given under, whose substance under `provider` is the
+			// required provider; a different rule or provider voids it.
 			if err := s.dropPolicyConfirmations(ctx, tx, partyID, partyUUID); err != nil {
 				return err
 			}

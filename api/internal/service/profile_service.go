@@ -557,6 +557,9 @@ func (s *ProfileService) invite(ctx context.Context, tx pgx.Tx, req inviteReques
 // true: the caller records the confirmation once the profile exists (the confirmation
 // references the profile), in the same transaction.
 func (s *ProfileService) checkInvitePolicyMismatch(ctx context.Context, tx pgx.Tx, in InviteInput, holderID int64) (confirmed bool, err error) {
+	if err := lockPartyPolicyShared(ctx, tx, in.PartyID); err != nil {
+		return false, err
+	}
 	mm, err := detectPolicyMismatch(ctx, s.usersQ(tx), holderID, in.PartyID)
 	if err != nil || mm == nil {
 		return false, err

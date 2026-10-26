@@ -69,6 +69,9 @@ func (g *CollaboratorGate) CheckOutsideCollaborator(ctx context.Context, tx pgx.
 	if p.PartyID.Valid && p.PartyID.Int64 == owningPartyID {
 		return nil
 	}
+	if err := lockPartyPolicyShared(ctx, tx, owningPartyID); err != nil {
+		return err
+	}
 	if _, err := cq.GetProfilePolicyConfirmation(ctx, coredb.GetProfilePolicyConfirmationParams{
 		ProfileID: memberProfileID, PartyID: owningPartyID,
 	}); err == nil {
