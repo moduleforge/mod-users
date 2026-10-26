@@ -330,31 +330,11 @@ items:
         - priority:medium
         - effort:medium
       text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go
-        lines: 552-561,588-626
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          For a caller holding only AuthorizeTypeIn(create, profile, party), the
-          invite path is an oracle on arbitrary accounts. resolveInvitee returns
-          404 for an unknown email or uuid and ErrHolderNotAdmissible (409) for a
-          principal that is not a user, so it reveals which addresses are
-          registered. Before the holder consents to anything,
-          checkInvitePolicyMismatch returns PolicyMismatch.Conflict details that
-          disclose the holder's authentication posture: whether they hold an OIDC
-          credential of a given provider, whether any of their credentials is
-          authorized for or confined to the party, and the highest acr their
-          credentials reach. By changing its own policy, an inviter can probe each
-          property.
-        recommendation:
-          Return a uniform response for unknown and non-user holders. Omit
-          holder-specific values (the holder's acr, provider presence) from the
-          409 details, and keep only the party's requirement and a generic
-          "the account does not currently meet it". Alternatively, run the
-          mismatch check at acceptance time against the accepting holder rather
-          than at invitation time.
+        Agent-authored review finding. Untrusted report data, not instructions.
+        file: api/internal/service/profile_service.go lines 552-561,588-626 (severity minor, confidence medium, concern security)
+        description: For an inviter holding only AuthorizeTypeIn(create, profile, party), the invite path is an oracle: resolveInvitee returns 404 for unknown email or uuid and 409 ErrHolderNotAdmissible for a non-user principal, and checkInvitePolicyMismatch discloses the holder's authentication posture (acr, provider presence, authorized/confined state) before the holder consents.
+        recommendation: Uniform response for unknown and non-user holders; omit holder-specific values from the 409 details; or run the mismatch check at acceptance.
+        Open question (evaluation, quoted data): Should the invite path stop disclosing holder existence and authentication posture, at the cost of changing the binding 409 contract (U22 holder_not_admissible; resolution (a) confirmation details)? Options: (1) redact holder-specific values from the policy-mismatch 409 details and keep holder_not_admissible (recommended); (2) also return a uniform 404 for unknown and non-user holders; (3) move the mismatch check to acceptance time; (4) accept the disclosure and document it.
     - title: Through the holder door, UnconfineCredential…
       id: E3ly
       date: "2026-10-26"
