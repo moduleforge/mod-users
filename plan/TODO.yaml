@@ -798,7 +798,7 @@ phases:
           slug: extend-last-operator-admin-guard
           title: Extend The Last Operator Admin Guard To Suspension And EndInTx
           path: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: The last-operator-admin guard now runs inside transitionLocked for every transition out of active, so suspension, EndInTx, admin ending and holder leave inherit it. The explicit guard calls in profile_admin.go and profile_holder.go were removed. The guard takes the platform_settings lock first (operator-party profiles only), then runs one count query.
           findings:
