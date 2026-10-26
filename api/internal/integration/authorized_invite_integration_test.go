@@ -23,7 +23,7 @@ func TestAuthorizedInvite_SatisfiedAtInviteThenGatedUntilAuthorized(t *testing.T
 	// interactive credential, so the rule is met at invite time.
 	v := g.invite(t, map[string]any{"holder_email": a.Email}).wantStatus(t, http.StatusCreated).obj(t)
 	profUUID := v["uuid"].(string)
-	if n := env.scanInt64(t, "confirmations", `SELECT count(*) FROM profile_policy_confirmations WHERE party_id = $1`, g.id); n != 0 {
+	if n := env.adminConfirmations(t, g.id); n != 0 {
 		t.Fatalf("the invitation wrote %d confirmation(s), want none", n)
 	}
 	env.do(t, http.MethodPost, "/v1/me/profiles/"+profUUID+"/accept", a.tk.access(), nil).wantStatus(t, http.StatusOK)
@@ -110,7 +110,7 @@ func TestAuthorizedInvite_RuleChangeDropsPolicyConfirmations(t *testing.T) {
 			om.profileID, other.id)
 	}
 	rows := func(partyID int64) int64 {
-		return env.scanInt64(t, "confirmations", `SELECT count(*) FROM profile_policy_confirmations WHERE party_id = $1`, partyID)
+		return env.adminConfirmations(t, partyID)
 	}
 	confirm()
 
