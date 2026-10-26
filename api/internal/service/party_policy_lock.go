@@ -14,6 +14,15 @@ import (
 // caller-supplied text reaches it.
 const partyPolicyLockKey = `hashtextextended('mod_users.party_authn_policy:' || $1::bigint::text, 0)`
 
+// errNilPolicyLockTx is returned by lockPartyPolicyShared when called without a
+// transaction.
+var errNilPolicyLockTx = errors.New("users: party policy lock requires a transaction")
+
+// partyPolicySharedLocker is the seam through which the confirmation writers
+// take the shared policy lock. Production uses lockPartyPolicyShared; only
+// test code replaces it (see party_policy_lock_seam_test.go).
+var partyPolicySharedLocker = lockPartyPolicyShared
+
 // lockPartyPolicyExclusive serializes the caller, inside tx, with every other
 // writer of the party's authentication policy and with every confirmation
 // writer (lockPartyPolicyShared). It takes the per-party advisory lock
@@ -38,12 +47,13 @@ func lockPartyPolicyExclusive(ctx context.Context, tx pgx.Tx, partyID int64) err
 // waits for an in-flight PutAuthnPolicy and holds it off until tx ends, so a
 // confirmation recorded under the old policy cannot outlive a policy change.
 //
-// A nil tx locks nothing: it occurs only in unit tests that drive the callers
-// over fake queriers, never in production, where every caller holds a real
-// transaction.
+// A nil tx fails closed (errNilPolicyLockTx): skipping the lock would silently
+// drop the confirmation-vs-policy-change serialization. Unit tests that drive
+// the callers over fake queriers without a transaction swap the package-level
+// partyPolicySharedLocker seam instead.
 func lockPartyPolicyShared(ctx context.Context, tx pgx.Tx, partyID int64) error {
 	if tx == nil {
-		return nil
+		return errNilPolicyLockTx
 	}
 	var one int
 	err := tx.QueryRow(ctx, `SELECT 1 FROM mod_users.party_authn_policies WHERE party_id = $1 FOR SHARE`, partyID).Scan(&one)

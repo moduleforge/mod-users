@@ -28,3 +28,7 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 
 - Finding `6dyh` in this plan's plan/findings.yaml (type:security, priority:medium): disablePrincipalInTx (api/internal/service/principal_admin.go) does not take the platform_settings lock that the last-admin guard uses, so concurrent disable and suspension can leave zero effective operator administrators.
 - Finding `8bH2` in this plan's plan/findings.yaml (type:security, priority:medium): lockPartyPolicyShared (api/internal/service/party_policy_lock.go) returns nil on a nil tx, silently skipping the confirmation-vs-policy-change lock in production code. The recommendation is fail-closed behavior with a test seam.
+
+## Status
+
+Outcome: succeeded (2026-10-26). `disablePrincipalInTx` now calls `requireNotLastOperatorAdminForDisable` (api/internal/service/profile_last_admin.go), which takes the platform_settings row lock when the principal holds an active operator-party profile and refuses with ErrLastOperatorAdmin when no other effective administrator remains. `lockPartyPolicyShared` fails closed on a nil tx; callers go through the `partyPolicySharedLocker` seam, which test code overrides (api/internal/service/party_policy_lock_seam_test.go). Validation: make build.api, make test.unit, make lint passed; the new integration test (leave_gate_integration_test.go) compiles and vets but the HTTP integration suite self-skipped here (docker inspect failed), so it was not observed to run.

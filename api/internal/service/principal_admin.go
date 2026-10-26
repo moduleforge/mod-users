@@ -384,11 +384,18 @@ func (s *UserService) DisablePrincipal(ctx context.Context, id uuid.UUID, reason
 // disablePrincipalInTx disables the principal in the caller's transaction,
 // without authorization: sets principals.disabled_at, revokes every session of
 // the principal with reason `principal_disabled` and observes `update` on the
-// principal's resource. Disabling a disabled principal changes nothing. The
+// principal's resource. Disabling a disabled principal changes nothing. Disabling
+// the last effective operator administrator is refused (ErrLastOperatorAdmin).
+// The
 // profile departure cleanup of a managed user's last profile uses it too.
 func (s *UserService) disablePrincipalInTx(ctx context.Context, tx pgx.Tx, sum PrincipalSummary, reason string) error {
 	if s.sessions == nil {
 		return errors.New("users: no session service configured for principal administration")
+	}
+	// Lock order: platform_settings (inside the guard) before the principal row.
+	// The guard refuses disabling the last effective operator administrator.
+	if err := requireNotLastOperatorAdminForDisable(ctx, tx, sum.PrincipalID); err != nil {
+		return err
 	}
 	cq := s.coreQuerier(tx)
 	cur, err := cq.GetPrincipalByEntityID(ctx, sum.PrincipalID)
