@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	coreAuthz "github.com/moduleforge/core-api/authz"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 
 	"github.com/moduleforge/mod-users/api/config"
@@ -45,6 +46,18 @@ type Authenticator = inner.Authenticator
 // NewLocalVerifier's) and the auth configuration (accepted audiences).
 func NewAuthenticator(pool *pgxpool.Pool, verifier *Verifier, cfg config.AuthConfig) *Authenticator {
 	return inner.NewAuthenticator(pool, verifier, cfg)
+}
+
+// NewAuthenticatorWithAppGate is NewAuthenticator plus the authorizer that
+// evaluates the invite-only app gate on every request: for a session whose app
+// has apps.invite_only, the request is live only while
+// Authorize(ctx-with-acting-profile, "login", &app.entity_id) allows it
+// (otherwise 401 users.profile_unavailable, lock reason app_login_not_granted).
+// Without an authorizer every invite-only app is refused. The module manifest
+// constructs the authenticator through it; NewAuthenticator plus
+// Authenticator.SetAppGate is the equivalent for hand-wired hosts.
+func NewAuthenticatorWithAppGate(pool *pgxpool.Pool, verifier *Verifier, cfg config.AuthConfig, az coreAuthz.Authorizer) *Authenticator {
+	return inner.NewAuthenticatorWithAppGate(pool, verifier, cfg, az)
 }
 
 // Errors returned by Authenticator.Authenticate. ErrNotLive wraps the

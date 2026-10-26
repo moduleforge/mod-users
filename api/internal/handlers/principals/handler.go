@@ -6,7 +6,8 @@
 // functions, a read needs `read` on the principal (an unreadable principal is
 // a 404, like an unknown one), and disable and enable need `update` plus a
 // fresh authentication (409 users.step_up_required). The credential
-// sub-routes of /v1/principals belong to the authorization-engine phase.
+// sub-routes (list, issue an API key, install an SSH key, revoke) authorize the
+// `credentials` operation on the principal; see credentials.go.
 package principals
 
 import (
@@ -41,6 +42,10 @@ func RegisterPrincipalRoutes(r chi.Router, h *PrincipalsHandler) {
 	r.Get("/{uuid}", h.Get)
 	r.Post("/{uuid}/disable", h.Disable)
 	r.Post("/{uuid}/enable", h.Enable)
+	r.Get("/{uuid}/credentials", h.ListCredentials)
+	r.Post("/{uuid}/credentials/api-keys", h.IssueAPIKey)
+	r.Post("/{uuid}/credentials/ssh-keys", h.InstallSSHKey)
+	r.Delete("/{uuid}/credentials/{credential_uuid}", h.RevokeCredential)
 }
 
 // writeError renders err: a service.AuthError with its own code and status,

@@ -488,14 +488,17 @@ func (s *SessionService) live(sess usersdb.Session) bool {
 // gateFor returns the invite-only app gate for the session, or nil when the
 // session's app is not invite-only.
 //
-// Until phase users-authorization-engine replaces it with
-// Authorize(login, app) (decision U15), the gate admits a profile only when
-// it holds a wildcard grant: Authorize with a nil target is satisfied by a
-// wildcard grant alone. An absent authorizer admits nobody.
+// The gate is Authorize(ctx-with-candidate-profile, "login", &app.entity_id)
+// (decision U15): the engine's wildcard, entity, owned-scope and own arms, and
+// the actor groups the candidate profile belongs to, all apply. An app has no
+// row of its own beyond its entity (apps.id is the entity id), so the target
+// is the session's app id. Only an invite-only app pays the extra query; any
+// other app returns a nil gate. An absent authorizer admits nobody.
 func (s *SessionService) gateFor(sc sessionContext) appGate {
-	if !sc.inviteOnly {
+	if !sc.inviteOnly || !sc.sess.AppID.Valid {
 		return nil
 	}
+	appID := sc.sess.AppID.Int64
 	return func(ctx context.Context, profileID int64) (bool, error) {
 		if s.az == nil {
 			return false, nil
@@ -507,7 +510,7 @@ func (s *SessionService) gateFor(sc sessionContext) appGate {
 			ACR:         sc.sess.Acr,
 			AuthTime:    sc.sess.AuthTime.Time,
 		})
-		err := s.az.Authorize(candidate, opLoginApp, nil)
+		err := s.az.Authorize(candidate, opLoginApp, &appID)
 		switch {
 		case err == nil:
 			return true, nil

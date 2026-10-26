@@ -827,6 +827,9 @@ components:
         public_key:
           type: string
           description: "Present for `ssh_key`: canonical `authorized_keys` form."
+        client_id:
+          type: string
+          description: Present for `api_key`.
 
     CredentialList:
       type: object
@@ -865,6 +868,57 @@ components:
           type: string
           maxLength: 100
           nullable: true
+
+    InstallSSHKeyRequest:
+      type: object
+      required: [public_key]
+      properties:
+        public_key:
+          type: string
+          description: >-
+            A single `authorized_keys`-format line, validated as for
+            `AddSSHKeyRequest`.
+        label:
+          type: string
+          maxLength: 100
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Must be in the future.
+
+    IssueAPIKeyRequest:
+      type: object
+      description: The whole body is optional.
+      properties:
+        label:
+          type: string
+          maxLength: 100
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Must be in the future.
+        default_profile_uuid:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The landing profile of client-credentials tokens; it must be held
+            by the service account (404 otherwise).
+
+    IssuedAPIKey:
+      description: >-
+        A newly issued API key: the credential and its one-time
+        `client_secret`, which is never shown again.
+      allOf:
+        - $ref: "#/components/schemas/CredentialView"
+        - type: object
+          required: [client_secret]
+          properties:
+            client_secret:
+              type: string
 
     PatchCredentialRequest:
       type: object
@@ -1410,7 +1464,9 @@ components:
       name: credential_uuid
       in: path
       required: true
-      description: The uuid of a credential (as listed by `GET /v1/me/credentials`).
+      description: >-
+        The uuid of a credential (as listed by `GET /v1/me/credentials` or
+        `GET /v1/principals/{uuid}/credentials`).
       schema:
         type: string
         format: uuid
@@ -3008,6 +3064,136 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PrincipalView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/principals/{uuid}/credentials:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    get:
+      summary: List a principal's active credentials
+      description: |
+        Authorizes the `credentials` operation on the principal (a stale
+        authentication is 409 `users.step_up_required`; the operation's
+        `max_auth_age` is 10 minutes). Order: 401, 400, 404 (a principal the
+        caller cannot read), 403, 409. Newest first; never a hash or secret.
+      tags: [Principals]
+      operationId: listPrincipalCredentials
+      responses:
+        "200":
+          description: Credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/principals/{uuid}/credentials/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Issue an API key to a service account
+      description: |
+        Authorizes `credentials` on the principal. A principal that is not a
+        service account is 400 `users.principal_not_service_account`. The
+        response carries the `client_secret` once and is not cacheable. A
+        personal profile that owns a self-owned service account may rotate its
+        key through the own arm; a party-owned account needs an owned-scope or
+        entity grant on the party.
+      tags: [Principals]
+      operationId: issuePrincipalAPIKey
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueAPIKeyRequest"
+      responses:
+        "201":
+          description: The credential and its one-time secret.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedAPIKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/principals/{uuid}/credentials/ssh-keys:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+    post:
+      summary: Install an SSH key for a principal
+      description: |
+        Authorizes `credentials` on the principal (not `assume` or
+        `impersonate`). A fingerprint that is active anywhere is 409
+        `users.ssh_key_in_use`; a guest is 409 `users.guest_upgrade_required`.
+      tags: [Principals]
+      operationId: installPrincipalSSHKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallSSHKeyRequest"
+      responses:
+        "201":
+          description: The credential.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/principals/{uuid}/credentials/{credential_uuid}:
+    parameters:
+      - $ref: "#/components/parameters/UUID"
+      - $ref: "#/components/parameters/CredentialUUID"
+    delete:
+      summary: Revoke a principal's credential
+      description: |
+        Authorizes `credentials` on the principal and revokes the credential
+        with reason `admin`, which also ends every session that holds it as a
+        factor. There is no last-credential check. A credential that does not
+        exist, belongs to another principal or is already revoked is 404.
+      tags: [Principals]
+      operationId: revokePrincipalCredential
+      responses:
+        "204":
+          description: Revoked.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":

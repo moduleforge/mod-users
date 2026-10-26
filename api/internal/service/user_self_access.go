@@ -271,6 +271,8 @@ type CredentialView struct {
 	KeyType     string `json:"key_type,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
 	PublicKey   string `json:"public_key,omitempty"`
+	// ClientID describes an api_key credential.
+	ClientID string `json:"client_id,omitempty"`
 }
 
 // entityUUIDs maps entity ids to their public uuids in one query.
@@ -330,7 +332,7 @@ func (s *UserService) credentialViews(ctx context.Context, principalID int64, de
 			UUID: d.UUID, Kind: d.Kind, Label: d.Label, CreatedAt: d.CreatedAt,
 			LastUsedAt: d.LastUsedAt, ExpiresAt: d.ExpiresAt,
 			ProviderID: d.ProviderID, EmailAtLink: d.EmailAtLink,
-			KeyType: d.KeyType, Fingerprint: d.Fingerprint, PublicKey: d.PublicKey,
+			KeyType: d.KeyType, Fingerprint: d.Fingerprint, PublicKey: d.PublicKey, ClientID: d.ClientID,
 		}
 		if u, ok := uuids[d.DefaultProfileID]; ok && d.DefaultProfileID != 0 {
 			v.DefaultProfileUUID = &u

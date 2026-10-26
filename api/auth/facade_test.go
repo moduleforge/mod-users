@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/config"
 )
@@ -18,6 +19,7 @@ import (
 var (
 	_ func(context.Context) (*Identity, bool)                                                 = IdentityFromContext
 	_ func(*pgxpool.Pool, *Verifier, config.AuthConfig) *Authenticator                        = NewAuthenticator
+	_ func(*pgxpool.Pool, *Verifier, config.AuthConfig, coreAuthz.Authorizer) *Authenticator  = NewAuthenticatorWithAppGate
 	_ func(*Authenticator) func(http.Handler) http.Handler                                    = NewRequireAuth
 	_ func(*Authenticator, *AnonymousActor) func(http.Handler) http.Handler                   = NewResolveOrAnonymous
 	_ func() func(http.Handler) http.Handler                                                  = NewRequireVerifiedEmail

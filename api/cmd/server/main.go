@@ -300,6 +300,10 @@ func main() {
 	// pass any authorization check.
 	az = localAuthz.New(authzdb.New(pool), opReg, pool)
 
+	// The per-request liveness check evaluates the invite-only app gate through
+	// the same Authorizer (decision U15).
+	authenticator.SetAppGate(az)
+
 	// Build the audit-module Observer and compose it into an ObserverGroup.
 	// The audit Observer writes one audit_log row inside the operation's transaction,
 	// providing transactional consistency. This is the only place in users-module

@@ -469,6 +469,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 		return nil, fmt.Errorf("apply access functions: %w", err)
 	}
 	az := localAuthz.New(authzdb.New(pool), opReg, pool)
+	authn.SetAppGate(az)
 
 	rec := &recorder{}
 	members := []observer.MutationObserver{rec}
