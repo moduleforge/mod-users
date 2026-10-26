@@ -23,3 +23,11 @@ This task fixes findings `9Mvf` (security, priority medium), `PL6d` (bug, priori
 - Finding `9Mvf` in this plan's `plan/findings.yaml` (type:security, priority:medium): `gateCredentialWrite` locks the credential first and the holder profile second, the reverse of the ending path, so a confine or unconfine racing an ending can deadlock.
 - Finding `PL6d` in this plan's `plan/findings.yaml` (type:bug, priority:medium): the same inversion, with the unconfine of a party-confined credential racing a holder leave as the concrete lock cycle; the recommendation is a uniform profile-then-credential order and a concurrency test.
 - Finding `zwbM` in this plan's `plan/findings.yaml` (type:bug, priority:medium): the lock-order inversion between the credential write gate and the profile ending path, with the comment that the share lock serializes both paths being true only for the profile lock.
+
+## Status
+
+- Outcome: succeeded (2026-10-26).
+- `gateCredentialWrite` in `api/internal/service/party_policy.go` now locks the holder's active profile FOR SHARE first, then the credential FOR UPDATE, re-reading it and re-checking `revoked_at`; the lock-order comment is at the lock site.
+- Tests added in `api/internal/integration/party_confinement_integration_test.go`: a deterministic ending-vs-write test (unconfine, confine, authorize, deauthorize; fails with 40P01 on the old order) and a repeated unconfine-vs-leave race.
+- Validation: `make build.api`, `make test.unit` and the full integration suites (authz, config, integration) passed against a throwaway Postgres 16.
+- Not done (outside this task's requirements): recording the global lock order in `AGENTS.md` or `docs/architecture.md`, which finding `zwbM` also recommends.

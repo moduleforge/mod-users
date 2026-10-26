@@ -11,7 +11,9 @@ package integration
 import (
 	"context"
 	"net/http"
+	"sync"
 	"testing"
+	"time"
 )
 
 // boundOIDCCredential gives the user an active OIDC credential of a new
@@ -228,6 +230,111 @@ func TestConfinement_DepartureStillRevokesEveryConfinedCredential(t *testing.T) 
 	for name, c := range map[string]string{"personal": pw, "bound-provider oidc": oidc, "managed": managedPw} {
 		if !env.revoked(t, c) {
 			t.Errorf("the %s credential confined to the party survived the holder's departure", name)
+		}
+	}
+}
+
+// waitForLockWaiter blocks until some backend of the test database waits on a
+// lock, so a test knows a concurrent request has reached its lock wait.
+func (s *stack) waitForLockWaiter(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.count(t, "lock waiters",
+			`SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`) > 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("no request reached a lock wait")
+}
+
+// A credential write about a confined credential must take the holder's
+// profile lock before the credential lock, the order of the ending path. The
+// ending holds the profile lock, a write arrives and waits, and only then does
+// the ending revoke the confined credential: with the credential locked first
+// the write would hold the row the ending needs while waiting for the profile,
+// a lock cycle (SQLSTATE 40P01, a 500).
+func TestConfinement_WriteRacingAnEndingTakesTheProfileLockFirst(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   func(g gateParty, cred string) string
+	}{
+		{"unconfine", http.MethodDelete, confPath},
+		{"confine", http.MethodPut, confPath},
+		{"authorize", http.MethodPut, authPath},
+		{"deauthorize", http.MethodDelete, authPath},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := env.newGateParty(t)
+			ctx := env.authCtx(t, g.adminTok.access())
+			m := env.newGateMember(t, g)
+			oidc := env.boundOIDCCredential(t, m.userID, g.id)
+			env.do(t, http.MethodPut, confPath(g, oidc), g.adminTok.access(), nil).wantStatus(t, http.StatusOK)
+
+			tx, err := env.pool.Begin(ctx)
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			if _, err := tx.Exec(ctx, `SELECT 1 FROM public.profiles WHERE entity_id = $1 FOR UPDATE`, m.profileID); err != nil {
+				t.Fatalf("lock profile: %v", err)
+			}
+
+			done := make(chan *resp, 1)
+			go func() { done <- env.do(t, tc.method, tc.path(g, oidc), g.adminTok.access(), nil) }()
+			env.waitForLockWaiter(t)
+
+			// The ending now revokes the confined credential. It must not wait
+			// on the write, which may hold no credential lock yet.
+			if err := env.profiles.EndInTx(ctx, tx, m.profileID, "left"); err != nil {
+				t.Fatalf("EndInTx: %v", err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatalf("commit ending: %v", err)
+			}
+			r := <-done
+			if r.status != http.StatusNotFound {
+				t.Fatalf("%s racing an ending = %d, want 404; body=%s", tc.name, r.status, r.raw)
+			}
+			if !env.revoked(t, oidc) {
+				t.Errorf("the confined credential survived the ending")
+			}
+		})
+	}
+}
+
+// Repeatedly races an administrator's unconfine of a party-controlled
+// credential against the holder leaving: neither may fail with a 500.
+func TestConfinement_UnconfineRacingALeaveNeverFails(t *testing.T) {
+	g := env.newGateParty(t)
+	for i := 0; i < 8; i++ {
+		m := env.newGateMember(t, g)
+		oidc := env.boundOIDCCredential(t, m.userID, g.id)
+		env.do(t, http.MethodPut, confPath(g, oidc), g.adminTok.access(), nil).wantStatus(t, http.StatusOK)
+		personal := env.login(t, m.acct)
+
+		var wg sync.WaitGroup
+		var leave, unconfine *resp
+		start := make(chan struct{})
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			leave = env.do(t, http.MethodPost, "/v1/me/profiles/"+m.profUUID+"/leave", personal.access(), nil)
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			unconfine = env.do(t, http.MethodDelete, confPath(g, oidc), g.adminTok.access(), nil)
+		}()
+		close(start)
+		wg.Wait()
+
+		leave.wantStatus(t, http.StatusNoContent)
+		if unconfine.status != http.StatusNoContent && unconfine.status != http.StatusNotFound {
+			t.Fatalf("iteration %d: unconfine = %d, want 204 or 404; body=%s", i, unconfine.status, unconfine.raw)
 		}
 	}
 }
