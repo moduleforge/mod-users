@@ -192,7 +192,8 @@ phases:
           digest: 'SSHKeyResolver.AuthContextForOwner implements the ADR derivation: owner party with active principal profile and credential_profile_availability available gives that profile; otherwise ErrSSHKeyNotAuthorized carrying the party uuid; confined keys refused for their confining party. Exported ErrSSHKeyNotAuthorized, SSHKeyNotAuthorizedError and SSHKeyNotAuthorizedParty(err). Two round trips via coredb.ListProfilesByHolder then CredentialProfileAvailability.'
           git:
             branch: plan/identity-model-impl-07-005
-            commit: []
+            commit:
+                - 4aa0ac5
             merge: null
         - number: 6
           slug: party-flows-integration-tests
