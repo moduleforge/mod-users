@@ -256,7 +256,7 @@ phases:
           tier: sonnet-high
           digest: 'Impersonation is now a child session: ImpersonationService (start, renew, end) and ImpersonationHandler on /v1/impersonations, wired through facades, main.go, manifest and openapi. Switch and fork refuse inside an impersonation (Fork returns ErrImpersonationNotAllowed). Start order 400, 403, authorize impersonate, 404, 409. Operators reach restrictive-policy party members per Decision D; no skip helper. Filed followups 0chQ (renew does not re-authorize administrator impersonate authority) and Q1lB (stale docs for removed /assume route).'
           git:
-            branch: null
+            branch: plan/identity-model-impl-08-003
             commit: []
             merge: null
         - number: 4
