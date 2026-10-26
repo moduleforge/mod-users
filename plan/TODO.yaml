@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 20
+    tasks_added: 21
 phases:
     - number: 6
       slug: users-identity-core
@@ -633,7 +633,7 @@ phases:
       title: Remediation Round 3
       kind: remediation
       security_review: required
-      tasks_added: 5
+      tasks_added: 6
       remediates_phase: 7
       tasks:
         - number: 1
@@ -696,6 +696,19 @@ phases:
           findings:
             - 4w6W
             - iaJb
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 6
+          slug: correct-openapi-and-architecture-doc-drift
+          title: Correct Step-Up Order And Bootstrap Exception Docs
+          path: phase-14-remediation-03/006-correct-openapi-and-architecture-doc-drift.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - qvpE
+            - kimI
           git:
             branch: null
             commit: []
