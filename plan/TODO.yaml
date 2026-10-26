@@ -278,6 +278,7 @@ phases:
           path: phase-08-users-authorization-engine/005-personal-party.md
           done: false
           tier: sonnet-med
+          digest: Added EnsurePersonalParty (user-row lock for idempotency, owned-scope manage grant, three audit ops) with facade, manifest entry and unit and integration tests, including the B6 sequence and the U28 limitation. Re-ran phase 7 party flows, the ADR worked example and remediation tests with non-operator owned-scope administrators, plus a refusal case per flow. All suites pass against a real Postgres.
           git:
             branch: null
             commit: []
