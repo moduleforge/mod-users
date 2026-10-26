@@ -739,7 +739,7 @@ phases:
             branch: plan/identity-model-impl-14-007
             commit:
                 - 843012c
-            merge: null
+            merge: d9a8e781381f51fa7cee9b012918291a323e91ba
         - number: 8
           slug: authorized-rule-invite-time-semantics
           title: Treat Authorized Credential Rule As Satisfied At Invite Time
