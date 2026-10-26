@@ -27,6 +27,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: api/openapi.yaml info.description says step-up (409 users.step_up_required) comes before authorization on the principal disable and enable, but UserService.writablePrincipal in api/internal/service/principal_admin.go authorizes `read` then `update` first and checks freshness after (the same order the profile status change now uses, noted in the new party-administration bullet of that description). Correct the principal sentence, or change the order, so the document and code agree.
+    - title: 'mod-core: in-tx org create'
+      id: 0b75
+      date: "2026-10-25"
+      tags:
+        - type:enhancement
+        - plan/phase:parties-profiles-and-bootstrap
+        - priority:unspecified
+        - effort:unspecified
+      text: 'mod-core gap (request to mod-core, not a mod-users change): coreservice.OrganizationService.Create (mod-core api/service/organization.go) always authorizes via authz.AuthorizeTypeIn against the acting profile''s ownership subject and opens its own transaction (txhelper.Run), so a trusted in-transaction caller cannot create an organization through it. mod-users'' BootstrapService.createOrganization (api/internal/service/bootstrap_service.go) therefore composes coreservice.CreateEntity(WithoutOwner) with the generated coredb CreateLegalEntity and CreateOrganization queries inside the bootstrap transaction, which skips mod-core''s own `create organization` observation and its field normalisation/tax-id encryption path (the bootstrap observes the organization through its `create bootstrap` event instead). Ask mod-core for a trusted `CreateInTx(ctx, tx, in, opts...)` variant (no authorization, explicit owner option, in-tx observation) mirroring NaturalPersonService.CreateInTx, then switch the bootstrap to it.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
