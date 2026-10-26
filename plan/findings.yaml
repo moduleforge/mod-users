@@ -107,10 +107,10 @@ items:
       id: hyek
       date: "2026-10-26"
       tags:
-        - type:ambiguity
+        - type:documentation
         - plan/phase:remediation-04
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'Behavioral consequence: a handler whose cache was never populated now rejects every token without a read. main.go, the harness and unit tests all call RefreshState at boot; any new wiring must call RefreshState at startup.'
     - title: 'Out of scope, existing behavior: whether PutA'
       id: oufL
