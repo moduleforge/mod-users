@@ -581,6 +581,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Behavioral consequence: a handler whose cache was never populated now rejects every token without a read. main.go, the harness and unit tests all call RefreshState at boot; any new wiring must call RefreshState at startup.'
+    - title: 'Out of scope, existing behavior: whether PutA'
+      id: oufL
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Out of scope, existing behavior: whether PutAuthnPolicy should authorize or flag existing unauthorized credentials of managed users when switching to authorized. Admin-recoverable; not changed by this task.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials

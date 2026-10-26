@@ -873,11 +873,13 @@ phases:
           slug: serialize-managed-user-provisioning-with-policy
           title: Serialize Managed User Provisioning With Authn Policy Writes
           path: phase-15-remediation-04/008-serialize-managed-user-provisioning-with-policy.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: ProvisionManagedUserInTx calls lockPartyPolicyShared before GetPartyAuthnPolicy (FOR SHARE on the policy row, or shared advisory lock with no row), serializing provisioning against PutAuthnPolicy. Two deterministic lock-ordering integration tests added; both fail with the lock removed and pass with it. Integration suite ran in full against a throwaway postgres:16-alpine container.
           findings:
             - vHBJ
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-15-008
+            commit:
+                - b6e9f7c
             merge: null
