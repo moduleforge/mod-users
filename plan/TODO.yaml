@@ -194,7 +194,7 @@ phases:
             branch: plan/identity-model-impl-07-005
             commit:
                 - 4aa0ac5
-            merge: null
+            merge: d1f7d44e64e5e8478507f2cc015e10c2ff52ab11
         - number: 6
           slug: party-flows-integration-tests
           title: Party Flows Integration Tests
