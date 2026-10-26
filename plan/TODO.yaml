@@ -815,7 +815,7 @@ phases:
           slug: verify-setup-token-without-cache-writes
           title: Verify The Setup Token From A Local Fresh Read Without Rewriting The Shared Cache
           path: phase-15-remediation-04/004-verify-setup-token-without-cache-writes.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'verifySetupToken now short-circuits on cached state, does a local fresh read, and never touches the shared cache. Docs and unit tests are updated. The integration test compiles but did NOT run: no usable Postgres (no users superuser reachable; the shared localhost:5432 instance is refused without AUTHZ_DEV_PG_CONFIRM_SHARED=1, which was not set).'
           findings:
