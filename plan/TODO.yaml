@@ -222,6 +222,7 @@ phases:
     - number: 8
       slug: users-authorization-engine
       title: Users Authorization Engine
+      diff_base: 5d8a61652739fde471acab8bc2354222fa5c0e66
       tasks:
         - number: 1
           slug: rewrite-authorization-engine
