@@ -24,8 +24,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:parties-profiles-and-bootstrap
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'docs/architecture.md''s "requires.services" table (top of the file) still lists consumers and hooks that no longer exist in moduleforge.module.yaml: userAccountService, selfHandler, appsHandler, typeResolver/entityResolver/coreServices/grantService and the firstUserGrant hook (the wildcard manage grant is now created by BootstrapService during POST /v1/bootstrap, not by a first-user hook). The table should be regenerated from the manifest''s current requires block (naturalPersonService, displayRegistry) and the bootstrap described in its place.'
     - title: resolveInvitee resolves holder_email through…
       id: T1E6
