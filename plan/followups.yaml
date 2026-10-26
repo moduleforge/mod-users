@@ -2047,3 +2047,23 @@ items:
         recommendation:
           Confirm an upstream rate limit covers these routes; consider comparing the token
           against the cached hash first and reading the DB only on a match.
+    - title: The concurrency test only requires that not…
+      id: WA7h
+      date: "2026-10-26"
+      tags:
+        - type:bug
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-05
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/integration/leave_gate_integration_test.go
+        lines: 374-416
+        severity: suggestion
+        confidence: low
+        concerns: correctness
+        description:
+          The concurrency test only requires that not both operations succeed and at least one effective admin remains. It can pass if the second operation fails with 401 (sessions revoked by the disable) rather than the intended 409 from the guard, and a single run may not interleave. It also was not observed to run in the implementing environment.
+        recommendation:
+          Assert that the failing result is 409 users.last_operator_admin where the disable loses, and run the test against a real Postgres before relying on it.
