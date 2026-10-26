@@ -1,38 +1,5 @@
 version: 2
 items:
-    - title: Under credential_rule 'authorized', holder_p…
-      id: xhLc
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:high
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0100_baseline.sql
-        lines: 1307-1324
-        severity: major
-        confidence: medium
-        concerns: security
-        description:
-          Under credential_rule 'authorized', holder_policy_mismatch reports credential_not_authorized
-          unless the holder already has a credential authorized for, or confined to, the party. Neither door
-          can authorize a credential before the holder has a non-ended profile in the party
-          (gateCredentialWrite requires one), so every invitation of an outside user to an 'authorized'
-          party fails with 409 users.policy_mismatch_confirmation_required. That includes every later
-          operator administrator, because bootstrap sets the operator party to 'authorized'. The only way
-          forward is confirm_policy_mismatch=true, which writes a profile_policy_confirmations row, and
-          profile_availability_for then skips the credential rule for that profile permanently. In practice
-          the 'authorized' rule binds only the bootstrap administrator and managed users, and the confirmation
-          stops being an exceptional outside-collaborator decision.
-        recommendation:
-          Decide the intended semantics with the manager. One option is to treat 'authorized' at invitation
-          time as satisfied when the holder has any usable interactive credential (authorization follows
-          acceptance), so no confirmation or exemption is written. Another is to let the inviting admin name
-          the credential(s) to authorize in the same transaction as the invitation. Either way, add an
-          integration test showing that a member invited to an 'authorized' party without a confirmation is
-          gated by the rule after acceptance.
     - title: holderProfile authorizes POST /v1/me/profile…
       id: aNYW
       date: "2026-10-26"
@@ -1372,4 +1339,9 @@ closed:
       title: gateCredentialWrite lets a party administrat…
       disposition: fixed
       ref: phase-14-remediation-03/007-restrict-admin-confinement-to-party-controlled-credentials.md
+      date: "2026-10-26"
+    - id: xhLc
+      title: Under credential_rule 'authorized', holder_p…
+      disposition: fixed
+      ref: phase-14-remediation-03/008-authorized-rule-invite-time-semantics.md
       date: "2026-10-26"
