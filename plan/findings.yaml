@@ -536,6 +536,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Sibling links under worktrees/plan/ (mod-core, mod-authz, mod-audit) appear unchanged; the agent had no earlier snapshot to compare, so this is unverified.
+    - title: 'Manager action: no users-module-postgres cont'
+      id: nLkT
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Manager action: no users-module-postgres container exists on this machine. The integration suite silently skips (TestMain exits 0) unless AUTHZ_DEV_PG_HOST and AUTHZ_DEV_PG_PORT point at a Postgres with a users superuser. The agent''s passing integration run used a throwaway postgres:16-alpine container on 127.0.0.1:55433 and removed it afterwards. Integration results for later tasks need the same care.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
