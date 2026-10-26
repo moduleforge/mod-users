@@ -677,7 +677,7 @@ phases:
           findings:
             - cvMO
           git:
-            branch: null
+            branch: plan/identity-model-impl-14-003
             commit: []
             merge: null
         - number: 4
