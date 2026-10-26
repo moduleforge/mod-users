@@ -503,25 +503,6 @@ items:
           The setup-token lifecycle changed: the OIDC configuration routes now accept the token only while OIDC is unconfirmed (re-read from the database per request), while POST /v1/bootstrap alone keeps it live while the bootstrap is pending (decision U9 narrowed for the OIDC routes). The code comments and oidc_config.go header were updated, and docs/architecture.md D20 and the API-layer exceptions list were updated for the bootstrap route, but the AGENTS.md first-run paragraph and docs/architecture.md line 101 still describe the token as simply valid until both steps are done, without the confirmed-state restriction on the OIDC routes.
         recommendation:
           Add one sentence to the AGENTS.md first-run paragraph and to the architecture API-layer exceptions bullet stating that after OIDC is confirmed the OIDC config routes require an operator admin session even while the bootstrap is pending.
-    - title: Lock ordering between the credential write g…
-      id: Nj1F
-      date: "2026-10-26"
-      tags:
-        - type:conflict
-        - plan/phase:remediation-03
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/party_policy.go
-        lines: 540-585
-        severity: major
-        confidence: medium
-        concerns: architecture
-        description:
-          Lock ordering between the credential write gate and profile ending is inverted. gateCredentialWrite locks the credential row first and then takes the holder profile FOR SHARE. EndInTx (profile_service.go) locks the profile FOR UPDATE first, and departureCleanupInTx then revokes party-confined credentials (RevokeInTx updates the credential row). Two concurrent transactions (a confine/unconfine write and an ending of the same holder's profile) take profile and credential locks in opposite orders, so Postgres can raise a deadlock (40P01) that surfaces as a 500 rather than the intended 404/serialized outcome. The comment claims clean serialization (ending commits first or write commits first) but does not address this cycle.
-        recommendation:
-          Choose one global order (profile before credential, matching EndInTx) and take the holder's profile FOR SHARE before locking the credential in gateCredentialWrite (resolving the profile via principal and party first), or have the ending lock affected credentials first. Add a concurrent test of confine versus leave or end, and record the order in docs/architecture.md.
     - title: Lock order inversion (task 004). gateCredent…
       id: DuW4
       date: "2026-10-26"
@@ -1563,4 +1544,14 @@ closed:
       title: dropPolicyConfirmations runs DELETE FROM pro…
       disposition: promoted
       ref: h0m8
+      date: "2026-10-26"
+    - id: Nj1F
+      title: Lock ordering between the credential write g…
+      disposition: dismissed
+      reason: |-
+        Already planned: phase-15-remediation-04/001-order-credential-gate-locks-profile-first. Its title
+        states the work this finding asks for (the credential write gate takes the holder profile lock
+        before the credential lock, matching EndInTx). It covers 9Mvf/PL6d/zwbM, which describe the same
+        credential-then-profile versus profile-then-credential cycle in gateCredentialWrite and
+        departureCleanupInTx, with the same 40P01-as-500 outcome. Stamped conflict; reclassified as a bug.
       date: "2026-10-26"
