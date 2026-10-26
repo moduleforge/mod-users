@@ -125,6 +125,23 @@ provides:
         - service:challengeService
         - expr:usersservice.SessionConfigFrom(cfg)
 
+    # impersonationService — impersonation as a child session of the
+    # administrator's own (/v1/impersonations): a recorded reason, a lifetime
+    # capped by AUTH_IMPERSONATION_TTL and AUTH_IMPERSONATION_MAX (carried by
+    # sessionService's SessionConfig), a fresh-authentication requirement (the
+    # authorizer's `impersonate` gate), no nesting, and the real administrator
+    # always recorded. Observations: `impersonate`, `update` and `revoke` on
+    # resource `impersonation`.
+    - name: impersonationService
+      type: "*usersservice.ImpersonationService"
+      constructor: usersservice.NewImpersonationService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - service:authorizer
+        - service:observerGroup
+        - service:sessionService
+
     # userService — user creation and the /v1/me and /v1/principals operations.
     # NewUserServiceWithSelfService is NewUserService followed by
     # UserService.WithSelfService (pool, sessions, challenges, op resolver and
@@ -323,6 +340,13 @@ provides:
       args:
         - service:sessionService
 
+    # impersonationHandler — /v1/impersonations: start, renew and end.
+    - name: impersonationHandler
+      type: "*handlers.ImpersonationHandler"
+      constructor: handlers.NewImpersonationHandler
+      args:
+        - service:impersonationService
+
     # principalsHandler — /v1/principals: list, read, disable and enable.
     - name: principalsHandler
       type: "*handlers.PrincipalsHandler"
@@ -440,6 +464,16 @@ provides:
       register: handlers.RegisterSessionRoutes
       register_args:
         - service:oidcHandler
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
+
+    # /v1/impersonations — start (POST /), renew (POST /current/renew) and end
+    # (DELETE /current) an impersonation session. Authorization is enforced at
+    # the service layer.
+    - prefix: /v1/impersonations
+      handler: impersonationHandler
+      register: handlers.RegisterImpersonationRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth

@@ -29,6 +29,10 @@ const (
 	opDelete = "delete"
 	opRevoke = "revoke"
 	opLogin  = "login"
+
+	// opImpersonate is the start of an impersonation (decision U21). mod-audit
+	// removed "assume" with no alias.
+	opImpersonate = "impersonate"
 )
 
 // Observer resources this package emits.
@@ -37,6 +41,7 @@ const (
 	resourceUserIdentifier = "user_identifier"
 	resourceCredential     = "credential"
 	resourceSession        = "session"
+	resourceImpersonation  = "impersonation"
 )
 
 // observeInTx runs the in-transaction observers for one event. It is a no-op

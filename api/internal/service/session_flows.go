@@ -585,10 +585,15 @@ func (s *SessionService) Current(ctx context.Context, sessionID int64, profileUU
 // (POST /v1/session/switch). It writes nothing: the active profile rides on
 // the token. The profile must be available to the session (and admitted by
 // an invite-only app); otherwise ProfileUnavailable or ErrAppLoginNotGranted.
+// An impersonation session cannot switch (ErrImpersonationNotAllowed): its
+// only profile is the impersonated one.
 func (s *SessionService) Switch(ctx context.Context, sessionID int64, profileUUID uuid.UUID) (TokenResponse, error) {
 	sess, err := s.liveSession(ctx, s.q, sessionID)
 	if err != nil {
 		return TokenResponse{}, err
+	}
+	if sess.ImpersonatorSessionID.Valid {
+		return TokenResponse{}, ErrImpersonationNotAllowed
 	}
 	sc, err := s.loadSessionContext(ctx, s.pool, sess)
 	if err != nil {
@@ -623,7 +628,7 @@ func (s *SessionService) Fork(ctx context.Context, sessionID int64, profileUUID 
 		if sess.ImpersonatorSessionID.Valid {
 			// An impersonation token carries no refresh token and is
 			// renewed through /v1/impersonations, not refreshed.
-			return ErrSessionRevoked
+			return ErrImpersonationNotAllowed
 		}
 		sc, err := s.loadSessionContext(ctx, tx, sess)
 		if err != nil {

@@ -67,6 +67,12 @@ type SessionConfig struct {
 	IdleTimeout time.Duration
 	// ClientCredentialsTTL is AUTH_CLIENT_CREDENTIALS_TTL.
 	ClientCredentialsTTL time.Duration
+	// ImpersonationTTL is AUTH_IMPERSONATION_TTL: the lifetime of an
+	// impersonation session at its start and of each renewal.
+	ImpersonationTTL time.Duration
+	// ImpersonationMax is AUTH_IMPERSONATION_MAX: the longest an impersonation
+	// session lives from its creation, renewals included.
+	ImpersonationMax time.Duration
 }
 
 // SessionConfigFrom builds a SessionConfig from the loaded configuration.
@@ -78,6 +84,8 @@ func SessionConfigFrom(cfg *config.Config) SessionConfig {
 		SessionMaxAge:        cfg.Auth.SessionMaxAge,
 		IdleTimeout:          cfg.Auth.SessionIdleTimeout,
 		ClientCredentialsTTL: cfg.Auth.ClientCredentialsTTL,
+		ImpersonationTTL:     cfg.Auth.ImpersonationTTL,
+		ImpersonationMax:     cfg.Auth.ImpersonationMax,
 	}
 }
 
@@ -512,9 +520,14 @@ func (s *SessionService) gateFor(sc sessionContext) appGate {
 }
 
 // sessionViews lists the principal's profiles with their availability to
-// the session.
+// the session. An impersonation session's only profile is the impersonated
+// one: the holder's other profiles are neither listed nor reachable.
 func (s *SessionService) sessionViews(ctx context.Context, db usersdb.DBTX, sc sessionContext) ([]ProfileView, error) {
-	return loadProfileViews(ctx, db, viewScope{principalID: sc.sess.PrincipalID, sessionID: sc.sess.ID}, s.gateFor(sc))
+	return loadProfileViews(ctx, db, viewScope{
+		principalID: sc.sess.PrincipalID,
+		sessionID:   sc.sess.ID,
+		onlyProfile: sc.sess.ImpersonatedProfileID.Int64,
+	}, s.gateFor(sc))
 }
 
 // landingInput holds the landing chain's candidates.

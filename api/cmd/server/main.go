@@ -388,6 +388,11 @@ func main() {
 		sessionSvc, challengeSvc, opReg, cfg.Auth.SelfServiceMaxAuthAge, displayReg,
 	)
 
+	// impersonationService: impersonation as a child session of the
+	// administrator's own (POST /v1/impersonations); its lifetimes ride on the
+	// session configuration.
+	impersonationSvc := usersservice.NewImpersonationService(pool, queries, az, observerGroup, sessionSvc)
+
 	// The party profile lifecycle: invitations, managed users, departure
 	// cleanup. Other modules (mod-billing seats) subscribe with
 	// profileSvc.AddLifecycleObserver.
@@ -410,6 +415,7 @@ func main() {
 	)
 	meHandler := me.NewMeHandler(userSvc, profileSvc)
 	sessionHandler := session.NewSessionHandler(sessionSvc)
+	impersonationHandler := handlers.NewImpersonationHandler(impersonationSvc)
 	principalsHandler := principals.NewPrincipalsHandler(userSvc)
 	partiesHandler := parties.NewPartiesHandler(profileSvc, partyPolicySvc)
 	bootstrapHandler := handlers.NewBootstrapHandler(bootstrapSvc, onboarding)
@@ -458,6 +464,14 @@ func main() {
 		r.Use(requireAuth)
 		session.RegisterSessionRoutes(r, sessionHandler)
 		r.Post("/step-up/oidc/{provider}/start", oidcHandler.StepUpStart)
+	})
+
+	// Impersonation: start (POST /), renew and end the caller's impersonation
+	// session. Authorization is enforced at the service layer.
+	r.Route("/v1/impersonations", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		handlers.RegisterImpersonationRoutes(r, impersonationHandler)
 	})
 
 	// Self-service routes, including the OIDC credential-link start. Reachable

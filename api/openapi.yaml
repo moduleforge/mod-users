@@ -67,6 +67,10 @@ tags:
     description: >-
       The caller's session: read, switch profile, fork a refresh lineage,
       step up, and log out.
+  - name: Impersonations
+    description: >-
+      Impersonation as a child session: start one for a profile with a reason,
+      renew it up to its maximum, and end it.
   - name: Me
     description: >-
       The caller's own user record, identifiers, credentials and sessions.
@@ -557,6 +561,20 @@ components:
         profile_uuid:
           type: string
           format: uuid
+
+    StartImpersonationRequest:
+      type: object
+      required: [profile_uuid, reason]
+      properties:
+        profile_uuid:
+          type: string
+          format: uuid
+          description: The profile to impersonate.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Why the caller impersonates; recorded on the impersonation session and in the audit log.
 
     StepUpPasswordRequest:
       type: object
@@ -1446,7 +1464,8 @@ components:
       description: |
         Caller lacks permission (`error.code: forbidden`), or a sign-in is
         refused (`users.app_login_not_granted` for an invite-only app,
-        `users.byo_identity_disabled` when self-registration is off).
+        `users.byo_identity_disabled` when self-registration is off), or an
+        impersonation rule refuses the call (`users.impersonation_not_allowed`).
       content:
         application/json:
           schema:
@@ -2095,7 +2114,9 @@ paths:
         Returns a new access token acting as `profile_uuid` for the same session, with no
         session write and no refresh token. An unavailable profile is 401
         `users.profile_unavailable`, and 403 `users.app_login_not_granted` for the
-        invite-only app gate.
+        invite-only app gate. Inside an impersonation session the route is refused
+        with 403 `users.impersonation_not_allowed`: its only profile is the
+        impersonated one.
       tags: [Session]
       operationId: switchProfile
       requestBody:
@@ -2124,6 +2145,8 @@ paths:
       description: |
         Starts a new refresh lineage for the caller's session (a new tab) and returns it
         with an access token acting as the caller's current profile. The body is ignored.
+        Inside an impersonation session the route is refused with 403
+        `users.impersonation_not_allowed`.
       tags: [Session]
       operationId: forkSession
       responses:
@@ -2135,6 +2158,8 @@ paths:
                 $ref: "#/components/schemas/TokenResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /v1/session/step-up/password:
     post:
@@ -2261,6 +2286,101 @@ paths:
           description: Session revoked.
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  # -- Impersonations (bearer) --
+
+  /v1/impersonations:
+    post:
+      summary: Start an impersonation
+      description: |
+        Starts an impersonation of `profile_uuid` as a separate child session of the
+        caller's own session, and returns its token response: an access token acting
+        as the profile (its `act.sub` is the caller's principal uuid), without a
+        refresh token, with `expires_in` at most `AUTH_IMPERSONATION_TTL`
+        (default 30 minutes). The child session records the reason, the real
+        administrator (the caller's session), the caller's `acr` and `amr`, and
+        `auth_time` of now. It needs `impersonate` on the profile, which carries a
+        maximum authentication age of 10 minutes: a stale authentication is the 409
+        `users.step_up_required` action. Revoking or expiring the caller's session
+        ends the impersonation on its next request.
+
+        Refused with 403 `users.impersonation_not_allowed` when the caller's session is
+        itself an impersonation (impersonations never nest) or the profile is held by the
+        caller. A caller without `impersonate` authority gets 403 for a profile that
+        exists and for one that does not; 404 is returned only to a caller allowed to
+        impersonate every profile (a wildcard holder) for a profile that does not
+        exist. 409 `users.impersonation_target_unavailable` when the profile cannot be
+        acted as (not active, holder disabled, party policy unmet). Audit: op
+        `impersonate`, resource `impersonation`, target the profile.
+      tags: [Impersonations]
+      operationId: startImpersonation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartImpersonationRequest"
+      responses:
+        "201":
+          description: Token response of the impersonation session (no refresh token).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConflictOrStepUp"
+
+  /v1/impersonations/current/renew:
+    post:
+      summary: Renew the current impersonation
+      description: |
+        Extends the caller's impersonation session to now plus `AUTH_IMPERSONATION_TTL`,
+        never beyond `AUTH_IMPERSONATION_MAX` (default 60 minutes) from its start, and
+        returns a token response with a fresh access token (no refresh token). Refused
+        with 403 `users.impersonation_not_allowed` outside an impersonation session and
+        409 `users.impersonation_limit_reached` when the maximum leaves no room to
+        extend. The body is ignored. Audit: op `update`, resource `impersonation`.
+      tags: [Impersonations]
+      operationId: renewImpersonation
+      responses:
+        "200":
+          description: Token response (no refresh token).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/impersonations/current:
+    delete:
+      summary: End the current impersonation
+      description: |
+        Revokes the caller's impersonation session (revoke reason
+        `impersonation_ended`). Refused with 403 `users.impersonation_not_allowed`
+        outside an impersonation session. Audit: op `revoke`, resource
+        `impersonation`.
+      tags: [Impersonations]
+      operationId: endImpersonation
+      responses:
+        "204":
+          description: Impersonation ended.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   # -- Me (bearer; reachable with an unverified email) --
 

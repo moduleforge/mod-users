@@ -34,6 +34,8 @@ type (
 	MeHandler = innerme.MeHandler
 	// SessionHandler serves the /v1/session routes.
 	SessionHandler = innersession.SessionHandler
+	// ImpersonationHandler serves the /v1/impersonations routes.
+	ImpersonationHandler = inner.ImpersonationHandler
 	// PrincipalsHandler serves the /v1/principals routes.
 	PrincipalsHandler = innerprincipals.PrincipalsHandler
 	// PartiesHandler serves the /v1/parties/{party_uuid} routes and
@@ -180,6 +182,18 @@ func RegisterSessionRoutes(r chi.Router, h *SessionHandler, stepUp OIDCStepUpSta
 	if stepUp != nil {
 		r.Post("/step-up/oidc/{provider}/start", stepUp.StepUpStart)
 	}
+}
+
+// NewImpersonationHandler constructs the /v1/impersonations handler over the
+// impersonation service.
+func NewImpersonationHandler(impersonations *usersservice.ImpersonationService) *ImpersonationHandler {
+	return inner.NewImpersonationHandler(impersonations)
+}
+
+// RegisterImpersonationRoutes mounts the /v1/impersonations routes on r (start,
+// renew and end); the caller applies auth.NewRequireAuth first.
+func RegisterImpersonationRoutes(r chi.Router, h *ImpersonationHandler) {
+	inner.RegisterImpersonationRoutes(r, h)
 }
 
 // NewPrincipalsHandler constructs the /v1/principals handler over the user
