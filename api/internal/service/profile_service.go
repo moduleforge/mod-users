@@ -60,6 +60,9 @@ type ProfileService struct {
 	newQ     func(pgx.Tx) usersdb.Querier
 	newCoreQ func(pgx.Tx) coredb.Querier
 	now      func() time.Time
+	// policyLock is the test seam for the shared policy lock; nil means the
+	// production locker (lockPartyPolicyShared).
+	policyLock policySharedLocker
 
 	mu        sync.RWMutex
 	observers []ProfileLifecycleObserver
@@ -557,7 +560,7 @@ func (s *ProfileService) invite(ctx context.Context, tx pgx.Tx, req inviteReques
 // true: the caller records the confirmation once the profile exists (the confirmation
 // references the profile), in the same transaction.
 func (s *ProfileService) checkInvitePolicyMismatch(ctx context.Context, tx pgx.Tx, in InviteInput, holderID int64) (confirmed bool, err error) {
-	if err := partyPolicySharedLocker(ctx, tx, in.PartyID); err != nil {
+	if err := s.policyLock.orDefault()(ctx, tx, in.PartyID); err != nil {
 		return false, err
 	}
 	mm, err := detectPolicyMismatch(ctx, s.usersQ(tx), holderID, in.PartyID, true)
@@ -958,7 +961,7 @@ func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx
 	// below serializes with a concurrent PutAuthnPolicy: a switch to
 	// `authorized` either commits before this read (and is seen) or waits until
 	// this transaction commits.
-	if err := partyPolicySharedLocker(ctx, tx, party); err != nil {
+	if err := s.policyLock.orDefault()(ctx, tx, party); err != nil {
 		return ProvisionedManagedUser{}, err
 	}
 	uq := s.usersQ(tx)

@@ -18,10 +18,19 @@ const partyPolicyLockKey = `hashtextextended('mod_users.party_authn_policy:' || 
 // transaction.
 var errNilPolicyLockTx = errors.New("users: party policy lock requires a transaction")
 
-// partyPolicySharedLocker is the seam through which the confirmation writers
-// take the shared policy lock. Production uses lockPartyPolicyShared; only
-// test code replaces it (see party_policy_lock_seam_test.go).
-var partyPolicySharedLocker = lockPartyPolicyShared
+// policySharedLocker takes the shared policy lock inside tx for partyID. It is
+// the per-instance seam on the confirmation writers (ProfileService,
+// CollaboratorGate): a nil field means lockPartyPolicyShared, the production
+// fail-closed locker; only test code sets it.
+type policySharedLocker func(ctx context.Context, tx pgx.Tx, partyID int64) error
+
+// orDefault returns l, or lockPartyPolicyShared when l is nil.
+func (l policySharedLocker) orDefault() policySharedLocker {
+	if l == nil {
+		return lockPartyPolicyShared
+	}
+	return l
+}
 
 // lockPartyPolicyExclusive serializes the caller, inside tx, with every other
 // writer of the party's authentication policy and with every confirmation
@@ -49,8 +58,8 @@ func lockPartyPolicyExclusive(ctx context.Context, tx pgx.Tx, partyID int64) err
 //
 // A nil tx fails closed (errNilPolicyLockTx): skipping the lock would silently
 // drop the confirmation-vs-policy-change serialization. Unit tests that drive
-// the callers over fake queriers without a transaction swap the package-level
-// partyPolicySharedLocker seam instead.
+// the callers over fake queriers without a transaction set the per-instance policyLock
+// seam on the service instead.
 func lockPartyPolicyShared(ctx context.Context, tx pgx.Tx, partyID int64) error {
 	if tx == nil {
 		return errNilPolicyLockTx
