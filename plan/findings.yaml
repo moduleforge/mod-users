@@ -18,15 +18,6 @@ items:
         - priority:low
         - effort:small
       text: api/openapi.yaml info.description says step-up (409 users.step_up_required) comes before authorization on the principal disable and enable, but UserService.writablePrincipal in api/internal/service/principal_admin.go authorizes `read` then `update` first and checks freshness after (the same order the profile status change now uses, noted in the new party-administration bullet of that description). Correct the principal sentence, or change the order, so the document and code agree.
-    - title: Stale architecture service table
-      id: Jwo8
-      date: "2026-10-25"
-      tags:
-        - type:documentation
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:low
-        - effort:small
-      text: 'docs/architecture.md''s "requires.services" table (top of the file) still lists consumers and hooks that no longer exist in moduleforge.module.yaml: userAccountService, selfHandler, appsHandler, typeResolver/entityResolver/coreServices/grantService and the firstUserGrant hook (the wildcard manage grant is now created by BootstrapService during POST /v1/bootstrap, not by a first-user hook). The table should be regenerated from the manifest''s current requires block (naturalPersonService, displayRegistry) and the bootstrap described in its place.'
     - title: resolveInvitee resolves holder_email through…
       id: T1E6
       date: "2026-10-26"
@@ -1191,4 +1182,9 @@ closed:
       title: 'mod-core: in-tx org create'
       disposition: promoted
       ref: 0b75
+      date: "2026-10-26"
+    - id: Jwo8
+      title: Stale architecture service table
+      disposition: promoted
+      ref: Jwo8
       date: "2026-10-26"
