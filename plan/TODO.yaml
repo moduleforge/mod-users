@@ -923,7 +923,7 @@ phases:
           slug: document-lock-order-and-phase-15-contracts
           title: Document Lock Order And Correct Phase 15 Contract Drift
           path: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
-          done: false
+          done: true
           tier: sonnet-med
           findings:
             - A202
