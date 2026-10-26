@@ -1,53 +1,5 @@
 version: 2
 items:
-    - title: gateCredentialWrite lets a party administrat…
-      id: Pxlw
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:high
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/party_policy.go
-        lines: 481-537
-        severity: major
-        confidence: medium
-        concerns: security
-        description:
-          gateCredentialWrite lets a party administrator (`update` on the party)
-          confine any live credential whose principal holds a non-ended profile in
-          the party, including a profile that is only `invited` (the EXISTS check
-          at line 518 uses status <> 'ended'). The credential need not have been
-          issued by or for the party: it may be the holder's personal password,
-          passkey, SSH key or personal IdP login, which the holder also uses for
-          their personal profile and for other parties. Once confined,
-          mod_users.profile_availability_for returns `confined` for every profile
-          outside the party, so the holder loses their personal profile and every
-          other party in sessions that use that credential. If the administrator
-          then ends the profile (PATCH /v1/profiles/{uuid}), or the holder declines
-          or leaves, ProfileService.departureCleanupInTx revokes every credential
-          confined to the party, so the administrator of one party can revoke a
-          credential that belongs to the holder's whole account. Credential uuids
-          are exposed to the same administrator by GET
-          /v1/parties/{party_uuid}/credential-authorizations and in the
-          credential_party_authorization audit payloads. The holder cannot undo it
-          through the holder door when the confined credential is their only
-          factor, because profile_availability_excluding then fails. The identity
-          ADR permits a party admin to create a confinement, but its worked
-          examples confine only credentials created for the party (a firm-issued
-          guest IdP account) and keep a shared personal credential unconfined.
-        recommendation:
-          Restrict the administrator door of ConfineCredential to credentials the
-          party issued or controls: for example, credentials whose
-          created_by_profile_id is a profile of the party, OIDC credentials from a
-          provider bound to the party, or credentials of a managed user of the
-          party. Otherwise require the holder's own consent (the holder door).
-          Also require an `active` profile (not `invited`) for the
-          held-profile check in gateCredentialWrite, and add an integration test
-          showing that an administrator cannot confine an outside collaborator's
-          personal credential.
     - title: Under credential_rule 'authorized', holder_p…
       id: xhLc
       date: "2026-10-26"
@@ -1415,4 +1367,9 @@ closed:
       title: resolveInvitee resolves holder_email through…
       disposition: fixed
       ref: phase-14-remediation-03/001-require-verified-invitee-and-authorize-managed-password.md
+      date: "2026-10-26"
+    - id: Pxlw
+      title: gateCredentialWrite lets a party administrat…
+      disposition: fixed
+      ref: phase-14-remediation-03/007-restrict-admin-confinement-to-party-controlled-credentials.md
       date: "2026-10-26"
