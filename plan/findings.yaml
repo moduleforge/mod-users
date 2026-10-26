@@ -36,6 +36,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'mod-core gap (request to mod-core, not a mod-users change): coreservice.OrganizationService.Create (mod-core api/service/organization.go) always authorizes via authz.AuthorizeTypeIn against the acting profile''s ownership subject and opens its own transaction (txhelper.Run), so a trusted in-transaction caller cannot create an organization through it. mod-users'' BootstrapService.createOrganization (api/internal/service/bootstrap_service.go) therefore composes coreservice.CreateEntity(WithoutOwner) with the generated coredb CreateLegalEntity and CreateOrganization queries inside the bootstrap transaction, which skips mod-core''s own `create organization` observation and its field normalisation/tax-id encryption path (the bootstrap observes the organization through its `create bootstrap` event instead). Ask mod-core for a trusted `CreateInTx(ctx, tx, in, opts...)` variant (no authorization, explicit owner option, in-tx observation) mirroring NaturalPersonService.CreateInTx, then switch the bootstrap to it.'
+    - title: Stale architecture service table
+      id: Jwo8
+      date: "2026-10-25"
+      tags:
+        - type:documentation
+        - plan/phase:parties-profiles-and-bootstrap
+        - priority:unspecified
+        - effort:unspecified
+      text: 'docs/architecture.md''s "requires.services" table (top of the file) still lists consumers and hooks that no longer exist in moduleforge.module.yaml: userAccountService, selfHandler, appsHandler, typeResolver/entityResolver/coreServices/grantService and the firstUserGrant hook (the wildcard manage grant is now created by BootstrapService during POST /v1/bootstrap, not by a first-user hook). The table should be regenerated from the manifest''s current requires block (naturalPersonService, displayRegistry) and the bootstrap described in its place.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
