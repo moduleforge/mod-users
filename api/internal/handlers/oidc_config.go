@@ -5,7 +5,10 @@
 // bootstrap the deployment (POST /v1/bootstrap) and to confirm a
 // provider selection here. The token stays active while either step is
 // pending (decision U9): whichever of the two completes last clears the
-// setup-token hash. A successful confirm recomputes BootState and (via
+// setup-token hash. The OIDC configuration routes accept the token only
+// while OIDC is unconfirmed; once confirmed they require an operator admin
+// session, even while the bootstrap is pending (POST /v1/bootstrap alone
+// keeps the token live then). A successful confirm recomputes BootState and (via
 // Rebuild) refreshes the OAuth registry so /v1/auth/oidc/* starts serving
 // real traffic without a process restart.
 package handlers
@@ -362,8 +365,9 @@ type confirmRequest struct {
 }
 
 // Confirm handles POST /v1/oidc-config/confirm. The caller must either
-// present a valid setup token (pre-confirmation) or be an authenticated
-// admin (post-confirmation reconfig).
+// present a valid setup token (accepted only while OIDC is unconfirmed) or be
+// an authenticated operator admin (required once OIDC is confirmed, even
+// while the bootstrap is pending).
 //
 // Error order (credential-in-body route): body-independent credentials (admin
 // bearer, then the X-Setup-Token header) are evaluated first (an AdminChecker
@@ -496,7 +500,8 @@ func (h *OIDCConfigHandler) VerifySetupTokenFresh(ctx context.Context, token str
 //   - (true, nil)  - authenticated; proceed.
 //   - (false, nil) - neither credential authenticated; the caller may still
 //     present a body setup_token, otherwise 401.
-//   - (_,    err)  - AdminChecker had an internal fault; 500.
+//   - (_,    err)  - AdminChecker or the fresh token check had an internal
+//     fault; 500.
 func (h *OIDCConfigHandler) authorizeAmbient(r *http.Request) (bool, error) {
 	if h.deps.AdminChecker != nil {
 		isAdmin, err := h.deps.AdminChecker(r)
@@ -507,23 +512,29 @@ func (h *OIDCConfigHandler) authorizeAmbient(r *http.Request) (bool, error) {
 			return true, nil
 		}
 	}
-	return h.verifySetupToken(r.Header.Get("X-Setup-Token")), nil
+	return h.verifySetupToken(r.Context(), r.Header.Get("X-Setup-Token"))
 }
 
-// verifySetupToken reports whether token matches the stored setup-token hash.
-// An empty token, an absent hash (cleared), or a token that is no longer
-// active (bootstrap done and OIDC confirmed, even if clearing the hash
-// failed) never matches; after that an operator administrator session is
-// required.
-func (h *OIDCConfigHandler) verifySetupToken(token string) bool {
+// verifySetupToken reports whether token authorizes an OIDC configuration
+// route. On these routes the token is accepted only while OIDC is
+// unconfirmed: once OIDC is confirmed an operator administrator session is
+// required, even while the bootstrap is pending (POST /v1/bootstrap alone
+// keeps accepting the token then, decision U9). The hash and the confirmed
+// state are re-read from the database rather than taken from the cache, so a
+// replica holding a stale snapshot never accepts a cleared token or a
+// confirmed configuration. An empty token never matches and costs no read.
+func (h *OIDCConfigHandler) verifySetupToken(ctx context.Context, token string) (bool, error) {
 	if token == "" {
-		return false
+		return false, nil
+	}
+	if err := h.RefreshState(ctx); err != nil {
+		return false, fmt.Errorf("setup token: refresh state: %w", err)
 	}
 	h.mu.RLock()
 	hash := h.cachedDB.SetupTokenHash
-	active := h.tokenActiveLocked()
+	unconfirmed := !h.cachedBoot.State.Confirmed()
 	h.mu.RUnlock()
-	return active && hash.Valid && auth.VerifySetupToken(token, hash.String)
+	return unconfirmed && hash.Valid && auth.VerifySetupToken(token, hash.String), nil
 }
 
 // authorizeBodyless authenticates a route that carries no body (GET/DELETE
@@ -570,7 +581,15 @@ func (h *OIDCConfigHandler) authenticateWithBody(w http.ResponseWriter, r *http.
 	if !decode() {
 		return false
 	}
-	if !ambient && !h.verifySetupToken(bodyToken()) {
+	if ambient {
+		return true
+	}
+	ok, err := h.verifySetupToken(r.Context(), bodyToken())
+	if err != nil {
+		apiresp.WriteError(w, r, fmt.Errorf("%s: authorize: %w", op, err))
+		return false
+	}
+	if !ok {
 		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
 		return false
 	}
