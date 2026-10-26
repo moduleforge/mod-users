@@ -155,35 +155,6 @@ items:
           Accept and decline can stay ungated. Optionally refuse ending the last
           active operator-party profile that holds the wildcard `manage` grant,
           through both LeaveProfile and UpdateProfileStatus.
-    - title: ProvisionManagedUserInTx creates the managed…
-      id: 2mUw
-      date: "2026-10-26"
-      tags:
-        - type:bug
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go
-        lines: 885-909
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          ProvisionManagedUserInTx creates the managed user's only credential (a password) but does not
-          authorize it for the party or consult the party's policy. In a party whose credential_rule is
-          'authorized' (including the operator party bootstrap creates) or whose min_acr is above the
-          password's base_acr, the new user's only profile is locked from the first sign-in
-          (credential_not_authorized or acr_too_low). The user has no personal profile, and the holder
-          door needs another factor that already satisfies the gate, so the account cannot use anything
-          until an administrator separately authorizes the credential. The 201 response gives no hint of
-          this.
-        recommendation:
-          When the party's rule is 'authorized', insert credential_party_authorizations(password, party,
-          acting profile) in the same transaction, as Bootstrap does for the admin password, and observe
-          'create credential_party_authorization'. Alternatively, document the extra step in openapi.yaml.
-          Add an integration test that signs in as a managed user of an 'authorized' party.
     - title: The function comment says holder_acr is NULL…
       id: 4w6W
       date: "2026-10-26"
@@ -1622,4 +1593,14 @@ closed:
         instead of the bare EXISTS. The concurrency tests are in
         api/internal/integration/profile_writers_integration_test.go. The lock-order inversion
         this fix introduced is tracked as 9Mvf/PL6d/zwbM.
+      date: "2026-10-26"
+    - id: 2mUw
+      title: ProvisionManagedUserInTx creates the managed…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 001 (commit d8eef20). Under credential_rule 'authorized',
+        ProvisionManagedUserInTx (api/internal/service/profile_service.go:938-958) inserts the
+        credential_party_authorizations row for the new password and emits `create`
+        `credential_party_authorization`. The "an authorized party's managed user can sign in"
+        subtest covers it. The authority question this fix raises is tracked as 1cWY.
       date: "2026-10-26"
