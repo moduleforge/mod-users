@@ -24,3 +24,12 @@ This task fixes finding `iFeg` (security, priority medium). `PutAuthnPolicy` pur
 ## References
 
 - Finding `iFeg` in this plan's `plan/findings.yaml` (type:security, priority:medium): `PutAuthnPolicy` in `api/internal/service/party_policy.go` drops confirmations only when `credential_rule` changes, not when the required provider changes, and the prior-policy read and the confirmation writers are not serialized with the rule change.
+
+## Status
+
+Outcome: succeeded (2026-10-26). Validation: `make build.api`, `make test.unit` pass; integration suite passed against a throwaway postgres:16 container (not skipped).
+
+- `api/internal/service/party_policy.go`: purge compares (`credential_rule`, `required_oidc_provider_id`); takes the per-party lock first.
+- `api/internal/service/party_policy_lock.go`: new `lockPartyPolicyExclusive` (advisory xact lock + row `FOR UPDATE`) and `lockPartyPolicyShared` (row `FOR SHARE`, else shared advisory lock); reusable by task 008.
+- `api/internal/service/profile_service.go`, `api/internal/service/collaborator_gate.go`: confirmation writers take the shared lock before reading the policy.
+- `api/internal/integration/party_policy_confirmations_integration_test.go`: provider-change purge, unchanged-keeps, and writer/rule-change serialization tests.
