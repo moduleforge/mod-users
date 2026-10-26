@@ -93,7 +93,7 @@ type partyFixture struct {
 
 func (s *stack) newParty(t *testing.T) partyFixture {
 	t.Helper()
-	f := partyFixture{admin: s.register(t)}
+	f := partyFixture{admin: s.registerVerified(t)}
 	f.adminTok, f.adminProf = s.makeOperator(t, f.admin)
 	f.partyName = "Profile Party " + uniq("p")
 	f.partyID = s.seedParty(t, f.partyName)
@@ -112,7 +112,7 @@ func (s *stack) inviteEmail(t *testing.T, f partyFixture, email string) *resp {
 // invited invites a fresh account and returns it with the new profile's uuid.
 func (s *stack) invited(t *testing.T, f partyFixture) (account, string) {
 	t.Helper()
-	a := s.register(t)
+	a := s.registerVerified(t)
 	v := s.inviteEmail(t, f, a.Email).wantStatus(t, http.StatusCreated).obj(t)
 	return a, v["uuid"].(string)
 }
@@ -170,7 +170,7 @@ func noInternalIDs(t *testing.T, raw []byte) {
 func TestProfiles_InviteCreatesAnInvitedProfile(t *testing.T) {
 	lc := env.watchLifecycle()
 	f := env.newParty(t)
-	invitee := env.register(t)
+	invitee := env.registerVerified(t)
 	inviteeID := env.principalID(t, invitee.Email)
 
 	env.obs.reset()
@@ -237,9 +237,37 @@ func TestProfiles_InviteCreatesAnInvitedProfile(t *testing.T) {
 	}
 }
 
+func TestProfiles_InviteByEmailRequiresAVerifiedIdentifier(t *testing.T) {
+	f := env.newParty(t)
+	// A freshly registered account's address is unverified.
+	a := env.register(t)
+	uid := env.principalID(t, a.Email)
+	profiles := env.count(t, "profiles", `SELECT count(*) FROM profiles`)
+
+	env.inviteEmail(t, f, a.Email).wantStatus(t, http.StatusNotFound)
+	if n := env.count(t, "profiles", `SELECT count(*) FROM profiles`); n != profiles {
+		t.Errorf("a refused invitation created %d profile(s)", n-profiles)
+	}
+	if n := env.count(t, "holder profiles", `SELECT count(*) FROM profiles WHERE holder_id = $1 AND party_id = $2`, uid, f.partyID); n != 0 {
+		t.Errorf("holder profiles in the party = %d, want 0", n)
+	}
+	// The refusal is the same as for an unknown address.
+	unknown := env.inviteEmail(t, f, uniq("nobody")+"@example.test").wantStatus(t, http.StatusNotFound)
+	if got := env.inviteEmail(t, f, a.Email); string(got.raw) != string(unknown.raw) {
+		t.Errorf("unverified body = %s, want the unknown-address body %s", got.raw, unknown.raw)
+	}
+
+	// After verification the same address is invitable.
+	env.verifyRegisteredEmail(t, a)
+	env.inviteEmail(t, f, a.Email).wantStatus(t, http.StatusCreated)
+	if n := env.count(t, "holder profiles", `SELECT count(*) FROM profiles WHERE holder_id = $1 AND party_id = $2`, uid, f.partyID); n != 1 {
+		t.Errorf("holder profiles in the party = %d, want 1", n)
+	}
+}
+
 func TestProfiles_InviteByUserUUIDAndPolicyConfirmationFlag(t *testing.T) {
 	f := env.newParty(t)
-	a := env.register(t)
+	a := env.registerVerified(t)
 	r := env.do(t, http.MethodPost, f.profilesPath(), f.adminTok.access(), map[string]any{
 		"holder_user_uuid": env.entityUUID(t, env.principalID(t, a.Email)), "confirm_policy_mismatch": true,
 	}).wantStatus(t, http.StatusCreated)
@@ -428,7 +456,7 @@ func TestProfiles_AcceptDeclineLeave(t *testing.T) {
 
 	t.Run("a profile the caller does not hold is a masked 404", func(t *testing.T) {
 		_, id := env.invited(t, f)
-		other := env.register(t)
+		other := env.registerVerified(t)
 		missing := "66666666-6666-6666-6666-666666666666"
 		for _, action := range []string{"accept", "decline", "leave"} {
 			foreign := env.do(t, http.MethodPost, "/v1/me/profiles/"+id+"/"+action, other.tk.access(), nil)
@@ -569,14 +597,14 @@ func TestProfiles_AdminStatusChanges(t *testing.T) {
 	})
 
 	t.Run("a personal profile is not found", func(t *testing.T) {
-		a := env.register(t)
+		a := env.registerVerified(t)
 		personal := env.profileUUID(t, env.personalProfileID(t, env.principalID(t, a.Email)))
 		patch(personal, map[string]string{"status": "suspended"}).wantStatus(t, http.StatusNotFound)
 	})
 
 	t.Run("a stale authentication needs a step-up, only after authorization", func(t *testing.T) {
 		_, id := env.accepted(t, f)
-		stale := env.register(t)
+		stale := env.registerVerified(t)
 		staleTok, _ := env.makeOperator(t, stale)
 		env.exec(t, "age auth_time", `UPDATE mod_users.sessions SET auth_time = now() - interval '3 hours' WHERE uuid = $1::uuid`, staleTok.Session.UUID)
 		env.do(t, http.MethodPatch, "/v1/profiles/"+id, staleTok.access(), map[string]string{"status": "suspended"}).
@@ -585,12 +613,12 @@ func TestProfiles_AdminStatusChanges(t *testing.T) {
 			t.Errorf("a stale-session change was applied: %s", got)
 		}
 		// A caller without authority learns nothing of the step-up.
-		ordinary := env.register(t)
+		ordinary := env.registerVerified(t)
 		env.exec(t, "age auth_time", `UPDATE mod_users.sessions SET auth_time = now() - interval '3 hours' WHERE uuid = $1::uuid`, ordinary.tk.Session.UUID)
 		env.do(t, http.MethodPatch, "/v1/profiles/"+id, ordinary.tk.access(), map[string]string{"status": "suspended"}).
 			wantError(t, http.StatusNotFound, "not_found", "")
 		// Inviting is not behind the freshness gate.
-		env.do(t, http.MethodPost, f.profilesPath(), staleTok.access(), map[string]any{"holder_email": env.register(t).Email}).
+		env.do(t, http.MethodPost, f.profilesPath(), staleTok.access(), map[string]any{"holder_email": env.registerVerified(t).Email}).
 			wantStatus(t, http.StatusCreated)
 	})
 }
@@ -602,7 +630,7 @@ func TestProfiles_AdminStatusChanges(t *testing.T) {
 func TestProfiles_UnauthorizedCallersSeeNotFound(t *testing.T) {
 	f := env.newParty(t)
 	_, profileID := env.accepted(t, f)
-	ordinary := env.register(t)
+	ordinary := env.registerVerified(t)
 	unknownParty := "88888888-8888-8888-8888-888888888888"
 	unknownProfile := "99999999-9999-9999-9999-999999999999"
 
@@ -866,8 +894,30 @@ SELECT count(*) FROM mod_users.credentials c JOIN mod_users.cred_password p ON p
 		}
 	})
 
+	t.Run("an authorized party's managed user can sign in", func(t *testing.T) {
+		g := env.newGateParty(t)
+		env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
+		email := uniq("managed") + "@example.test"
+		env.obs.reset()
+		created := env.do(t, http.MethodPost, g.path("/managed-users"), g.adminTok.access(), map[string]string{"email": email, "password": testPassword}).
+			wantStatus(t, http.StatusCreated).obj(t)
+		profileID := created["profile"].(map[string]any)["uuid"].(string)
+		env.checkObservations(t, "authorized managed user", "create user", "create user_identifier", "create profile", "create credential", "create credential_party_authorization")
+
+		uid := env.principalID(t, email)
+		if n := env.count(t, "authorizations", `
+SELECT count(*) FROM mod_users.credential_party_authorizations a JOIN mod_users.credentials c ON c.id = a.credential_id
+ WHERE c.principal_id = $1 AND a.party_id = $2`, uid, g.id); n != 1 {
+			t.Errorf("authorizations of the managed user's password = %d, want 1", n)
+		}
+		tk := env.do(t, http.MethodPost, "/v1/auth/login", "", map[string]string{"email": email, "password": testPassword}).wantStatus(t, http.StatusOK).tok(t)
+		if tk.Profile == nil || tk.Profile.UUID != profileID || !tk.Profile.Available {
+			t.Fatalf("landing = %+v, want the available party profile (not credential_not_authorized)", tk.Profile)
+		}
+	})
+
 	t.Run("a registered address is a conflict and nothing is left behind", func(t *testing.T) {
-		taken := env.register(t)
+		taken := env.registerVerified(t)
 		users := env.count(t, "users", `SELECT count(*) FROM mod_users.users`)
 		profiles := env.count(t, "profiles", `SELECT count(*) FROM profiles`)
 		env.do(t, http.MethodPost, path, f.adminTok.access(), map[string]string{"email": taken.Email, "password": testPassword}).
@@ -939,7 +989,7 @@ func TestProfiles_ObserverErrorAbortsTheTransaction(t *testing.T) {
 	boom := errors.New("seat release failed")
 
 	t.Run("invite", func(t *testing.T) {
-		a := env.register(t)
+		a := env.registerVerified(t)
 		uid := env.principalID(t, a.Email)
 		lc.failWith(boom)
 		defer lc.reset()

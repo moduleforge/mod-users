@@ -23,3 +23,11 @@ This task fixes findings `T1E6` (security, high), `4ZP1` (security, high) and `2
 - Finding `T1E6` in this plan's `plan/findings.yaml` (security, high): an email invitation resolves to whichever account first registered the address, verified or not, and that account can accept through `/v1/me`.
 - Finding `4ZP1` in this plan's `plan/findings.yaml` (security, high): `resolveInvitee` in `api/internal/service/profile_service.go` looks up the holder email without checking `verified_at`. Same issue as `T1E6`.
 - Finding `2mUw` in this plan's `plan/findings.yaml` (bug, medium): `ProvisionManagedUserInTx` creates the managed user's only credential without authorizing it for an `authorized` party, so the user is locked out from first sign-in.
+
+## Status
+
+- Outcome: succeeded (2026-10-25).
+- `resolveInvitee` (`api/internal/service/profile_service.go`) returns `apiresp.ErrNotFound` for an email identifier with `verified_at` unset (a `VerifiedAt` check after the lookup; no sqlc change). Invitation by `holder_user_uuid` is unchanged.
+- `ProvisionManagedUserInTx` reads the party's authn policy and, under `credential_rule` `authorized`, authorizes the new password for the party (authorized by the acting profile) and emits `create credential_party_authorization`.
+- Tests: `TestProfiles_InviteByEmailRequiresAVerifiedIdentifier` and the "an authorized party's managed user can sign in" subtest of `TestProfiles_ManagedUsers` in `api/internal/integration/profiles_integration_test.go`; unit case in `profile_service_test.go`. Existing integration tests that invite freshly registered accounts now use the new `registerVerified` helper (`helpers_integration_test.go`); `audit_integration_test.go` allows `create credential_party_authorization`.
+- Validation: unit, vet, gofmt and the full integration suite (throwaway Postgres) pass.

@@ -410,6 +410,7 @@ func TestInviteInTx_ErrorOrder(t *testing.T) {
 func TestInviteInTx_HolderResolution(t *testing.T) {
 	t.Parallel()
 	const party = int64(5)
+	verifiedAt := time.Now()
 	managedUser := func(of int64) usersdb.User {
 		return usersdb.User{EntityID: 40, ManagingPartyID: pgtype.Int8{Int64: of, Valid: true}}
 	}
@@ -433,10 +434,19 @@ func TestInviteInTx_HolderResolution(t *testing.T) {
 			want: apiresp.ErrNotFound,
 		},
 		{
+			name: "unverified email is not found, like an unknown one",
+			in:   InviteInput{PartyID: party, HolderEmail: "u@example.com"},
+			ident: func(usersdb.GetIdentifierByKindValueParams) (usersdb.UserIdentifier, error) {
+				return usersdb.UserIdentifier{UserID: 40}, nil
+			},
+			user: func(int64) (usersdb.User, error) { return usersdb.User{EntityID: 40}, nil },
+			want: apiresp.ErrNotFound,
+		},
+		{
 			name: "guest holder must upgrade",
 			in:   InviteInput{PartyID: party, HolderEmail: "g@example.com"},
 			ident: func(usersdb.GetIdentifierByKindValueParams) (usersdb.UserIdentifier, error) {
-				return usersdb.UserIdentifier{UserID: 40}, nil
+				return usersdb.UserIdentifier{UserID: 40, VerifiedAt: &verifiedAt}, nil
 			},
 			user: func(int64) (usersdb.User, error) { return usersdb.User{EntityID: 40, IsGuest: true}, nil },
 			want: ErrGuestMustUpgrade,
@@ -445,7 +455,7 @@ func TestInviteInTx_HolderResolution(t *testing.T) {
 			name: "managed user of another party",
 			in:   InviteInput{PartyID: party, HolderEmail: "m@example.com"},
 			ident: func(usersdb.GetIdentifierByKindValueParams) (usersdb.UserIdentifier, error) {
-				return usersdb.UserIdentifier{UserID: 40}, nil
+				return usersdb.UserIdentifier{UserID: 40, VerifiedAt: &verifiedAt}, nil
 			},
 			user: func(int64) (usersdb.User, error) { return managedUser(party + 1), nil },
 			want: ErrHolderNotAdmissible,

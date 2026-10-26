@@ -99,7 +99,7 @@ type acmeFixture struct {
 // removed again when the test ends.
 func (s *stack) newAcme(t *testing.T) acmeFixture {
 	t.Helper()
-	alice := s.register(t)
+	alice := s.registerVerified(t)
 	tok, profileID := s.makeOperator(t, alice)
 	party := s.operatorPartyID(t)
 	t.Cleanup(func() {
@@ -426,7 +426,7 @@ func TestPartyFlows_HolderAndAdministratorAuthority(t *testing.T) {
 		}
 	}
 	env.do(t, http.MethodGet, f.profilesPath(), holder.tk.access(), nil).wantStatus(t, http.StatusNotFound)
-	env.do(t, http.MethodPost, f.profilesPath(), holder.tk.access(), map[string]any{"holder_email": env.register(t).Email}).
+	env.do(t, http.MethodPost, f.profilesPath(), holder.tk.access(), map[string]any{"holder_email": env.registerVerified(t).Email}).
 		wantStatus(t, http.StatusNotFound)
 	if got := env.profileStatus(t, id); got != "active" {
 		t.Fatalf("the holder administered the profile: %s", got)
@@ -442,6 +442,12 @@ func TestPartyFlows_ManagedUserCreatedThroughTheRouteIsNotInvitable(t *testing.T
 	env.do(t, http.MethodPost, "/v1/parties/"+owner.partyUUID+"/managed-users", owner.adminTok.access(),
 		map[string]string{"email": email, "password": testPassword}).wantStatus(t, http.StatusCreated)
 
+	// An invitation resolves only a verified address, so verify it to reach the
+	// admissibility check.
+	if _, err := env.pool.Exec(context.Background(),
+		`UPDATE mod_users.user_identifiers SET verified_at = now() WHERE kind = 'email' AND value_canon = $1`, email); err != nil {
+		t.Fatalf("verify %s: %v", email, err)
+	}
 	env.inviteEmail(t, other, email).wantError(t, http.StatusConflict, "conflict", "users.holder_not_admissible")
 	uid := env.principalID(t, email)
 	if n := env.profileCount(t, uid, other.partyID); n != 0 {
@@ -554,7 +560,7 @@ func TestPartyFlows_ConfinedFactorNeverListsThePersonalProfileAsAvailable(t *tes
 func TestPartyFlows_OutsideCollaboratorThroughTheRoutes(t *testing.T) {
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
-	outsider := env.register(t)
+	outsider := env.registerVerified(t)
 
 	g.invite(t, map[string]any{"holder_email": outsider.Email}).wantMismatch(t, "credential_not_authorized")
 	v := g.invite(t, map[string]any{"holder_email": outsider.Email, "confirm_policy_mismatch": true}).

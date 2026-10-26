@@ -114,7 +114,7 @@ func (g gateParty) invite(t *testing.T, body map[string]any) *resp {
 func TestCollaborator_InviteMismatchNeedsConfirmationAndWritesNothing(t *testing.T) {
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
-	a := env.register(t)
+	a := env.registerVerified(t)
 	uid := env.principalID(t, a.Email)
 
 	env.obs.reset()
@@ -149,13 +149,13 @@ func TestCollaborator_InviteMismatchNeedsConfirmationAndWritesNothing(t *testing
 func TestCollaborator_InviteNoMismatchRecordsNoConfirmation(t *testing.T) {
 	g := env.newGateParty(t)
 	// `any` with min_acr 1 never mismatches, even with the flag set.
-	a := env.register(t)
+	a := env.registerVerified(t)
 	g.invite(t, map[string]any{"holder_email": a.Email, "confirm_policy_mismatch": true}).wantStatus(t, http.StatusCreated)
 	if n := env.scanInt64(t, "confirmations", `SELECT count(*) FROM profile_policy_confirmations WHERE party_id = $1`, g.id); n != 0 {
 		t.Fatalf("a matching holder got %d confirmation(s)", n)
 	}
 	// An unconfirmed invitation passes too.
-	b := env.register(t)
+	b := env.registerVerified(t)
 	g.invite(t, map[string]any{"holder_email": b.Email}).wantStatus(t, http.StatusCreated)
 }
 
@@ -165,7 +165,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 
 	t.Run("provider rule needs an OIDC credential of the provider", func(t *testing.T) {
 		env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
-		a := env.register(t)
+		a := env.registerVerified(t)
 		g.invite(t, map[string]any{"holder_email": a.Email}).wantMismatch(t, "provider_required")
 		// An OIDC credential of another provider does not help; the right one does.
 		uid := env.principalID(t, a.Email)
@@ -177,7 +177,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 
 	t.Run("authorized rule is met by an authorized or confined credential", func(t *testing.T) {
 		env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
-		a := env.register(t)
+		a := env.registerVerified(t)
 		uid := env.principalID(t, a.Email)
 		adminProfile := env.scanInt64(t, "admin profile", `SELECT p.entity_id FROM profiles p JOIN entities e ON e.id = p.entity_id WHERE e.uuid = $1::uuid`,
 			env.profileOf(t, g.adminTok.access()))
@@ -187,7 +187,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 		g.invite(t, map[string]any{"holder_email": a.Email}).wantStatus(t, http.StatusCreated)
 
 		// A credential confined to another party is unusable for this one.
-		b := env.register(t)
+		b := env.registerVerified(t)
 		bid := env.principalID(t, b.Email)
 		other := env.seedParty(t, "Other "+uniq("p"))
 		env.exec(t, "confine", `UPDATE mod_users.credentials SET confined_to_party_id = $2 WHERE principal_id = $1`, bid, other)
@@ -196,7 +196,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 
 	t.Run("min_acr follows the session_acr composition rule", func(t *testing.T) {
 		env.setPolicy(t, g, map[string]any{"credential_rule": "any", "min_acr": 2}).wantStatus(t, http.StatusOK)
-		a := env.register(t)
+		a := env.registerVerified(t)
 		uid := env.principalID(t, a.Email)
 		// A password alone reaches acr 1; no combination reaches 2.
 		g.invite(t, map[string]any{"holder_email": a.Email}).wantMismatch(t, "acr_too_low")
@@ -213,14 +213,14 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 		// No seeded kind reaches 3: min_acr 3 always mismatches, and a confirmation
 		// is accepted but changes nothing about min_acr (see the availability test).
 		env.setPolicy(t, g, map[string]any{"credential_rule": "any", "min_acr": 3}).wantStatus(t, http.StatusOK)
-		b := env.register(t)
+		b := env.registerVerified(t)
 		env.verifyRegisteredEmail(t, b)
 		g.invite(t, map[string]any{"holder_email": b.Email}).wantMismatch(t, "acr_too_low")
 	})
 
 	t.Run("a revoked or non-interactive credential counts for nothing", func(t *testing.T) {
 		env.setPolicy(t, g, map[string]any{"credential_rule": "any", "min_acr": 2}).wantStatus(t, http.StatusOK)
-		a := env.register(t)
+		a := env.registerVerified(t)
 		env.verifyRegisteredEmail(t, a)
 		uid := env.principalID(t, a.Email)
 		if reason, _ := env.mismatch(t, uid, g.id); reason != "" {
@@ -273,7 +273,7 @@ func TestCollaborator_GateDirect(t *testing.T) {
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 	member := env.newGateMember(t, g)                // a profile of the party
-	outsider := env.register(t)                      // a user with only a personal profile
+	outsider := env.registerVerified(t)              // a user with only a personal profile
 	outsiderID := env.principalID(t, outsider.Email) // the holder
 	personal := env.personalProfileID(t, outsiderID)
 	adminProfile := env.scanInt64(t, "admin profile", `SELECT p.entity_id FROM profiles p JOIN entities e ON e.id = p.entity_id WHERE e.uuid = $1::uuid`,
@@ -360,7 +360,7 @@ func TestCollaborator_AddToPartyActorGroupThroughAuthzRoute(t *testing.T) {
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 	member := env.newGateMember(t, g)
-	outsider := env.register(t)
+	outsider := env.registerVerified(t)
 	outsiderID := env.principalID(t, outsider.Email)
 	personal := env.personalProfileID(t, outsiderID)
 

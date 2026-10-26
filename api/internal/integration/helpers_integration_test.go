@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
@@ -67,6 +68,22 @@ func (s *stack) verifyRegisteredEmail(t *testing.T, a account) {
 	id := s.identifierUUID(t, a.tk.access(), a.Email)
 	s.do(t, http.MethodPost, "/v1/me/identifiers/"+id+"/verify", a.tk.access(), map[string]string{"code": code}).
 		wantStatus(t, http.StatusOK)
+}
+
+// registerVerified registers an account and marks its registration email
+// verified directly in the database, so the address is invitable by email
+// (an invitation resolves only a verified address). Unlike
+// verifyRegisteredEmail it does not run the code flow, so it creates no
+// email_otp credential.
+func (s *stack) registerVerified(t *testing.T) account {
+	t.Helper()
+	a := s.register(t)
+	if _, err := s.pool.Exec(context.Background(),
+		`UPDATE mod_users.user_identifiers SET verified_at = now() WHERE kind = 'email' AND value_canon = $1`,
+		strings.ToLower(a.Email)); err != nil {
+		t.Fatalf("verify %s: %v", a.Email, err)
+	}
+	return a
 }
 
 // doRaw issues a GET-style request with explicit headers.
