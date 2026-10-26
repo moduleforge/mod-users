@@ -235,7 +235,7 @@ phases:
             branch: plan/identity-model-impl-08-001
             commit:
                 - b81ed0a
-            merge: null
+            merge: 3955f4d6fc9d30a6b87367db0e32e36bc11f1482
         - number: 2
           slug: authorization-engine-tests
           title: Authorization Engine Tests
