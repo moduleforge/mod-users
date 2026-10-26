@@ -30,25 +30,6 @@ items:
           rule as met by any usable interactive credential (invite-time relaxation, decision B / xhLc). That holds for an invitation, which creates a profile in the party. It does not hold for CollaboratorGate.CheckOutsideCollaborator (api/internal/service/collaborator_gate.go:79-88): a collaborator holds no profile in the owning party, so can never get a credential_party_authorizations row, and profile_availability_for evaluates only the profile's own party. An 'authorized' party therefore admits an outside collaborator holding only a personal password with no confirmation row and no later lock. README.md:84 and model/README.md describe the shared gate incorrectly for this path.
         recommendation:
           USER DECISION (2026-10-26, interactive): option 1, strict on the collaborator path. Give holder_policy_mismatch an invite-time mode parameter (e.g. p_invite_time BOOLEAN); the invitation path passes true (relaxed check); CheckOutsideCollaborator passes false (keeps the strict pre-change check, so collaborators under an 'authorized' party always need an explicit confirmation). Touches: SQL function signature in 0100_baseline.sql, collaborator_gate.go, policy_mismatch.go callers, README.md:84, model/README.md, and one integration test showing a personal-password collaborator is refused with 409 unless confirmed. Amend the xhLc amendment note in plan/notes/decisions-and-resolutions.md to state collaborators are excluded from the invite-time relaxation. Queue as a security-linked remediation task, sequenced AFTER phase-15-remediation-04 tasks that edit baseline SQL (005, 006) so edits do not conflict. DEFERRED to the next remediation round only because phase 15 hit the divergence cap (8 tasks).
-    - title: Lock-ordering inversion between the credenti…
-      id: zwbM
-      date: "2026-10-26"
-      tags:
-        - type:bug
-        - plan/phase:remediation-03
-        - priority:medium
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/party_policy.go
-        lines: 563-577
-        severity: major
-        confidence: medium
-        concerns: architecture
-        description:
-          Lock-ordering inversion between the credential write gate and the profile ending path. gateCredentialWrite now takes the credential row FOR UPDATE (GetCredentialByUUIDForUpdate) and then the holder's profile FOR SHARE. EndInTx/endLocked (and holderTransition, UpdateProfileStatus) lock the profile FOR UPDATE first and then departureCleanupInTx revokes the party-confined credentials (RevokeInTx updates the credential row). A concurrent confine/authorize and an ending of the same holder therefore acquire the two rows in opposite orders (credential->profile vs profile->credential) and can deadlock (SQLSTATE 40P01, surfacing as a 500). The comment claims the share lock serializes the two paths, which holds only for the profile lock, not the credential lock. No lock-order rule is recorded in docs/architecture.md or AGENTS.md, so the ordering is not a stated contract.
-        recommendation:
-          Adopt one global order (profile before credential, matching the ending path): in gateCredentialWrite read the credential unlocked, lock the holder's active profile FOR SHARE first, then take the credential FOR UPDATE and re-validate. Record the order (platform_settings, then users row, then profile, then credential) in AGENTS.md or architecture.md. Alternative: keep the order and have the ending path pre-lock the holder's credentials ordered by id, at the cost of extra locking on every ending.
     - title: The leave guard accepts avail == 'inactive'…
       id: nA1G
       date: "2026-10-26"
@@ -1592,6 +1573,11 @@ closed:
       date: "2026-10-26"
     - id: PL6d
       title: gateCredentialWrite locks the credential row…
+      disposition: fixed
+      ref: phase-15-remediation-04/001-order-credential-gate-locks-profile-first.md
+      date: "2026-10-26"
+    - id: zwbM
+      title: Lock-ordering inversion between the credenti…
       disposition: fixed
       ref: phase-15-remediation-04/001-order-credential-gate-locks-profile-first.md
       date: "2026-10-26"
