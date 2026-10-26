@@ -838,7 +838,8 @@ phases:
             - iFeg
           git:
             branch: plan/identity-model-impl-15-005
-            commit: []
+            commit:
+                - c20e828
             merge: null
         - number: 6
           slug: require-party-update-for-managed-password-authorization
