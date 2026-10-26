@@ -85,25 +85,6 @@ items:
           requireNotLastOperatorAdmin takes the platform_settings row FOR UPDATE, the same row Bootstrap locks (lockPlatformSettingsSQL), and does so while already holding the ending profile lock. The order profile then platform_settings is new and undocumented; Bootstrap holds platform_settings and creates profiles, so the reverse order is plausible. Also the check counts only direct wildcard manage grants, so admins whose authority comes via group are not counted (documented in the SQL comment, a deliberate narrowing).
         recommendation:
           Document the platform_settings lock position in the lock order and confirm Bootstrap never locks an existing profile after taking platform_settings.
-    - title: ProvisionManagedUserInTx reads the party's a…
-      id: vHBJ
-      date: "2026-10-26"
-      tags:
-        - type:bug
-        - plan/phase:remediation-03
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go
-        lines: 934-960
-        severity: suggestion
-        confidence: low
-        concerns: correctness
-        description:
-          ProvisionManagedUserInTx reads the party's authn policy without a lock and authorizes the new password only when the rule is 'authorized' at that moment. A concurrent PutAuthnPolicy switching the rule to 'authorized' (which commits after this read) leaves the new managed user's password unauthorized, and the managed user is locked out until an admin authorizes it. Narrow race and admin-recoverable.
-        recommendation:
-          Optional: read the policy row FOR SHARE (or lock the party) in the provisioning transaction so it serializes with PutAuthnPolicy.
     - title: Decide whether to queue a docs task for the g
       id: jBbn
       date: "2026-10-26"
@@ -1320,4 +1301,9 @@ closed:
       title: The last-operator-admin guard covers only th…
       disposition: fixed
       ref: phase-15-remediation-04/007-exclude-disabled-principals-from-admin-count.md
+      date: "2026-10-26"
+    - id: vHBJ
+      title: ProvisionManagedUserInTx reads the party's a…
+      disposition: fixed
+      ref: phase-15-remediation-04/008-serialize-managed-user-provisioning-with-policy.md
       date: "2026-10-26"
