@@ -1,33 +1,5 @@
 version: 2
 items:
-    - title: resolveInvitee resolves holder_email through…
-      id: T1E6
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go
-        lines: 601-612
-        severity: major
-        confidence: high
-        concerns: security
-        description:
-          resolveInvitee resolves holder_email through GetIdentifierByKindValue, which matches any
-          mod_users.user_identifiers row, verified or not. Uniqueness on (kind, value_canon) is first-come and
-          includes unverified addresses, as the baseline comment says. So an account that registered
-          someone else's address without verifying it receives every invitation an administrator sends to that
-          address. /v1/me (and so POST /v1/me/profiles/{uuid}/accept) is reachable to accounts with an
-          unverified email, so the squatter can accept and become a member of the party. The administrator
-          sees only a holder display name and uuid in the 201 response.
-        recommendation:
-          When the holder is named by email, resolve only identifiers with verified_at IS NOT NULL: add a
-          verified-only lookup query or check ident.VerifiedAt after the lookup. Treat an unverified match as
-          not found (or as a distinct 409), and add an integration test that inviting an address held only
-          unverified does not create a profile.
     - title: gateCredentialWrite lets a party administrat…
       id: Pxlw
       date: "2026-10-26"
@@ -1436,6 +1408,11 @@ closed:
       date: "2026-10-26"
     - id: 4ZP1
       title: Invite by email matches unverified addresses
+      disposition: fixed
+      ref: phase-14-remediation-03/001-require-verified-invitee-and-authorize-managed-password.md
+      date: "2026-10-26"
+    - id: T1E6
+      title: resolveInvitee resolves holder_email through…
       disposition: fixed
       ref: phase-14-remediation-03/001-require-verified-invitee-and-authorize-managed-password.md
       date: "2026-10-26"
