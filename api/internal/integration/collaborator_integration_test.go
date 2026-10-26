@@ -48,14 +48,14 @@ func (s *stack) availability(t *testing.T, sessionUUID string, profileID int64) 
 	return got
 }
 
-// mismatch is mod_users.holder_policy_mismatch for a holder and a party:
-// the reason ("" for none) and the holder's best acr (0 for none).
+// mismatch is mod_users.holder_policy_mismatch for a holder and a party in
+// invite-time (relaxed) mode: the reason ("" for none) and the holder's best acr (0 for none).
 func (s *stack) mismatch(t *testing.T, holderID, partyID int64) (reason string, holderACR int16) {
 	t.Helper()
 	var r *string
 	var acr *int16
 	if err := s.pool.QueryRow(context.Background(),
-		`SELECT reason, holder_acr FROM mod_users.holder_policy_mismatch($1, $2)`, holderID, partyID).Scan(&r, &acr); err != nil {
+		`SELECT reason, holder_acr FROM mod_users.holder_policy_mismatch($1, $2, true)`, holderID, partyID).Scan(&r, &acr); err != nil {
 		t.Fatalf("holder_policy_mismatch: %v", err)
 	}
 	if r != nil {
@@ -246,7 +246,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 		env.exec(t, "revoke all", `UPDATE mod_users.credentials SET revoked_at = now(), revoke_reason = 'user' WHERE principal_id = $1`, uid)
 		var acr *int16
 		if err := env.pool.QueryRow(context.Background(),
-			`SELECT holder_acr FROM mod_users.holder_policy_mismatch($1, $2)`, uid, g.id).Scan(&acr); err != nil {
+			`SELECT holder_acr FROM mod_users.holder_policy_mismatch($1, $2, true)`, uid, g.id).Scan(&acr); err != nil {
 			t.Fatalf("holder_policy_mismatch: %v", err)
 		}
 		if acr != nil {
@@ -427,6 +427,54 @@ func TestCollaborator_AddToPartyActorGroupThroughAuthzRoute(t *testing.T) {
 	if n := env.scanInt64(t, "confirmations", `SELECT count(*) FROM profile_policy_confirmations WHERE profile_id = $1 AND party_id = $2`, personal, g.id); n != 1 {
 		t.Fatalf("confirmations = %d, want 1", n)
 	}
+}
+
+// A collaborator holds no profile in the owning party, so under an `authorized`
+// party it can never hold a credential authorization: the invite-time relaxation
+// does not reach the collaborator gate, and a personal-password-only outsider
+// needs an explicit confirmation (while the same holder's invitation passes).
+func TestCollaborator_AuthorizedPartyStrictForOutsideCollaborator(t *testing.T) {
+	g := env.newGateParty(t)
+	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
+	outsider := env.registerVerified(t)
+	outsiderID := env.principalID(t, outsider.Email)
+	personal := env.personalProfileID(t, outsiderID)
+
+	groupID := env.scanInt64(t, "group entity",
+		`INSERT INTO entities (fundamental_type_id, owner_id) SELECT id, $1 FROM types WHERE slug = 'authz_actor_group' RETURNING id`, g.id)
+	env.exec(t, "group row", `INSERT INTO authz_actor_groups (entity_id, name) VALUES ($1, $2)`, groupID, "collab-"+uniq("grp"))
+	path := "/v1/authz/actor-groups/" + env.entityUUID(t, groupID) + "/members"
+	members := func() int64 {
+		return env.scanInt64(t, "members", `SELECT count(*) FROM authz_actor_group_members WHERE group_id = $1`, groupID)
+	}
+
+	// The strict check refuses where the relaxed invite-time check passes.
+	if got, _ := env.mismatch(t, outsiderID, g.id); got != "" {
+		t.Fatalf("invite-time mismatch = %q, want none for a usable password", got)
+	}
+	var strict *string
+	if err := env.pool.QueryRow(context.Background(),
+		`SELECT reason FROM mod_users.holder_policy_mismatch($1, $2, false)`, outsiderID, g.id).Scan(&strict); err != nil {
+		t.Fatalf("holder_policy_mismatch strict: %v", err)
+	}
+	if strict == nil || *strict != "credential_not_authorized" {
+		t.Fatalf("strict mismatch = %v, want credential_not_authorized", strict)
+	}
+
+	body := map[string]any{"member_uuid": env.profileUUID(t, personal)}
+	env.do(t, http.MethodPost, path, g.adminTok.access(), body).wantMismatch(t, "credential_not_authorized")
+	if members() != 0 || env.confirmationRow(t, personal, g.id) != 0 {
+		t.Fatal("a refused add wrote a member or a confirmation")
+	}
+	body["confirm_policy_mismatch"] = true
+	env.do(t, http.MethodPost, path, g.adminTok.access(), body).wantStatus(t, http.StatusNoContent)
+	if members() != 1 || env.confirmationRow(t, personal, g.id) == 0 {
+		t.Fatalf("the confirmed add left members=%d confirmation=%d", members(), env.confirmationRow(t, personal, g.id))
+	}
+
+	// The invitation of a holder with the same credentials still passes unconfirmed.
+	b := env.registerVerified(t)
+	g.invite(t, map[string]any{"holder_email": b.Email}).wantStatus(t, http.StatusCreated)
 }
 
 func TestCollaborator_Compliance_RevokingACredentialRevokesItsSessions(t *testing.T) {

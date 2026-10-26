@@ -187,6 +187,9 @@ type Querier interface {
 	GetUserByIdentifier(ctx context.Context, arg GetUserByIdentifierParams) (User, error)
 	// Whether the holder's current credentials can meet the party's authentication
 	// policy (mod_users.holder_policy_mismatch). reason is NULL when they can.
+	// invite_time true relaxes the 'authorized' rule to any usable interactive
+	// credential (no profile exists yet); false is the strict outside-collaborator
+	// check requiring an explicit authorization or confinement.
 	HolderPolicyMismatch(ctx context.Context, arg HolderPolicyMismatchParams) (HolderPolicyMismatchRow, error)
 	// The attempt counter; the caller consumes the challenge once the budget is spent.
 	IncrementChallengeFailedAttempts(ctx context.Context, id int64) (int32, error)

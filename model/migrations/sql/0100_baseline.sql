@@ -1282,21 +1282,29 @@ END;
 $$;
 -- +goose StatementEnd
 
--- holder_policy_mismatch(p_holder_id, p_party_id): whether the holder's current
+-- holder_policy_mismatch(p_holder_id, p_party_id, p_invite_time): whether the holder's current
 -- credentials can meet the party's authentication policy, for the
 -- outside-collaborator check on an invitation or on adding a profile to a
 -- party's actor group (no profile exists yet, so profile_availability cannot
 -- answer). reason is NULL when they can, else the first failing lock reason in
 -- profile_availability_for's order:
 --
---   credential_not_authorized the 'authorized' rule: the holder has no usable
---                             interactive credential at all. At invite time no
---                             profile exists, so no credential can yet be
---                             authorized for the party; the rule is treated as
---                             satisfied by any usable interactive credential, and
---                             the member stays locked (profile_availability_for
---                             returns credential_not_authorized) after acceptance
---                             until a credential is authorized or confined;
+--   credential_not_authorized the 'authorized' rule. Invite time
+--                             (p_invite_time true): the holder has no usable
+--                             interactive credential at all. No profile exists
+--                             yet, so no credential can be authorized for the
+--                             party; the rule is treated as satisfied by any
+--                             usable interactive credential, and the member
+--                             stays locked (profile_availability_for returns
+--                             credential_not_authorized) after acceptance until
+--                             a credential is authorized or confined. Strict
+--                             (p_invite_time false, the outside-collaborator
+--                             path): no usable interactive credential is
+--                             authorized for the party (a
+--                             credential_party_authorizations row) or confined
+--                             to it. A collaborator holds no profile in the
+--                             owning party, so it can never be authorized there
+--                             implicitly and always needs a confirmation;
 --   provider_required         the 'provider' rule: no usable oidc credential of
 --                             the required provider;
 --   acr_too_low               no combination of usable credentials reaches
@@ -1312,6 +1320,7 @@ $$;
 CREATE FUNCTION mod_users.holder_policy_mismatch(
   p_holder_id                BIGINT,
   p_party_id                 BIGINT,
+  p_invite_time              BOOLEAN,
   OUT reason                 TEXT,
   OUT credential_rule        TEXT,
   OUT required_provider_id   TEXT,
@@ -1346,10 +1355,29 @@ BEGIN
      AND k.class = 'interactive'
      AND (c.confined_to_party_id IS NULL OR c.confined_to_party_id = p_party_id);
 
-  -- No profile exists yet, so no credential can be authorized for the party:
-  -- the 'authorized' rule is met by any usable interactive credential
-  -- (holder_acr is non-NULL exactly then). Authorization follows acceptance.
-  IF credential_rule = 'authorized' AND holder_acr IS NULL THEN
+  IF credential_rule = 'authorized' AND p_invite_time THEN
+    -- No profile exists yet, so no credential can be authorized for the party:
+    -- the rule is met by any usable interactive credential (holder_acr is
+    -- non-NULL exactly then). Authorization follows acceptance.
+    IF holder_acr IS NULL THEN
+      reason := 'credential_not_authorized';
+      RETURN;
+    END IF;
+  ELSIF credential_rule = 'authorized' AND NOT EXISTS (
+    SELECT 1
+      FROM mod_users.credentials c
+      JOIN mod_users.credential_kinds k ON k.kind = c.kind
+     WHERE c.principal_id = p_holder_id
+       AND c.revoked_at IS NULL
+       AND (c.expires_at IS NULL OR c.expires_at > now())
+       AND k.class = 'interactive'
+       AND (c.confined_to_party_id = p_party_id
+            OR (c.confined_to_party_id IS NULL
+                AND EXISTS (
+                  SELECT 1 FROM mod_users.credential_party_authorizations cpa
+                   WHERE cpa.credential_id = c.id AND cpa.party_id = p_party_id
+                )))
+  ) THEN
     reason := 'credential_not_authorized';
     RETURN;
   END IF;
@@ -1673,7 +1701,7 @@ DROP FUNCTION IF EXISTS mod_users.credential_profile_availability(BIGINT, BIGINT
 DROP FUNCTION IF EXISTS mod_users.profile_availability_excluding(BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_gate(BIGINT, BIGINT);
-DROP FUNCTION IF EXISTS mod_users.holder_policy_mismatch(BIGINT, BIGINT);
+DROP FUNCTION IF EXISTS mod_users.holder_policy_mismatch(BIGINT, BIGINT, BOOLEAN);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_gate_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr(BIGINT);

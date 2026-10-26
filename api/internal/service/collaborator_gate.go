@@ -79,7 +79,7 @@ func (g *CollaboratorGate) CheckOutsideCollaborator(ctx context.Context, tx pgx.
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("users: collaborator gate: read confirmation: %w", err)
 	}
-	mm, err := detectPolicyMismatch(ctx, g.usersQ(tx), p.HolderID, owningPartyID)
+	mm, err := detectPolicyMismatch(ctx, g.usersQ(tx), p.HolderID, owningPartyID, false)
 	if err != nil {
 		return err
 	}

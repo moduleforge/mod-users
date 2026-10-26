@@ -28,3 +28,7 @@ This is the user's decision (2026-10-26, interactive): option 1, strict collabor
 ## References
 
 - Finding `ggb7` in this plan's plan/findings.yaml (type:security, priority:high): CollaboratorGate.CheckOutsideCollaborator (api/internal/service/collaborator_gate.go) reaches the invite-time 'authorized' arm of holder_policy_mismatch, which admits a collaborator holding only a personal password. The recommendation is the strict collaborator path, which this task implements.
+
+## Status
+
+Outcome: succeeded (2026-10-26). `mod_users.holder_policy_mismatch` gained `p_invite_time BOOLEAN` (`model/migrations/sql/0100_baseline.sql`, rollback signature updated); `true` keeps the relaxed `authorized` check, `false` restores the strict `credential_party_authorizations`/confinement check. `detectPolicyMismatch` (`api/internal/service/policy_mismatch.go`) takes `inviteTime`; `profile_service.go` passes `true`, `collaborator_gate.go` passes `false`. sqlc query and `model/db` regenerated; `credential_not_authorized` message reworded to fit both modes; `README.md` and `model/README.md` describe both modes; the xhLc note in `plan/notes/decisions-and-resolutions.md` records the phase-16 task. New integration test `TestCollaborator_AuthorizedPartyStrictForOutsideCollaborator`. Validation: build.api, test.unit, `go vet -tags integration` passed; authz, config and integration suites passed against a throwaway Postgres 16; grep shows every call passes the mode argument.
