@@ -590,6 +590,194 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Out of scope, existing behavior: whether PutAuthnPolicy should authorize or flag existing unauthorized credentials of managed users when switching to authorized. Admin-recoverable; not changed by this task.'
+    - title: The PUT authn-policy description says changi…
+      id: xWC3
+      date: "2026-10-26"
+      tags:
+        - type:bug
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/openapi.yaml
+        lines: 3065-3067
+        severity: minor
+        confidence: high
+        concerns: correctness
+        description:
+          The PUT authn-policy description says changing `credential_rule` deletes the party's policy confirmations
+          and a write that leaves the rule unchanged keeps them. PutAuthnPolicy now also deletes them when the
+          required OIDC provider changes (party_policy.go), so a write that changes only the provider is described
+          as keeping them.
+        recommendation:
+          Say that changing `credential_rule` or the required provider deletes the confirmations, and that a write
+          leaving both unchanged keeps them.
+    - title: The collaborator_gate.go row states that `Pu…
+      id: EvkR
+      date: "2026-10-26"
+      tags:
+        - type:bug
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: AGENTS.md
+        lines: 193
+        severity: minor
+        confidence: high
+        concerns: correctness
+        description:
+          The collaborator_gate.go row states that `PutAuthnPolicy` deletes the party's confirmations when
+          `credential_rule` changes; the diff extends this to a required-provider change and adds the per-party
+          policy lock that confirmation writers (CollaboratorGate, invite check, managed-user provisioning) now take.
+        recommendation:
+          Update the sentence to cover the provider change and mention the shared/exclusive party policy lock
+          (party_policy_lock.go).
+    - title: The PATCH profile status description says 40…
+      id: yPFO
+      date: "2026-10-26"
+      tags:
+        - type:bug
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/openapi.yaml
+        lines: 3285-3296
+        severity: minor
+        confidence: high
+        concerns: correctness
+        description:
+          The PATCH profile status description says 409 users.last_operator_admin applies "when ending the last
+          active operator-party profile" and "checked in the ending's transaction". The guard now also refuses
+          suspending the last administrator (transitionLocked, ErrLastOperatorAdmin message "ended or suspended"),
+          and the go doc of UpdateProfileStatus was updated but the OpenAPI text was not.
+        recommendation:
+          Extend the 409 sentence to "ending or suspending", and drop "ending's" from the transaction wording.
+    - title: POST managed-users is documented as authoriz…
+      id: 8mcq
+      date: "2026-10-26"
+      tags:
+        - type:bug
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/openapi.yaml
+        lines: 2994-3004
+        severity: minor
+        confidence: medium
+        concerns: correctness
+        description:
+          POST managed-users is documented as authorized by `create` on the user and profile types only. Under
+          credential_rule `authorized` the password is now authorized for the party only when the caller also
+          holds `update` on the party; otherwise the user is created with an unauthorized password (201, no
+          error). A client reading the contract cannot tell the response may leave the user locked
+          (credential_not_authorized).
+        recommendation:
+          Add a sentence on the `authorized` rule: the new password is authorized for the party only when the
+          caller holds `update` on the party, otherwise it stays unauthorized until an administrator authorizes it.
+    - title: The guard now counts only admins whose princ…
+      id: 6dyh
+      date: "2026-10-26"
+      tags:
+        - type:security
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/service/profile_last_admin.go
+        lines: 38-100
+        severity: minor
+        confidence: medium
+        concerns: security
+        description:
+          The guard now counts only admins whose principal is not disabled, but the
+          principal-disable path does not take the platform_settings row lock that
+          serializes ending and suspending. A concurrent disable of admin B's principal
+          and a suspension of admin A can each pass (the counts read committed state)
+          and leave zero effective operator administrators. Grant revocation, gate-locked
+          and group-inherited admins are documented as out of scope; this disable race is
+          not listed in those boundaries.
+        recommendation:
+          Take the same platform_settings lock in the principal-disable path when the
+          principal holds an operator-party admin profile, or add the race to the
+          documented boundary list.
+    - title: The platform_settings FOR UPDATE is now take…
+      id: oJhu
+      date: "2026-10-26"
+      tags:
+        - type:bug
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/service/profile_last_admin.go
+        lines: 37-44, 75-85
+        severity: suggestion
+        confidence: medium
+        concerns: correctness
+        description:
+          The platform_settings FOR UPDATE is now taken for every active-to-nonactive transition of any profile in
+          the operator party, not only for administrators (the earlier version locked only after confirming the
+          profile was an admin). This is correct for the serialization requirement but serializes all operator-party
+          endings and suspensions behind one row lock for their transaction lifetime, including departure cleanup
+          in endLocked.
+        recommendation:
+          Acceptable as is. If contention matters, the admin pre-check could be restored before taking the lock,
+          re-checking under the lock.
+    - title: lockPartyPolicyShared silently returns nil w…
+      id: 8bH2
+      date: "2026-10-26"
+      tags:
+        - type:security
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/service/party_policy_lock.go
+        lines: 262-268
+        severity: suggestion
+        confidence: medium
+        concerns: security
+        description:
+          lockPartyPolicyShared silently returns nil when tx is nil (a test-only
+          accommodation). If a production caller ever passed a nil tx the lock would be
+          skipped without any signal, reopening the confirmation-vs-policy-change race.
+        recommendation:
+          Prefer a test-only seam (fake locker) over a fail-open nil check in production code.
+    - title: verifySetupToken is reachable unauthenticate…
+      id: YpJ6
+      date: "2026-10-26"
+      tags:
+        - type:security
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/handlers/oidc_config.go
+        lines: 528-566
+        severity: suggestion
+        confidence: low
+        concerns: security
+        description:
+          verifySetupToken is reachable unauthenticated. While the cache says token valid
+          and unconfirmed, every request with a non-empty token performs GetOIDCConfig plus
+          LoadMergedProviders (DB reads) before the constant-time compare. This is cheaper
+          than the prior RefreshState, but is still a per-request DB cost an attacker can
+          drive; no rate limit is visible in the diff. Separately, a replica with a stale
+          cache lacking the hash rejects a valid token (fail-closed, availability only).
+        recommendation:
+          Confirm an upstream rate limit covers these routes; consider comparing the token
+          against the cached hash first and reading the DB only on a match.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
