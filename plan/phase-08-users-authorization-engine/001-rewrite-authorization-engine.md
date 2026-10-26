@@ -109,3 +109,23 @@ architectural_impact: true
 - After the engine and its arms compile in `api/internal/authz/authz.go`.
 - After the `api/localAuthz/authz.go` assertion and documentation rewrite.
 - After `export_test.go` stubs and existing-test adjustments are green.
+
+## Status
+
+- **Outcome:** succeeded, with one open manager decision (operator profiles under the owning-party gate, below). Date 2026-10-26.
+- **Prerequisites (requirement 1):** present in the mod-authz plan worktree (`authz_operations.ownership_confers`, `min_acr`, `max_auth_age`; `impersonate` (8) and `credentials` (17); `grants.scope`, `target_type_id`, `include_subtypes`; `OperationRegistry.Policy`; extended `authzdb.CreateGrantParams`). The sibling links resolve to the mod-core, mod-authz and mod-audit plan worktrees.
+- **Validation:** `make build`, `make test`, `make lint` and `cd model && make verify` pass. The authz integration suite passes against a throwaway `postgres:16` with migrations composed from the plan worktrees (104 tests). The `internal/config` and `internal/integration` suites also pass. The greps for `assume|sudo|account holder` (no hits), `session_meets_party_policy` and `OwnerScopedTypeAuthorizer` pass. The own-arm SQL matches API surface 6.2 item 6.
+- **Changed files:**
+  - `api/internal/authz/authz.go`: engine, prelude (assurance gate, owning-party gate, wildcard), arms, `AuthorizeTypeIn`, `ErrStepUpRequired`.
+  - `api/localAuthz/authz.go`: facade documentation and the compile-time assertions.
+  - `api/internal/authz/export_test.go`: owned-scope, party-policy and clock stubs; `standardOps` mirrors the mod-authz seed.
+  - `model/migrations/sql/0100_baseline.sql`: new `mod_users.party_policy_gate_for`, shared by `profile_gate_for` and the new `mod_users.session_meets_party_policy`.
+  - Tests: `api/internal/authz/authz_test.go`, `api/internal/authz/party_gate_integration_test.go` (new), `api/internal/authz/fixtures_integration_test.go` (`actorCtx` sets `AuthTime`).
+  - `docs/architecture.md`: the facade paragraph.
+- **Decisions:**
+  - The owning-party gate runs in the prelude, as written: after the assurance gate and before the wildcard arm. It applies to every acting profile outside the target's owning party, operator profiles included.
+  - Only 14 operator-administrator scenarios (9 tests and 5 subtests) in `api/internal/integration` were skipped with `skipOperatorUnderOwningPartyGate` (naming task 002). In each one, an operator profile administers a party that the test gave a restrictive policy.
+  - An unknown operation slug is gated with `manage`'s policy.
+  - The engine builds its own `ErrStepUpRequired` from `useraction.StepUpRequired`; it is a different pointer from `service.ErrStepUpRequired`.
+  - `SSHKeyResolver` needed no change: the personal-profile fallback already carries `CredentialID`, which the gate evaluates.
+- **Open:** whether operator profiles should be exempt from the owning-party gate. Findings `Ddx9` (list path skips the gate; needs mod-core) and `qvSR` (mod-core Authorizer contract text; needs mod-core), `IIA3` and `Lt3W`.
