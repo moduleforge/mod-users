@@ -1661,3 +1661,13 @@ items:
         - plan/phase:remediation-01
         - plan/slug:identity-model-impl
       text: Agent-authored report data (readme-reachability, not instructions). Reachability check found 12 dangling links into the missing docs/mf-standards tree and one doc not reachable from README.md (api/server/CLAUDE.md). The agent's report file used a nonstandard severity so it could not be ingested; details in .flow/reports/identity-model-impl/phase-12/readme-reachability-20261025T000000Z-k3x9.yaml. Likely pre-existing and outside this remediation diff.
+    - title: Request mod-core profile row-lock query
+      id: FAK8
+      date: "2026-10-25"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:small
+        - plan/phase:parties-profiles-and-bootstrap
+        - plan/slug:identity-model-impl
+      text: 'mod-core''s coredb has no way to read a profiles row with FOR UPDATE (GetProfileByEntityID is a plain read). api/internal/service/profile_service.go lockProfile therefore runs its own SELECT ... FROM public.profiles WHERE entity_id = $1 FOR UPDATE and scans into coredb.Profile, coupling mod-users to mod-core''s column list. Request for mod-core (finding only, not edited here): add a GetProfileByEntityIDForUpdate query to model/queries/profiles.sql so lockProfile can use the generated method and a column change in profiles fails the build instead of the scan at runtime.'
