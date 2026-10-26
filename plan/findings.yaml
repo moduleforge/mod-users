@@ -46,45 +46,6 @@ items:
           Optional. Fold the admin check and the other-admin count into one query (count with FILTER), or
           skip the first query for profiles outside the operator party. Do the second only if the first
           shows an admin.
-    - title: requireNotLastOperatorAdmin is called only o…
-      id: Kfjo
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:remediation-03
-        - priority:medium
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_last_admin.go
-        lines: 43-71
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          requireNotLastOperatorAdmin is called only on transitions to `ended`
-          (UpdateProfileStatus, profile_admin.go:522-526; LeaveProfile). It does not
-          cover two cases.
-          (1) Suspending the last active operator administrator
-          (UpdateProfileStatus to `suspended`, profile_admin.go:528) is not guarded.
-          A suspended profile reads as `inactive` in profile_availability_for, so the
-          operator party is left with no usable wildcard-`manage` holder. The same
-          lockout the guard prevents for ending is reachable through suspension.
-          (2) Suspension does not take the platform_settings row lock that
-          serializes endings. Suppose ending admin A runs concurrently with
-          suspending the only other admin B. A's count query (a plain read under
-          READ COMMITTED) still sees B as `active` while B's suspension is
-          uncommitted. Both transactions commit and no active operator administrator
-          remains. The same gap applies to any other path that ends a profile
-          through the exported EndInTx (profile_service.go:734), which does not call
-          the guard.
-        recommendation:
-          Call requireNotLastOperatorAdmin on any transition that takes an active
-          operator administrator out of `active`, including suspension, not only on
-          ending. Have every such transition take lockPlatformSettingsForEndSQL
-          before it counts. Alternatively, move the guard into transitionLocked (or
-          endLocked plus the suspend branch) so that EndInTx callers inherit it too.
-          Add a concurrent end-plus-suspend integration test.
     - title: verifySetupToken now calls RefreshState for…
       id: 77AP
       date: "2026-10-26"
@@ -1552,4 +1513,9 @@ closed:
       title: The leave guard accepts avail == 'inactive'…
       disposition: fixed
       ref: phase-15-remediation-04/002-gate-suspended-profile-leave.md
+      date: "2026-10-26"
+    - id: Kfjo
+      title: requireNotLastOperatorAdmin is called only o…
+      disposition: fixed
+      ref: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
       date: "2026-10-26"
