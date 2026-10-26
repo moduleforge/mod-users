@@ -209,3 +209,15 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
 - `UNIQUE (kind, value_canon)` on identifiers keeps today's `user_accounts.email UNIQUE` behavior,
   including the squatting limit for unverified addresses; not changed by this plan.
 - Rate limiting and lockout (followups `GDol`, `rMRg`) stay open and out of scope.
+
+## Amendments (2026-10-26, phase 8)
+
+- **Decision D (operators and the owning-party gate).** Platform operator profiles are exempt from the
+  owning-party authentication gate (RU9G, phase 8 task 001 requirement 13). A customer party's
+  `credential_rule` and `min_acr` do not bind operator profiles, so the platform can always administer,
+  support and impersonate; operation-level `min_acr` and step-up still apply. Implemented as a
+  `core_is_operator_profile` skip in `mod_users.session_meets_party_policy`, and the
+  `skipOperatorUnderOwningPartyGate` test helper is removed. User decision.
+- **Decision E (mod-core gaps from task 001).** Findings Ddx9 (list endpoints from `GrantTableGenerator`
+  lack the owning-party gate) and qvSR (Authorizer contract text contradicts the gate) are fixed in
+  mod-core in a remediation phase before mod-core lands. User decision.
