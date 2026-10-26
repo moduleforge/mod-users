@@ -233,7 +233,8 @@ phases:
           digest: 'Production engine rewritten (api/internal/authz/authz.go). Prelude per check: assurance gate (409 users.step_up_required), owning-party gate (403), then wildcard arm, entity/type-entity arm, owned-scope arm with include_subtypes, own arm gated on ownership_confers, plus AuthorizeTypeIn. Requirement 13 literal reading holds operator profiles to customer-party policies, which broke 14 phase-7 HTTP scenarios; these were narrowly skipped and raised for a decision. Two mod-core gaps filed (Ddx9, qvSR).'
           git:
             branch: plan/identity-model-impl-08-001
-            commit: []
+            commit:
+                - b81ed0a
             merge: null
         - number: 2
           slug: authorization-engine-tests
