@@ -785,6 +785,7 @@ phases:
           path: phase-15-remediation-04/002-gate-suspended-profile-leave.md
           done: false
           tier: sonnet-high
+          digest: LeaveProfile now decides on a status-agnostic party-gate evaluation for both active and suspended profiles. A locked-out session leaving a suspended profile gets 401 users.profile_unavailable and nothing changes. The departure cleanup runs only when the gate is met. Edited the baseline migration in place, as earlier tasks did.
           findings:
             - twos
             - nA1G
