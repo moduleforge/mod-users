@@ -808,7 +808,8 @@ phases:
             - Xqat
           git:
             branch: plan/identity-model-impl-15-003
-            commit: []
+            commit:
+                - "4724343"
             merge: null
         - number: 4
           slug: verify-setup-token-without-cache-writes
