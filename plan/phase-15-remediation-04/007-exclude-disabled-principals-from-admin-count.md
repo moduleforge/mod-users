@@ -20,3 +20,7 @@ This task fixes finding `DO7p` (security, priority medium). It carries a require
 ## References
 
 - Finding `DO7p` in this plan's `plan/findings.yaml` (type:security, priority:medium): the remaining-admin count in `requireNotLastOperatorAdmin` ignores whether an administrator's principal is disabled, and the guard's boundary (mod-authz grant revocation, gate-locked admins) is not documented.
+
+## Status
+
+Outcome: succeeded (2026-10-26). `operatorAdminProfileSQL` now joins `public.principals` on the profile holder with `disabled_at IS NULL`; the `requireNotLastOperatorAdmin` doc comment states the boundary (no mod-authz wildcard-grant revocation coverage, no gate-locked administrator coverage). Added `TestLeaveGate_DisabledPrincipalAdminDoesNotCountAsRemaining`. `make build.api`, `make test.unit` and the full integration suite passed (throwaway postgres:16 container, users superuser, tests executed, none skipped). Files: `api/internal/service/profile_last_admin.go`, `api/internal/integration/leave_gate_integration_test.go`.
