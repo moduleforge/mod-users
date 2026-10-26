@@ -778,6 +778,15 @@ items:
         recommendation:
           Confirm an upstream rate limit covers these routes; consider comparing the token
           against the cached hash first and reading the DB only on a match.
+    - title: Lock-order contract undocumented
+      id: A202
+      date: "2026-10-26"
+      tags:
+        - type:documentation
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: '[agent-authored report data] Docs lens (readme-reachability report, medium/high): lock-order contract not documented in AGENTS.md or docs/architecture.md: profile lock before credential lock; platform_settings lock first for operator-party transitions; per-party advisory lock (lockPartyPolicyExclusive/Shared in api/internal/service/party_policy_lock.go) then policy row. Also: add party_policy_lock.go to AGENTS.md key-files row (line ~192) and profile_gate/profile_gate_for to model/README.md wrapper list (lines 26-27). Recommendation: add a Lock order subsection to docs/architecture.md and pointer in AGENTS.md.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
