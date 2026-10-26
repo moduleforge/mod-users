@@ -291,8 +291,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:remediation-04
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: '[agent-authored report data] Docs lens, minor, pre-existing and not changed by phase 15: (1) api/server/CLAUDE.md is a tracked doc unreachable from README.md (claude-mem stub only); (2) docs/mf-standards/ is an empty directory in the plan worktree so links into mf-standards/ from README.md, AGENTS.md, model/README.md, docs/architecture.md, docs/mod-users-spec.md resolve to nothing; probably an unsynced target. Recommendation: confirm sync step populates it, else fix links; link or remove the stub.'
     - title: Lock contention in new guard/policy locks
       id: CZcA
