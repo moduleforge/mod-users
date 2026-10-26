@@ -1550,7 +1550,8 @@ paths:
       description: |
         Whether the deployment has an operator party and whether its OIDC
         configuration is confirmed. The setup token printed at boot stays
-        active until both are true.
+        active for `POST /v1/bootstrap` until both are true; the OIDC
+        configuration routes accept it only while OIDC is unconfirmed.
       tags: [Bootstrap]
       operationId: bootstrapStatus
       security: []
@@ -1580,10 +1581,12 @@ paths:
         with the administrator profile locked.
 
         The setup token is the one printed at boot (also used for the OIDC
-        configuration). When OIDC is already confirmed, a successful bootstrap
-        clears it; otherwise it stays for the OIDC confirmation, which then
-        clears it. After both, OIDC configuration requires an operator
-        administrator session.
+        configuration while OIDC is unconfirmed). When OIDC is already
+        confirmed, a successful bootstrap clears it; otherwise it stays for the
+        OIDC confirmation, which then clears it. Once OIDC is confirmed, OIDC
+        configuration requires an operator administrator session even while
+        the bootstrap is pending; this route keeps accepting the token until
+        the bootstrap completes.
       tags: [Bootstrap]
       operationId: bootstrap
       security: []

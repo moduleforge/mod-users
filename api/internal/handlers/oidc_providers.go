@@ -5,7 +5,8 @@
 // admin GUI". Every successful write rebuilds OAuth and refreshes the
 // cached boot state so /status and /v1/* see the new config live.
 //
-// Auth: admin session OR valid setup token (same seam as /confirm).
+// Auth: admin session OR valid setup token (same seam as /confirm; the token
+// is accepted only while OIDC is unconfirmed).
 // client_secret is NEVER returned in any response — has_client_secret
 // is surfaced instead. PUT with the field absent keeps the existing
 // secret; PUT with empty string clears it.

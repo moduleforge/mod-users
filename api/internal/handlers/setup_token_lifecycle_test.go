@@ -225,3 +225,72 @@ func TestBootstrapHandler_BodyValidation(t *testing.T) {
 		}
 	}
 }
+
+// TestSetupToken_RefusedOnOIDCRoutesOnceConfirmed: with OIDC confirmed and the
+// operator party still unset, the token is refused on the OIDC configuration
+// routes (header and body) but still accepted by POST /v1/bootstrap.
+func TestSetupToken_RefusedOnOIDCRoutesOnceConfirmed(t *testing.T) {
+	h, fq, _ := newLifecycleHandler(t, db.GetOIDCConfigRow{ID: 1})
+	token, err := h.EnsureSetupToken(context.Background())
+	if err != nil || token == "" {
+		t.Fatalf("EnsureSetupToken: %q, %v", token, err)
+	}
+	if rr := confirmWithHeader(h, token); rr.Code != http.StatusOK {
+		t.Fatalf("first confirm with the token while unconfirmed: %d %s", rr.Code, rr.Body.String())
+	}
+	if !fq.row.SetupTokenHash.Valid || !h.CurrentState().Confirmed() {
+		t.Fatalf("precondition: want OIDC confirmed with the token still live")
+	}
+
+	if rr := confirmWithHeader(h, token); rr.Code != http.StatusUnauthorized {
+		t.Errorf("confirm header token once confirmed: %d, want 401", rr.Code)
+	}
+	body := `{"opt_out":true,"setup_token":"` + token + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/oidc-config/confirm", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Confirm(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("confirm body token once confirmed: %d, want 401", rr.Code)
+	}
+	if ok, err := h.authorizeAmbient(httptest.NewRequest(http.MethodGet, "/v1/oidc-config/providers", nil)); err != nil || ok {
+		t.Errorf("tokenless ambient auth = %v, %v; want false", ok, err)
+	}
+	get := httptest.NewRequest(http.MethodGet, "/v1/oidc-config/providers", nil)
+	get.Header.Set("X-Setup-Token", token)
+	if rr := httptest.NewRecorder(); h.authorizeBodyless(rr, get, "test") || rr.Code != http.StatusUnauthorized {
+		t.Errorf("providers route with the token once confirmed: %d, want 401", rr.Code)
+	}
+
+	bh := NewBootstrapHandler(nil, h)
+	breq := httptest.NewRequest(http.MethodPost, "/v1/bootstrap", strings.NewReader("{not json"))
+	breq.Header.Set("X-Setup-Token", token)
+	brr := httptest.NewRecorder()
+	bh.Bootstrap(brr, breq)
+	if brr.Code != http.StatusBadRequest {
+		t.Errorf("bootstrap with the token once confirmed: %d, want 400 (token accepted, body rejected)", brr.Code)
+	}
+}
+
+// TestSetupToken_StaleCacheRejectsClearedHash: the hash is cleared in the
+// database after the handler cached it; the old token is refused.
+func TestSetupToken_StaleCacheRejectsClearedHash(t *testing.T) {
+	h, fq, _ := newLifecycleHandler(t, db.GetOIDCConfigRow{ID: 1})
+	token, err := h.EnsureSetupToken(context.Background())
+	if err != nil || token == "" {
+		t.Fatalf("EnsureSetupToken: %q, %v", token, err)
+	}
+	if ok, err := h.verifySetupToken(context.Background(), token); err != nil || !ok {
+		t.Fatalf("verifySetupToken with the live token = %v, %v; want true", ok, err)
+	}
+	// Another replica clears the hash behind this handler's cache.
+	if err := fq.ClearSetupTokenHash(context.Background()); err != nil {
+		t.Fatalf("ClearSetupTokenHash: %v", err)
+	}
+	if !h.cachedDB.SetupTokenHash.Valid {
+		t.Fatalf("precondition: cache should still hold the hash")
+	}
+	if ok, err := h.verifySetupToken(context.Background(), token); err != nil || ok {
+		t.Errorf("verifySetupToken after the hash was cleared = %v, %v; want false", ok, err)
+	}
+}

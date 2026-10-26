@@ -21,3 +21,9 @@ This task fixes finding `cvMO` (security, medium). The OIDC configuration routes
 ## References
 
 - Finding `cvMO` in this plan's `plan/findings.yaml` (security, medium): `verifySetupToken` in `api/internal/handlers/oidc_config.go` uses the cached hash and cached bootstrapped flag, and `tokenActiveLocked` keeps the token live on the OIDC routes while bootstrap is pending even after OIDC is confirmed.
+
+## Status
+
+Outcome: succeeded (2026-10-25). `verifySetupToken` in `api/internal/handlers/oidc_config.go` now refreshes state from the database (`RefreshState`) and accepts the token only while OIDC is unconfirmed; a refresh failure surfaces as 500. `POST /v1/bootstrap` is unchanged (`VerifySetupTokenFresh`). Comments in `oidc_config.go`, `oidc_providers.go` and descriptions in `api/openapi.yaml` describe the narrowed rule. Tests added to `api/internal/handlers/setup_token_lifecycle_test.go`.
+
+Validation: handler tests pass; `make build.api` and `make test.unit` pass. `make test.integration` fails at the model step (no `users` role on local Postgres, environmental); `go test -tags=integration` for api packages passes but ran in ~0.2s, so it likely skipped without a database.
