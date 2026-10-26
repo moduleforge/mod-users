@@ -138,3 +138,47 @@ func TestAuthorizedInvite_RuleChangeDropsPolicyConfirmations(t *testing.T) {
 		t.Fatalf("confirmations after the first rule write = %d, want 0", rows(other.id))
 	}
 }
+
+func TestAuthorizedManagedUser_AutoAuthorizationNeedsUpdateOnTheParty(t *testing.T) {
+	g := env.newGateParty(t)
+	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
+
+	// An operator-party caller that may read and create profiles and users in
+	// the party, but not update it.
+	acct := env.register(t)
+	callerUser := env.principalID(t, acct.Email)
+	callerProf, callerUUID := env.seedPartyProfile(t, callerUser, env.operatorPartyID(t), "active")
+	env.exec(t, "caller type grants",
+		`INSERT INTO grants (actor_id, operation_id, target_id, granted_by)
+		 SELECT $1, o.id, t.entity_id, NULL FROM authz_operations o, types t WHERE o.slug IN ('create', 'read') AND t.slug IN ('profile', 'user')`, callerProf)
+	tok := env.do(t, http.MethodPost, "/v1/session/switch", acct.tk.access(), map[string]string{"profile_uuid": callerUUID}).
+		wantStatus(t, http.StatusOK).tok(t)
+
+	email := uniq("managed") + "@example.test"
+	created := env.do(t, http.MethodPost, g.path("/managed-users"), tok.access(), map[string]string{"email": email, "password": testPassword}).
+		wantStatus(t, http.StatusCreated).obj(t)
+	profileUUID := created["profile"].(map[string]any)["uuid"].(string)
+
+	// The user is provisioned, but without `update` its password is not authorized.
+	uid := env.principalID(t, email)
+	if n := env.count(t, "authorizations", `
+SELECT count(*) FROM mod_users.credential_party_authorizations a JOIN mod_users.credentials c ON c.id = a.credential_id
+ WHERE c.principal_id = $1 AND a.party_id = $2`, uid, g.id); n != 0 {
+		t.Fatalf("authorizations of the managed user's password = %d, want 0", n)
+	}
+	// Signing in succeeds, but the only profile is locked: no profile is
+	// selected and the lock is credential_not_authorized.
+	login := env.do(t, http.MethodPost, "/v1/auth/login", "", map[string]string{"email": email, "password": testPassword}).wantStatus(t, http.StatusOK).obj(t)
+	if login["profile"] != nil || login["access_token"] != nil {
+		t.Fatalf("login selected a profile: %v", login)
+	}
+	profiles, _ := login["profiles"].([]any)
+	if len(profiles) != 1 {
+		t.Fatalf("profiles = %v, want the single party profile", profiles)
+	}
+	p := profiles[0].(map[string]any)
+	lock, _ := p["lock"].(map[string]any)
+	if p["uuid"] != profileUUID || p["available"] != false || lock["reason"] != "credential_not_authorized" {
+		t.Fatalf("profile = %v, want %s locked with credential_not_authorized", p, profileUUID)
+	}
+}

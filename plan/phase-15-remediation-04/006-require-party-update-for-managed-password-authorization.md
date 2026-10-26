@@ -21,3 +21,10 @@ This task fixes finding `1cWY` (security, priority low). Under an `authorized` p
 ## References
 
 - Finding `1cWY` in this plan's `plan/findings.yaml` (type:security, priority:low): `ProvisionManagedUserInTx` in `api/internal/service/profile_service.go` auto-authorizes a new password under an `authorized` party on `create` authority alone, so a principal delegated only profile creation can mint a credential that satisfies the party gate.
+
+## Status
+
+- Outcome: succeeded (2026-10-26).
+- `ProvisionManagedUserInTx` now authorizes the new password under an `authorized` party only when the caller holds `update` on the party (`canAuthorizeForParty`, mirroring `isPartyAdmin`); a refusal skips the authorization without error, other errors propagate. Source: `api/internal/service/profile_service.go`.
+- Test added: `TestAuthorizedManagedUser_AutoAuthorizationNeedsUpdateOnTheParty` in `api/internal/integration/authorized_invite_integration_test.go`.
+- Validation: `make build.api`, `make test.unit`, `make lint.api` passed; integration suite (authz, config, integration packages) passed against a throwaway postgres:16 container, including the existing "an authorized party's managed user can sign in" subtest.

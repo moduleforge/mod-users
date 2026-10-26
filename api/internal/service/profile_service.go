@@ -885,12 +885,17 @@ type ProvisionedManagedUser struct {
 // for a malformed email or password, ErrIdentifierTaken when the address is
 // registered.
 //
-// When the party's credential_rule is `authorized`, the new password is also
-// authorized for the party (authorized by the acting profile), so the user can
-// sign in from the first attempt.
+// When the party's credential_rule is `authorized` and the caller holds
+// `update` on the party (the authority of the credential-authorization
+// administrator door), the new password is also authorized for the party
+// (authorized by the acting profile), so the user can sign in from the first
+// attempt. A caller without `update` still provisions the user, but the
+// password stays unauthorized until an administrator authorizes it; that is
+// not an error.
 //
 // Observations: `create` `user`, `create` `user_identifier`, `create`
-// `profile`, `create` `credential` and, under the `authorized` rule, `create`
+// `profile`, `create` `credential` and, under the `authorized` rule with
+// `update` on the party, `create`
 // `credential_party_authorization`; the lifecycle observers see a change
 // from "" to `active`.
 func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx, in ManagedUserInput) (ProvisionedManagedUser, error) {
@@ -953,6 +958,17 @@ func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx
 	case err != nil:
 		return ProvisionedManagedUser{}, fmt.Errorf("users: load party authn policy: %w", err)
 	case policy.CredentialRule == CredentialRuleAuthorized:
+		// Authorizing a credential for the party is the administrator door's act
+		// (`update` on the party), not part of `create` on the party's profiles.
+		// Without it the user is still provisioned, but the password stays
+		// unauthorized until an administrator authorizes it.
+		canAuthorize, err := s.canAuthorizeForParty(ctx, party)
+		if err != nil {
+			return ProvisionedManagedUser{}, err
+		}
+		if !canAuthorize {
+			return ProvisionedManagedUser{User: created, Profile: prof, IdentifierID: ident.ID, CredentialID: cred.ID}, nil
+		}
 		if _, err := uq.AuthorizeCredentialForParty(ctx, usersdb.AuthorizeCredentialForPartyParams{
 			CredentialID: cred.ID, PartyID: party, AuthorizedByProfileID: ac.ProfileID,
 		}); err != nil {
@@ -968,4 +984,22 @@ func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx
 		}
 	}
 	return ProvisionedManagedUser{User: created, Profile: prof, IdentifierID: ident.ID, CredentialID: cred.ID}, nil
+}
+
+// canAuthorizeForParty reports whether the caller holds `update` on the party,
+// the authority to authorize a credential for it. A refusal is false, not an
+// error; any other failure (an action-required refusal, an engine error) is
+// returned.
+func (s *ProfileService) canAuthorizeForParty(ctx context.Context, partyID int64) (bool, error) {
+	if s.az == nil {
+		return false, nil
+	}
+	err := s.az.Authorize(ctx, opSlugUpdate, &partyID)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, apiresp.ErrForbidden):
+		return false, nil
+	}
+	return false, err
 }
