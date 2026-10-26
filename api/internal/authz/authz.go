@@ -1,100 +1,115 @@
-// Package authz provides the users-module Authorizer implementation.
+// Package authz provides the users-module Authorizer: the production
+// authorization engine of the identity model, over mod-authz's grants table.
 //
-// This is the minimal identity-model port; the full engine (assurance gate,
-// owned-scope arm, ownership_confers, AuthorizeTypeIn) replaces it later.
+// Actor. The effective actor is the acting profile, opctx.Auth(ctx).ProfileID:
+// the profile the authentication middleware installed on the AuthContext (under
+// impersonation, the impersonated profile, so the target's own permissions
+// apply and never the administrator's). A context without an AuthContext, or
+// with no profile, is ErrUnauthenticated. Liveness and the acting profile's own
+// availability (confinement, its party's policy) are checked once per request
+// by the authentication middleware; the engine trusts the installed
+// AuthContext for those.
 //
-// Actor: the effective actor is the acting profile, opctx.ProfileID — the
-// profile the authentication middleware installed on the AuthContext (under
-// impersonation, the impersonated profile). A context without an AuthContext
-// is ErrUnauthenticated. Liveness and profile availability were already
-// checked once per request by the authentication middleware; Authorize trusts
-// the installed AuthContext.
+// Prelude. Every entry point first runs, in order:
 //
-// Policy: actors whose actor chain holds a wildcard grant (scope 'entity',
-// target_id NULL) can perform any operation (checkWildcardGrant
-// short-circuit). All other actors must hold an entity grant (scope 'entity')
-// in the grants table, resolved via recursive actor/target group CTEs, OR own
-// the target through the own arm: entities.owner_id equals
-// public.profile_own_subject(actor) — the holder user of a personal profile;
-// NULL (so never a match) for party profiles, service accounts and system
-// actors. The own arm is not yet gated on the operation's ownership_confers
-// flag: owning the target satisfies every operation on that entity. Only
-// scope = 'entity' grants are read, so an owned-scope grant never acts as an
-// entity or wildcard grant on its target.
+//  1. The operation-level assurance gate, for contexts that carry a SessionID
+//     or a CredentialID: the context's ACR must reach the operation's MinACR
+//     and, when the operation sets MaxAuthAge, the authentication must be at
+//     most that old. A failure is the shared action-required error
+//     ErrStepUpRequired (409 users.step_up_required, rendered by
+//     apiresp.WriteError wherever it surfaces), never a plain 403. Trusted
+//     system-actor contexts (no session, no credential) and the anonymous
+//     context skip it; an impersonating context always carries a session and
+//     never does.
+//  2. The owning-party gate, when the check names an owner: the target's
+//     entities.owner_id for Authorize, ownerID for AuthorizeTypeIn. When the
+//     acting profile is outside that party (an outside collaborator reaching
+//     the party's content through actor groups or grants, or a personal
+//     profile through the SSH fallback), the session's factors (or the single
+//     credential's) must meet the owning party's credential_rule and min_acr,
+//     with mod_users.session_meets_party_policy. A profile_policy_confirmations
+//     row exempts the credential rule only. A failure is ErrForbidden, like a
+//     failed grant arm. Acting profiles inside the owning party, personal
+//     profiles reaching their own records, system-actor contexts and the
+//     anonymous context skip it. It costs one query per checked target.
+//  3. The wildcard arm: the actor chain (the profile and the actor groups it
+//     belongs to, transitively) holds a grant with scope 'entity' and
+//     target_id NULL for an operation in the requested operation's
+//     satisfied-by closure. It allows every target, and nil targets.
 //
-// The Authorizer does not implement the OwnerScopedTypeAuthorizer capability
-// yet: mod-core's authz.AuthorizeTypeIn helper falls back to AuthorizeType
-// (wildcard and type-entity grants only) for it.
+// An unknown operation slug falls back to manage: the prelude gates it with
+// manage's policy and only a wildcard manage grant allows it.
 //
-// Authorize is an entity-level check: its target is always an entities.id, or
-// nil for "no specific entity". Operations with a nil target (list, or other
-// admin-only operations) are denied for non-wildcard-admin actors. A wildcard
-// grant satisfies nil-target operations because the wildcard check runs before
-// the nil-target denial.
+// Authorize(op, &target) then admits the target through any of:
 //
-// Type-level checks (create or list of a resource type, where the caller holds
-// a types.id) are a different question and use AuthorizeType. They are
-// authorized by a wildcard grant, or by a grant on the exact type's entity
-// (types.entity_id of the type), held directly or through target groups, by the
-// actor or one of its actor groups. There is no ownership arm, no subtype or
-// parent-type inheritance, and the types.id is never treated as an entities.id.
+//   - Entity arm: an entity-scope grant on the target, directly or through
+//     target groups. Instance semantics: a grant on the entity of the target's
+//     exact type (types.entity_id, directly or through a type-only target
+//     group) confers the operation over every instance of exactly that type,
+//     unless the target is itself a type entity.
+//   - Owned-scope arm: an owned-scope grant with target_id = the target's
+//     owner whose target_type_id is NULL, equals the target's type, or, with
+//     include_subtypes, is an ancestor of it. It never reaches the owner's own
+//     record.
+//   - Own arm: the target's owner is profile_own_subject(actor) (the holder
+//     user of a personal profile; NULL for every other actor) and an
+//     operation in the closure has authz_operations.ownership_confers.
+//     impersonate, manage and login never confer.
 //
-// Passing a types.id to Authorize is a caller bug that Authorize cannot detect
-// (both are int64): it would be matched against entities.owner_id and
-// grants.target_id as if it were an entity id. Callers that hold only a
-// coreAuthz.Authorizer must assert the TypeAuthorizer capability and otherwise
-// fall back to Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID).
-// A type's own entity (types.entity_id) is a legitimate Authorize target for
-// entity-level operations on the type entity itself (for example read or
-// grant), but it is never a stand-in for the type id in a type-level check.
+// These are the same arms as mod-core's generated accessible_*_ids_for_actor
+// functions, so single-row and list checks agree by construction. A nil target
+// is allowed only by the wildcard arm.
 //
-// The Authorizer's single-row check issues one recursive-CTE SQL query
-// (checkGrantOrOwn) that walks UP from the actor profile through actor groups,
-// checks for an entity grant between any actor-chain member and any
-// target-chain member (target walking UP to target groups) for any operation
-// in the SatisfiedBy closure, OR-ed with a check that the target entity's
-// owner_id equals profile_own_subject(actor). A NULL owner_id or a NULL own
-// subject matches nothing, so entities that keep a NULL owner by design and
-// actors without an own subject stay outside this predicate.
+// AuthorizeType(op, typeID) answers type-level create and list: the wildcard
+// arm, or an entity-scope grant on the exact type's entity. No ownership, no
+// owned scope, no subtype or parent-type walk; an instance grant never
+// satisfies it.
 //
-// Instance semantics: the target chain is also seeded with the entity of the
-// target's exact type, so a grant on a type's entity (directly or through a
-// type-only target group) confers the same operation over EVERY existing and
-// future instance of exactly that type, for every operation in its SatisfiedBy
-// closure. manage on a type entity is therefore full control of every instance
-// (read, update, delete, assume, grant, revoke, ...); for natural_person that
-// includes assume of every user account and installing SSH keys through the
-// operator routes. list implies read, so a type-level list grant reads every
-// instance. manage or grant on a type-only target group confers this for every
-// type in the group. It does not extend to subtypes or parent types and never
-// applies to type entities themselves (a grant on the sentinel "type" entity
-// confers nothing over type entities).
-// Escalation paths: manage, grant or update on the type entity of
-// authz_actor_group or authz_target_group confers that operation over every
-// group of that kind. Adding a member needs grant on the member (and, for actor
-// groups, update and grant on the group); a bare type-level update only permits
-// removing members, and manage confers all of it. That is a path to groups that
-// hold wildcard grants and so to privilege escalation. The same applies to every
-// other type that has instances (app, system_actor and the anonymous system
-// actor, an instance of system_actor, where they exist). The assume of every
-// user account that manage on the natural_person type entity confers includes
-// accounts that themselves hold wildcard or admin grants, so that grant is
-// effectively full admin.
-// Installing an SSH key (git SSH access) through the operator register and
-// revoke routes requires assume on the account holder, so update on the
-// natural_person type entity does not confer it; manage does, because it
-// implies assume.
-// Grant on type entities only to principals trusted with every instance: a
-// holder of grant on a type entity can hand out instance-wide authority over
-// that type. Single-row Authorize and the list-side
-// accessible_*_ids_for_actor functions agree for type-grant holders, because
-// mod-core's GrantTableGenerator carries the matching arm.
-// AuthorizeType is unchanged: an instance grant never satisfies a type-level
-// check.
+// AuthorizeTypeIn(op, typeID, ownerID) answers create and list within an
+// owner: the prelude (with ownerID as the owning party), the wildcard arm, a
+// type-entity grant on the exact type, an owned-scope grant with target_id =
+// ownerID and the type match, then the own arm when ownerID =
+// profile_own_subject(actor) and the operation confers.
+//
+// Ids: Authorize's target is always an entities.id, never a types.id; typeID
+// is always a types.id. Passing a types.id to Authorize is a caller bug the
+// engine cannot detect (both are int64): it would be matched against
+// unrelated entities. Type-level checks go through AuthorizeType or
+// AuthorizeTypeIn (in practice mod-core's authz.AuthorizeType and
+// authz.AuthorizeTypeIn helpers).
+//
+// WARNING, operator-actor trust for type-entity grants. mod-authz accepts
+// wildcard and type-entity grants only for operator actors (profiles of the
+// operator party, with allow_platform_grants), and every such grant is
+// instance-wide: it confers its operation over every existing and future
+// instance of exactly that type, for every operation in its closure. manage
+// on a type entity is full control of every instance, including the
+// operations manage implies:
+//
+//   - manage on the profile type entity confers impersonate of every profile,
+//     operator administrators holding wildcard grants included, so it is
+//     effectively full administration.
+//   - manage on the user or service_account type entity confers credentials
+//     over every principal of that type (passwords, SSH keys, API keys), which
+//     is account takeover. update on those type entities confers neither
+//     impersonate nor credentials.
+//   - manage, grant or update on the type entity of authz_actor_group or
+//     authz_target_group confers that operation over every group of the kind,
+//     a path to groups that hold wildcard grants. Adding a member needs grant
+//     on the member (and, for actor groups, update and grant on the group); a
+//     bare type-level update only permits removing members.
+//   - grant on a type entity lets its holder hand out instance-wide authority
+//     over that type.
+//
+// Give type-entity grants only to operator profiles trusted with every
+// instance of the type. list implies read, so a type-level list grant reads
+// every instance.
 package authz
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -102,6 +117,7 @@ import (
 	"github.com/moduleforge/core-api/apiresp"
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/opctx"
+	"github.com/moduleforge/mod-users/api/internal/useraction"
 
 	authzapi "github.com/moduleforge/authz-api/authz"
 )
@@ -122,8 +138,22 @@ var ErrUnauthenticated = apiresp.ErrUnauthenticated
 // see the ErrUnauthenticated doc comment above.
 var ErrForbidden = apiresp.ErrForbidden
 
-// Compile-time assertion: Authorizer satisfies core's authz.Authorizer.
-var _ coreAuthz.Authorizer = (*Authorizer)(nil)
+// ErrStepUpRequired is the assurance gate's refusal: the session or credential
+// is below the operation's minimum assurance level, or its authentication is
+// older than the operation's maximum age. It is the shared apiresp
+// action-required error (409 users.step_up_required), so apiresp.WriteError
+// renders it as an action wherever it surfaces, including inside another
+// module's service. The engine returns it wrapped; match it with errors.Is.
+var ErrStepUpRequired = apiresp.ActionRequired(useraction.StepUpRequired,
+	"Confirm your identity to continue.", "/step-up", nil)
+
+// Compile-time assertions: Authorizer implements core's Authorizer and both
+// optional capabilities.
+var (
+	_ coreAuthz.Authorizer                = (*Authorizer)(nil)
+	_ coreAuthz.TypeAuthorizer            = (*Authorizer)(nil)
+	_ coreAuthz.OwnerScopedTypeAuthorizer = (*Authorizer)(nil)
+)
 
 // Authorizer is the users-module implementation of core's authz.Authorizer.
 // It is constructed once at the composition root (main.go) and injected into
@@ -132,129 +162,70 @@ type Authorizer struct {
 	authzQ authzdb.Querier
 	opReg  *authzapi.OperationRegistry
 	pool   *pgxpool.Pool
+	now    func() time.Time
 
-	// wildcardGrantFn is used internally by tests to stub the wildcard grant
-	// check without requiring a live database. If nil, checkWildcardGrant is
-	// used instead. Only set this field in tests.
+	// The fields below replace one database check each, so unit tests can
+	// drive the engine without a live Postgres. nil means the real check.
+	// Only set them in tests (export_test.go).
 	wildcardGrantFn func(ctx context.Context, actorEntityID int64, opIDs []int32) (bool, error)
-
-	// grantOrOwnFn is used internally by tests to stub the combined grant-or-
-	// own check without requiring a live database. If nil, checkGrantOrOwn is
-	// used instead. Only set this field in tests.
-	grantOrOwnFn func(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error)
-
-	// typeGrantFn is used internally by tests to stub the type-grant check
-	// (AuthorizeType's grant-on-the-type's-entity arm) without requiring a live
-	// database. If nil, checkTypeGrant is used instead. Only set this field in
-	// tests.
-	typeGrantFn func(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error)
+	grantOrOwnFn    func(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error)
+	typeGrantFn     func(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error)
+	ownedScopeFn    func(ctx context.Context, actorEntityID, typeID, ownerID int64, opIDs []int32) (bool, error)
+	partyPolicyFn   func(ctx context.Context, q partyPolicyQuery) (bool, error)
 }
+
+// partyPolicyQuery is the input of the owning-party gate. Exactly one of
+// TargetEntityID (Authorize: the owner is resolved from entities.owner_id)
+// and OwnerID (AuthorizeTypeIn) is non-zero.
+type partyPolicyQuery struct {
+	ProfileID      int64
+	SessionID      int64
+	CredentialID   int64
+	TargetEntityID int64
+	OwnerID        int64
+}
+
+// ownerScope names the owner the owning-party gate resolves for one check:
+// the owner of targetEntityID, or ownerID itself. The zero value names none.
+type ownerScope struct {
+	targetEntityID int64
+	ownerID        int64
+}
+
+func (s ownerScope) isZero() bool { return s.targetEntityID <= 0 && s.ownerID <= 0 }
 
 // New constructs an Authorizer.
 //
-//   - authzQ is used for grant resolution queries.
-//   - opReg provides the SatisfiedBy closure for each operation string.
-//   - pool is the database pool used for the recursive-CTE grant check and the
-//     wildcard grant check.
+//   - authzQ is the mod-authz querier.
+//   - opReg provides each operation's satisfied-by closure and policy
+//     (MinACR, MaxAuthAge).
+//   - pool runs the grant, owned-scope and owning-party checks.
 func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpool.Pool) *Authorizer {
-	return &Authorizer{authzQ: authzQ, opReg: opReg, pool: pool}
+	return &Authorizer{authzQ: authzQ, opReg: opReg, pool: pool, now: time.Now}
 }
 
-// Authorize enforces the policy described in the package doc for an
-// entity-level check: may the effective actor perform operation on the entity
-// whose entities.id is *target?
+// Authorize answers "may the effective actor perform operation on the entity
+// whose entities.id is *target?" (nil: no specific entity). See the package
+// documentation for the prelude and the arms.
 //
-// The target is ALWAYS an entities.id (or nil for "no specific entity"). It is
-// never a types.id. Passing a types.id here is a caller bug that Authorize
-// cannot detect, because both ids are plain int64: the value would be matched
-// as an entity id against entities.owner_id and grants.target_id, so any actor
-// who owns, or holds a grant over, the unrelated entity whose id happens to
-// equal that type id would be allowed. Type-level checks (create or list of a
-// resource type) must use AuthorizeType instead. A caller that holds only a
-// coreAuthz.Authorizer must assert TypeAuthorizer and otherwise fall back to
-// Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID).
-//
-// The effective actor is the acting profile, opctx.ProfileID. Under
-// impersonation that is the impersonated profile, so the target's own
-// permissions apply, never the administrator's.
-//
-// Flow:
-//  1. Resolve effective actor from context.
-//  2. Compute opIDs via opReg.SatisfiedBy(operation).
-//  3. checkWildcardGrant — if any (actor-chain, operation, NULL-target) grant
-//     exists, return nil immediately (wildcard admin short-circuit).
-//  4. If target == nil: return ErrForbidden (no entity to resolve a grant
-//     against; only a wildcard grant, already checked in step 3, can satisfy
-//     a nil-target operation).
-//  5. If target != nil: run checkGrantOrOwn — a single recursive-CTE query
-//     that resolves an entity grant via the actor/target group chains (the
-//     target chain is seeded with the target and, unless the target is itself
-//     a type entity, the entity of its exact type), OR-ed with the own arm
-//     (entities.owner_id = profile_own_subject(actor)).
-//
-// WARNING, instance semantics: the target chain is also seeded with the entity of the
-// target's exact type, so a grant on a type's entity (directly or through a
-// type-only target group) confers the same operation over EVERY existing and
-// future instance of exactly that type, for every operation in its SatisfiedBy
-// closure. manage on a type entity is therefore full control of every instance
-// (read, update, delete, assume, grant, revoke, ...); for natural_person that
-// includes assume of every user account and installing SSH keys through the
-// operator routes. list implies read, so a type-level list grant reads every
-// instance. manage or grant on a type-only target group confers this for every
-// type in the group. It does not extend to subtypes or parent types and never
-// applies to type entities themselves (a grant on the sentinel "type" entity
-// confers nothing over type entities).
-// Escalation paths: manage, grant or update on the type entity of
-// authz_actor_group or authz_target_group confers that operation over every
-// group of that kind. Adding a member needs grant on the member (and, for actor
-// groups, update and grant on the group); a bare type-level update only permits
-// removing members, and manage confers all of it. That is a path to groups that
-// hold wildcard grants and so to privilege escalation. The same applies to every
-// other type that has instances (app, system_actor and the anonymous system
-// actor, an instance of system_actor, where they exist). The assume of every
-// user account that manage on the natural_person type entity confers includes
-// accounts that themselves hold wildcard or admin grants, so that grant is
-// effectively full admin.
-// Installing an SSH key (git SSH access) through the operator register and
-// revoke routes requires assume on the account holder, so update on the
-// natural_person type entity does not confer it; manage does, because it
-// implies assume.
-// Grant on type entities only to principals trusted with every instance: a
-// holder of grant on a type entity can hand out instance-wide authority over
-// that type. Single-row Authorize and the list-side
-// accessible_*_ids_for_actor functions agree for type-grant holders, because
-// mod-core's GrantTableGenerator carries the matching arm.
-// AuthorizeType is unchanged: an instance grant never satisfies a type-level
-// check.
-//
-// Steps 1-3 are shared with AuthorizeType via authorizePrelude so the two
-// entry points cannot drift.
+// The target is ALWAYS an entities.id, never a types.id: a type id here would
+// be matched against unrelated entities. Type-level checks use AuthorizeType or
+// AuthorizeTypeIn. A nil target is allowed only by the wildcard arm.
 func (a *Authorizer) Authorize(ctx context.Context, operation string, target *int64) error {
-	actorEntityID, opIDs, done, err := a.authorizePrelude(ctx, operation)
+	var scope ownerScope
+	if target != nil {
+		scope.targetEntityID = *target
+	}
+	actorEntityID, opIDs, done, err := a.authorizePrelude(ctx, operation, scope)
 	if done {
 		return err
 	}
-
-	// Non-wildcard-admin. Check target.
 	if target == nil {
-		// Nil target means "no specific entity" (list, or other operations with
-		// no entity to resolve a grant or own-predicate against), so there is
-		// nothing to resolve a grant or the ownership predicate against: only a
-		// wildcard grant (already checked in the prelude) can satisfy this call.
-		//
-		// A non-nil target is always treated as an entities.id and handed to
-		// checkGrantOrOwn below. In particular a types.id must never be passed
-		// here as a "type-level" target: Authorize cannot tell the two apart,
-		// and the value would be matched against unrelated entities. Type-level
-		// create/list checks go through AuthorizeType.
 		return ErrForbidden
 	}
 
-	// Run the recursive-CTE grant check, OR-ed with the own arm
-	// (entities.owner_id = profile_own_subject(actor)) — one query, one DB
-	// round-trip. In this minimal port the own arm is not yet gated on the
-	// operation's ownership_confers flag. A genuine DB error propagates to
-	// the caller rather than being swallowed into a denial.
+	// Entity, owned-scope and own arms in one query. A DB error propagates
+	// rather than being swallowed into a denial.
 	granted, err := a.checkGrantOrOwnDispatch(ctx, actorEntityID, *target, opIDs)
 	if err != nil {
 		return err
@@ -262,44 +233,25 @@ func (a *Authorizer) Authorize(ctx context.Context, operation string, target *in
 	if granted {
 		return nil
 	}
-
 	return ErrForbidden
 }
 
 // AuthorizeType answers "may the effective actor perform operation on
-// resources of type typeID?" — the type-level counterpart of Authorize, used
-// for create and list of a resource type. typeID is a types.id, never an
-// entities.id.
+// resources of type typeID?" (type-level create and list). typeID is a
+// types.id, never an entities.id.
 //
-// The call is allowed when either holds:
-//   - the effective actor (the acting profile), or an actor group in its chain,
-//     holds a wildcard grant (scope 'entity', target_id IS NULL) whose operation is in the SatisfiedBy
-//     closure of operation, for example manage, which implies create; or
-//   - the actor chain holds a grant, with an operation in that closure, on the
-//     exact type's entity (types.entity_id of typeID), directly or on a target
-//     group that reaches it walking up through authz_target_group_members
-//     (checkTypeGrant).
+// Allowed by the wildcard arm, or by an entity-scope grant, with an operation
+// in the closure, on the exact type's entity (types.entity_id of typeID) held
+// by the actor chain directly or through target groups (checkTypeGrant).
+// There is no ownership arm, no owned-scope arm and no subtype or parent-type
+// walk, and typeID is never compared with an entities.id, so an instance grant
+// or ownership of the entity whose id equals typeID never satisfies it.
 //
-// Anything else returns ErrForbidden, as does typeID <= 0 (fail closed, even
-// for a wildcard holder) and a typeID with no types row.
-//
-// The type-grant arm is exact-type only: there is no subtype or parent-type
-// inheritance, so a grant on the entity (or legal_entity) type's entity does
-// not cover natural_person. There is no ownership arm either. AuthorizeType
-// deliberately never consults entity-level authority: it does not call
-// checkGrantOrOwn and never compares typeID with entities.id,
-// entities.owner_id, or grants.target_id; typeID is compared only with
-// types.id. Doing otherwise would let any actor who owns or holds a grant over
-// the unrelated entity whose id equals typeID pass the type-level check.
-//
-// types.deprecated_at is not consulted, for wildcard or type-grant holders:
-// creating an entity of a deprecated type is rejected by the data layer, and a
-// deprecated type must stay listable. A genuine DB error propagates rather than
-// being swallowed into a denial.
+// typeID <= 0 is ErrForbidden, even for a wildcard holder. types.deprecated_at
+// is not consulted: creating an entity of a deprecated type is rejected by the
+// data layer, and a deprecated type stays listable.
 func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID int64) error {
-	// Report a missing actor as 401-class even for a malformed typeID, then
-	// fail closed on a non-positive type id before any DB work: never "no
-	// target, so allow", and not even a wildcard holder passes it.
+	// Report a missing actor as 401-class even for a malformed typeID.
 	if _, ok := effectiveActor(ctx); !ok {
 		return ErrUnauthenticated
 	}
@@ -307,13 +259,45 @@ func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID
 		return ErrForbidden
 	}
 
-	actorEntityID, opIDs, done, err := a.authorizePrelude(ctx, operation)
+	actorEntityID, opIDs, done, err := a.authorizePrelude(ctx, operation, ownerScope{})
 	if done {
-		return err // nil: wildcard grant allows; non-nil: denial or DB error
+		return err
 	}
 
-	// No wildcard grant. Look for a grant on the exact type's entity. A DB
-	// error propagates unchanged and is never turned into a denial.
+	granted, err := a.checkTypeGrantDispatch(ctx, actorEntityID, typeID, opIDs)
+	if err != nil {
+		return err
+	}
+	if granted {
+		return nil
+	}
+	return ErrForbidden
+}
+
+// AuthorizeTypeIn answers "may the effective actor perform operation on
+// resources of type typeID owned by ownerID?" (create and list within an
+// owner). typeID is a types.id and ownerID an entities.id. Callers use
+// mod-core's authz.AuthorizeTypeIn helper rather than this method.
+//
+// Order: the prelude, with ownerID as the owning party; the wildcard arm; an
+// entity-scope grant on the exact type's entity (as AuthorizeType); an
+// owned-scope grant with target_id = ownerID whose target_type_id is NULL,
+// equals typeID, or, with include_subtypes, is an ancestor of typeID; the own
+// arm when ownerID = profile_own_subject(actor) and the operation confers.
+// typeID <= 0 or ownerID <= 0 is ErrForbidden.
+func (a *Authorizer) AuthorizeTypeIn(ctx context.Context, operation string, typeID int64, ownerID int64) error {
+	if _, ok := effectiveActor(ctx); !ok {
+		return ErrUnauthenticated
+	}
+	if typeID <= 0 || ownerID <= 0 {
+		return ErrForbidden
+	}
+
+	actorEntityID, opIDs, done, err := a.authorizePrelude(ctx, operation, ownerScope{ownerID: ownerID})
+	if done {
+		return err
+	}
+
 	granted, err := a.checkTypeGrantDispatch(ctx, actorEntityID, typeID, opIDs)
 	if err != nil {
 		return err
@@ -322,58 +306,68 @@ func (a *Authorizer) AuthorizeType(ctx context.Context, operation string, typeID
 		return nil
 	}
 
+	granted, err = a.checkOwnedScopeDispatch(ctx, actorEntityID, typeID, ownerID, opIDs)
+	if err != nil {
+		return err
+	}
+	if granted {
+		return nil
+	}
 	return ErrForbidden
 }
 
-// authorizePrelude runs the steps Authorize and AuthorizeType share, so the two
-// entry points cannot drift: resolve the effective actor, compute the
-// SatisfiedBy closure for operation (with the unknown-slug fallback to a
-// wildcard-manage check), and run the wildcard grant check.
+// authorizePrelude runs the steps every entry point shares, so they cannot
+// drift: resolve the actor, compute the operation's satisfied-by closure (an
+// unknown slug falls back to manage), the assurance gate, the owning-party
+// gate when scope names an owner, and the wildcard arm.
 //
 // When done is true the outcome is final and err is it: nil means a wildcard
-// grant allows the call; ErrUnauthenticated, ErrForbidden, or a propagated DB
-// error otherwise. When done is false the actor holds no wildcard grant for
-// operation; actorEntityID and opIDs are valid for any further, entity-level
-// check the caller chooses to make.
-func (a *Authorizer) authorizePrelude(ctx context.Context, operation string) (actorEntityID int64, opIDs []int32, done bool, err error) {
-	// Resolve the effective actor: the acting profile.
-	actorEntityID, ok := effectiveActor(ctx)
-	if !ok {
+// grant allows the call; otherwise ErrUnauthenticated, ErrStepUpRequired
+// (wrapped), ErrForbidden or a propagated DB error. When done is false,
+// actorEntityID and opIDs are valid for the caller's remaining arms.
+func (a *Authorizer) authorizePrelude(ctx context.Context, operation string, scope ownerScope) (actorEntityID int64, opIDs []int32, done bool, err error) {
+	ac, ok := opctx.Auth(ctx)
+	if !ok || ac.ProfileID <= 0 {
 		return 0, nil, true, ErrUnauthenticated
 	}
+	actorEntityID = ac.ProfileID
 
-	// Compute the satisfied-by closure for the requested operation. opIDs is used
-	// by both the wildcard check and the targeted grant check.
-	//
-	// SatisfiedBy may return an error if the operation slug is not in the registry.
-	// As of this writing, every in-tree caller passes a registered operation slug
-	// (verified across mod-authz, mod-users, mod-tasks, mod-tags, and mod-core);
-	// this branch is defense-in-depth against an uninitialized or lagging
-	// registry, not a documented reliance on an unregistered slug. For the
-	// wildcard check, we fall back to the "manage" opIDs if the slug is
-	// unknown — a wildcard manage grant means full control over any operation.
+	// An unknown slug is a defense-in-depth case (every in-tree caller passes
+	// a registered slug): it is authorized as manage, so only a wildcard
+	// manage grant allows it, behind manage's policy.
+	policySlug := operation
 	opIDs, sErr := a.opReg.SatisfiedBy(operation)
-	if sErr != nil {
-		// Unknown slug: use "manage" opIDs for the wildcard check.
-		// If the actor has a wildcard manage grant, allow. Otherwise deny.
-		manageIDs, mErr := a.opReg.SatisfiedBy("manage")
+	unknown := sErr != nil
+	if unknown {
+		policySlug = "manage"
+		var mErr error
+		opIDs, mErr = a.opReg.SatisfiedBy(policySlug)
 		if mErr != nil {
-			// Even "manage" is unknown (uninitialized registry). Deny.
-			return 0, nil, true, ErrForbidden
+			return 0, nil, true, ErrForbidden // uninitialized registry
 		}
-		wildcardAllowed, wErr := a.checkWildcardGrantDispatch(ctx, actorEntityID, manageIDs)
-		if wErr != nil {
-			return 0, nil, true, wErr
-		}
-		if wildcardAllowed {
-			return 0, nil, true, nil // wildcard manage admin can do anything
-		}
-		return 0, nil, true, ErrForbidden
 	}
 
-	// Wildcard grant check: if the actor (or any actor group they belong to)
-	// holds a grant with target_id IS NULL and operation_id in the opIDs closure,
-	// allow unconditionally. This replaces the is_admin column short-circuit.
+	if gated(ac) {
+		if err := a.assuranceGate(ac, operation, policySlug); err != nil {
+			return 0, nil, true, err
+		}
+		if !scope.isZero() {
+			met, err := a.checkPartyPolicyDispatch(ctx, partyPolicyQuery{
+				ProfileID:      ac.ProfileID,
+				SessionID:      ac.SessionID,
+				CredentialID:   ac.CredentialID,
+				TargetEntityID: scope.targetEntityID,
+				OwnerID:        scope.ownerID,
+			})
+			if err != nil {
+				return 0, nil, true, err
+			}
+			if !met {
+				return 0, nil, true, ErrForbidden
+			}
+		}
+	}
+
 	wildcardAllowed, wErr := a.checkWildcardGrantDispatch(ctx, actorEntityID, opIDs)
 	if wErr != nil {
 		return 0, nil, true, wErr
@@ -381,8 +375,40 @@ func (a *Authorizer) authorizePrelude(ctx context.Context, operation string) (ac
 	if wildcardAllowed {
 		return 0, nil, true, nil
 	}
-
+	if unknown {
+		return 0, nil, true, ErrForbidden
+	}
 	return actorEntityID, opIDs, false, nil
+}
+
+// gated reports whether the prelude's gates apply to ac: an interactive or
+// non-interactive caller always carries a session or a credential; trusted
+// system-actor contexts carry neither, and the anonymous context is exempt.
+func gated(ac opctx.AuthContext) bool {
+	return !ac.Anonymous && (ac.SessionID != 0 || ac.CredentialID != 0)
+}
+
+// assuranceGate applies the operation-level assurance policy of policySlug to
+// ac: ACR >= MinACR, and the authentication no older than MaxAuthAge when it
+// is set. A policy lookup failure (a registry that knows the closure but not
+// the policy) fails closed.
+func (a *Authorizer) assuranceGate(ac opctx.AuthContext, operation, policySlug string) error {
+	policy, err := a.opReg.Policy(policySlug)
+	if err != nil {
+		return ErrForbidden
+	}
+	stale := policy.MaxAuthAge > 0 && a.clock().Sub(ac.AuthTime) > policy.MaxAuthAge
+	if ac.ACR < policy.MinACR || stale {
+		return fmt.Errorf("authz: operation %q needs a stronger or more recent authentication: %w", operation, ErrStepUpRequired)
+	}
+	return nil
+}
+
+func (a *Authorizer) clock() time.Time {
+	if a.now != nil {
+		return a.now()
+	}
+	return time.Now()
 }
 
 // effectiveActor returns the acting profile's entity id from the
@@ -396,8 +422,6 @@ func effectiveActor(ctx context.Context) (int64, bool) {
 	return id, true
 }
 
-// checkWildcardGrantDispatch calls wildcardGrantFn if set (test stub), otherwise
-// delegates to checkWildcardGrant.
 func (a *Authorizer) checkWildcardGrantDispatch(ctx context.Context, actorEntityID int64, opIDs []int32) (bool, error) {
 	if a.wildcardGrantFn != nil {
 		return a.wildcardGrantFn(ctx, actorEntityID, opIDs)
@@ -405,8 +429,6 @@ func (a *Authorizer) checkWildcardGrantDispatch(ctx context.Context, actorEntity
 	return a.checkWildcardGrant(ctx, actorEntityID, opIDs)
 }
 
-// checkGrantOrOwnDispatch calls grantOrOwnFn if set (test stub), otherwise
-// delegates to checkGrantOrOwn.
 func (a *Authorizer) checkGrantOrOwnDispatch(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error) {
 	if a.grantOrOwnFn != nil {
 		return a.grantOrOwnFn(ctx, actorEntityID, targetEntityID, opIDs)
@@ -414,8 +436,6 @@ func (a *Authorizer) checkGrantOrOwnDispatch(ctx context.Context, actorEntityID,
 	return a.checkGrantOrOwn(ctx, actorEntityID, targetEntityID, opIDs)
 }
 
-// checkTypeGrantDispatch calls typeGrantFn if set (test stub), otherwise
-// delegates to checkTypeGrant.
 func (a *Authorizer) checkTypeGrantDispatch(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error) {
 	if a.typeGrantFn != nil {
 		return a.typeGrantFn(ctx, actorEntityID, typeID, opIDs)
@@ -423,27 +443,35 @@ func (a *Authorizer) checkTypeGrantDispatch(ctx context.Context, actorEntityID, 
 	return a.checkTypeGrant(ctx, actorEntityID, typeID, opIDs)
 }
 
-// checkWildcardGrant queries the grants table for a wildcard grant:
-// a row where actor_id is in the actor's transitive group chain,
-// scope = 'entity', target_id IS NULL and operation_id is in the opIDs
-// closure.
-//
-// This implements the B4 mechanism from the Final design: a Go-side
-// EXISTS query before checkGrantOrOwn, replacing the is_admin column
-// short-circuit.
-//
-// The query uses the same ActorChain CTE as checkGrantOrOwn for consistency
-// and so that actor-group-based wildcard grants work correctly.
-func (a *Authorizer) checkWildcardGrant(ctx context.Context, actorEntityID int64, opIDs []int32) (bool, error) {
-	const wildcardCheckSQL = `
-WITH RECURSIVE
+func (a *Authorizer) checkOwnedScopeDispatch(ctx context.Context, actorEntityID, typeID, ownerID int64, opIDs []int32) (bool, error) {
+	if a.ownedScopeFn != nil {
+		return a.ownedScopeFn(ctx, actorEntityID, typeID, ownerID, opIDs)
+	}
+	return a.checkOwnedScope(ctx, actorEntityID, typeID, ownerID, opIDs)
+}
+
+func (a *Authorizer) checkPartyPolicyDispatch(ctx context.Context, q partyPolicyQuery) (bool, error) {
+	if a.partyPolicyFn != nil {
+		return a.partyPolicyFn(ctx, q)
+	}
+	return a.checkPartyPolicy(ctx, q)
+}
+
+// actorChainCTE walks UP from the acting profile ($1) through actor groups.
+const actorChainCTE = `
     ActorChain AS (
         SELECT $1::bigint AS aid
         UNION
         SELECT agm.group_id
         FROM authz_actor_group_members agm
         JOIN ActorChain ac ON agm.member_id = ac.aid
-    )
+    )`
+
+// checkWildcardGrant reports whether the actor chain holds a wildcard grant:
+// scope 'entity', target_id NULL, operation in opIDs.
+func (a *Authorizer) checkWildcardGrant(ctx context.Context, actorEntityID int64, opIDs []int32) (bool, error) {
+	const wildcardCheckSQL = `
+WITH RECURSIVE` + actorChainCTE + `
 SELECT EXISTS(
     SELECT 1 FROM grants g
     JOIN ActorChain ac ON g.actor_id = ac.aid
@@ -453,120 +481,40 @@ SELECT EXISTS(
 )`
 
 	var exists bool
-	err := a.pool.QueryRow(ctx, wildcardCheckSQL, actorEntityID, opIDs).Scan(&exists)
-	if err != nil {
+	if err := a.pool.QueryRow(ctx, wildcardCheckSQL, actorEntityID, opIDs).Scan(&exists); err != nil {
 		return false, err
 	}
 	return exists, nil
 }
 
-// checkGrantOrOwn runs the recursive-CTE entity-grant check, OR-ed with the
-// own arm (entities.owner_id = profile_own_subject(actor)):
+// checkGrantOrOwn runs Authorize's entity, owned-scope and own arms for the
+// target $2 in one query:
 //
-//	WITH RECURSIVE
-//	    ActorChain AS (
-//	        SELECT actorEntityID AS aid
-//	        UNION
-//	        SELECT agm.group_id FROM authz_actor_group_members agm JOIN ActorChain ac ON agm.member_id = ac.aid
-//	    ),
-//	    TargetChain AS (
-//	        SELECT targetEntityID AS tid
-//	        UNION
-//	        -- instance semantics: the entity of the target's exact type, unless
-//	        -- the target is itself a type entity
-//	        SELECT t.entity_id
-//	        FROM entities e JOIN types t ON t.id = e.fundamental_type_id
-//	        WHERE e.id = targetEntityID
-//	          AND t.entity_id IS NOT NULL
-//	          AND NOT EXISTS (SELECT 1 FROM types tt WHERE tt.entity_id = targetEntityID)
-//	        UNION
-//	        SELECT atgm.group_id FROM authz_target_group_members atgm JOIN TargetChain tc ON atgm.member_id = tc.tid
-//	    )
-//	SELECT
-//	    EXISTS (
-//	        SELECT 1 FROM grants g
-//	        JOIN ActorChain ac ON g.actor_id = ac.aid
-//	        JOIN TargetChain tc ON g.target_id = tc.tid
-//	        WHERE g.operation_id = ANY(opIDs)
-//	          AND g.scope = 'entity'
-//	    )
-//	    OR EXISTS (
-//	        SELECT 1 FROM entities e
-//	        WHERE e.id = targetEntityID
-//	          AND e.owner_id = public.profile_own_subject(actorEntityID)
-//	    )
+//   - Entity arm: an entity-scope grant held by the actor chain on a member
+//     of TargetChain. TargetChain is seeded with the target and, unless the
+//     target is itself a type entity, the entity of its exact fundamental
+//     type (instance semantics), then walks UP through target groups. The
+//     type-entity guard keeps a grant on the sentinel "type" entity from
+//     conferring authority over every type entity. A target id with no
+//     entities row seeds nothing and fails closed.
+//   - Owned-scope arm: an owned-scope grant held by the actor chain with
+//     target_id = the target's owner_id and target_type_id NULL, equal to the
+//     target's fundamental type, or, with include_subtypes, a type the target's
+//     type descends from (resolved by slug through type_is_or_descends_from,
+//     as mod-core's generated functions do). e.id <> e.owner_id keeps it off
+//     the owner's own record (mod-core D7), including a self-owned user.
+//     Owned-scope grants do not walk target groups.
+//   - Own arm: target.owner_id = public.profile_own_subject(actor) and
+//     EXISTS (SELECT 1 FROM public.authz_operations o WHERE o.id = ANY(op_ids)
+//     AND o.ownership_confers), the predicate of mod-core's generated
+//     accessible_*_ids_for_actor functions. The closure-wide test equals "the
+//     requested operation confers" by mod-authz's implication invariant.
 //
-// Instance semantics: TargetChain is seeded with the target AND the entity of
-// the target's exact fundamental type (types.entity_id of
-// entities.fundamental_type_id), so a grant on a type's entity, directly or
-// through a type-only target group (the group walk starts from the seeded type
-// entity), also confers the operation over every instance of exactly that
-// type. The type-entity seed is skipped when the target is itself a type
-// entity: its fundamental type is the sentinel "type", so without the guard a
-// grant on the sentinel's own entity would confer the operation over every type
-// entity, and grant or manage there would let its holder grant authority over
-// every type. A target id with no entities row seeds nothing and fails closed.
-// There is no parent or child type walk, and AuthorizeType is unaffected.
-//
-// WARNING: this makes a type grant instance-wide. It confers the operation
-// over every existing and future instance of exactly that type, for every
-// operation in the SatisfiedBy closure: manage on a type entity is full control
-// of every instance (read, update, delete, assume, grant, revoke, ...), which
-// for natural_person includes assume of every user account and installing SSH
-// keys through the operator routes. list implies read, so a type-level list
-// grant also reads every instance. manage or grant on a type-only target group
-// confers all of this for every type in the group. It does not extend to
-// subtypes or parent types, and never applies to type entities themselves.
-// Escalation paths: manage, grant or update on the type entity of
-// authz_actor_group or authz_target_group confers that operation over every
-// group of that kind. Adding a member needs grant on the member (and, for actor
-// groups, update and grant on the group); a bare type-level update only permits
-// removing members, and manage confers all of it. That is a path to groups that
-// hold wildcard grants and so to privilege escalation. The same applies to every
-// other type that has instances (app, system_actor and the anonymous system
-// actor, an instance of system_actor, where they exist). The assume of every
-// user account that manage on the natural_person type entity confers includes
-// accounts that themselves hold wildcard or admin grants, so that grant is
-// effectively full admin.
-// Installing an SSH key (git SSH access) through the operator register and
-// revoke routes requires assume on the account holder, so update on the
-// natural_person type entity does not confer it; manage does, because it
-// implies assume.
-// A holder of grant on a type entity can hand out instance-wide authority over
-// that type, so grant on type entities only to principals trusted with every
-// instance. This single-row check and the list-side
-// accessible_*_ids_for_actor functions agree for type-grant holders, because
-// mod-core's GrantTableGenerator carries the matching arm.
-//
-// Only scope = 'entity' grants are read, so an owned-scope grant never acts
-// as an entity grant on its target.
-//
-// The own arm is a single, resource-agnostic predicate: the target's owner
-// must be profile_own_subject(actor), the holder user of a personal profile
-// (NULL for party profiles, service accounts and system actors). In this
-// minimal port it is not yet gated on the operation's ownership_confers flag,
-// so owning the target satisfies every operation on that entity. It is not
-// scoped by type_is_or_descends_from, unlike the list-side own arm in
-// mod-core's generated access functions — that predicate is load-bearing
-// there only because that arm scans all of entities; here the query already
-// has one specific target entity id.
-//
-// The comparison evaluates to NULL (not true) when owner_id or the own
-// subject IS NULL, so a NULL-owner entity and an actor without an own subject
-// match nothing. No COALESCE / IS NOT DISTINCT FROM is used, since either
-// would defeat that semantics.
-//
-// Returns true if a matching grant exists or the actor owns the target.
+// A NULL owner_id or a NULL own subject makes the owner comparisons NULL, not
+// true, so such targets and actors match neither ownership arm.
 func (a *Authorizer) checkGrantOrOwn(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error) {
 	const grantOrOwnCheckSQL = `
-WITH RECURSIVE
-    ActorChain AS (
-        SELECT $1::bigint AS aid
-        UNION
-        SELECT agm.group_id
-        FROM authz_actor_group_members agm
-        JOIN ActorChain ac ON agm.member_id = ac.aid
-    ),
+WITH RECURSIVE` + actorChainCTE + `,
     TargetChain AS (
         SELECT $2::bigint AS tid
         UNION
@@ -591,64 +539,41 @@ SELECT
     )
     OR EXISTS (
         SELECT 1 FROM entities e
+        JOIN grants g ON g.target_id = e.owner_id
+        JOIN ActorChain ac ON g.actor_id = ac.aid
+        WHERE e.id = $2::bigint
+          AND e.id <> e.owner_id
+          AND g.scope = 'owned'
+          AND g.operation_id = ANY($3::int[])
+          AND (g.target_type_id IS NULL
+            OR e.fundamental_type_id = g.target_type_id
+            OR (g.include_subtypes AND EXISTS (
+              SELECT 1 FROM types gt
+              WHERE gt.id = g.target_type_id
+                AND type_is_or_descends_from(e.fundamental_type_id, gt.slug))))
+    )
+    OR EXISTS (
+        SELECT 1 FROM entities e
         WHERE e.id = $2::bigint
           AND e.owner_id = public.profile_own_subject($1::bigint)
+          AND EXISTS (SELECT 1 FROM public.authz_operations o WHERE o.id = ANY($3::int[]) AND o.ownership_confers)
     )`
 
 	var exists bool
-	err := a.pool.QueryRow(ctx, grantOrOwnCheckSQL, actorEntityID, targetEntityID, opIDs).Scan(&exists)
-	if err != nil {
+	if err := a.pool.QueryRow(ctx, grantOrOwnCheckSQL, actorEntityID, targetEntityID, opIDs).Scan(&exists); err != nil {
 		return false, err
 	}
 	return exists, nil
 }
 
-// checkTypeGrant reports whether the actor chain holds a grant, with an
-// operation in the opIDs closure, on the entity of the exact type typeID,
-// directly or on a target group reached by walking UP from that entity:
-//
-//	WITH RECURSIVE
-//	    ActorChain AS (
-//	        SELECT actorEntityID AS aid
-//	        UNION
-//	        SELECT agm.group_id FROM authz_actor_group_members agm JOIN ActorChain ac ON agm.member_id = ac.aid
-//	    ),
-//	    TargetChain AS (
-//	        SELECT t.entity_id AS tid FROM types t WHERE t.id = typeID AND t.entity_id IS NOT NULL
-//	        UNION
-//	        SELECT atgm.group_id FROM authz_target_group_members atgm JOIN TargetChain tc ON atgm.member_id = tc.tid
-//	    )
-//	SELECT EXISTS (
-//	    SELECT 1 FROM grants g
-//	    JOIN ActorChain ac ON g.actor_id = ac.aid
-//	    JOIN TargetChain tc ON g.target_id = tc.tid
-//	    WHERE g.operation_id = ANY(opIDs)
-//	      AND g.scope = 'entity'
-//	)
-//
-// Properties:
-//   - typeID is compared only with types.id. It never reaches grants.target_id,
-//     entities.id or entities.owner_id, so a grant on an unrelated entity whose
-//     id equals typeID cannot satisfy the check.
-//   - The chain is seeded from the exact type only: there is no walk to parent types,
-//     so a grant on a supertype's entity does not cover a subtype.
-//   - There is no ownership arm; the query never reads entities.owner_id.
-//   - An unknown typeID gives an empty TargetChain and therefore false (fail
-//     closed). The entity_id IS NOT NULL guard is defensive.
-//   - types.deprecated_at is deliberately not consulted.
-//
-// The wildcard grant is checked before this arm (authorizePrelude), so this
-// query does not repeat it.
+// checkTypeGrant reports whether the actor chain holds an entity-scope grant,
+// with an operation in opIDs, on the entity of the exact type typeID, directly
+// or on a target group reached by walking UP from that entity. typeID is
+// compared only with types.id; there is no parent-type walk and no ownership
+// arm. An unknown typeID gives an empty TargetChain and fails closed.
 func (a *Authorizer) checkTypeGrant(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error) {
 	const typeGrantCheckSQL = `
-WITH RECURSIVE
-    ActorChain AS (
-        SELECT $1::bigint AS aid
-        UNION
-        SELECT agm.group_id
-        FROM authz_actor_group_members agm
-        JOIN ActorChain ac ON agm.member_id = ac.aid
-    ),
+WITH RECURSIVE` + actorChainCTE + `,
     TargetChain AS (
         SELECT t.entity_id AS tid
         FROM types t
@@ -668,9 +593,69 @@ SELECT EXISTS (
 )`
 
 	var exists bool
-	err := a.pool.QueryRow(ctx, typeGrantCheckSQL, actorEntityID, typeID, opIDs).Scan(&exists)
-	if err != nil {
+	if err := a.pool.QueryRow(ctx, typeGrantCheckSQL, actorEntityID, typeID, opIDs).Scan(&exists); err != nil {
 		return false, err
 	}
 	return exists, nil
+}
+
+// checkOwnedScope runs AuthorizeTypeIn's owner arms for resources of type $2
+// owned by $3 in one query:
+//
+//   - Owned-scope arm: an owned-scope grant held by the actor chain with
+//     target_id = ownerID and target_type_id NULL, equal to typeID, or, with
+//     include_subtypes, a type typeID descends from.
+//   - Own arm: ownerID = public.profile_own_subject(actor) and an operation
+//     in the closure has ownership_confers (the same predicate as Authorize's
+//     own arm).
+func (a *Authorizer) checkOwnedScope(ctx context.Context, actorEntityID, typeID, ownerID int64, opIDs []int32) (bool, error) {
+	const ownedScopeCheckSQL = `
+WITH RECURSIVE` + actorChainCTE + `
+SELECT
+    EXISTS (
+        SELECT 1 FROM grants g
+        JOIN ActorChain ac ON g.actor_id = ac.aid
+        WHERE g.scope = 'owned'
+          AND g.target_id = $3::bigint
+          AND g.operation_id = ANY($4::int[])
+          AND (g.target_type_id IS NULL
+            OR g.target_type_id = $2::bigint
+            OR (g.include_subtypes AND EXISTS (
+              SELECT 1 FROM types gt
+              WHERE gt.id = g.target_type_id
+                AND type_is_or_descends_from($2::bigint, gt.slug))))
+    )
+    OR (
+        $3::bigint = public.profile_own_subject($1::bigint)
+        AND EXISTS (SELECT 1 FROM public.authz_operations o WHERE o.id = ANY($4::int[]) AND o.ownership_confers)
+    ) IS TRUE`
+
+	var exists bool
+	if err := a.pool.QueryRow(ctx, ownedScopeCheckSQL, actorEntityID, typeID, ownerID, opIDs).Scan(&exists); err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+// checkPartyPolicy runs the owning-party gate:
+// mod_users.session_meets_party_policy over the context's session (or
+// credential), the acting profile, and the owner: q.OwnerID when set, else the
+// owner_id of q.TargetEntityID (NULL for a target with no owner or no entities
+// row, which the function passes). Zero session and credential ids are passed
+// as NULL.
+func (a *Authorizer) checkPartyPolicy(ctx context.Context, q partyPolicyQuery) (bool, error) {
+	const partyPolicySQL = `
+SELECT mod_users.session_meets_party_policy(
+    NULLIF($1::bigint, 0),
+    NULLIF($2::bigint, 0),
+    $3::bigint,
+    CASE WHEN $5::bigint > 0 THEN $5::bigint
+         ELSE (SELECT e.owner_id FROM entities e WHERE e.id = $4::bigint)
+    END)`
+
+	var met bool
+	if err := a.pool.QueryRow(ctx, partyPolicySQL, q.SessionID, q.CredentialID, q.ProfileID, q.TargetEntityID, q.OwnerID).Scan(&met); err != nil {
+		return false, err
+	}
+	return met, nil
 }

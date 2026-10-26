@@ -5,88 +5,72 @@ package authz
 
 import (
 	"context"
+	"time"
 
 	authzapi "github.com/moduleforge/authz-api/authz"
 )
 
-// SetWildcardGrantFn sets the wildcard-grant override function on the Authorizer.
-// Used by unit tests to inject a wildcard grant outcome without a live Postgres.
+// SetWildcardGrantFn stubs the wildcard arm (an entity-scope grant with no
+// target held by the actor chain), so unit tests need no live Postgres.
 func (a *Authorizer) SetWildcardGrantFn(fn func(ctx context.Context, actorEntityID int64, opIDs []int32) (bool, error)) {
 	a.wildcardGrantFn = fn
 }
 
-// SetGrantOrOwnFn sets the grant-or-own override function on the Authorizer.
-// Used by unit tests to inject a grant-or-own outcome (recursive-CTE grant
-// check OR-ed with the entities.owner_id ownership check) without a live
-// Postgres.
+// SetGrantOrOwnFn stubs Authorize's single-row arms after the prelude: the
+// entity arm (with instance semantics), the owned-scope arm on the target's
+// owner and the own arm.
 func (a *Authorizer) SetGrantOrOwnFn(fn func(ctx context.Context, actorEntityID, targetEntityID int64, opIDs []int32) (bool, error)) {
 	a.grantOrOwnFn = fn
 }
 
-// SetTypeGrantFn sets the type-grant override function on the Authorizer.
-// Used by unit tests to inject AuthorizeType's type-grant arm outcome (a grant
-// on the exact type's entity) without a live Postgres.
+// SetTypeGrantFn stubs the type-grant arm of AuthorizeType and
+// AuthorizeTypeIn (an entity-scope grant on the exact type's entity).
 func (a *Authorizer) SetTypeGrantFn(fn func(ctx context.Context, actorEntityID, typeID int64, opIDs []int32) (bool, error)) {
 	a.typeGrantFn = fn
 }
 
-// stubOpReg is a minimal OperationRegistry that accepts any operation slug and
-// returns a slice containing a dummy op ID. Used by unit tests that need to
-// exercise the Authorize flow without a real authz_operations table.
-type stubOpReg struct{}
-
-func (stubOpReg) SatisfiedBy(op string) ([]int32, error) {
-	// Return a dummy op ID for any known operation.
-	// Return an error for "unknown_op" to test the unknown-operation denial path.
-	if op == "unknown_op" {
-		return nil, errUnknownOp
-	}
-	return []int32{1}, nil
+// SetOwnedScopeFn stubs AuthorizeTypeIn's owner arms: an owned-scope grant
+// with target_id = ownerID and a type match, or the own arm (ownerID is the
+// actor's own subject and the operation confers).
+func (a *Authorizer) SetOwnedScopeFn(fn func(ctx context.Context, actorEntityID, typeID, ownerID int64, opIDs []int32) (bool, error)) {
+	a.ownedScopeFn = fn
 }
 
-// errUnknownOp is a sentinel error returned by stubOpReg for unknown operations.
-var errUnknownOp = ErrForbidden
+// PartyPolicyQuery is the owning-party gate's input, exported for stubs.
+type PartyPolicyQuery = partyPolicyQuery
 
-// opRegAdapter adapts stubOpReg to the *authzapi.OperationRegistry interface
-// that Authorizer.opReg expects. Since OperationRegistry is a concrete struct
-// (not an interface), we embed the functionality via wildcardGrantFn.
-//
-// The Authorizer calls opReg.SatisfiedBy(operation) directly. We cannot inject
-// a stub opReg without changing the field type to an interface. Instead, we use
-// a workaround: set opReg to nil and override the behaviour via a wrapper.
-//
-// NewWithStubOpReg returns an Authorizer where:
-//   - opReg is a real (zero-operations) registry, BUT
-//   - wildcardGrantFn captures the caller's stub AND handles the opReg step.
-//
-// This works because the stubbed wildcardGrantFn is called after opReg.SatisfiedBy.
-// We can't intercept SatisfiedBy directly, but we can use a real (empty) registry
-// and rely on the fact that our unit tests don't exercise paths that require
-// specific op IDs — they only check allow/deny at the Authorize level.
+// SetPartyPolicyFn stubs the owning-party gate
+// (mod_users.session_meets_party_policy). It runs only for contexts with a
+// session or a credential, and only when the check names an owner.
+func (a *Authorizer) SetPartyPolicyFn(fn func(ctx context.Context, q PartyPolicyQuery) (bool, error)) {
+	a.partyPolicyFn = fn
+}
 
-// NewWithStubOpReg builds an Authorizer suitable for unit tests.
-// It uses a real OperationRegistry loaded from in-memory stubs, and sets
-// wildcardGrantFn to the given function. Pool is nil; tests that reach
-// checkGrantOrOwn without first calling SetGrantOrOwnFn (or checkTypeGrant
-// without SetTypeGrantFn) will panic (that
-// path requires a DB).
-//
-// The stub OperationRegistry contains the standard seed operations so that
-// SatisfiedBy("read"), SatisfiedBy("manage"), etc. all return non-error results.
+// SetNow replaces the clock the assurance gate measures authentication age
+// against.
+func (a *Authorizer) SetNow(now func() time.Time) {
+	a.now = now
+}
+
+// partyPolicyMet is the default owning-party stub of NewWithStubOpReg: every
+// session meets every owning party's policy.
+func partyPolicyMet(context.Context, partyPolicyQuery) (bool, error) { return true, nil }
+
+// NewWithStubOpReg builds an Authorizer for unit tests: a real
+// OperationRegistry built from standardOps (closures and policies), the given
+// wildcard stub, and an owning-party stub that always passes (override it
+// with SetPartyPolicyFn). The pool is nil, so a test that reaches a database
+// arm without its stub panics.
 func NewWithStubOpReg(wildcardFn func(ctx context.Context, actor int64, opIDs []int32) (bool, error)) *Authorizer {
-	// Build an OperationRegistry from a hand-rolled slice of operations.
-	// NewOperationRegistry requires a Querier; use a stub via the registry's
-	// exported constructor.
-	opReg := buildStubOpReg()
-	az := &Authorizer{
-		opReg:           opReg,
+	return &Authorizer{
+		opReg:           buildStubOpReg(),
+		now:             time.Now,
 		wildcardGrantFn: wildcardFn,
+		partyPolicyFn:   partyPolicyMet,
 	}
-	return az
 }
 
-// buildStubOpReg builds an *authzapi.OperationRegistry for unit tests using
-// the standard seed operations. This avoids needing a live DB in unit tests.
+// buildStubOpReg builds an *authzapi.OperationRegistry from standardOps.
 func buildStubOpReg() *authzapi.OperationRegistry {
 	reg, err := authzapi.NewRegistryFromSeed(standardOps)
 	if err != nil {
@@ -101,23 +85,23 @@ func StandardOpRegistry() *authzapi.OperationRegistry {
 	return buildStubOpReg()
 }
 
-// standardOps mirrors the seed data from mod-authz's
-// model/migrations/0500_authz_operations.sql, as amended by
-// model/migrations/0506_authz_create_operation.sql (which registers the
-// "create" operation and extends manage's implies to include it).
-// IDs must match the seeded values so that SatisfiedBy closures are correct.
+// standardOps mirrors the seed of mod-authz's
+// model/migrations/0500_authz_operations.sql: ids, implies, ownership_confers,
+// min_acr and max_auth_age. IDs must match the seeded values so that
+// SatisfiedBy closures are correct.
 var standardOps = []authzapi.SeedOperation{
-	{ID: 1, Slug: "read", Implies: nil},
-	{ID: 2, Slug: "sread", Implies: []int32{1}},
-	{ID: 3, Slug: "list", Implies: []int32{1}},
-	{ID: 4, Slug: "update", Implies: []int32{1}},
-	{ID: 5, Slug: "delete", Implies: []int32{1}},
-	{ID: 6, Slug: "supdate", Implies: []int32{2, 4}},
-	{ID: 7, Slug: "manage", Implies: []int32{1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13}},
-	{ID: 8, Slug: "assume", Implies: nil},
-	{ID: 9, Slug: "login", Implies: nil},
-	{ID: 10, Slug: "grant", Implies: nil},
-	{ID: 11, Slug: "revoke", Implies: nil},
-	{ID: 12, Slug: "connect", Implies: nil},
-	{ID: 13, Slug: "create", Implies: nil},
+	{ID: 1, Slug: "read", Implies: nil, OwnershipConfers: true, MinACR: 1},
+	{ID: 2, Slug: "sread", Implies: []int32{1}, OwnershipConfers: true, MinACR: 1},
+	{ID: 3, Slug: "list", Implies: []int32{1}, OwnershipConfers: true, MinACR: 1},
+	{ID: 4, Slug: "update", Implies: []int32{1}, OwnershipConfers: true, MinACR: 1},
+	{ID: 5, Slug: "delete", Implies: []int32{1}, OwnershipConfers: true, MinACR: 1},
+	{ID: 6, Slug: "supdate", Implies: []int32{2, 4}, OwnershipConfers: true, MinACR: 1},
+	{ID: 7, Slug: "manage", Implies: []int32{1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 17}, OwnershipConfers: false, MinACR: 1},
+	{ID: 8, Slug: "impersonate", Implies: nil, OwnershipConfers: false, MinACR: 1, MaxAuthAge: 10 * time.Minute},
+	{ID: 9, Slug: "login", Implies: nil, OwnershipConfers: false, MinACR: 1},
+	{ID: 10, Slug: "grant", Implies: nil, OwnershipConfers: true, MinACR: 1},
+	{ID: 11, Slug: "revoke", Implies: nil, OwnershipConfers: true, MinACR: 1},
+	{ID: 12, Slug: "connect", Implies: nil, OwnershipConfers: true, MinACR: 1},
+	{ID: 13, Slug: "create", Implies: nil, OwnershipConfers: true, MinACR: 1},
+	{ID: 17, Slug: "credentials", Implies: nil, OwnershipConfers: true, MinACR: 1, MaxAuthAge: 10 * time.Minute},
 }

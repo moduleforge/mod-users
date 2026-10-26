@@ -1,5 +1,30 @@
-// Package localAuthz is the public facade for the users-module grants-table Authorizer.
-// It re-exports the Authorizer type and constructor from internal/authz.
+// Package localAuthz is the public facade for the users-module authorization
+// engine over mod-authz's grants table. It re-exports the Authorizer type and
+// constructor from internal/authz.
+//
+// The Authorizer implements coreAuthz.Authorizer and its two optional
+// capabilities, coreAuthz.TypeAuthorizer and
+// coreAuthz.OwnerScopedTypeAuthorizer. The effective actor is the acting
+// profile of the request's opctx.AuthContext (under impersonation, the
+// impersonated profile). Every check first runs a prelude:
+//
+//  1. the operation-level assurance gate for contexts with a session or a
+//     credential: the context's assurance must reach the operation's min_acr
+//     and its authentication must be no older than the operation's
+//     max_auth_age (10 minutes on impersonate and credentials), else the
+//     shared action-required error users.step_up_required (409);
+//  2. the owning-party gate, when the check names an owner (the target's
+//     owner, or AuthorizeTypeIn's ownerID) and the acting profile is outside
+//     that party: the session's factors must meet the party's credential_rule
+//     and min_acr, else 403;
+//  3. the wildcard arm (an entity-scope grant with no target).
+//
+// Authorize then admits a target through an entity-scope grant on it (or, by
+// instance semantics, on its exact type's entity), an owned-scope grant on its
+// owner with a matching type, or the own arm: the target's owner is the
+// holder user of the acting personal profile and the operation has
+// ownership_confers (never impersonate, manage or login). These are the arms
+// of mod-core's generated list functions, so list and single-row checks agree.
 package localAuthz
 
 import (
@@ -9,57 +34,59 @@ import (
 
 	authzapi "github.com/moduleforge/authz-api/authz"
 	authzdb "github.com/moduleforge/authz-model/db"
+	coreAuthz "github.com/moduleforge/core-api/authz"
 	inner "github.com/moduleforge/mod-users/api/internal/authz"
 )
 
-// Authorizer is the grants-table implementation of coreAuthz.Authorizer.
-//
-// WARNING: entity-level Authorize honours type grants over instances. A grant
-// on a type's entity (directly or through a type-only target group) confers the
-// same operation over every existing and future instance of exactly that type,
-// so manage on a type entity is full control of every instance (for
-// natural_person, including assume of every user account). That reaches
-// accounts holding wildcard or admin grants, so manage on natural_person is
-// effectively full admin; installing an SSH key (git SSH access) through the
-// operator routes requires assume on the account holder, so update on
-// natural_person does not confer it (manage does, since it implies assume);
-// manage, grant or update on the type entity of
-// authz_actor_group or authz_target_group likewise confers authority over every
-// group of that kind (adding a member needs grant on the member and, for actor
-// groups, update and grant on the group; a bare type-level update only permits
-// removing members; manage confers all of it), a path to groups holding
-// wildcard grants and so to privilege escalation, and the same holds for every
-// other type with instances (app, system_actor, the anonymous system actor, an
-// instance of system_actor, where they exist). Grant on type entities only to
-// principals trusted with every instance. See the Type grants confer instance
-// access decision in docs/architecture.md for the full warning. TypeAuthorizer,
-// below, is unchanged: an instance grant never satisfies a type-level check.
+// Authorizer is the users-module authorization engine (see the package
+// documentation). Its assurance refusal is the shared action-required error
+// users.step_up_required; every other refusal is ErrForbidden or
+// ErrUnauthenticated from core-api's apiresp.
 type Authorizer = inner.Authorizer
 
 // TypeAuthorizer is implemented by Authorizers that can answer type-level
 // questions (create or list of a resource type) distinctly from entity-level
 // ones. AuthorizeType's typeID is a types.id, never an entities.id. It is
-// allowed to actors holding a wildcard grant covering the operation, or a grant
-// on the exact type's entity (types.entity_id of typeID), held directly or
-// through target groups, by the actor or its actor groups. It is never answered
-// by entity ownership or by grants on unrelated entities (in particular the
-// entity whose id happens to equal typeID), and a type does not inherit from its
-// subtypes or parent types.
+// allowed to actors holding a wildcard grant covering the operation, or an
+// entity-scope grant on the exact type's entity (types.entity_id of typeID),
+// held directly or through target groups, by the actor or its actor groups. It
+// is never answered by entity ownership, owned-scope grants or grants on
+// unrelated entities (in particular the entity whose id happens to equal
+// typeID), and a type does not inherit from its subtypes or parent types.
 //
-// Consumer contract: a caller holding only a coreAuthz.Authorizer must assert
-// this capability and use it for type-level checks. When the assertion fails
-// (for example a decorator hides the method) the caller must fall back to
-// Authorize(ctx, op, nil), which is fail-safe, and never to
-// Authorize(ctx, op, &typeID): Authorize treats its target as an entities.id,
-// so a type id there is matched against unrelated entities. The nil-target
-// fallback answers from wildcard grants only, so it denies actors who hold only
-// a type grant; that is fail-closed.
+// Consumer contract: a caller holding only a coreAuthz.Authorizer uses
+// coreAuthz.AuthorizeType, which asserts this capability and otherwise falls
+// back to Authorize(ctx, op, nil), never to Authorize(ctx, op, &typeID):
+// Authorize treats its target as an entities.id, so a type id there is matched
+// against unrelated entities.
+//
+// WARNING, operator-actor trust: wildcard and type-entity grants are accepted
+// by mod-authz only for operator profiles, and a type-entity grant confers its
+// operation over every existing and future instance of exactly that type.
+// manage on the profile type entity confers impersonate of every profile,
+// operator administrators included, so it is effectively full administration;
+// manage on the user or service_account type entity confers credentials over
+// every principal of that type (account takeover); update confers neither.
+// manage, grant or update on the type entity of authz_actor_group or
+// authz_target_group reaches every group of that kind, a path to groups that
+// hold wildcard grants. Give type-entity grants only to operator profiles
+// trusted with every instance. See the Type grants confer instance access
+// decision in docs/architecture.md.
 type TypeAuthorizer interface {
 	AuthorizeType(ctx context.Context, operation string, typeID int64) error
 }
 
-// Compile-time assertion: Authorizer implements TypeAuthorizer.
-var _ TypeAuthorizer = (*Authorizer)(nil)
+// Compile-time assertions: Authorizer implements core's Authorizer, the local
+// TypeAuthorizer, and core's TypeAuthorizer and OwnerScopedTypeAuthorizer
+// capabilities (AuthorizeTypeIn: create and list of a type within an owner,
+// answered by the wildcard arm, a type-entity grant, an owned-scope grant on
+// the owner with a matching type, or the own arm).
+var (
+	_ coreAuthz.Authorizer                = (*Authorizer)(nil)
+	_ TypeAuthorizer                      = (*Authorizer)(nil)
+	_ coreAuthz.TypeAuthorizer            = (*Authorizer)(nil)
+	_ coreAuthz.OwnerScopedTypeAuthorizer = (*Authorizer)(nil)
+)
 
 // New constructs an Authorizer backed by the authz grants table.
 func New(authzQ authzdb.Querier, opReg *authzapi.OperationRegistry, pool *pgxpool.Pool) *Authorizer {

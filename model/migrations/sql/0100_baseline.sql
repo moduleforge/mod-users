@@ -6,8 +6,9 @@
 -- docs/architecture/identity-model.md): users as a principal subtype,
 -- identifiers, credentials with per-kind subtables, challenges, party
 -- authentication policies, credential authorizations, sessions with factors and
--- refresh lineages, the persisted signing key, and the availability and
--- liveness functions. The former 0101 to 0104 migrations are folded in. A
+-- refresh lineages, the persisted signing key, the availability and liveness
+-- functions, and the authorization engine's owning-party gate
+-- (session_meets_party_policy). The former 0101 to 0104 migrations are folded in. A
 -- database created from an earlier baseline must be dropped and recreated
 -- (make clean.data); there is no in-place upgrade path.
 --
@@ -31,7 +32,7 @@
 --
 -- Requires mod-core (principals, profiles, legal_entities, natural_persons,
 -- apps, profile_policy_confirmations, type_is_or_descends_from,
--- set_updated_at); the manifest's migrations.after: [core] orders it.
+-- profile_own_subject, set_updated_at); the manifest's migrations.after: [core] orders it.
 
 CREATE SCHEMA IF NOT EXISTS mod_users;
 
@@ -1130,6 +1131,82 @@ AS $$
 $$;
 -- +goose StatementEnd
 
+-- party_policy_gate_for(p_party_id, p_profile_id, p_skip_credential_rule,
+-- p_credential_ids, p_acr): the party authentication policy part of the gate,
+-- shared by profile_gate_for (the acting profile's own party) and
+-- session_meets_party_policy (the owning party of content reached from outside
+-- it), so the two cannot drift. Returns 'available' or the first failing lock
+-- reason: credential_not_authorized (the 'authorized' rule: no factor is
+-- authorized for the party or confined to it), provider_required (the
+-- 'provider' rule: no oidc factor of the required provider), acr_too_low
+-- (p_acr is NULL or below min_acr). No policy row means 'any' with min_acr 1.
+--
+-- The credential rule is skipped when p_skip_credential_rule is true (an
+-- impersonation session, which holds no factors of its own) and when a
+-- profile_policy_confirmations row exists for (p_profile_id, p_party_id);
+-- min_acr is never skipped.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.party_policy_gate_for(
+  p_party_id             BIGINT,
+  p_profile_id           BIGINT,
+  p_skip_credential_rule BOOLEAN,
+  p_credential_ids       BIGINT[],
+  p_acr                  SMALLINT
+) RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+  v_rule        TEXT;
+  v_provider_id TEXT;
+  v_min_acr     SMALLINT;
+BEGIN
+  SELECT pol.credential_rule, pol.required_oidc_provider_id, pol.min_acr
+    INTO v_rule, v_provider_id, v_min_acr
+    FROM mod_users.party_authn_policies pol WHERE pol.party_id = p_party_id;
+  IF NOT FOUND THEN
+    v_rule := 'any';
+    v_min_acr := 1;
+  END IF;
+
+  IF v_rule <> 'any'
+     AND NOT p_skip_credential_rule
+     AND NOT EXISTS (
+       SELECT 1 FROM public.profile_policy_confirmations ppc
+        WHERE ppc.profile_id = p_profile_id AND ppc.party_id = p_party_id
+     )
+  THEN
+    IF v_rule = 'authorized' AND NOT EXISTS (
+      SELECT 1 FROM mod_users.credentials c
+       WHERE c.id = ANY (p_credential_ids)
+         AND (c.confined_to_party_id = p_party_id
+              OR EXISTS (
+                SELECT 1 FROM mod_users.credential_party_authorizations cpa
+                 WHERE cpa.credential_id = c.id AND cpa.party_id = p_party_id
+              ))
+    ) THEN
+      RETURN 'credential_not_authorized';
+    END IF;
+    IF v_rule = 'provider' AND NOT EXISTS (
+      SELECT 1 FROM mod_users.cred_oidc o
+       WHERE o.credential_id = ANY (p_credential_ids)
+         AND o.provider_id = v_provider_id
+    ) THEN
+      RETURN 'provider_required';
+    END IF;
+  END IF;
+
+  IF p_acr IS NULL OR p_acr < v_min_acr THEN
+    RETURN 'acr_too_low';
+  END IF;
+
+  RETURN 'available';
+END;
+$$;
+-- +goose StatementEnd
+
 -- profile_gate_for: the status-agnostic core of profile_availability_for. It
 -- evaluates everything but the profile's own status, so it answers "would the
 -- principal's session satisfy the profile's gate" for a profile in any status
@@ -1148,10 +1225,10 @@ $$;
 --                             the required provider;
 --   acr_too_low               p_acr is below the party's min_acr.
 --
--- The party gate applies only to party profiles. Its credential rule is
--- skipped for impersonation sessions and for a profile with a
--- profile_policy_confirmations row for the party (an outside collaborator);
--- min_acr is never skipped for a party profile.
+-- The party gate applies only to party profiles and is party_policy_gate_for.
+-- Its credential rule is skipped for impersonation sessions and for a profile
+-- with a profile_policy_confirmations row for the party (an outside
+-- collaborator); min_acr is never skipped for a party profile.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.profile_gate_for(
   p_principal_id            BIGINT,
@@ -1168,9 +1245,6 @@ AS $$
 DECLARE
   v_holder_id   BIGINT;
   v_party_id    BIGINT;
-  v_rule        TEXT;
-  v_provider_id TEXT;
-  v_min_acr     SMALLINT;
 BEGIN
   SELECT p.holder_id, p.party_id INTO v_holder_id, v_party_id
     FROM public.profiles p WHERE p.entity_id = p_profile_id;
@@ -1201,46 +1275,8 @@ BEGIN
     RETURN 'available';
   END IF;
 
-  SELECT pol.credential_rule, pol.required_oidc_provider_id, pol.min_acr
-    INTO v_rule, v_provider_id, v_min_acr
-    FROM mod_users.party_authn_policies pol WHERE pol.party_id = v_party_id;
-  IF NOT FOUND THEN
-    v_rule := 'any';
-    v_min_acr := 1;
-  END IF;
-
-  IF v_rule <> 'any'
-     AND p_impersonated_profile_id IS NULL
-     AND NOT EXISTS (
-       SELECT 1 FROM public.profile_policy_confirmations ppc
-        WHERE ppc.profile_id = p_profile_id AND ppc.party_id = v_party_id
-     )
-  THEN
-    IF v_rule = 'authorized' AND NOT EXISTS (
-      SELECT 1 FROM mod_users.credentials c
-       WHERE c.id = ANY (p_credential_ids)
-         AND (c.confined_to_party_id = v_party_id
-              OR EXISTS (
-                SELECT 1 FROM mod_users.credential_party_authorizations cpa
-                 WHERE cpa.credential_id = c.id AND cpa.party_id = v_party_id
-              ))
-    ) THEN
-      RETURN 'credential_not_authorized';
-    END IF;
-    IF v_rule = 'provider' AND NOT EXISTS (
-      SELECT 1 FROM mod_users.cred_oidc o
-       WHERE o.credential_id = ANY (p_credential_ids)
-         AND o.provider_id = v_provider_id
-    ) THEN
-      RETURN 'provider_required';
-    END IF;
-  END IF;
-
-  IF p_acr IS NULL OR p_acr < v_min_acr THEN
-    RETURN 'acr_too_low';
-  END IF;
-
-  RETURN 'available';
+  RETURN mod_users.party_policy_gate_for(
+    v_party_id, p_profile_id, p_impersonated_profile_id IS NOT NULL, p_credential_ids, p_acr);
 END;
 $$;
 -- +goose StatementEnd
@@ -1522,6 +1558,103 @@ AS $$
 $$;
 -- +goose StatementEnd
 
+-- session_meets_party_policy(p_session_id, p_credential_id, p_profile_id,
+-- p_party_id): the owning-party gate of the authorization engine. Per-request
+-- liveness (profile_availability) applies only the acting profile's own party;
+-- an acting profile outside the party that owns the target (an outside
+-- collaborator reaching the party's content through actor groups or grants, or
+-- a personal profile through the SSH fallback) must also meet the owning
+-- party's credential_rule and min_acr. p_party_id is the target's owner
+-- (entities.owner_id; the owner argument of an owner-scoped type check).
+--
+-- True, without consulting the factors, when p_party_id is NULL, the acting
+-- profile p_profile_id belongs to p_party_id, p_party_id is the acting
+-- profile's own subject (a personal profile reaching its own records), or the
+-- owner carries no restrictive policy (no row, or 'any' with min_acr 1; this
+-- also covers owners that are not parties). Otherwise the factors are those of
+-- the interactive session p_session_id (its unrevoked factors and
+-- sessions.acr; an impersonation session skips the credential rule, as in
+-- profile_availability), else of the single unrevoked credential
+-- p_credential_id with its kind's base_acr, and the result is
+-- party_policy_gate_for(...) = 'available': a profile_policy_confirmations row
+-- for (p_profile_id, p_party_id) exempts the credential rule only, never
+-- min_acr. An unknown session, a revoked or unknown credential, or neither id
+-- fails closed (false): trusted contexts without a session or credential are
+-- the engine's to skip, not this function's.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.session_meets_party_policy(
+  p_session_id    BIGINT,
+  p_credential_id BIGINT,
+  p_profile_id    BIGINT,
+  p_party_id      BIGINT
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+  v_credential_ids BIGINT[];
+  v_acr            SMALLINT;
+  v_impersonation  BOOLEAN := false;
+BEGIN
+  IF p_party_id IS NULL THEN
+    RETURN true;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.profiles p
+     WHERE p.entity_id = p_profile_id AND p.party_id = p_party_id
+  ) THEN
+    RETURN true;
+  END IF;
+
+  IF p_party_id = public.profile_own_subject(p_profile_id) THEN
+    RETURN true;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM mod_users.party_authn_policies pol
+     WHERE pol.party_id = p_party_id
+       AND (pol.credential_rule <> 'any' OR pol.min_acr > 1)
+  ) THEN
+    RETURN true;
+  END IF;
+
+  IF p_session_id IS NOT NULL THEN
+    SELECT s.acr,
+           s.impersonated_profile_id IS NOT NULL,
+           ARRAY(SELECT f.credential_id
+                   FROM mod_users.session_factors f
+                   JOIN mod_users.credentials c ON c.id = f.credential_id
+                  WHERE f.session_id = s.id
+                    AND c.revoked_at IS NULL)
+      INTO v_acr, v_impersonation, v_credential_ids
+      FROM mod_users.sessions s
+     WHERE s.id = p_session_id;
+    IF NOT FOUND THEN
+      RETURN false;
+    END IF;
+  ELSIF p_credential_id IS NOT NULL THEN
+    SELECT ARRAY[c.id], k.base_acr
+      INTO v_credential_ids, v_acr
+      FROM mod_users.credentials c
+      JOIN mod_users.credential_kinds k ON k.kind = c.kind
+     WHERE c.id = p_credential_id
+       AND c.revoked_at IS NULL;
+    IF NOT FOUND THEN
+      RETURN false;
+    END IF;
+  ELSE
+    RETURN false;
+  END IF;
+
+  RETURN mod_users.party_policy_gate_for(
+    p_party_id, p_profile_id, v_impersonation, v_credential_ids, v_acr) = 'available';
+END;
+$$;
+-- +goose StatementEnd
+
 -- session_liveness: the per-request check for an interactive access token, in
 -- one round trip. Always returns exactly one row (OUT parameters rather than
 -- RETURNS TABLE, so sqlc can type the result). status is 'ok' or the first
@@ -1697,6 +1830,7 @@ DROP FUNCTION IF EXISTS public.accessible_user_ids_for_actor(BIGINT, INT[]);
 
 DROP FUNCTION IF EXISTS mod_users.credential_liveness(UUID, UUID, UUID);
 DROP FUNCTION IF EXISTS mod_users.session_liveness(UUID, UUID, UUID);
+DROP FUNCTION IF EXISTS mod_users.session_meets_party_policy(BIGINT, BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.credential_profile_availability(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_excluding(BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability(BIGINT, BIGINT);
@@ -1704,6 +1838,7 @@ DROP FUNCTION IF EXISTS mod_users.profile_gate(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.holder_policy_mismatch(BIGINT, BIGINT, BOOLEAN);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_gate_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
+DROP FUNCTION IF EXISTS mod_users.party_policy_gate_for(BIGINT, BIGINT, BOOLEAN, BIGINT[], SMALLINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr(BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr_excluding(BIGINT, BIGINT);
 
