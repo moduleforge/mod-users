@@ -182,33 +182,6 @@ items:
         recommendation:
           Add a sentence on the `authorized` rule: the new password is authorized for the party only when the
           caller holds `update` on the party, otherwise it stays unauthorized until an administrator authorizes it.
-    - title: The guard now counts only admins whose princ…
-      id: 6dyh
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:remediation-04
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_last_admin.go
-        lines: 38-100
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          The guard now counts only admins whose principal is not disabled, but the
-          principal-disable path does not take the platform_settings row lock that
-          serializes ending and suspending. A concurrent disable of admin B's principal
-          and a suspension of admin A can each pass (the counts read committed state)
-          and leave zero effective operator administrators. Grant revocation, gate-locked
-          and group-inherited admins are documented as out of scope; this disable race is
-          not listed in those boundaries.
-        recommendation:
-          Take the same platform_settings lock in the principal-disable path when the
-          principal holds an operator-party admin profile, or add the race to the
-          documented boundary list.
     - title: lockPartyPolicyShared silently returns nil w…
       id: 8bH2
       date: "2026-10-26"
@@ -1444,4 +1417,9 @@ closed:
       title: mod_users.holder_policy_mismatch now treats…
       disposition: fixed
       ref: phase-16-remediation-05/001-strict-collaborator-policy-mismatch.md
+      date: "2026-10-26"
+    - id: 6dyh
+      title: The guard now counts only admins whose princ…
+      disposition: fixed
+      ref: phase-16-remediation-05/002-close-admin-disable-race-and-fail-closed-policy-lock.md
       date: "2026-10-26"
