@@ -15,8 +15,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:parties-profiles-and-bootstrap
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: api/openapi.yaml info.description says step-up (409 users.step_up_required) comes before authorization on the principal disable and enable, but UserService.writablePrincipal in api/internal/service/principal_admin.go authorizes `read` then `update` first and checks freshness after (the same order the profile status change now uses, noted in the new party-administration bullet of that description). Correct the principal sentence, or change the order, so the document and code agree.
     - title: 'mod-core: in-tx org create'
       id: 0b75
