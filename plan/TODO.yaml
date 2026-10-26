@@ -228,7 +228,7 @@ phases:
           slug: rewrite-authorization-engine
           title: Rewrite Authorization Engine
           path: phase-08-users-authorization-engine/001-rewrite-authorization-engine.md
-          done: false
+          done: true
           tier: opus-high
           digest: 'Production engine rewritten (api/internal/authz/authz.go). Prelude per check: assurance gate (409 users.step_up_required), owning-party gate (403), then wildcard arm, entity/type-entity arm, owned-scope arm with include_subtypes, own arm gated on ownership_confers, plus AuthorizeTypeIn. Requirement 13 literal reading holds operator profiles to customer-party policies, which broke 14 phase-7 HTTP scenarios; these were narrowly skipped and raised for a decision. Two mod-core gaps filed (Ddx9, qvSR).'
           git:
