@@ -191,7 +191,7 @@ phases:
           tier: sonnet-med
           digest: 'SSHKeyResolver.AuthContextForOwner implements the ADR derivation: owner party with active principal profile and credential_profile_availability available gives that profile; otherwise ErrSSHKeyNotAuthorized carrying the party uuid; confined keys refused for their confining party. Exported ErrSSHKeyNotAuthorized, SSHKeyNotAuthorizedError and SSHKeyNotAuthorizedParty(err). Two round trips via coredb.ListProfilesByHolder then CredentialProfileAvailability.'
           git:
-            branch: null
+            branch: plan/identity-model-impl-07-005
             commit: []
             merge: null
         - number: 6
