@@ -700,14 +700,16 @@ phases:
           slug: fix-policy-sql-null-handling
           title: Fix NULL Handling In Policy SQL Functions
           path: phase-14-remediation-03/005-fix-policy-sql-null-handling.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Fixed both NULL-handling defects in 0100_baseline.sql, added one integration test for each, and tweaked the 409 message for a zero holder acr. Verified on a throwaway Postgres.
           findings:
             - 4w6W
             - iaJb
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-14-005
+            commit:
+                - 7b08d96
             merge: null
         - number: 6
           slug: correct-openapi-and-architecture-doc-drift
