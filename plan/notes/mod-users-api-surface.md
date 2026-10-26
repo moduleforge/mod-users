@@ -340,6 +340,12 @@ and `coreAuthz.OwnerScopedTypeAuthorizer`. Semantics after the engine phase:
 type; owned-scope grant with `target_id = ownerID` and the type match; own arm when
 `ownerID = profile_own_subject(actor)` and `ownership_confers`.
 
+Amendment (2026-10-26, decision C, finding `RU9G`; amends U5): the prelude (items 1 and 2) also
+enforces the owning party's authentication policy (`credential_rule`, `min_acr`) per request when the
+acting profile is outside the target's owning party, for example through
+`mod_users.session_meets_party_policy(session, party)` (one extra query per cross-party
+`Authorize`). The SSH personal-profile fallback is gated the same way. mod-authz is unchanged.
+
 ### 6.3 `usersservice` (public facade over `internal/service`)
 
 Constructors take `(pool *pgxpool.Pool, q usersdb.Querier, coreQ coredb.Querier, az coreAuthz.Authorizer,
@@ -387,6 +393,9 @@ type Profile struct { ID int64; UUID uuid.UUID; HolderPrincipalID int64; PartyID
 func (s *ProfileService) InviteInTx(ctx context.Context, tx pgx.Tx, in InviteInput) (Profile, error)
 // AuthorizeTypeIn(create, profile, party); 409 users.policy_mismatch_confirmation_required when the
 // holder's credentials cannot meet the party policy and ConfirmPolicyMismatch is false.
+// Amended 2026-10-26: credential_rule 'authorized' counts as met at invite time when the holder has any
+// usable interactive credential (authorization follows acceptance; members stay locked until a
+// credential is authorized). ConfirmPolicyMismatch=true requires `update` on the party (else 403).
 func (s *ProfileService) EndInTx(ctx context.Context, tx pgx.Tx, profileID int64, reason string) error
 // Departure cleanup: deletes the holder's credential authorizations for the party, revokes
 // credentials confined to it, disables a managed user whose last profile ended.
@@ -522,6 +531,8 @@ profile, only available profile) yields no profile, `access_token` is null and
 | `/v1/impersonations` | `POST /` (`profile_uuid`, `reason`; `impersonate` on the target profile, fresh `auth_time`; token response without refresh token, `expires_in <= AUTH_IMPERSONATION_TTL`), `POST /current/renew` (up to `AUTH_IMPERSONATION_MAX` from start), `DELETE /current` |
 | `/v1/bootstrap` (public) | `GET /status` (`bootstrapped`, `oidc_confirmed`), `POST /` (`X-Setup-Token`; body `operator` = `{kind: "organization", legal_name, legal_form, jurisdiction?}` or `{kind: "natural_person"}`, `admin` = `{email, password, given_name, family_name}`; 201 token response landing on the admin profile; 409 `users.already_bootstrapped`) |
 | `/v1/oidc-config` | unchanged routes; providers gain `party_uuid`, `jit_mode`, `trust_acr`; the ambient admin check is an operator profile with wildcard `manage`; the setup token follows U9 |
+
+Amendment (2026-10-26, decision A): `PUT /confinements/{credential_uuid}` through the administrator door confines only party-controlled credentials (managed-user credentials and OIDC credentials from a party-bound provider) and needs an `active` held profile; `DELETE` through the holder door is refused for party-controlled credentials. Changing `credential_rule` through `PUT /authn-policy` clears the party's policy confirmations.
 
 Removed routes: `/v1/self`, `/v1/self/identities*`, `/v1/self/credential*`, `/v1/self/ssh-keys*`,
 `/v1/user-accounts*`, `/v1/assume`, `/v1/apps/{uuid}/user-accounts*`, `/v1/anonymous-demo`.
