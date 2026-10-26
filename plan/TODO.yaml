@@ -831,7 +831,7 @@ phases:
           slug: purge-confirmations-on-provider-change
           title: Purge Policy Confirmations On Provider Change And Serialize Them With Policy Writes
           path: phase-15-remediation-04/005-purge-confirmations-on-provider-change.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: PutAuthnPolicy purges confirmations on a change to credential_rule or required_oidc_provider_id, under a per-party advisory lock plus policy-row lock. Invite and collaborator-gate paths take the shared lock before policy or confirmation access. Integration suite ran for real against a throwaway postgres:16 container (not the shared 5432 instance).
           findings:
