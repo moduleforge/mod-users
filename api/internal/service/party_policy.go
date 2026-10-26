@@ -514,8 +514,9 @@ type credentialWriteGate struct {
 // it cannot read the party, 403 otherwise). The credential must be a live one
 // of a principal holding an active profile in the party (404; an invited or
 // ended profile does not qualify), and the caller's authentication must be
-// fresh (409). The holder's profile is read FOR SHARE after the credential
-// lock, so the write serializes with an ending. The returned gate records
+// fresh (409). The holder's profile is read FOR SHARE before the credential is
+// locked, so the write serializes with an ending without inverting its lock
+// order. The returned gate records
 // which doors the caller satisfies, for the writes that restrict one of them
 // (see ConfineCredential and UnconfineCredential).
 func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx, partyUUID, credUUID uuid.UUID) (credentialWriteGate, error) {
@@ -554,20 +555,16 @@ func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx,
 	if err := s.users.requireFresh(ac); err != nil {
 		return credentialWriteGate{}, err
 	}
-	// Serialize writes on the credential, then re-read the state under the lock.
-	cred, err = q.GetCredentialByUUIDForUpdate(ctx, credUUID)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cred.RevokedAt != nil) {
-		return credentialWriteGate{}, apiresp.ErrNotFound
-	}
-	if err != nil {
-		return credentialWriteGate{}, fmt.Errorf("users: lock credential: %w", err)
-	}
-	// Read the holder's active profile under a row lock, after the credential
-	// lock. EndInTx and the departure cleanup lock that profile FOR UPDATE, so
-	// the share lock makes this write wait for a concurrent ending: either the
+	// Lock order: the holder's profile, then the credential. EndInTx and the
+	// departure cleanup lock the profile FOR UPDATE first and then revoke the
+	// holder's party-confined credentials, which updates their rows; taking the
+	// credential before the profile here would be the reverse order, a lock
+	// cycle Postgres breaks with SQLSTATE 40P01 (a 500 for the caller). The
+	// share lock also makes this write wait for a concurrent ending: either the
 	// ending commits first and the profile reads as ended here (404), or this
 	// write commits first and the cleanup, which runs after, removes what it
-	// wrote. A plain read would let the write land after the cleanup ran.
+	// wrote. A plain read would let the write land after the cleanup ran. The
+	// credential read above was unlocked, so it is re-read under its lock below.
 	var heldID int64
 	if err := tx.QueryRow(ctx,
 		`SELECT entity_id FROM public.profiles WHERE holder_id = $1 AND party_id = $2 AND status = 'active' FOR SHARE`,
@@ -576,6 +573,15 @@ func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx,
 			return credentialWriteGate{}, apiresp.ErrNotFound
 		}
 		return credentialWriteGate{}, fmt.Errorf("users: check holder profile: %w", err)
+	}
+	// Serialize writes on the credential, then re-read the state under the lock:
+	// it may have been revoked while the profile lock was awaited.
+	cred, err = q.GetCredentialByUUIDForUpdate(ctx, credUUID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cred.RevokedAt != nil) {
+		return credentialWriteGate{}, apiresp.ErrNotFound
+	}
+	if err != nil {
+		return credentialWriteGate{}, fmt.Errorf("users: lock credential: %w", err)
 	}
 	return credentialWriteGate{ac: ac, partyID: partyID, cred: cred, admin: admin, holder: holder}, nil
 }
