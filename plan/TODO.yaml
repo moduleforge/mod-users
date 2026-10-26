@@ -737,7 +737,8 @@ phases:
             - Pxlw
           git:
             branch: plan/identity-model-impl-14-007
-            commit: []
+            commit:
+                - 843012c
             merge: null
         - number: 8
           slug: authorized-rule-invite-time-semantics
