@@ -791,7 +791,8 @@ phases:
             - nA1G
           git:
             branch: plan/identity-model-impl-15-002
-            commit: []
+            commit:
+                - 804fcdc
             merge: null
         - number: 3
           slug: extend-last-operator-admin-guard
