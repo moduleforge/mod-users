@@ -252,11 +252,13 @@ phases:
           slug: impersonation-sessions
           title: Impersonation Sessions
           path: phase-08-users-authorization-engine/003-impersonation-sessions.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: 'Impersonation is now a child session: ImpersonationService (start, renew, end) and ImpersonationHandler on /v1/impersonations, wired through facades, main.go, manifest and openapi. Switch and fork refuse inside an impersonation (Fork returns ErrImpersonationNotAllowed). Start order 400, 403, authorize impersonate, 404, 409. Operators reach restrictive-policy party members per Decision D; no skip helper. Filed followups 0chQ (renew does not re-authorize administrator impersonate authority) and Q1lB (stale docs for removed /assume route).'
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-08-003
+            commit:
+                - 5ffa05b
             merge: null
         - number: 4
           slug: credentials-operation-and-app-login-gate
