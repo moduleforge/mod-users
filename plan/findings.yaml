@@ -115,25 +115,6 @@ items:
           for the same zero-credential case.
         recommendation:
           Reword to "the account has no usable credential" (the acr_too_low case already does).
-    - title: 'The setup-token lifecycle changed: the OIDC…'
-      id: ICke
-      date: "2026-10-26"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-03
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: AGENTS.md
-        lines: 111
-        severity: suggestion
-        confidence: medium
-        concerns: architecture
-        description:
-          The setup-token lifecycle changed: the OIDC configuration routes now accept the token only while OIDC is unconfirmed (re-read from the database per request), while POST /v1/bootstrap alone keeps it live while the bootstrap is pending (decision U9 narrowed for the OIDC routes). The code comments and oidc_config.go header were updated, and docs/architecture.md D20 and the API-layer exceptions list were updated for the bootstrap route, but the AGENTS.md first-run paragraph and docs/architecture.md line 101 still describe the token as simply valid until both steps are done, without the confirmed-state restriction on the OIDC routes.
-        recommendation:
-          Add one sentence to the AGENTS.md first-run paragraph and to the architecture API-layer exceptions bullet stating that after OIDC is confirmed the OIDC config routes require an operator admin session even while the bootstrap is pending.
     - title: The diff introduces several architectural de…
       id: J6jP
       date: "2026-10-26"
@@ -1406,6 +1387,11 @@ closed:
       date: "2026-10-26"
     - id: HOWM
       title: verifySetupToken now calls RefreshState (a D…
+      disposition: fixed
+      ref: phase-15-remediation-04/004-verify-setup-token-without-cache-writes.md
+      date: "2026-10-26"
+    - id: ICke
+      title: 'The setup-token lifecycle changed: the OIDC…'
       disposition: fixed
       ref: phase-15-remediation-04/004-verify-setup-token-without-cache-writes.md
       date: "2026-10-26"
