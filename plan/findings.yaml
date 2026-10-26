@@ -51,7 +51,7 @@ items:
       tags:
         - type:documentation
         - plan/phase:remediation-03
-        - priority:low
+        - priority:medium
         - effort:small
         - remediation/overflow:true
       text: |-
