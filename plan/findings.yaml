@@ -164,15 +164,6 @@ items:
         recommendation:
           Add a sentence on the `authorized` rule: the new password is authorized for the party only when the
           caller holds `update` on the party, otherwise it stays unauthorized until an administrator authorizes it.
-    - title: Lock-order contract undocumented
-      id: A202
-      date: "2026-10-26"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-04
-        - priority:medium
-        - effort:small
-      text: '[agent-authored report data] Docs lens (readme-reachability report, medium/high): lock-order contract not documented in AGENTS.md or docs/architecture.md: profile lock before credential lock; platform_settings lock first for operator-party transitions; per-party advisory lock (lockPartyPolicyExclusive/Shared in api/internal/service/party_policy_lock.go) then policy row. Also: add party_policy_lock.go to AGENTS.md key-files row (line ~192) and profile_gate/profile_gate_for to model/README.md wrapper list (lines 26-27). Recommendation: add a Lock order subsection to docs/architecture.md and pointer in AGENTS.md.'
     - title: Run TestLeaveGate_ConcurrentDisableAndSuspend
       id: tmcn
       date: "2026-10-26"
@@ -1398,4 +1389,9 @@ closed:
       title: 'Behavioral consequence: a handler whose cache'
       disposition: fixed
       ref: phase-16-remediation-05/004-run-bootstrap-token-lifecycle-integration.md
+      date: "2026-10-26"
+    - id: A202
+      title: Lock-order contract undocumented
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
       date: "2026-10-26"
