@@ -746,6 +746,7 @@ phases:
           path: phase-14-remediation-03/008-authorized-rule-invite-time-semantics.md
           done: false
           tier: sonnet-high
+          digest: Implemented decision B. The authorized rule is met at invite time by any usable interactive credential, so no confirmation row is written for that case. A confirmed mismatch now needs update on the party, else 403, and a credential_rule change clears the party's confirmations. Four integration tests added and four existing tests migrated to the provider rule. Docs and openapi updated.
           findings:
             - xhLc
           git:
