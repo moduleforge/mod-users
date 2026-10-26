@@ -8,7 +8,7 @@ package authz_test
 // never over type entities themselves.
 //
 // This is security-sensitive: manage on natural_person's type entity confers
-// assume of every user account. The tests pin that, the exact-type (no parent
+// impersonate of every user account. The tests pin that, the exact-type (no parent
 // type walk) boundary, and the type-entity exclusion (a grant on the sentinel
 // "type" entity must not reach any type entity).
 //
@@ -65,7 +65,7 @@ func TestInteg_InstanceSemantics_Matrix(t *testing.T) {
 		requireAllowed(t, actorCtx(u), "read", corp, "list on organization's type entity")
 	})
 
-	t.Run("manage on natural_person type entity confers assume of any user", func(t *testing.T) {
+	t.Run("manage on natural_person type entity confers impersonate of any user", func(t *testing.T) {
 		u := seedGrantHolder(t, "is-manage-np")
 		targetedGrant(t, u, npEnt, "manage")
 		ctx := actorCtx(u)

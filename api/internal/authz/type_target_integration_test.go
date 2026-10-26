@@ -19,7 +19,7 @@ package authz_test
 // Since every type is an entity, the entity whose id equals a given types.id
 // may be that type's own entity (a legitimate type-grant target) or another
 // entity entirely. These tests resolve types.entity_id at runtime and never
-// assume a layout.
+// presuppose a layout.
 //
 // Run with the throwaway-Postgres recipe in authz_integration_test.go's header.
 
