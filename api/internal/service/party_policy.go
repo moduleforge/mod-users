@@ -469,6 +469,10 @@ type credentialWriteGate struct {
 	ac      opctx.AuthContext
 	partyID int64
 	cred    usersdb.Credential
+	// admin is true when the caller is a party administrator; holder is true
+	// when the caller is the credential's own holder acting through a session
+	// that satisfies the party's gate through another factor. Both can hold.
+	admin, holder bool
 }
 
 // gateCredentialWrite authorizes a write about a credential and a party and
@@ -476,9 +480,12 @@ type credentialWriteGate struct {
 // the credential's own holder acting through a session that satisfies the
 // party's gate through another factor; every other caller is refused (404 when
 // it cannot read the party, 403 otherwise). The credential must be a live one
-// of a principal holding a profile in the party that is not ended (404), and
-// the caller's authentication must be fresh (409). The holder's profile is read
-// FOR SHARE after the credential lock, so the write serializes with an ending.
+// of a principal holding an active profile in the party (404; an invited or
+// ended profile does not qualify), and the caller's authentication must be
+// fresh (409). The holder's profile is read FOR SHARE after the credential
+// lock, so the write serializes with an ending. The returned gate records
+// which doors the caller satisfies, for the writes that restrict one of them
+// (see ConfineCredential and UnconfineCredential).
 func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx, partyUUID, credUUID uuid.UUID) (credentialWriteGate, error) {
 	ac, err := writeCaller(ctx)
 	if err != nil {
@@ -498,18 +505,16 @@ func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx,
 	if err != nil && !missing {
 		return credentialWriteGate{}, fmt.Errorf("users: load credential: %w", err)
 	}
-	if !admin {
-		// A caller outside the administrator door learns nothing about the
-		// credential: an unknown one is refused like one it may not touch.
-		ok := false
-		if !missing {
-			if ok, err = s.holderSatisfiesGate(ctx, q, tx, ac, partyID, cred); err != nil {
-				return credentialWriteGate{}, err
-			}
+	holder := false
+	if !missing {
+		if holder, err = s.holderSatisfiesGate(ctx, q, tx, ac, partyID, cred); err != nil {
+			return credentialWriteGate{}, err
 		}
-		if !ok {
-			return credentialWriteGate{}, s.refuse(ctx, partyID)
-		}
+	}
+	if !admin && !holder {
+		// A caller outside both doors learns nothing about the credential: an
+		// unknown one is refused like one it may not touch.
+		return credentialWriteGate{}, s.refuse(ctx, partyID)
 	}
 	if missing || cred.RevokedAt != nil {
 		return credentialWriteGate{}, apiresp.ErrNotFound
@@ -525,7 +530,7 @@ func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx,
 	if err != nil {
 		return credentialWriteGate{}, fmt.Errorf("users: lock credential: %w", err)
 	}
-	// Read the holder's open profile under a row lock, after the credential
+	// Read the holder's active profile under a row lock, after the credential
 	// lock. EndInTx and the departure cleanup lock that profile FOR UPDATE, so
 	// the share lock makes this write wait for a concurrent ending: either the
 	// ending commits first and the profile reads as ended here (404), or this
@@ -533,14 +538,34 @@ func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx,
 	// wrote. A plain read would let the write land after the cleanup ran.
 	var heldID int64
 	if err := tx.QueryRow(ctx,
-		`SELECT entity_id FROM public.profiles WHERE holder_id = $1 AND party_id = $2 AND status <> 'ended' FOR SHARE`,
+		`SELECT entity_id FROM public.profiles WHERE holder_id = $1 AND party_id = $2 AND status = 'active' FOR SHARE`,
 		cred.PrincipalID, partyID).Scan(&heldID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return credentialWriteGate{}, apiresp.ErrNotFound
 		}
 		return credentialWriteGate{}, fmt.Errorf("users: check holder profile: %w", err)
 	}
-	return credentialWriteGate{ac: ac, partyID: partyID, cred: cred}, nil
+	return credentialWriteGate{ac: ac, partyID: partyID, cred: cred, admin: admin, holder: holder}, nil
+}
+
+// partyControlled reports whether the party controls the credential: its
+// principal is a managed user of the party, or it is an OIDC credential of a
+// provider bound to the party. Any other credential, such as an outside
+// collaborator's personal one, is not the party's to confine. It reads inside
+// the transaction after the credential lock, so the answer is stable for the
+// write. No issuer column (such as who created the credential) is an input.
+func partyControlled(ctx context.Context, tx pgx.Tx, partyID int64, cred usersdb.Credential) (bool, error) {
+	var controlled bool
+	err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM mod_users.users WHERE entity_id = $1 AND managing_party_id = $2)
+		     OR EXISTS (SELECT 1 FROM mod_users.cred_oidc o
+		                  JOIN mod_users.oidc_providers p ON p.id = o.provider_id
+		                 WHERE o.credential_id = $3 AND p.party_id = $2)`,
+		cred.PrincipalID, partyID, cred.ID).Scan(&controlled)
+	if err != nil {
+		return false, fmt.Errorf("users: classify credential: %w", err)
+	}
+	return controlled, nil
 }
 
 // authorizationAudit is the observer payload of a credential authorization.
@@ -639,7 +664,11 @@ func (s *PartyPolicyService) DeauthorizeCredential(ctx context.Context, partyUUI
 // /v1/parties/{party_uuid}/confinements/{credential_uuid}); confining a
 // credential already confined to the party changes nothing. A credential
 // confined to another party is ErrCredentialConfinedElsewhere (409). See
-// gateCredentialWrite for who may write it.
+// gateCredentialWrite for who may write it. The administrator door confines
+// only party-controlled credentials (those of a managed user of the party, and
+// OIDC credentials of a provider bound to the party); any other credential,
+// such as an outside collaborator's personal one, is apiresp.ErrNotFound there
+// and needs its holder, who is served by the holder door.
 //
 // Observations: `update` `credential` (the principal), only on a change.
 func (s *PartyPolicyService) ConfineCredential(ctx context.Context, partyUUID, credUUID uuid.UUID) (CredentialConfinementView, error) {
@@ -648,6 +677,17 @@ func (s *PartyPolicyService) ConfineCredential(ctx context.Context, partyUUID, c
 		g, err := s.gateCredentialWrite(ctx, tx, partyUUID, credUUID)
 		if err != nil {
 			return err
+		}
+		if !g.holder {
+			// Only the administrator door is left: it reaches only the
+			// credentials the party controls, and hides the rest.
+			controlled, err := partyControlled(ctx, tx, g.partyID, g.cred)
+			if err != nil {
+				return err
+			}
+			if !controlled {
+				return apiresp.ErrNotFound
+			}
 		}
 		if g.cred.ConfinedToPartyID.Valid {
 			if g.cred.ConfinedToPartyID.Int64 == g.partyID {
@@ -667,7 +707,11 @@ func (s *PartyPolicyService) ConfineCredential(ctx context.Context, partyUUID, c
 // /v1/parties/{party_uuid}/confinements/{credential_uuid}), only when it
 // currently names the party. A credential confined to another party is
 // ErrCredentialConfinedElsewhere (409); one that is not confined is
-// apiresp.ErrNotFound. See gateCredentialWrite for who may write it.
+// apiresp.ErrNotFound. See gateCredentialWrite for who may write it. The holder
+// door is refused for a party-controlled credential (see ConfineCredential), so
+// a party-issued credential cannot escape departure revocation; a holder may
+// still clear the confinement of their own personal credential. The
+// administrator door is unrestricted.
 //
 // Observations: `update` `credential` (the principal).
 func (s *PartyPolicyService) UnconfineCredential(ctx context.Context, partyUUID, credUUID uuid.UUID) error {
@@ -675,6 +719,17 @@ func (s *PartyPolicyService) UnconfineCredential(ctx context.Context, partyUUID,
 		g, err := s.gateCredentialWrite(ctx, tx, partyUUID, credUUID)
 		if err != nil {
 			return err
+		}
+		if !g.admin {
+			// The holder door: it cannot clear what the party controls, or a
+			// party-issued credential could escape departure revocation.
+			controlled, err := partyControlled(ctx, tx, g.partyID, g.cred)
+			if err != nil {
+				return err
+			}
+			if controlled {
+				return s.refuse(ctx, g.partyID)
+			}
 		}
 		switch {
 		case !g.cred.ConfinedToPartyID.Valid:

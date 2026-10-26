@@ -50,3 +50,10 @@ Files: `api/internal/service/party_policy.go` (`gateCredentialWrite`, `ConfineCr
 - Followup `E3ly` (project followups backlog; cited by id only): through the holder door, `UnconfineCredential` lets a holder clear the confinement of a party-issued credential and escape departure revocation. Consistent with decision A.
 - [Task 004](./004-serialize-profile-writers-with-endings.md): serializes `gateCredentialWrite` with profile endings; this task builds on its `FOR SHARE` profile read and must run after it.
 - [Decisions](../notes/decisions-and-resolutions.md#amendments-2026-10-26): the 2026-10-26 amendments.
+
+## Status
+
+- Outcome: succeeded (2026-10-25).
+- Validation: `make build.api`, `make test.unit` and the full integration suite (authz, config, integration packages, throwaway Postgres) pass; `make -C api lint` clean. New integration tests in `api/internal/integration/party_confinement_integration_test.go` cover validation checks 1 to 5.
+- Changes: `api/internal/service/party_policy.go` (`credentialWriteGate` records the admin and holder doors; `partyControlled` helper; `ConfineCredential` hides non-party-controlled credentials from the administrator door with `apiresp.ErrNotFound`; `UnconfineCredential` refuses the holder door for party-controlled credentials via `refuse`; the held-profile `FOR SHARE` read requires `status = 'active'`), `api/openapi.yaml`, `README.md`, `AGENTS.md`.
+- Decisions: the provider binding is `oidc_providers.party_id` (the baseline column), not `required_oidc_provider_id`. A caller who is both administrator and holder is served by the holder door on confine; on unconfine the administrator door applies (unrestricted). Existing tests that used the administrator door on a personal credential were moved to party-controlled credentials, or to a direct SQL write where the test is about session gating (`party_flows_integration_test.go`).

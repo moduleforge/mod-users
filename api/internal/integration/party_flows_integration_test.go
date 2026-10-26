@@ -332,7 +332,9 @@ func TestPartyFlows_ADRWorkedExample_ConfinedVariant(t *testing.T) {
 	env.requireAuthorizedCredentials(t, acme)
 	env.addAcmePassword(t, &j)
 	pr3 := env.joinBeta(t, acme, j, beta)
-	env.do(t, http.MethodPut, confPath(acme.gateParty, j.c2UUID), acme.adminTok.access(), nil).wantStatus(t, http.StatusOK)
+	// Written directly: C2 is the collaborator's own credential, which the
+	// administrator door of the confinement route does not reach.
+	env.exec(t, "confine C2", `UPDATE mod_users.credentials SET confined_to_party_id = $1 WHERE uuid = $2::uuid`, acme.id, j.c2UUID)
 	if got := env.confinedTo(t, j.c2UUID); got != acme.id {
 		t.Fatalf("C2 confined to %d, want Acme %d", got, acme.id)
 	}
@@ -541,7 +543,9 @@ func TestPartyFlows_ConfinedFactorNeverListsThePersonalProfileAsAvailable(t *tes
 	m := env.newGateMember(t, g)
 	_, otherProf := env.seedPartyProfile(t, m.userID, other, "active")
 	pw := env.credentialUUID(t, m.acct.tk.access(), "password")
-	env.do(t, http.MethodPut, confPath(g, pw), g.adminTok.access(), nil).wantStatus(t, http.StatusOK)
+	// Written directly: the member's own credential is outside the
+	// administrator door of the confinement route.
+	env.exec(t, "confine password", `UPDATE mod_users.credentials SET confined_to_party_id = $1 WHERE uuid = $2::uuid`, g.id, pw)
 
 	tk := env.login(t, m.acct)
 	if tk.Profile == nil || tk.Profile.UUID != m.profUUID {

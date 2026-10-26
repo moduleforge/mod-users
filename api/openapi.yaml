@@ -3115,8 +3115,9 @@ paths:
         stays `available` with the credential excluded from the session's
         factors, so a credential never authorizes itself). Every other caller is
         refused: 404 when the caller cannot read the party, 403 otherwise. The
-        credential must be a live credential of a principal holding a profile in
-        the party that is not ended (404 otherwise). Needs a fresh authentication
+        credential must be a live credential of a principal holding an active
+        profile in the party (404 otherwise; an invited or ended profile does not
+        qualify). Needs a fresh authentication
         (409 `users.step_up_required`, checked after authorization).
       tags: [Parties]
       operationId: authorizePartyCredential
@@ -3148,8 +3149,9 @@ paths:
         stays `available` with the credential excluded from the session's
         factors, so a credential never authorizes itself). Every other caller is
         refused: 404 when the caller cannot read the party, 403 otherwise. The
-        credential must be a live credential of a principal holding a profile in
-        the party that is not ended (404 otherwise). Needs a fresh authentication
+        credential must be a live credential of a principal holding an active
+        profile in the party (404 otherwise; an invited or ended profile does not
+        qualify). Needs a fresh authentication
         (409 `users.step_up_required`, checked after authorization).
       tags: [Parties]
       operationId: deauthorizePartyCredential
@@ -3185,8 +3187,15 @@ paths:
         stays `available` with the credential excluded from the session's
         factors, so a credential never authorizes itself). Every other caller is
         refused: 404 when the caller cannot read the party, 403 otherwise. The
-        credential must be a live credential of a principal holding a profile in
-        the party that is not ended (404 otherwise). Needs a fresh authentication
+        credential must be a live credential of a principal holding an active
+        profile in the party (404 otherwise; an invited or ended profile does not
+        qualify).
+        The administrator door confines only party-controlled credentials: those
+        of a managed user of the party, and OIDC credentials of a provider bound
+        to the party. For any other credential, such as an outside collaborator's
+        personal one, the administrator door is 404 (indistinguishable from an
+        unknown credential) and only the credential's holder may confine it,
+        through the holder door. Needs a fresh authentication
         (409 `users.step_up_required`, checked after authorization).
       tags: [Parties]
       operationId: confinePartyCredential
@@ -3220,8 +3229,16 @@ paths:
         stays `available` with the credential excluded from the session's
         factors, so a credential never authorizes itself). Every other caller is
         refused: 404 when the caller cannot read the party, 403 otherwise. The
-        credential must be a live credential of a principal holding a profile in
-        the party that is not ended (404 otherwise). Needs a fresh authentication
+        credential must be a live credential of a principal holding an active
+        profile in the party (404 otherwise; an invited or ended profile does not
+        qualify).
+        The holder door is refused for party-controlled credentials (those of a
+        managed user of the party, and OIDC credentials of a provider bound to
+        the party), with the refusal given to any caller it does not serve (404
+        when the caller cannot read the party, 403 otherwise), so a credential
+        the party controls cannot escape departure revocation; a holder may still
+        clear the confinement of their own personal credential. The
+        administrator door is unaffected. Needs a fresh authentication
         (409 `users.step_up_required`, checked after authorization).
       tags: [Parties]
       operationId: unconfinePartyCredential

@@ -405,7 +405,10 @@ func TestPartyPolicy_ConfinementSetClearAndConflict(t *testing.T) {
 	m := env.newGateMember(t, g)
 	// The same user also belongs to the second party.
 	env.seedPartyProfile(t, m.userID, g2.id, "active")
-	credUUID := env.credentialUUID(t, m.acct.tk.access(), "password")
+	// Party-controlled credentials of the member: an OIDC credential of a
+	// provider bound to each party.
+	credUUID := env.boundOIDCCredential(t, m.userID, g.id)
+	cred2UUID := env.boundOIDCCredential(t, m.userID, g2.id)
 
 	env.obs.reset()
 	v := env.do(t, http.MethodPut, confPath(g, credUUID), g.adminTok.access(), nil).wantStatus(t, http.StatusOK).obj(t)
@@ -421,12 +424,20 @@ func TestPartyPolicy_ConfinementSetClearAndConflict(t *testing.T) {
 		t.Errorf("observations = %v, want one update credential", got)
 	}
 
-	// Confined to another party: both the set and the clear are 409.
-	env.do(t, http.MethodPut, confPath(g2, credUUID), g2.adminTok.access(), nil).
-		wantError(t, http.StatusConflict, "conflict", "users.credential_confined")
-	env.do(t, http.MethodDelete, confPath(g2, credUUID), g2.adminTok.access(), nil).
-		wantError(t, http.StatusConflict, "conflict", "users.credential_confined")
+	// The second party's administrator reaches neither a credential that party
+	// does not control nor the other party's confinement of it.
+	env.do(t, http.MethodPut, confPath(g2, credUUID), g2.adminTok.access(), nil).wantStatus(t, http.StatusNotFound)
 	if got := env.confinedTo(t, credUUID); got != g.id {
+		t.Fatalf("the other party changed the confinement to %d", got)
+	}
+
+	// Confined to another party: both the set and the clear are 409.
+	env.exec(t, "confine elsewhere", `UPDATE mod_users.credentials SET confined_to_party_id = $1 WHERE uuid = $2::uuid`, g.id, cred2UUID)
+	env.do(t, http.MethodPut, confPath(g2, cred2UUID), g2.adminTok.access(), nil).
+		wantError(t, http.StatusConflict, "conflict", "users.credential_confined")
+	env.do(t, http.MethodDelete, confPath(g2, cred2UUID), g2.adminTok.access(), nil).
+		wantError(t, http.StatusConflict, "conflict", "users.credential_confined")
+	if got := env.confinedTo(t, cred2UUID); got != g.id {
 		t.Fatalf("the other party changed the confinement to %d", got)
 	}
 
@@ -439,9 +450,10 @@ func TestPartyPolicy_ConfinementSetClearAndConflict(t *testing.T) {
 		t.Errorf("observations = %v, want one update credential", got)
 	}
 	env.do(t, http.MethodDelete, confPath(g, credUUID), g.adminTok.access(), nil).wantStatus(t, http.StatusNotFound)
-	// Free again, the second party may confine it.
-	env.do(t, http.MethodPut, confPath(g2, credUUID), g2.adminTok.access(), nil).wantStatus(t, http.StatusOK)
-	if got := env.confinedTo(t, credUUID); got != g2.id {
+	// Free again, the second party may confine the credential it controls.
+	env.exec(t, "free", `UPDATE mod_users.credentials SET confined_to_party_id = NULL WHERE uuid = $1::uuid`, cred2UUID)
+	env.do(t, http.MethodPut, confPath(g2, cred2UUID), g2.adminTok.access(), nil).wantStatus(t, http.StatusOK)
+	if got := env.confinedTo(t, cred2UUID); got != g2.id {
 		t.Fatalf("confined to %d, want %d", got, g2.id)
 	}
 }
