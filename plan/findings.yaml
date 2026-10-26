@@ -112,15 +112,6 @@ items:
         - priority:low
         - effort:small
       text: 'Behavioral consequence: a handler whose cache was never populated now rejects every token without a read. main.go, the harness and unit tests all call RefreshState at boot; any new wiring must call RefreshState at startup.'
-    - title: 'Out of scope, existing behavior: whether PutA'
-      id: oufL
-      date: "2026-10-26"
-      tags:
-        - type:enhancement
-        - plan/phase:remediation-04
-        - priority:low
-        - effort:medium
-      text: 'Out of scope, existing behavior: whether PutAuthnPolicy should authorize or flag existing unauthorized credentials of managed users when switching to authorized. Admin-recoverable; not changed by this task.'
     - title: The PUT authn-policy description says changi…
       id: xWC3
       date: "2026-10-26"
@@ -1303,4 +1294,9 @@ closed:
         Stale: it reports that line numbers cited in earlier (now-resolved) findings drifted against the
         current file; those findings were handled by phase-15 tasks and line citations in closed findings
         carry no remaining action.
+      date: "2026-10-26"
+    - id: oufL
+      title: 'Out of scope, existing behavior: whether PutA'
+      disposition: promoted
+      ref: oufL
       date: "2026-10-26"
