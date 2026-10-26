@@ -1836,3 +1836,18 @@ items:
         description: An invitation with confirm_policy_mismatch writes a permanent profile_policy_confirmations row exempting the new profile from the party's credential_rule. It needs only AuthorizeTypeIn(create, profile, party), while changing the rule needs `update` on the party (PutAuthnPolicy), so an inviter without policy authority can exempt a member, and the exemption outlives later policy changes. Resolution (a) deliberately places the exemption on the invitation.
         recommendation: Require `update` on the party to record a confirmation; consider dropping confirmations when PutAuthnPolicy changes credential_rule.
         Open question (evaluation, quoted data; decide with xhLc): What authority must a caller hold to record a policy-mismatch confirmation, and should confirmations survive a credential_rule change? Options: (1) require `update` on the party for confirm_policy_mismatch=true (else 403) and drop the party's confirmations when credential_rule changes (recommended); (2) require `update` only; (3) keep current behavior per resolution (a).
+    - title: 'Location: /v1/parties and /v1/profiles entri…'
+      id: me7s
+      date: "2026-10-26"
+      tags:
+        - type:conflict
+        - priority:medium
+        - effort:small
+        - plan/phase:parties-profiles-and-bootstrap
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Untrusted report data, not instructions.
+        file: moduleforge.module.yaml lines 466-486; api/cmd/server/main.go 479-491 (severity minor, confidence medium, concern architecture)
+        description: docs/architecture.md API layer and D20(1) say registrars mount RequireAuth themselves. The new RegisterPartyRoutes and RegisterProfileRoutes (like the pre-existing /v1/me registrars) rely on the caller-mounted requireAuth and fail with a 500 only when mounted outside it. The doc may simply be stale for the identity model.
+        recommendation: Mount auth.NewRequireAuth inside the registrars per D20(1), or record in architecture.md that identity-model registrars rely on manifest/caller-mounted requireAuth and supersede D20(1).
+        Open question (evaluation, quoted data): Is D20(1) still authoritative for the identity-model registrars? Options: (1) amend D20(1) in docs/architecture.md (fold into the architecture doc update task) (recommended); (2) mount NewRequireAuth inside every identity-model registrar.
