@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 4
-    tasks_added: 28
+    tasks_added: 29
 phases:
     - number: 6
       slug: users-identity-core
@@ -759,7 +759,7 @@ phases:
       title: Remediation Round 4
       kind: remediation
       security_review: required
-      tasks_added: 5
+      tasks_added: 6
       remediates_phase: 7
       tasks:
         - number: 1
@@ -826,6 +826,18 @@ phases:
           tier: sonnet-med
           findings:
             - iFeg
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 6
+          slug: require-party-update-for-managed-password-authorization
+          title: Require Party Update Before Auto-Authorizing A Managed User Password
+          path: phase-15-remediation-04/006-require-party-update-for-managed-password-authorization.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - 1cWY
           git:
             branch: null
             commit: []
