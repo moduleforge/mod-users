@@ -137,7 +137,7 @@ The spec covers three sub-packages — `model`, `api`, and `gui`. A demo applica
 
 **Action:** Uses the OIDC configuration UI (served by `app-mfdemo`) to add, edit, or disable OIDC providers. Changes are persisted to `oidc_providers`. The "Test configuration" flow exercises a full round-trip against the provider without affecting the admin's session and without creating user records.
 
-**Outcome:** The effective provider configuration is the merged result of environment variables and any `oidc_providers` DB overrides — DB rows take precedence. The `oidc_config` singleton tracks whether OIDC is opted out entirely, and holds the setup-token hash used to authorize the initial confirm step before any admin account exists.
+**Outcome:** The effective provider configuration is the merged result of environment variables and any `oidc_providers` DB overrides — DB rows take precedence. The `oidc_config` singleton tracks whether OIDC is opted out entirely, and holds the setup-token hash. The one setup token authorizes both the first-run bootstrap (`POST /v1/bootstrap`, which creates the first user, the operator party and its administrator) and the OIDC confirm; it stays active while either is pending and is cleared when both are done, after which configuration requires an operator administrator session.
 
 ---
 

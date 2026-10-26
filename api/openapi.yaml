@@ -26,6 +26,10 @@ info:
     - Public and credential routes (`/v1/auth/*`) have no 401 gate; their
       credential failures answer 401 `users.invalid_credentials`, which does
       not distinguish an unknown identifier from a wrong secret.
+    - `POST /v1/bootstrap` carries its credential in the `X-Setup-Token`
+      header and checks it before reading the body: 401
+      `users.setup_token_invalid`, then 400, then 409
+      `users.already_bootstrapped`.
     - Step-up (`409 users.step_up_required`, an action-required response) comes
       after the 400 shape checks and before authorization on the self-service
       writes and the principal disable and enable.
@@ -76,6 +80,11 @@ tags:
       accept, decline and leave are under `/v1/me/profiles`.
   - name: Audit
     description: Audit log reads (served by the audit module).
+  - name: Bootstrap
+    description: >-
+      First-run bootstrap of the deployment with the setup token: the first
+      user, the operator party and its administrator. Public; not behind the
+      OIDC-confirmed gate.
 
 # ---------------------------------------------------------------------------
 # Security
@@ -1280,6 +1289,61 @@ components:
             $ref: "#/components/schemas/AuditEntry"
         total:
 
+    BootstrapStatus:
+      type: object
+      required: [bootstrapped, oidc_confirmed]
+      properties:
+        bootstrapped:
+          type: boolean
+          description: The deployment has an operator party (`platform_settings.operator_party_id` is set).
+        oidc_confirmed:
+          type: boolean
+          description: The OIDC configuration is confirmed (including an opt-out).
+    BootstrapRequest:
+      type: object
+      required: [operator, admin]
+      additionalProperties: false
+      properties:
+        operator:
+          type: object
+          required: [kind]
+          additionalProperties: false
+          description: |
+            The operator party. `organization` creates an organization with no
+            owner (`legal_name` and `legal_form` required, `jurisdiction`
+            optional). `natural_person` makes the first user's own person
+            record the operator party (single-person self-host); the other
+            fields are ignored.
+          properties:
+            kind:
+              type: string
+              enum: [organization, natural_person]
+            legal_name:
+              type: string
+            legal_form:
+              type: string
+              enum: [corporation, llc, partnership, nonprofit, public_body, trust]
+            jurisdiction:
+              type: string
+        admin:
+          type: object
+          required: [email, password, given_name, family_name]
+          additionalProperties: false
+          description: |
+            The first user. The email identifier is recorded as verified (the
+            setup-token holder is trusted) and gets its email-code credential;
+            the password is bound to it.
+          properties:
+            email:
+              type: string
+              format: email
+            password:
+              type: string
+              minLength: 12
+            given_name:
+              type: string
+            family_name:
+              type: string
   # -------------------------------------------------------------------------
   # Reusable parameters
   # -------------------------------------------------------------------------
@@ -1477,6 +1541,88 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+
+  # -- Bootstrap (public, not behind requireOIDCConfirmed) --
+
+  /v1/bootstrap/status:
+    get:
+      summary: First-run bootstrap status
+      description: |
+        Whether the deployment has an operator party and whether its OIDC
+        configuration is confirmed. The setup token printed at boot stays
+        active until both are true.
+      tags: [Bootstrap]
+      operationId: bootstrapStatus
+      security: []
+      responses:
+        "200":
+          description: Bootstrap status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootstrapStatus"
+
+  /v1/bootstrap:
+    post:
+      summary: Bootstrap the deployment with the setup token
+      description: |
+        Runs once per deployment. In one transaction it creates the first user
+        (bring-your-own, own person record, personal profile, verified primary
+        email with its email-code credential, password bound to it), the
+        operator party, claims it as the operator party (the race-free single
+        winner), the administrator's party profile with a wildcard `manage`
+        grant, the operator party's authentication policy (`credential_rule:
+        authorized`) with the bootstrap password authorized for it and set to
+        land on the administrator profile, and a password session.
+
+        Signing in with the bootstrap password lands on the administrator
+        profile; signing in with the email code lands on the personal profile
+        with the administrator profile locked.
+
+        The setup token is the one printed at boot (also used for the OIDC
+        configuration). When OIDC is already confirmed, a successful bootstrap
+        clears it; otherwise it stays for the OIDC confirmation, which then
+        clears it. After both, OIDC configuration requires an operator
+        administrator session.
+      tags: [Bootstrap]
+      operationId: bootstrap
+      security: []
+      parameters:
+        - name: X-Setup-Token
+          in: header
+          required: true
+          description: The setup token printed at boot.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BootstrapRequest"
+      responses:
+        "201":
+          description: Bootstrapped; token response of a password session landing on the administrator profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: |
+            Missing or wrong setup token (`error.code: users.setup_token_invalid`), checked before the body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: |
+            The deployment is already bootstrapped (`error.code: conflict`, detail `users.already_bootstrapped`). Nothing is written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   # -- Authentication --
 

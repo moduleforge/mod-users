@@ -68,6 +68,7 @@ import (
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	localAuthz "github.com/moduleforge/mod-users/api/internal/authz"
 	"github.com/moduleforge/mod-users/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/handlers"
 	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
 	"github.com/moduleforge/mod-users/api/internal/handlers/me"
 	"github.com/moduleforge/mod-users/api/internal/handlers/parties"
@@ -228,6 +229,8 @@ type stack struct {
 	sessions    *svc.SessionService
 	chal        *svc.ChallengeService
 	dir         *svc.DirectoryService
+	boot        *svc.BootstrapService
+	onboarding  *handlers.OIDCConfigHandler
 	q           *db.Queries
 	coreQ       *coredb.Queries
 	opReg       *authzapi.OperationRegistry
@@ -523,6 +526,30 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 		r.Use(requireAuth)
 		authzhttpapi.RegisterRoutes(r, authzSvcs)
 	})
+	// The first-run bootstrap and the OIDC configuration routes, wired as the
+	// dev server does: public, the OIDC config handler owning the setup token
+	// (active while the bootstrap or the OIDC confirmation is pending) and the
+	// operator-administrator check as its AdminChecker.
+	boot := svc.NewBootstrapService(pool, az, group, users, creds, sessions, profiles)
+	onboarding := handlers.NewOIDCConfigHandler(handlers.OIDCConfigDeps{
+		Queries:      queries,
+		OAuth:        oauth,
+		EnvRegistry:  cfg.Providers,
+		TokenDisplay: config.TokenDisplayStderr,
+		AdminChecker: handlers.NewOperatorAdminChecker(authn, boot),
+		Platform:     coreQueries,
+	})
+	if err := onboarding.RefreshState(ctx); err != nil {
+		return nil, fmt.Errorf("oidc config state: %w", err)
+	}
+	providersH := handlers.NewProvidersHandler(handlers.ProvidersDeps{
+		Queries: queries, EnvRegistry: cfg.Providers, OAuth: oauth,
+		RedirectBase: cfg.Auth.OAuthRedirectBaseURL, Parties: coreQueries, Confirmer: onboarding,
+	})
+	r.Route("/v1/oidc-config", func(r chi.Router) { handlers.RegisterOIDCConfigRoutes(r, onboarding, providersH) })
+	r.Route("/v1/bootstrap", func(r chi.Router) {
+		handlers.RegisterBootstrapRoutes(r, handlers.NewBootstrapHandler(boot, onboarding))
+	})
 	// /v1/probe reports what the middleware installed. /v1/probe-anon is the
 	// same behind ResolveOrAnonymous.
 	anon, err := auth.NewAnonymousActor(ctx, pool)
@@ -536,7 +563,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 	return &stack{
 		pool: pool, cfg: cfg, signer: signer, signKey: key, handler: r, obs: rec, group: group,
 		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, partyPolicy: partyPolicy, gate: gate, creds: creds,
-		sessions: sessions, chal: chal, dir: dir, q: queries, coreQ: coreQueries, opReg: opReg,
+		sessions: sessions, chal: chal, dir: dir, boot: boot, onboarding: onboarding, q: queries, coreQ: coreQueries, opReg: opReg,
 		auditApplied: auditApplied,
 	}, nil
 }

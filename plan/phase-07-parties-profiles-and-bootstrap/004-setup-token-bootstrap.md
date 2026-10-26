@@ -134,3 +134,51 @@ architectural_impact: true
 - After the service transaction and its concurrency test.
 - After the routes and setup-token lifecycle changes.
 - After the admin check, wiring and docs.
+
+## Status
+
+- **Outcome:** succeeded (2026-10-25).
+- **Validation:** `make build`, `make test`, `make lint`, `cd model && make verify` pass (sibling links via
+  `MODULEFORGE_SIBLINGS_DIR=/Users/zane/playground/.flow/siblings/mod-users`). Integration suites
+  (`internal/authz`, `internal/config`, `internal/integration`) pass against a throwaway Postgres 16;
+  `TestBootstrap_Concurrent` passes with `-count=5` (and the whole `TestBootstrap*` set with `-count=5`).
+  The `count(*)` grep matches only integration-test row assertions (the `mod_users` schema name contains
+  "user"); no query or non-test code has a first-user path. The `FirstUserHook|firstUserGrant` grep is empty.
+  `api/openapi.yaml` documents `GET /v1/bootstrap/status` and `POST /v1/bootstrap`.
+- **Affected files:** `api/internal/service/bootstrap_service.go` (new), `api/internal/handlers/bootstrap.go`
+  (new), `api/internal/handlers/operator_admin.go` (new), `api/internal/handlers/oidc_config.go`,
+  `api/handlers/onboarding_boot.go`, `api/internal/auth/setup_token.go`, `api/handlers/handlers.go`,
+  `api/usersservice/service.go`, `api/cmd/server/main.go`, `moduleforge.module.yaml`, `api/openapi.yaml`,
+  `README.md`, `AGENTS.md`, `docs/mod-users-spec.md`; tests `api/internal/service/bootstrap_service_test.go`,
+  `api/internal/handlers/setup_token_lifecycle_test.go`, `api/internal/integration/bootstrap_integration_test.go`
+  (plus harness wiring in `harness_integration_test.go` and the 10.1 pairs in `audit_integration_test.go`).
+- **Observation approach (requirement 2):** the writes made before the admin profile exists (user,
+  person record, identifier, password and email OTP credentials, and the admin profile's own `create
+  profile`) are observed as the first user's **personal profile**, which the shared creation primitives
+  already act as. The trusted grant (`grant grant`, no target) is observed as the admin profile; the
+  session `login` (landed profile = admin) and the `create bootstrap` event (target the operator party) as
+  the admin profile with the new session. The operator organization is not observed separately (mod-core's
+  `OrganizationService.Create` cannot run in a trusted transaction; recorded as finding `0b75`); the
+  `create bootstrap` event carries it. Party policy, credential authorization and the password's
+  `default_profile_id` are written directly (trusted flow) without their own observations; they are part
+  of the bootstrap event.
+- **Decisions:**
+  - Concurrency: the bootstrap transaction first locks the `platform_settings` row (`FOR UPDATE`) and
+    answers 409 when the operator party is set, so a concurrent loser waits and then writes nothing
+    instead of failing on the winner's identifier; `core_claim_operator_party` stays the arbiter (false
+    rolls back with 409). No `count(*)`/first-user check exists.
+  - Setup-token lifecycle lives in `OIDCConfigHandler` with a new `Platform` dependency
+    (`platform_settings` reader); a nil `Platform` treats the deployment as bootstrapped. The token is
+    active while the bootstrap is pending or OIDC is unconfirmed; `Confirm` and `AfterBootstrap` clear it
+    only when both are done, and the OIDC routes refuse a token that is no longer active even if clearing
+    the hash failed. The bootstrap route verifies the header token against the stored hash (fresh read,
+    constant-time `auth.VerifySetupToken`).
+  - `TOKEN_DISPLAY=none` keeps the fail-fast on unconfirmed OIDC and only logs a warning when the
+    bootstrap is pending (no channel can show a token).
+  - Admin check: `BootstrapService.IsOperatorAdmin` requires a non-impersonating session acting as a
+    profile for which `core_is_operator_profile` is true and that holds wildcard `manage`;
+    `handlers.NewOperatorAdminChecker` adapts it to `AdminChecker`. Manifest: new services
+    `bootstrapService`, `operatorAdminChecker` (type `handlers.OperatorAdminCheck`), `bootstrapHandler`, the
+    public `/v1/bootstrap` route, and `onboardingHandler` takes `service:operatorAdminChecker` plus a
+    trailing `queries:coredb` (facade `NewOIDCConfigHandler` gained a trailing `platform` parameter).
+  - The wildcard grant's `granted_by` is the admin profile; `Scope` is left NULL (coalesced to `entity`).

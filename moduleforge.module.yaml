@@ -192,6 +192,36 @@ provides:
       constructor: usersservice.NewCollaboratorGate
       args: []
 
+    # bootstrapService — the first-run bootstrap (POST /v1/bootstrap): in one
+    # transaction the first user, the operator party, the admin profile and
+    # its wildcard manage grant, the operator party's authentication policy
+    # and the landing session, with core_claim_operator_party as the single
+    # winner. Also answers the operator-administrator check of the OIDC
+    # configuration routes (operatorAdminChecker).
+    - name: bootstrapService
+      type: "*usersservice.BootstrapService"
+      constructor: usersservice.NewBootstrapService
+      args:
+        - infra:pool
+        - service:authorizer
+        - service:observerGroup
+        - service:userService
+        - service:credentialService
+        - service:sessionService
+        - service:profileService
+
+    # operatorAdminChecker — the OIDC configuration routes' ambient admin
+    # check: a bearer session whose acting profile is an operator profile
+    # holding wildcard manage. Without it only the setup token authorizes
+    # those routes, and the token is cleared once the bootstrap is done and
+    # OIDC is confirmed.
+    - name: operatorAdminChecker
+      type: "handlers.OperatorAdminCheck"
+      constructor: handlers.NewOperatorAdminChecker
+      args:
+        - service:authenticator
+        - service:bootstrapService
+
     # directoryService — batch display lookups for other modules; does no
     # authorization (callers authorize first).
     - name: directoryService
@@ -208,12 +238,14 @@ provides:
       args:
         - queries:usersdb
 
-    # onboardingHandler — OIDCConfigHandler; owns the oidc_config row and BootState.
-    # Consumed by requireOIDCConfirmed middleware and the /v1/oidc-config route group.
-    # The public handlers.NewOIDCConfigHandler wrapper constructs OIDCConfigDeps internally.
-    # envNoOIDCEnv/adminChecker are the two trailing args added by the Phase 02
-    # onboarding-boot-helpers task; neither app has an admin-checker concept yet,
-    # so adminChecker is always expr:nil here.
+    # onboardingHandler — OIDCConfigHandler; owns the oidc_config row, BootState
+    # and the setup token, which stays active while the bootstrap is pending
+    # (platform_settings.operator_party_id NULL) or OIDC is unconfirmed.
+    # Consumed by requireOIDCConfirmed middleware, the /v1/oidc-config route
+    # group and bootstrapHandler. The public handlers.NewOIDCConfigHandler
+    # wrapper constructs OIDCConfigDeps internally. adminChecker is the
+    # operator-administrator check; the trailing queries:coredb reads
+    # platform_settings.
     - name: onboardingHandler
       type: "*handlers.OIDCConfigHandler"
       constructor: handlers.NewOIDCConfigHandler
@@ -223,7 +255,8 @@ provides:
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
         - expr:oauthOrchestrator.EnvNoOIDCAccounts()
-        - expr:nil
+        - service:operatorAdminChecker
+        - queries:coredb
 
     # authHandler — local auth handler; serves /v1/auth/*.
     # smtp infra singleton satisfies the authhandlers.Sender interface.
@@ -307,6 +340,15 @@ provides:
         - service:profileService
         - service:partyPolicyService
 
+    # bootstrapHandler — the public /v1/bootstrap routes (status and the
+    # setup-token bootstrap).
+    - name: bootstrapHandler
+      type: "*handlers.BootstrapHandler"
+      constructor: handlers.NewBootstrapHandler
+      args:
+        - service:bootstrapService
+        - service:onboardingHandler
+
     # sshKeyResolver — resolves a candidate SSH public key to the credential
     # that registered it (docs/architecture/ssh-keys.md D11). A composing app
     # (for example app-mfgit) adapts it into mod-repos' transport.KeyResolver;
@@ -376,10 +418,19 @@ provides:
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
         - expr:oauthOrchestrator.EnvNoOIDCAccounts()
-        - expr:nil
+        - service:operatorAdminChecker
+        - queries:coredb
       register: handlers.RegisterOIDCConfigRoutes
       register_args:
         - service:providersHandler
+
+    # /v1/bootstrap — first-run bootstrap: GET /status and POST / with the
+    # X-Setup-Token header. Public and deliberately NOT behind
+    # requireOIDCConfirmed: the bootstrap may precede the OIDC configuration.
+    - prefix: /v1/bootstrap
+      scope: public             # unauthenticated — the setup token is the credential
+      handler: bootstrapHandler
+      register: handlers.RegisterBootstrapRoutes
 
     # /v1/session — current session, switch, fork, step-up (password, email
     # code, OIDC) and logout. Every route is bearer-authenticated.
