@@ -21,3 +21,9 @@ This task fixes finding `vHBJ` (bug, priority low). `ProvisionManagedUserInTx` r
 ## References
 
 - Finding `vHBJ` in this plan's `plan/findings.yaml` (type:bug, priority:low): `ProvisionManagedUserInTx` in `api/internal/service/profile_service.go` reads the authn policy without a lock, so a concurrent switch to `authorized` can leave the new managed user's password unauthorized; the recommendation is to read the policy `FOR SHARE`.
+
+## Status
+
+Outcome: succeeded (2026-10-26). `ProvisionManagedUserInTx` now calls `lockPartyPolicyShared` (the task 005 helper) immediately before `GetPartyAuthnPolicy`; the task 006 `update` authority check is unchanged. Added `api/internal/integration/managed_user_policy_race_integration_test.go` (two lock-ordering tests, no-row and existing-row; both fail without the lock and pass with it). Validation: `make build.api`, `make test.unit` passed; the full integration suite passed against a throwaway postgres:16-alpine container on port 55478 (the existing `TestProfiles_ManagedUsers` task 006 cases included).
+
+Source: `api/internal/service/profile_service.go`.
