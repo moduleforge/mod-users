@@ -85,3 +85,10 @@ Dependency: requires task 001. It can run in parallel with tasks 002, 003 and 00
 - After the principal credential routes and their authorization.
 - After the app login gate replaces the stub in every availability path.
 - After the integration tests.
+
+## Status
+
+- Outcome: succeeded (2026-10-26).
+- Validation: `make build`, `make test`, `make lint` and `cd model && make verify` pass. The integration suites (`api/internal/authz`, `api/internal/config`, `api/internal/integration`) pass against a throwaway `postgres:16`. The `assume`/`impersonate` grep shows only the comment in `api/internal/service/helpers.go` and a negative test string. `grep -n credentials api/openapi.yaml` lists the four principal credential routes. The `stub`/`invite` grep is empty.
+- Changed: `api/internal/handlers/principals/credentials.go` and `handler.go` (routes), `api/internal/service/principal_credentials.go` (list, issue, install, revoke under `credentials`), `api/internal/service/session_service.go` (gate is `Authorize(login, &app.id)`), `api/internal/auth/authenticator.go` (per-request invite-only gate through `SetAppGate`), `api/auth/auth.go` (`NewAuthenticatorWithAppGate`), `moduleforge.module.yaml`, `api/cmd/server/main.go`, `api/openapi.yaml`, plus unit and integration tests.
+- Decisions: the per-request gate is part of the existing liveness query (`apps.invite_only` joined in), so an app that is not invite-only costs no extra query; a denial is 401 `users.profile_unavailable` with lock reason `app_login_not_granted`. `NewAuthenticator`'s binding signature is unchanged; the manifest uses the new `NewAuthenticatorWithAppGate`.

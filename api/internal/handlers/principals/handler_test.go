@@ -21,7 +21,11 @@ func TestRegisterPrincipalRoutes(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("walk: %v", err)
 	}
-	want := []string{"GET /", "GET /{uuid}", "POST /{uuid}/disable", "POST /{uuid}/enable"}
+	want := []string{
+		"GET /", "GET /{uuid}", "POST /{uuid}/disable", "POST /{uuid}/enable",
+		"GET /{uuid}/credentials", "POST /{uuid}/credentials/api-keys",
+		"POST /{uuid}/credentials/ssh-keys", "DELETE /{uuid}/credentials/{credential_uuid}",
+	}
 	sort.Strings(got)
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
@@ -38,6 +42,10 @@ func TestRoutesOutsideRequireAuthAreServerErrors(t *testing.T) {
 		{http.MethodGet, "/00000000-0000-0000-0000-000000000001"},
 		{http.MethodPost, "/00000000-0000-0000-0000-000000000001/disable"},
 		{http.MethodPost, "/00000000-0000-0000-0000-000000000001/enable"},
+		{http.MethodGet, "/00000000-0000-0000-0000-000000000001/credentials"},
+		{http.MethodPost, "/00000000-0000-0000-0000-000000000001/credentials/api-keys"},
+		{http.MethodPost, "/00000000-0000-0000-0000-000000000001/credentials/ssh-keys"},
+		{http.MethodDelete, "/00000000-0000-0000-0000-000000000001/credentials/00000000-0000-0000-0000-000000000002"},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, nil)
 		rec := httptest.NewRecorder()

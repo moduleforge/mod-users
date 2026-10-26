@@ -51,13 +51,16 @@ provides:
     # authenticator — authenticates a bearer access token with per-request
     # liveness: one database round trip re-checks the session or credential
     # and the acting profile. Consumed by requireAuth and resolveOrAnonymous.
+    # The authorizer evaluates the invite-only app gate (login on the app) in
+    # the same check.
     - name: authenticator
       type: "*auth.Authenticator"
-      constructor: auth.NewAuthenticator
+      constructor: auth.NewAuthenticatorWithAppGate
       args:
         - infra:pool
         - service:verifier
         - field:cfg.Auth
+        - service:authorizer
 
     # signer — signs this module's EdDSA access tokens.
     - name: signer

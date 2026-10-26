@@ -11,6 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moduleforge/core-api/apiresp"
+	coreAuthz "github.com/moduleforge/core-api/authz"
+	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
@@ -103,6 +106,9 @@ type livenessResult struct {
 	// AudienceRegistered is true when no app-slug check was requested or one
 	// of the requested slugs is a registered app's.
 	AudienceRegistered bool
+	// InviteOnly is true when the session's app is invite-only; the
+	// authenticator then checks the `login` gate for the acting profile.
+	InviteOnly bool
 }
 
 // livenessFn runs the liveness query for a verified carrier. appSlugs, when
@@ -120,6 +126,10 @@ type Authenticator struct {
 	audience audiencePolicy
 	liveness livenessFn
 	now      func() time.Time
+
+	// appGate authorizes `login` on the session's app for invite-only apps
+	// (decision U15). nil refuses every invite-only app.
+	appGate coreAuthz.Authorizer
 }
 
 // NewAuthenticator builds an Authenticator over pool (liveness), verifier
@@ -131,6 +141,15 @@ func NewAuthenticator(pool *pgxpool.Pool, verifier *Verifier, cfg config.AuthCon
 		liveness: poolLiveness(pool),
 		now:      time.Now,
 	}
+}
+
+// NewAuthenticatorWithAppGate is NewAuthenticator plus the authorizer that
+// evaluates the invite-only app gate (see SetAppGate). The module manifest
+// constructs the authenticator through it.
+func NewAuthenticatorWithAppGate(pool *pgxpool.Pool, verifier *Verifier, cfg config.AuthConfig, az coreAuthz.Authorizer) *Authenticator {
+	a := NewAuthenticator(pool, verifier, cfg)
+	a.SetAppGate(az)
+	return a
 }
 
 // bearerToken extracts the token of an "Authorization: Bearer <token>"
@@ -208,6 +227,11 @@ func (a *Authenticator) Authenticate(r *http.Request) (*Identity, error) {
 	if res.IsUser {
 		id.PrincipalKind = PrincipalKindUser
 	}
+	if res.InviteOnly {
+		if err := a.checkAppGate(r.Context(), id); err != nil {
+			return nil, err
+		}
+	}
 	if c.CredentialUUID != uuid.Nil {
 		// Client credentials: the credential row has no amr or auth_time;
 		// both come from the token (amr ["swk"], auth_time = issue time).
@@ -243,9 +267,11 @@ SELECT l.status,
         OR EXISTS (SELECT 1 FROM public.apps a
                    JOIN public.entities ae ON ae.id = a.id
                    WHERE a.slug = ANY($4::text[])
-                     AND ae.archived_at IS NULL))
+                     AND ae.archived_at IS NULL)),
+       COALESCE(app.invite_only, false)
 FROM mod_users.session_liveness($1::uuid, $2::uuid, $3::uuid) l
-LEFT JOIN mod_users.users u ON u.entity_id = l.principal_id`
+LEFT JOIN mod_users.users u ON u.entity_id = l.principal_id
+LEFT JOIN public.apps app ON app.id = l.app_id`
 
 // credentialLivenessSQL is sessionLivenessSQL's counterpart for
 // client-credentials tokens, over mod_users.credential_liveness.
@@ -293,7 +319,7 @@ func poolLiveness(pool *pgxpool.Pool) livenessFn {
 				c.SessionUUID, c.PrincipalUUID, c.ProfileUUID, appSlugs,
 			).Scan(&res.Status, &sessionID, &principalID, &profileID, &partyID,
 				&impersonatorID, &appID, &acr, &res.AMR, &authTime,
-				&res.IsUser, &res.IsGuest, &res.EmailVerified, &res.AudienceRegistered)
+				&res.IsUser, &res.IsGuest, &res.EmailVerified, &res.AudienceRegistered, &res.InviteOnly)
 		} else {
 			err = pool.QueryRow(ctx, credentialLivenessSQL,
 				c.CredentialUUID, c.PrincipalUUID, c.ProfileUUID, appSlugs,
@@ -324,4 +350,48 @@ func deref[T any](p *T) T {
 		return zero
 	}
 	return *p
+}
+
+// lockAppLoginNotGranted is the profile-unavailable lock reason of an
+// invite-only app that does not admit the acting profile
+// (service.LockAppLoginNotGranted).
+const lockAppLoginNotGranted = "app_login_not_granted"
+
+// SetAppGate installs the authorizer that evaluates the invite-only app gate:
+// whenever the session's app has apps.invite_only, a request is live only if
+// Authorize(ctx-with-acting-profile, "login", &app.entity_id) allows it
+// (decision U15), so a revoked or removed `login` grant takes effect on the
+// next request. Without a gate, every invite-only app is refused. An app that
+// is not invite-only costs no extra query. Call it once at startup, before
+// the authenticator serves requests.
+func (a *Authenticator) SetAppGate(az coreAuthz.Authorizer) {
+	a.appGate = az
+}
+
+// checkAppGate applies the invite-only app gate to the authenticated identity.
+// A refusal is the profile-unavailable failure with lock reason
+// app_login_not_granted; any other error (a database fault) propagates.
+func (a *Authenticator) checkAppGate(ctx context.Context, id *Identity) error {
+	denied := &NotLiveError{Status: lockAppLoginNotGranted}
+	if a.appGate == nil || id.AppID <= 0 {
+		return denied
+	}
+	appID := id.AppID
+	candidate := opctx.WithAuthContext(ctx, opctx.AuthContext{
+		PrincipalID:             id.PrincipalID,
+		ProfileID:               id.ProfileID,
+		SessionID:               id.SessionID,
+		ImpersonatorPrincipalID: id.ImpersonatorPrincipalID,
+		ACR:                     id.ACR,
+		AuthTime:                id.AuthTime,
+	})
+	err := a.appGate.Authorize(candidate, "login", &appID)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, apiresp.ErrForbidden), errors.Is(err, apiresp.ErrUnauthenticated):
+		return denied
+	default:
+		return fmt.Errorf("auth: app gate: %w", err)
+	}
 }
