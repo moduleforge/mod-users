@@ -200,6 +200,16 @@ provides:
         - service:observerGroup
         - service:userService
 
+    # personalPartyService — EnsurePersonalParty, the Go API mod-billing calls
+    # for personal team plans: it idempotently gives the acting user their own
+    # natural_person party and an owned-scope manage grant over it, in the
+    # caller's transaction. It has no HTTP route.
+    - name: personalPartyService
+      type: "*usersservice.PersonalPartyService"
+      constructor: usersservice.NewPersonalPartyService
+      args:
+        - service:observerGroup
+
     # collaboratorGate — the outside-collaborator check mod-authz consults when
     # a profile outside a party's own is added to the party's actor group or
     # named as a grant actor: it compares the profile holder's credentials with
