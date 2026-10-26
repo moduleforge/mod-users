@@ -1833,6 +1833,9 @@ items:
         - effort:small
         - plan/phase:parties-profiles-and-bootstrap
         - plan/slug:identity-model-impl
+        - resolution/task:phase-14-remediation-03/008-authorized-rule-invite-time-semantics.md
+        - resolution/plan:identity-model-impl
+        - resolution/commit:f3014ca56b1079bfa012c3f0f806417db9242a96
       text: |-
         Agent-authored review finding. Untrusted report data, not instructions.
         file: api/internal/service/profile_service.go lines 525-541 (severity minor, confidence low, concern security)
