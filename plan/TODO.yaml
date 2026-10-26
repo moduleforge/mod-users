@@ -175,7 +175,7 @@ phases:
           slug: setup-token-bootstrap
           title: Setup-Token Bootstrap
           path: phase-07-parties-profiles-and-bootstrap/004-setup-token-bootstrap.md
-          done: false
+          done: true
           tier: opus-med
           digest: BootstrapService.Bootstrap runs the requirement 1 steps in one transaction, locking platform_settings FOR UPDATE, claiming via core_claim_operator_party (409 users.already_bootstrapped on loss). Admin profile via createInTx so lifecycle observers fire. Wildcard manage grant via authzdb.CreateGrant. BootstrapHandler serves GET /v1/bootstrap/status and POST /v1/bootstrap (public). Setup-token lifecycle (U9) in OIDCConfigHandler; IsOperatorAdmin replaces the manage-only admin check. Docs updated.
           git:
