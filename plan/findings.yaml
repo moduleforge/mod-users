@@ -610,25 +610,6 @@ items:
           The last-operator-admin guard reads mod-authz-owned tables (public.grants, public.authz_operations) and public.platform_settings with raw SQL from mod-users and hardcodes the shape of the Bootstrap grant (direct entity-scope wildcard manage, target NULL). It deliberately ignores a manage grant inherited through an actor group, so a real administrator reached through a group is not counted and the guard can refuse an ending that would not remove the last effective admin, or could be bypassed by a different grant representation. This couples mod-users to another module's schema, which the architecture otherwise keeps behind service interfaces (cross-module composition through requires.services and the CollaboratorGate seam), and the approximation is not recorded as a decision.
         recommendation:
           Record the approximation and the cross-schema read as an explicit decision (or in the AGENTS.md row for profile_last_admin.go). Longer term, resolve admin status through the grantService/authorizer interface already used by IsOperatorAdmin instead of reading grants tables directly.
-    - title: Dangling forward-links into the uninitialize…
-      id: ZfaZ
-      date: "2026-10-26"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-03
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/mod-users-spec.md
-        lines: 7, 161, 206, 362
-        severity: minor
-        confidence: medium
-        concerns: documentation
-        description:
-          Dangling forward-links into the uninitialized docs/mf-standards submodule: architecture.md, building-applications.md, architecture/api-response-design.md, architecture/authorization-design.md.
-        recommendation:
-          Initialize the submodule and re-verify; fix any targets that are absent upstream.
     - title: Dangling forward-link into the uninitialized…
       id: lUew
       date: "2026-10-26"
@@ -1508,4 +1489,12 @@ closed:
         architecture/entity-typing.md and architecture/db-considerations.md all exist in the main
         checkout's initialized docs/mf-standards submodule. The links in docs/architecture.md
         resolve once the submodule is initialized.
+      date: "2026-10-26"
+    - id: ZfaZ
+      title: Dangling forward-links into the uninitialize…
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental, same as rAhy). architecture.md, building-applications.md,
+        architecture/api-response-design.md and architecture/authorization-design.md all exist in
+        the main checkout's initialized docs/mf-standards submodule.
       date: "2026-10-26"
