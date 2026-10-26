@@ -723,7 +723,8 @@ phases:
             - kimI
           git:
             branch: plan/identity-model-impl-14-006
-            commit: []
+            commit:
+                - 5ade1e4
             merge: null
         - number: 7
           slug: restrict-admin-confinement-to-party-controlled-credentials
