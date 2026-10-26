@@ -685,7 +685,7 @@ phases:
           slug: serialize-profile-writers-with-endings
           title: Serialize Credential Gate And Invitations With Profile Writers
           path: phase-14-remediation-03/004-serialize-profile-writers-with-endings.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: gateCredentialWrite locks the credential then takes FOR SHARE on the holder's open profile; resolveInvitee takes the same holder lock as AdmitInTx. Two concurrency integration tests added. Lock order credential-then-profile differs from EndInTx; a deadlock is theoretically possible, flagged for review.
           findings:
