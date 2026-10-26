@@ -384,20 +384,6 @@ items:
         recommendation:
           Use "(p_exclude_credential_id IS NULL OR c.id <> p_exclude_credential_id)" in the factor array to
           match session_acr_excluding.
-    - title: 'Location: /v1/parties and /v1/profiles entri…'
-      id: me7s
-      date: "2026-10-26"
-      tags:
-        - type:conflict
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Untrusted report data, not instructions.
-        file: moduleforge.module.yaml lines 466-486; api/cmd/server/main.go 479-491 (severity minor, confidence medium, concern architecture)
-        description: docs/architecture.md API layer and D20(1) say registrars mount RequireAuth themselves. The new RegisterPartyRoutes and RegisterProfileRoutes (like the pre-existing /v1/me registrars) rely on the caller-mounted requireAuth and fail with a 500 only when mounted outside it. The doc may simply be stale for the identity model.
-        recommendation: Mount auth.NewRequireAuth inside the registrars per D20(1), or record in architecture.md that identity-model registrars rely on manifest/caller-mounted requireAuth and supersede D20(1).
-        Open question (evaluation, quoted data): Is D20(1) still authoritative for the identity-model registrars? Options: (1) amend D20(1) in docs/architecture.md (fold into the architecture doc update task) (recommended); (2) mount NewRequireAuth inside every identity-model registrar.
     - title: 'Location: /v1/bootstrap entry (431-438); als…'
       id: kimI
       date: "2026-10-26"
@@ -972,4 +958,9 @@ closed:
       title: An invitation with confirm_policy_mismatch w…
       disposition: promoted
       ref: t2OR
+      date: "2026-10-26"
+    - id: me7s
+      title: 'Location: /v1/parties and /v1/profiles entri…'
+      disposition: promoted
+      ref: me7s
       date: "2026-10-26"
