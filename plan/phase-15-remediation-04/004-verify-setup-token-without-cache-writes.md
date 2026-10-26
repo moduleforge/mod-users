@@ -25,3 +25,9 @@ This task fixes findings `77AP` (security, priority medium), `HOWM` (optimizatio
 - Finding `77AP` in this plan's `plan/findings.yaml` (type:security, priority:medium): `verifySetupToken` calls `RefreshState` on every request with a non-empty token, so junk tokens force several queries and a write lock per request, and a concurrent refresh can overwrite a newer cache snapshot.
 - Finding `HOWM` in this plan's `plan/findings.yaml` (type:optimization, priority:low): `verifySetupToken` runs a database read on each request carrying a non-empty token; the recommendation is to keep the freshness check but drop the shared-cache write and short-circuit on cached state.
 - Finding `ICke` in this plan's `plan/findings.yaml` (type:documentation, priority:low): the setup-token lifecycle changed for the OIDC routes, but the `AGENTS.md` first-run paragraph and `docs/architecture.md` still describe the token as valid until both steps are done.
+
+## Status
+
+- Outcome: succeeded (2026-10-26). Integration test added and compiled (`go vet -tags integration`) but NOT executed: no throwaway Postgres with a users superuser was available (only a shared instance on port 5432).
+- Validation: `make build.api` and `make test.unit` pass; new unit test `TestVerifySetupToken_NoReadNoCacheWrite`; no `RefreshState` call remains in `verifySetupToken`.
+- Files: `api/internal/handlers/oidc_config.go`, `api/internal/handlers/setup_token_lifecycle_test.go`, `api/internal/integration/bootstrap_integration_test.go`, `AGENTS.md`, `docs/architecture.md`.

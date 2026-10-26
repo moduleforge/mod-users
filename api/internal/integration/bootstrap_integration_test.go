@@ -458,6 +458,13 @@ func TestBootstrap_TokenLifecycle(t *testing.T) {
 		if b, c := s.bootstrapStatus(t); b || !c {
 			t.Errorf("status = %v, %v; want false, true", b, c)
 		}
+		// Once OIDC is confirmed the OIDC configuration routes refuse the
+		// still-live setup token (no operator admin session exists yet), while
+		// POST /v1/bootstrap below still accepts it.
+		s.confirmOptOut(t, token, "").wantStatus(t, http.StatusUnauthorized)
+		if !s.tokenHashSet(t) {
+			t.Fatalf("a refused confirm cleared the token")
+		}
 		tk := s.postBootstrap(t, token, bootstrapBody("first@operator.test", orgOperator())).wantStatus(t, http.StatusCreated).tok(t)
 		if s.tokenHashSet(t) {
 			t.Errorf("token not cleared after both steps")

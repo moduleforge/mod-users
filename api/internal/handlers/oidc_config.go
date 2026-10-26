@@ -124,16 +124,10 @@ func (h *OIDCConfigHandler) RefreshState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	merged, err := config.LoadMergedProviders(ctx, h.deps.EnvRegistry, h.deps.Queries)
+	state, err := h.computeBootState(ctx, row)
 	if err != nil {
 		return err
 	}
-	dbView := config.DBConfigView{OptOut: row.OptOut}
-	state := config.DetermineBootState(
-		h.buildProviderViews(merged),
-		dbView,
-		h.deps.EnvNoOIDCEnv,
-	)
 	bootstrapped, err := h.readBootstrapped(ctx)
 	if err != nil {
 		return err
@@ -144,6 +138,21 @@ func (h *OIDCConfigHandler) RefreshState(ctx context.Context) error {
 	h.bootstrapped = bootstrapped
 	h.mu.Unlock()
 	return nil
+}
+
+// computeBootState merges env + DB provider rows and derives the BootState
+// for row. It touches no handler state, so a caller can use the result as a
+// local value without writing the shared cache.
+func (h *OIDCConfigHandler) computeBootState(ctx context.Context, row db.GetOIDCConfigRow) (config.BootStateResult, error) {
+	merged, err := config.LoadMergedProviders(ctx, h.deps.EnvRegistry, h.deps.Queries)
+	if err != nil {
+		return config.BootStateResult{}, err
+	}
+	return config.DetermineBootState(
+		h.buildProviderViews(merged),
+		config.DBConfigView{OptOut: row.OptOut},
+		h.deps.EnvNoOIDCEnv,
+	), nil
 }
 
 // readBootstrapped reads whether the operator party is set; true when no
@@ -519,22 +528,41 @@ func (h *OIDCConfigHandler) authorizeAmbient(r *http.Request) (bool, error) {
 // route. On these routes the token is accepted only while OIDC is
 // unconfirmed: once OIDC is confirmed an operator administrator session is
 // required, even while the bootstrap is pending (POST /v1/bootstrap alone
-// keeps accepting the token then, decision U9). The hash and the confirmed
-// state are re-read from the database rather than taken from the cache, so a
-// replica holding a stale snapshot never accepts a cleared token or a
-// confirmed configuration. An empty token never matches and costs no read.
+// keeps accepting the token then, decision U9).
+//
+// Unauthenticated callers reach this path, so it is cheap to refuse: an empty
+// token, a cached-invalid hash, or a cached confirmed state is rejected with
+// no database read (staleness only matters in the unconfirmed direction, and
+// a stale cache errs toward refusing). Otherwise the hash and the confirmed
+// state are read fresh into local variables and the decision is made from
+// those; the shared cache (cachedDB, cachedBoot, bootstrapped) is never
+// written here, so a request cannot overwrite a newer snapshot.
 func (h *OIDCConfigHandler) verifySetupToken(ctx context.Context, token string) (bool, error) {
 	if token == "" {
 		return false, nil
 	}
-	if err := h.RefreshState(ctx); err != nil {
-		return false, fmt.Errorf("setup token: refresh state: %w", err)
-	}
 	h.mu.RLock()
-	hash := h.cachedDB.SetupTokenHash
-	unconfirmed := !h.cachedBoot.State.Confirmed()
+	cachedHash := h.cachedDB.SetupTokenHash
+	cachedConfirmed := h.cachedBoot.State.Confirmed()
 	h.mu.RUnlock()
-	return unconfirmed && hash.Valid && auth.VerifySetupToken(token, hash.String), nil
+	if !cachedHash.Valid || cachedConfirmed {
+		return false, nil
+	}
+	row, err := h.deps.Queries.GetOIDCConfig(ctx)
+	if err != nil {
+		return false, fmt.Errorf("setup token: load oidc config: %w", err)
+	}
+	if !row.SetupTokenHash.Valid {
+		return false, nil
+	}
+	state, err := h.computeBootState(ctx, row)
+	if err != nil {
+		return false, fmt.Errorf("setup token: compute boot state: %w", err)
+	}
+	if state.State.Confirmed() {
+		return false, nil
+	}
+	return auth.VerifySetupToken(token, row.SetupTokenHash.String), nil
 }
 
 // authorizeBodyless authenticates a route that carries no body (GET/DELETE

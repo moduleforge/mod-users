@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -292,5 +293,100 @@ func TestSetupToken_StaleCacheRejectsClearedHash(t *testing.T) {
 	}
 	if ok, err := h.verifySetupToken(context.Background(), token); err != nil || ok {
 		t.Errorf("verifySetupToken after the hash was cleared = %v, %v; want false", ok, err)
+	}
+}
+
+// countingQuerier counts GetOIDCConfig reads so tests can assert that a
+// rejected setup token costs no database read.
+type countingQuerier struct {
+	*fakeQuerier
+	mu    sync.Mutex
+	reads int
+}
+
+func (c *countingQuerier) GetOIDCConfig(ctx context.Context) (db.GetOIDCConfigRow, error) {
+	c.mu.Lock()
+	c.reads++
+	c.mu.Unlock()
+	return c.fakeQuerier.GetOIDCConfig(ctx)
+}
+
+func (c *countingQuerier) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.reads
+}
+
+// TestVerifySetupToken_NoReadNoCacheWrite covers the verify path: an empty
+// token, an invalid token, a valid token while unconfirmed, and a valid token
+// once confirmed. Rejections decided from the cache cost no read, and no case
+// writes the shared cache.
+func TestVerifySetupToken_NoReadNoCacheWrite(t *testing.T) {
+	ctx := context.Background()
+	h, fq, _ := newLifecycleHandler(t, db.GetOIDCConfigRow{ID: 1})
+	cq := &countingQuerier{fakeQuerier: fq}
+	h.deps.Queries = cq
+	token, err := h.EnsureSetupToken(ctx)
+	if err != nil || token == "" {
+		t.Fatalf("EnsureSetupToken: %q, %v", token, err)
+	}
+
+	snapshot := func() (db.GetOIDCConfigRow, config.BootStateResult, bool) {
+		h.mu.RLock()
+		defer h.mu.RUnlock()
+		return h.cachedDB, h.cachedBoot, h.bootstrapped
+	}
+	db0, boot0, bs0 := snapshot()
+
+	// Empty token: rejected with no read.
+	before := cq.count()
+	if ok, err := h.verifySetupToken(ctx, ""); err != nil || ok {
+		t.Errorf("empty token = %v, %v; want false", ok, err)
+	}
+	if cq.count() != before {
+		t.Errorf("empty token read the database")
+	}
+
+	// Invalid token while unconfirmed: one fresh read, rejected.
+	if ok, err := h.verifySetupToken(ctx, "junk"); err != nil || ok {
+		t.Errorf("invalid token = %v, %v; want false", ok, err)
+	}
+	if cq.count() != before+1 {
+		t.Errorf("invalid token reads = %d, want 1", cq.count()-before)
+	}
+
+	// Valid token while unconfirmed: accepted.
+	if ok, err := h.verifySetupToken(ctx, token); err != nil || !ok {
+		t.Errorf("valid token = %v, %v; want true", ok, err)
+	}
+
+	// The verify path never wrote the shared cache.
+	db1, boot1, bs1 := snapshot()
+	if !reflect.DeepEqual(db1, db0) || !reflect.DeepEqual(boot1, boot0) || bs1 != bs0 {
+		t.Errorf("verifySetupToken rewrote the shared cache")
+	}
+
+	// A write path refreshes the cache (OIDC now confirmed), so a valid token
+	// is refused from the cache with no read.
+	if rr := confirmWithHeader(h, token); rr.Code != http.StatusOK {
+		t.Fatalf("confirm: %d %s", rr.Code, rr.Body.String())
+	}
+	before = cq.count()
+	if ok, err := h.verifySetupToken(ctx, token); err != nil || ok {
+		t.Errorf("valid token once confirmed = %v, %v; want false", ok, err)
+	}
+	if cq.count() != before {
+		t.Errorf("confirmed-state rejection read the database")
+	}
+
+	// A cached-invalid hash is likewise rejected without a read.
+	h2, _, _ := newLifecycleHandler(t, db.GetOIDCConfigRow{ID: 1})
+	cq2 := &countingQuerier{fakeQuerier: newFakeQuerier(db.GetOIDCConfigRow{ID: 1})}
+	h2.deps.Queries = cq2
+	if ok, err := h2.verifySetupToken(ctx, "anything"); err != nil || ok {
+		t.Errorf("no-hash token = %v, %v; want false", ok, err)
+	}
+	if cq2.count() != 0 {
+		t.Errorf("cached-invalid-hash rejection read the database")
 	}
 }
