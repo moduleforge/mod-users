@@ -321,20 +321,6 @@ items:
           Take the same GetUserByEntityIDForUpdate lock on the holder in invite before the duplicate check
           and insert, so admissions and invitations serialize. Alternatively, narrow the AdmitInTx comment to
           say a concurrent invitation can still yield ErrProfileExists.
-    - title: Through the holder door, UnconfineCredential…
-      id: E3ly
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:medium
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Untrusted report data, not instructions.
-        file: api/internal/service/party_policy.go lines 659-680 (severity minor, confidence medium, concern security)
-        description: Through the holder door, UnconfineCredential lets a holder clear a confinement when their session satisfies the party gate through another factor, including credentials the party itself confined (JIT guest IdP account from a party-bound provider, managed-user path, or an admin-set confinement). A holder who unconfines before leaving escapes departure revocation and can use the party-issued credential for their personal profile and other parties.
-        recommendation: Limit DELETE /v1/parties/{party_uuid}/confinements/{credential_uuid} to the administrator door, or allow the holder door only for holder-set confinements, never for credentials JIT-created from a party-bound provider.
-        Open question (evaluation, quoted data; decide together with Pxlw): May a holder remove a confinement the party imposed through the holder door? Options: (1) holder door refused for party-controlled credentials (managed-user credentials and OIDC credentials from a party-bound provider), allowed otherwise, no schema change (recommended); (2) record who set each confinement (schema change) and let the holder remove only holder-set ones; (3) administrator door only for unconfine.
     - title: An invitation with confirm_policy_mismatch w…
       id: t2OR
       date: "2026-10-26"
@@ -990,4 +976,9 @@ closed:
       title: For a caller holding only AuthorizeTypeIn(cr…
       disposition: promoted
       ref: 255B
+      date: "2026-10-26"
+    - id: E3ly
+      title: Through the holder door, UnconfineCredential…
+      disposition: promoted
+      ref: E3ly
       date: "2026-10-26"
