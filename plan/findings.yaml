@@ -150,7 +150,7 @@ items:
       id: R4R0
       date: "2026-10-26"
       tags:
-        - type:bug
+        - type:security
         - plan/phase:remediation-03
         - priority:medium
         - effort:small
