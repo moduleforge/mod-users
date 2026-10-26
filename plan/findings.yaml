@@ -195,15 +195,6 @@ items:
           verifySetupToken too. Document in the upgrade notes that upgrading a
           confirmed deployment re-emits a setup token that grants operator
           administration until the bootstrap is done.
-    - title: Sibling symlinks mod-core, mod-audit and mod-
-      id: Fjaa
-      date: "2026-10-26"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-03
-        - priority:unspecified
-        - effort:unspecified
-      text: Sibling symlinks mod-core, mod-audit and mod-authz under worktrees/plan/ were repointed to the master checkouts by the make preflight during validation and were restored by the agent to each repo's worktrees/plan/identity-model-impl. The same-named symlinks under mod-users/worktrees/ carry a 20:02 timestamp and were left untouched. Manager should verify the sibling links are intact and that make preflight does not repoint them in this layout. Validation logs are under worktrees/plan/identity-model-impl-14-001/.flow/validation-logs/.
     - title: Party gate not evaluated for suspended leave
       id: twos
       date: "2026-10-25"
@@ -1543,4 +1534,16 @@ closed:
         docs/architecture.md:101 and D20(3) at docs/architecture.md:260 both list POST
         /v1/bootstrap as a public route outside requireOIDCConfirmed that uses the X-Setup-Token
         header, with the reason.
+      date: "2026-10-26"
+    - id: Fjaa
+      title: Sibling symlinks mod-core, mod-audit and mod-
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental). scripts/link-siblings.sh repoints the sibling symlinks
+        to the main checkouts by design, unless MODULEFORGE_SIBLINGS_DIR is set (see its header).
+        That is harness and workspace layout, not a defect in mod-users code. At evaluation time,
+        the mod-core, mod-audit and mod-authz links under both worktrees/plan/ and worktrees/ point
+        to /Users/zane/playground/.flow/siblings/mod-users/<sibling> (Flow-managed, 20:08). No
+        change to the plan's code would resolve it. The manager's verification request is
+        repeated in flagged_for_manager.
       date: "2026-10-26"
