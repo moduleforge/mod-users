@@ -9,15 +9,6 @@ items:
         - priority:high
         - effort:small
       text: api/internal/service/profile_service.go resolveInvitee resolves holder_email through mod_users.user_identifiers (kind email, canonical value) without requiring verified_at. Because (kind, value_canon) is unique across unverified identifiers (the retained squatting limit), a party that invites a colleague by email can invite whoever registered that address first without verifying it; that account then accepts and holds a party profile. The invitation still needs the invitee to accept and is gated by the party's authn policy and grants, so the exposure is bounded, but invitation by email is the case where address ownership matters most. Decide whether InviteInTx/InviteProfile should require a verified identifier (and return the not-found or a dedicated 409 for an unverified match), or whether invitations should stay address-agnostic. The behavior as implemented follows the spec wording (canonicalized email identifier) and has a test per path in api/internal/integration/profiles_integration_test.go.
-    - title: OpenAPI step-up order note is stale
-      id: qvpE
-      date: "2026-10-25"
-      tags:
-        - type:documentation
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:low
-        - effort:small
-      text: api/openapi.yaml info.description says step-up (409 users.step_up_required) comes before authorization on the principal disable and enable, but UserService.writablePrincipal in api/internal/service/principal_admin.go authorizes `read` then `update` first and checks freshness after (the same order the profile status change now uses, noted in the new party-administration bullet of that description). Correct the principal sentence, or change the order, so the document and code agree.
     - title: resolveInvitee resolves holder_email through…
       id: T1E6
       date: "2026-10-26"
@@ -1641,4 +1632,14 @@ closed:
       disposition: dismissed
       reason: 'Resolved by user decision (option 1): the owning party''s authn policy (credential_rule, min_acr) is enforced per request in mod-users'' engine for actors whose profile is outside that party, implemented by phase 8 task 001 (new requirement 13; amends resolution (a)/U5). mod-authz unchanged.'
       ref: plan/phase-08-users-authorization-engine/001-rewrite-authorization-engine.md
+      date: "2026-10-26"
+    - id: qvpE
+      title: OpenAPI step-up order note is stale
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 006 (commit 5ade1e4). api/openapi.yaml:33-37 now says that
+        on principal disable and enable, step-up comes after authorization ("`read` (404
+        otherwise) then `update` (403), and only then is step-up freshness checked"). That matches
+        UserService.writablePrincipal in api/internal/service/principal_admin.go, which calls
+        Authorize update and then requireFresh.
       date: "2026-10-26"
