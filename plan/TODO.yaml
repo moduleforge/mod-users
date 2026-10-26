@@ -663,7 +663,7 @@ phases:
           findings:
             - aNYW
           git:
-            branch: null
+            branch: plan/identity-model-impl-14-002
             commit: []
             merge: null
         - number: 3
