@@ -214,7 +214,8 @@ type InviteInput struct {
 	// ConfirmPolicyMismatch confirms an invitation whose holder cannot meet the
 	// party's authentication policy with their current credentials. It is
 	// recorded as a profile_policy_confirmation when the holder's credentials
-	// mismatch (checkInvitePolicyMismatch).
+	// mismatch (checkInvitePolicyMismatch). It needs `update` on the party
+	// (403 otherwise).
 	ConfirmPolicyMismatch bool
 }
 
@@ -476,7 +477,8 @@ func validateInvite(in InviteInput, holderUUID uuid.UUID) (canonEmail string, er
 // ErrGuestMustUpgrade for a guest holder; ErrHolderNotAdmissible for a managed
 // user of another party or a principal that is not a user; ErrProfileExists
 // when the holder already has an open profile in the party; the
-// policy-mismatch confirmation error of checkInvitePolicyMismatch.
+// policy-mismatch confirmation error of checkInvitePolicyMismatch (409 when
+// unconfirmed, 403 when confirmed without `update` on the party).
 //
 // Observations: `create` `profile`; the lifecycle observers see a change from
 // "" to `invited`.
@@ -550,8 +552,9 @@ func (s *ProfileService) invite(ctx context.Context, tx pgx.Tx, req inviteReques
 // (mod_users.holder_policy_mismatch). It returns nil, false when there is none.
 // On a mismatch it refuses with 409 users.policy_mismatch_confirmation_required
 // (details: the failing rule, what the party requires and what the holder has)
-// unless in.ConfirmPolicyMismatch is set, in which case it returns true: the
-// caller records the confirmation once the profile exists (the confirmation
+// unless in.ConfirmPolicyMismatch is set, in which case it requires `update`
+// on the party (403 otherwise; an absent authorizer fails closed) and returns
+// true: the caller records the confirmation once the profile exists (the confirmation
 // references the profile), in the same transaction.
 func (s *ProfileService) checkInvitePolicyMismatch(ctx context.Context, tx pgx.Tx, in InviteInput, holderID int64) (confirmed bool, err error) {
 	mm, err := detectPolicyMismatch(ctx, s.usersQ(tx), holderID, in.PartyID)
@@ -560,6 +563,14 @@ func (s *ProfileService) checkInvitePolicyMismatch(ctx context.Context, tx pgx.T
 	}
 	if !in.ConfirmPolicyMismatch {
 		return false, mm.Conflict()
+	}
+	// A confirmation exempts the profile from the party's credential rule for
+	// good, so it is the party administrator's call: `update` on the party.
+	if s.az == nil {
+		return false, apiresp.ErrForbidden
+	}
+	if err := s.az.Authorize(ctx, opSlugUpdate, &in.PartyID); err != nil {
+		return false, err
 	}
 	return true, nil
 }

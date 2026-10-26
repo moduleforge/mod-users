@@ -108,6 +108,9 @@ const (
 // Observer resource of a party authn policy.
 const resourcePartyAuthnPolicy = "party_authn_policy"
 
+// Observer resource of the confirmations dropped by a credential_rule change.
+const resourcePolicyConfirmation = "profile_policy_confirmation"
+
 // Error codes owned by party gating administration.
 const (
 	CodeCredentialConfined = "users.credential_confined"
@@ -350,9 +353,12 @@ func validatePolicyInput(in PutPartyAuthnPolicyInput) (pgtype.Text, error) {
 // /v1/parties/{party_uuid}/authn-policy). It needs `update` on the party (404
 // when the caller cannot read the party, 403 otherwise) and a fresh
 // authentication (409 users.step_up_required). A required provider that does
-// not exist is a 400 field error.
+// not exist is a 400 field error. Changing credential_rule (a party with no
+// policy row counts as `any`) deletes the party's profile_policy_confirmations
+// rows in the same transaction; a write that leaves the rule unchanged keeps them.
 //
-// Observations: `create` or `update` `party_authn_policy` on the party.
+// Observations: `create` or `update` `party_authn_policy` on the party; `delete`
+// `profile_policy_confirmation` on the party when confirmations were dropped.
 func (s *PartyPolicyService) PutAuthnPolicy(ctx context.Context, partyUUID uuid.UUID, in PutPartyAuthnPolicyInput) (PartyAuthnPolicyView, error) {
 	ac, err := writeCaller(ctx)
 	if err != nil {
@@ -399,6 +405,17 @@ func (s *PartyPolicyService) PutAuthnPolicy(ctx context.Context, partyUUID uuid.
 			view = policyView(partyUUID, row)
 			return nil
 		}
+		oldRule := CredentialRuleAny // a party with no policy row gates by `any`
+		if existed {
+			oldRule = before.CredentialRule
+		}
+		if oldRule != row.CredentialRule {
+			// A confirmation exempts a profile from the credential rule it
+			// was given under; a different rule voids it.
+			if err := s.dropPolicyConfirmations(ctx, tx, partyID, partyUUID); err != nil {
+				return err
+			}
+		}
 		op, beforeAudit := opCreate, any(nil)
 		if existed {
 			op, beforeAudit = opUpdate, policyAudit(partyUUID, before)
@@ -413,6 +430,21 @@ func (s *PartyPolicyService) PutAuthnPolicy(ctx context.Context, partyUUID uuid.
 		return PartyAuthnPolicyView{}, err
 	}
 	return view, nil
+}
+
+// dropPolicyConfirmations deletes every profile_policy_confirmations row of the
+// party, observed as one `delete` of `profile_policy_confirmation` on the
+// party when any row existed.
+func (s *PartyPolicyService) dropPolicyConfirmations(ctx context.Context, tx pgx.Tx, partyID int64, partyUUID uuid.UUID) error {
+	tag, err := tx.Exec(ctx, `DELETE FROM profile_policy_confirmations WHERE party_id = $1`, partyID)
+	if err != nil {
+		return fmt.Errorf("users: drop policy confirmations: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil
+	}
+	return observeInTx(ctx, s.obs, tx, opDelete, resourcePolicyConfirmation, partyID,
+		map[string]any{"party_uuid": partyUUID.String(), "confirmations": tag.RowsAffected()}, nil)
 }
 
 func samePolicy(a, b usersdb.PartyAuthnPolicy) bool {

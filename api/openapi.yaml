@@ -1119,7 +1119,11 @@ components:
             confirmation (the acting profile and the time) is recorded in the
             same transaction. A confirmation exempts the profile from the
             party's `credential_rule` only, never from `min_acr`. Ignored when
-            the holder meets the policy.
+            the holder meets the policy. Honoring it needs `update` on the
+            party (403 otherwise, and nothing is created). Under
+            `credential_rule` `authorized` an invitation needs no confirmation
+            while the holder has any usable interactive credential, so this
+            flag matters there only for a holder with none.
 
     CreateManagedUserRequest:
       type: object
@@ -1163,7 +1167,13 @@ components:
             be authorized for the party or confined to it. `provider`: a session
             factor must be an OIDC credential of `required_oidc_provider_id`.
             An outside collaborator's confirmed profile is exempt from the
-            credential rule, never from `min_acr`.
+            credential rule, never from `min_acr`. At invite time `authorized`
+            is treated as satisfied when the holder has any usable interactive
+            credential (no credential can be authorized before the profile
+            exists); the member then stays locked (`credential_not_authorized`)
+            after acceptance until an administrator or the holder authorizes a
+            credential. Changing `credential_rule` clears the party's policy
+            confirmations.
         required_oidc_provider_id:
           type: string
           nullable: true
@@ -2934,8 +2944,11 @@ paths:
         (a managed user of another party, or a principal that is not a user),
         and `users.policy_mismatch_confirmation_required` (the holder's current
         interactive credentials cannot meet the party's authentication policy:
-        under `authorized`, none is authorized for or confined to the party;
-        under `provider`, none is an OIDC credential of the required provider;
+        under `authorized`, the holder has no usable interactive credential at
+        all (an invitation is accepted when the holder has any; authorization
+        follows acceptance, so the member stays locked with
+        `credential_not_authorized` until an administrator or the holder
+        authorizes a credential); under `provider`, none is an OIDC credential of the required provider;
         or no combination of them reaches `min_acr`). The mismatch error has
         two details: the first carries that code on field
         `confirm_policy_mismatch`; the second names the failing rule (field
@@ -2943,7 +2956,8 @@ paths:
         `users.provider_required`, or field `min_acr` with code
         `users.acr_too_low`) and its message states what the party requires
         and what the holder has. Repeat the request with
-        `confirm_policy_mismatch: true` to proceed.
+        `confirm_policy_mismatch: true` to proceed; that needs `update` on the
+        party (403 otherwise, and no profile is created).
         No email notification is sent.
       tags: [Parties]
       operationId: inviteToParty
@@ -3046,7 +3060,13 @@ paths:
         profile of the party follows the new policy on its holders' next
         request. 400 for an unknown rule, a `min_acr` outside 1 to 3, a provider
         given without the `provider` rule or missing with it, and a provider that
-        does not exist (`users.oidc_provider_unknown`).
+        does not exist (`users.oidc_provider_unknown`). Changing
+        `credential_rule` also deletes the party's policy confirmations (a write
+        that leaves the rule unchanged keeps them). Under `authorized`, an
+        invitation is accepted when the holder has any usable interactive
+        credential; the member stays locked (`credential_not_authorized`) after
+        acceptance until an administrator or the holder authorizes a
+        credential.
       tags: [Parties]
       operationId: putPartyAuthnPolicy
       requestBody:

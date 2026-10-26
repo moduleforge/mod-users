@@ -27,7 +27,8 @@ for the rationale behind the Postgres + goose choices.
     `credential_profile_availability` and `session_acr` wrappers
   - `party_policies.sql` — `party_authn_policies` and `credential_party_authorizations`, and the
     `holder_policy_mismatch` wrapper (whether a holder's credentials can meet a party's policy; the
-    outside-collaborator check)
+    outside-collaborator check; the `authorized` rule is met by any usable interactive credential,
+    since no credential can be authorized before the profile exists)
   - `oidc_config.sql`, `oidc_providers.sql` — the OIDC onboarding singleton and provider overrides
     (providers carry `party_id`, `jit_mode`, `trust_acr`)
   - `signing_keys.sql` — the persisted Ed25519 signing key

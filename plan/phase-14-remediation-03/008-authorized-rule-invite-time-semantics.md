@@ -45,3 +45,11 @@ Files: `model/migrations/sql/0100_baseline.sql` (`mod_users.holder_policy_mismat
 - [Task 005](./005-fix-policy-sql-null-handling.md): also edits `holder_policy_mismatch`; this task must follow it.
 - [Task 007](./007-restrict-admin-confinement-to-party-controlled-credentials.md): this task must follow it.
 - [Decisions](../notes/decisions-and-resolutions.md#amendments-2026-10-26): amendment to resolution (a).
+
+## Status
+
+Outcome: succeeded (2026-10-25). Validation: all four new integration tests pass (`api/internal/integration/authorized_invite_integration_test.go`); `make build.api`, `make test.unit` and the full `go test -tags=integration ./...` suite pass against a throwaway Postgres (the suite drops and recreates its own database, so it ran on a fresh DB; the shared-container `make clean.data` was not run). Logs under `.flow/validation-logs/`.
+
+Changed: `model/migrations/sql/0100_baseline.sql` (`holder_policy_mismatch` `authorized` branch is `holder_acr IS NULL`; comment updated), `api/internal/service/profile_service.go` (`checkInvitePolicyMismatch` requires `update` on the party for a confirmed mismatch, else 403), `api/internal/service/party_policy.go` (`PutAuthnPolicy` deletes the party's confirmations on a `credential_rule` change, observed as `delete` `profile_policy_confirmation`), `api/openapi.yaml`, `README.md`, `AGENTS.md`, `model/README.md`, and the existing collaborator/party-flow integration tests, which exercised the `authorized` mismatch and now use the `provider` rule.
+
+Decisions: the 403 check runs only when a mismatch exists and the flag is set (a request that needs no confirmation is unaffected); a party with no policy row counts as `any` for the rule-change comparison; `holder_policy_mismatch` is shared with the outside-collaborator gate, so that gate also treats `authorized` as met by any usable interactive credential.

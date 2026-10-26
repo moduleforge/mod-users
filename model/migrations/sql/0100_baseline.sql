@@ -1256,8 +1256,14 @@ $$;
 -- answer). reason is NULL when they can, else the first failing lock reason in
 -- profile_availability_for's order:
 --
---   credential_not_authorized the 'authorized' rule: no usable credential is
---                             authorized for the party or confined to it;
+--   credential_not_authorized the 'authorized' rule: the holder has no usable
+--                             interactive credential at all. At invite time no
+--                             profile exists, so no credential can yet be
+--                             authorized for the party; the rule is treated as
+--                             satisfied by any usable interactive credential, and
+--                             the member stays locked (profile_availability_for
+--                             returns credential_not_authorized) after acceptance
+--                             until a credential is authorized or confined;
 --   provider_required         the 'provider' rule: no usable oidc credential of
 --                             the required provider;
 --   acr_too_low               no combination of usable credentials reaches
@@ -1307,21 +1313,10 @@ BEGIN
      AND k.class = 'interactive'
      AND (c.confined_to_party_id IS NULL OR c.confined_to_party_id = p_party_id);
 
-  IF credential_rule = 'authorized' AND NOT EXISTS (
-    SELECT 1
-      FROM mod_users.credentials c
-      JOIN mod_users.credential_kinds k ON k.kind = c.kind
-     WHERE c.principal_id = p_holder_id
-       AND c.revoked_at IS NULL
-       AND (c.expires_at IS NULL OR c.expires_at > now())
-       AND k.class = 'interactive'
-       AND (c.confined_to_party_id = p_party_id
-            OR (c.confined_to_party_id IS NULL
-                AND EXISTS (
-                  SELECT 1 FROM mod_users.credential_party_authorizations cpa
-                   WHERE cpa.credential_id = c.id AND cpa.party_id = p_party_id
-                )))
-  ) THEN
+  -- No profile exists yet, so no credential can be authorized for the party:
+  -- the 'authorized' rule is met by any usable interactive credential
+  -- (holder_acr is non-NULL exactly then). Authorization follows acceptance.
+  IF credential_rule = 'authorized' AND holder_acr IS NULL THEN
     reason := 'credential_not_authorized';
     RETURN;
   END IF;
