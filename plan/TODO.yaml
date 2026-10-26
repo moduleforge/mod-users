@@ -866,7 +866,8 @@ phases:
             - DO7p
           git:
             branch: plan/identity-model-impl-15-007
-            commit: []
+            commit:
+                - b6b6a51
             merge: null
         - number: 8
           slug: serialize-managed-user-provisioning-with-policy
