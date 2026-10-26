@@ -160,36 +160,25 @@ func (r *SSHKeyResolver) ResolveCredential(ctx context.Context, key gossh.Public
 // ACR = the credential kind's base_acr, AuthTime = now. It performs no
 // authorization and no writes.
 //
-// Until the party-aware profile rules land (phase
-// parties-profiles-and-bootstrap), ownerID is ignored and the context is the
-// principal's personal profile. A credential confined to a party yields
-// ErrSSHKeyNotAuthorized (carrying the party's uuid), as does a personal
-// profile that is not available to the credential (credential_profile_availability
-// other than 'available': a suspended profile, a disabled principal).
+// The profile is derived from the owner:
+//
+//  1. ownerID names a party in which the credential's principal holds an
+//     active profile: that profile, when credential_profile_availability is
+//     'available' for the credential; otherwise ErrSSHKeyNotAuthorized
+//     carrying the party's uuid. An SSH key is never an OIDC factor, so a
+//     party whose rule requires a provider always refuses it, as does a party
+//     min_acr above the credential kind's base_acr.
+//  2. Otherwise (no owner, an owner that is not a party, no active profile in
+//     it, or the principal's own user or person): the principal's personal
+//     profile, unless the credential is confined to a party, in which case
+//     ErrSSHKeyNotAuthorized for the confining party. A personal profile that
+//     is not available to the credential (a disabled principal) is refused
+//     the same way, without a party.
+//  3. A confined credential used against its own party follows rule 1.
 func (r *SSHKeyResolver) AuthContextForOwner(ctx context.Context, cred SSHCredential, ownerID *int64) (opctx.AuthContext, error) {
-	_ = ownerID // party-aware derivation arrives with the parties phase
-
-	if cred.ConfinedToPartyID != 0 {
-		return opctx.AuthContext{}, r.notAuthorizedFor(ctx, cred.ConfinedToPartyID)
-	}
-
-	profile, err := r.coreQ.GetPersonalProfileByHolder(ctx, cred.PrincipalID)
+	profileID, err := r.deriveProfile(ctx, cred, ownerID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return opctx.AuthContext{}, &SSHKeyNotAuthorizedError{}
-		}
-		return opctx.AuthContext{}, fmt.Errorf("ssh_key_resolver.AuthContextForOwner: load personal profile: %w", err)
-	}
-
-	availability, err := r.q.CredentialProfileAvailability(ctx, usersdb.CredentialProfileAvailabilityParams{
-		CredentialID: cred.CredentialID,
-		ProfileID:    profile.EntityID,
-	})
-	if err != nil {
-		return opctx.AuthContext{}, fmt.Errorf("ssh_key_resolver.AuthContextForOwner: profile availability: %w", err)
-	}
-	if availability != "available" {
-		return opctx.AuthContext{}, &SSHKeyNotAuthorizedError{}
+		return opctx.AuthContext{}, err
 	}
 
 	kind, err := r.q.GetCredentialKind(ctx, KindSSHKey)
@@ -198,11 +187,81 @@ func (r *SSHKeyResolver) AuthContextForOwner(ctx context.Context, cred SSHCreden
 	}
 	return opctx.AuthContext{
 		PrincipalID:  cred.PrincipalID,
-		ProfileID:    profile.EntityID,
+		ProfileID:    profileID,
 		CredentialID: cred.CredentialID,
 		ACR:          kind.BaseAcr,
 		AuthTime:     r.now(),
 	}, nil
+}
+
+// deriveProfile applies the owner rules of AuthContextForOwner and returns the
+// acting profile's entity id.
+func (r *SSHKeyResolver) deriveProfile(ctx context.Context, cred SSHCredential, ownerID *int64) (int64, error) {
+	if ownerID != nil && *ownerID != 0 {
+		partyProfile, found, err := r.activePartyProfile(ctx, cred.PrincipalID, *ownerID)
+		if err != nil {
+			return 0, err
+		}
+		if found {
+			ok, err := r.available(ctx, cred, partyProfile)
+			if err != nil {
+				return 0, err
+			}
+			if !ok {
+				return 0, r.notAuthorizedFor(ctx, *ownerID)
+			}
+			return partyProfile, nil
+		}
+	}
+
+	if cred.ConfinedToPartyID != 0 {
+		return 0, r.notAuthorizedFor(ctx, cred.ConfinedToPartyID)
+	}
+
+	profile, err := r.coreQ.GetPersonalProfileByHolder(ctx, cred.PrincipalID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, &SSHKeyNotAuthorizedError{}
+		}
+		return 0, fmt.Errorf("ssh_key_resolver.AuthContextForOwner: load personal profile: %w", err)
+	}
+	ok, err := r.available(ctx, cred, profile.EntityID)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, &SSHKeyNotAuthorizedError{}
+	}
+	return profile.EntityID, nil
+}
+
+// activePartyProfile returns the entity id of the principal's active profile in
+// partyID. found is false when the principal holds none, which includes an
+// owner that is not a party.
+func (r *SSHKeyResolver) activePartyProfile(ctx context.Context, principalID, partyID int64) (id int64, found bool, err error) {
+	profiles, err := r.coreQ.ListProfilesByHolder(ctx, principalID)
+	if err != nil {
+		return 0, false, fmt.Errorf("ssh_key_resolver.AuthContextForOwner: list profiles: %w", err)
+	}
+	for _, p := range profiles {
+		if p.PartyID.Valid && p.PartyID.Int64 == partyID && p.Status == "active" {
+			return p.EntityID, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+// available reports whether credential_profile_availability is 'available' for
+// the credential and profile.
+func (r *SSHKeyResolver) available(ctx context.Context, cred SSHCredential, profileID int64) (bool, error) {
+	availability, err := r.q.CredentialProfileAvailability(ctx, usersdb.CredentialProfileAvailabilityParams{
+		CredentialID: cred.CredentialID,
+		ProfileID:    profileID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("ssh_key_resolver.AuthContextForOwner: profile availability: %w", err)
+	}
+	return availability == "available", nil
 }
 
 // notAuthorizedFor builds the refusal for a party; a failure to resolve the

@@ -1,11 +1,19 @@
 // Package usersservice is the public facade for the users-module services.
 // It re-exports the service types and constructors from internal/service.
+//
+// SSH: SSHKeyResolver.AuthContextForOwner derives the acting profile of an SSH
+// push or pull from the repository owner (a party profile when the key
+// satisfies the party's gate, otherwise the personal profile). A refusal
+// satisfies errors.Is(err, ErrSSHKeyNotAuthorized); SSHKeyNotAuthorizedParty
+// reads the uuid of the party the key is not authorized for.
 package usersservice
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	gossh "golang.org/x/crypto/ssh"
 
@@ -306,6 +314,29 @@ type SSHCredential = inner.SSHCredential
 // errors.Is(err, usersservice.ErrUnknownSSHKey) matches across the facade
 // boundary for a caller that only imports this package.
 var ErrUnknownSSHKey = inner.ErrUnknownSSHKey
+
+// ErrSSHKeyNotAuthorized is re-exported as the same value as
+// inner.ErrSSHKeyNotAuthorized. SSHKeyResolver.AuthContextForOwner returns an
+// error satisfying errors.Is(err, ErrSSHKeyNotAuthorized) when the key may not
+// act as the profile the repository owner implies ("key not authorized for
+// X"): a party whose gate the key does not satisfy, a confined key used
+// outside its party, or a personal profile unavailable to the key. Use
+// SSHKeyNotAuthorizedParty to read the party's uuid.
+var ErrSSHKeyNotAuthorized = inner.ErrSSHKeyNotAuthorized
+
+// SSHKeyNotAuthorizedError is the concrete error behind ErrSSHKeyNotAuthorized.
+type SSHKeyNotAuthorizedError = inner.SSHKeyNotAuthorizedError
+
+// SSHKeyNotAuthorizedParty returns the uuid of the party an
+// ErrSSHKeyNotAuthorized refusal names, and true. It returns false when err is
+// not such a refusal or the refusal is not about a party.
+func SSHKeyNotAuthorizedParty(err error) (uuid.UUID, bool) {
+	var e *SSHKeyNotAuthorizedError
+	if errors.As(err, &e) && e.PartyUUID != uuid.Nil {
+		return e.PartyUUID, true
+	}
+	return uuid.Nil, false
+}
 
 // NewSSHKeyResolver constructs an SSHKeyResolver.
 func NewSSHKeyResolver(q usersdb.Querier, coreQ coredb.Querier) *SSHKeyResolver {
