@@ -673,6 +673,7 @@ phases:
           path: phase-14-remediation-03/003-scope-setup-token-on-oidc-routes.md
           done: false
           tier: sonnet-high
+          digest: Narrowed the setup token on the OIDC config routes to the unconfirmed-OIDC window using a fresh DB-backed check. Bootstrap behaviour is unchanged, and docs and tests are updated.
           findings:
             - cvMO
           git:
