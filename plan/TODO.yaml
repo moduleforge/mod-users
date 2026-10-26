@@ -944,12 +944,13 @@ phases:
           slug: run-bootstrap-token-lifecycle-integration
           title: Run Bootstrap Token Lifecycle Integration Test And Confirm RefreshState Wiring
           path: phase-16-remediation-05/004-run-bootstrap-token-lifecycle-integration.md
-          done: false
+          done: true
           tier: sonnet-med
           findings:
             - PlQx
             - hyek
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-16-004
+            commit:
+                - 11be668
             merge: null
