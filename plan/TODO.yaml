@@ -879,6 +879,6 @@ phases:
           findings:
             - vHBJ
           git:
-            branch: null
+            branch: plan/identity-model-impl-15-008
             commit: []
             merge: null
