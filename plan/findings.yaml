@@ -98,10 +98,10 @@ items:
       id: PlQx
       date: "2026-10-26"
       tags:
-        - type:ambiguity
+        - type:bug
         - plan/phase:remediation-04
-        - priority:unspecified
-        - effort:unspecified
+        - priority:high
+        - effort:small
       text: Integration subtest in TestBootstrap_TokenLifecycle (bootstrap_integration_test.go) was NOT executed. It compiles (go vet -tags integration clean). Run it against a throwaway Postgres with a users superuser before the phase gate, or set AUTHZ_DEV_PG_CONFIRM_SHARED=1 deliberately.
     - title: 'Behavioral consequence: a handler whose cache'
       id: hyek
