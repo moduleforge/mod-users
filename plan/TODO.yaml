@@ -972,7 +972,7 @@ phases:
           findings:
             - sDO1
           git:
-            branch: null
+            branch: plan/identity-model-impl-17-001
             commit: []
             merge: null
         - number: 2
