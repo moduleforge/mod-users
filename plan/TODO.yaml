@@ -269,7 +269,8 @@ phases:
           digest: 'Added four /v1/principals/{uuid}/credentials routes under the credentials operation (owner rotation, party-admin owned-scope, operator wildcard). Replaced the invite_only stub with a real Authorize(login, app) check in session availability and in the per-request authentication middleware. NewAuthenticatorWithAppGate and SetAppGate added; NewAuthenticator signature unchanged. SSH-key administration no longer authorizes assume. Tests: unit and integration, including ordertest route-order cases.'
           git:
             branch: plan/identity-model-impl-08-004
-            commit: []
+            commit:
+                - 974157a
             merge: null
         - number: 5
           slug: personal-party
