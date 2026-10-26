@@ -27,7 +27,7 @@ var ErrLastOperatorAdmin = apiresp.Conflict(apiresp.FieldError{
 // creates it), whose holder principal is not disabled. A grant inherited
 // through an actor group is not counted.
 const operatorAdminProfileSQL = `
-SELECT p.entity_id
+SELECT p.entity_id, p.holder_id
   FROM public.profiles p
   JOIN public.platform_settings s ON s.id = 1 AND p.party_id = s.operator_party_id
   JOIN public.principals pr ON pr.entity_id = p.holder_id AND pr.disabled_at IS NULL
@@ -88,6 +88,47 @@ func requireNotLastOperatorAdmin(ctx context.Context, tx pgx.Tx, p coredb.Profil
 		`SELECT count(*) FILTER (WHERE a.entity_id = $2), count(*) FILTER (WHERE a.entity_id <> $2) FROM (`+
 			operatorAdminProfileSQL+`) a`,
 		manageOperationSlug, p.EntityID).Scan(&self, &others); err != nil {
+		return fmt.Errorf("users: count operator administrators: %w", err)
+	}
+	if self > 0 && others == 0 {
+		return ErrLastOperatorAdmin
+	}
+	return nil
+}
+
+// lockPlatformSettingsForDisableSQL takes the same platform_settings row lock
+// as lockPlatformSettingsForEndSQL, but only when the principal $1 holds an
+// active profile in the operator party, so disabling any other principal takes
+// no lock. No row means nothing to guard.
+const lockPlatformSettingsForDisableSQL = `
+SELECT 1 FROM public.platform_settings s
+ WHERE s.id = 1
+   AND EXISTS (SELECT 1 FROM public.profiles p
+                WHERE p.holder_id = $1 AND p.party_id = s.operator_party_id AND p.status = 'active')
+   FOR UPDATE OF s`
+
+// requireNotLastOperatorAdminForDisable refuses (ErrLastOperatorAdmin) to
+// disable principalID when it holds an active operator administrator profile
+// and no other principal does. It takes the platform_settings row lock (the
+// same one requireNotLastOperatorAdmin takes, before any principal or profile
+// row is written, per the documented lock order) and counts under it, so a
+// concurrent disable and an ending or suspension of another administrator
+// serialize: the second sees the first's committed result. A principal that
+// holds no active operator-party profile passes untouched. The same boundary
+// and approximation notes as requireNotLastOperatorAdmin apply.
+func requireNotLastOperatorAdminForDisable(ctx context.Context, tx pgx.Tx, principalID int64) error {
+	var locked int
+	if err := tx.QueryRow(ctx, lockPlatformSettingsForDisableSQL, principalID).Scan(&locked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("users: lock platform settings: %w", err)
+	}
+	var self, others int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FILTER (WHERE a.holder_id = $2), count(*) FILTER (WHERE a.holder_id <> $2) FROM (`+
+			operatorAdminProfileSQL+`) a`,
+		manageOperationSlug, principalID).Scan(&self, &others); err != nil {
 		return fmt.Errorf("users: count operator administrators: %w", err)
 	}
 	if self > 0 && others == 0 {

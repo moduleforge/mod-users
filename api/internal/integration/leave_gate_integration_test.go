@@ -370,3 +370,47 @@ func TestLeaveGate_ConcurrentEndAndSuspendLeaveOneAdministrator(t *testing.T) {
 		t.Errorf("suspend status = %d: %s, want 409", suspended.status, suspended.raw)
 	}
 }
+
+// Disabling one operator administrator's principal while the other
+// administrator is suspended in a concurrent transaction cannot leave the
+// operator party with no effective administrator: the two serialize on the
+// platform_settings row lock and the second is refused (409) or loses its
+// session to the first.
+func TestLeaveGate_ConcurrentDisableAndSuspendLeaveAnEffectiveAdministrator(t *testing.T) {
+	f := bootstrapOperator(t)
+	s := f.s
+	secondTok, secondUUID := f.secondAdmin(t)
+	secondProf := s.scanInt64(t, "second admin profile",
+		`SELECT p.entity_id FROM profiles p JOIN entities e ON e.id = p.entity_id WHERE e.uuid = $1::uuid`, secondUUID)
+	secondHolder := s.scanInt64(t, "second admin holder", `SELECT holder_id FROM profiles WHERE entity_id = $1`, secondProf)
+
+	// The first administrator disables the second's principal while the second
+	// suspends the first's profile.
+	results := make([]*resp, 2)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		results[0] = s.do(t, http.MethodPost, "/v1/principals/"+s.entityUUID(t, secondHolder)+"/disable",
+			f.adminTok.access(), map[string]string{"reason": "race"})
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		results[1] = s.do(t, http.MethodPatch, "/v1/profiles/"+f.adminUUID, secondTok.access(), map[string]string{"status": "suspended"})
+	}()
+	close(start)
+	wg.Wait()
+
+	if ok0, ok1 := results[0].status/100 == 2, results[1].status/100 == 2; ok0 && ok1 {
+		t.Fatalf("both the disable (%d) and the suspension (%d) succeeded; bodies: %s / %s",
+			results[0].status, results[1].status, results[0].raw, results[1].raw)
+	}
+	if n := s.scanInt64(t, "effective administrators",
+		`SELECT count(*) FROM profiles p JOIN principals pr ON pr.entity_id = p.holder_id AND pr.disabled_at IS NULL
+		  WHERE p.party_id = $1 AND p.status = 'active'`, f.partyID); n < 1 {
+		t.Fatalf("effective operator administrators = %d, want at least 1", n)
+	}
+}
