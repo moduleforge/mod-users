@@ -269,6 +269,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Run TestLeaveGate_ConcurrentDisableAndSuspend in an environment where the Docker/Postgres integration harness starts: go test -tags=integration -run TestLeaveGate_ConcurrentDisableAndSuspend ./internal/integration/ from api/. Not yet observed to execute.'
+    - title: 'Optional: install pyyaml or spectral so make'
+      id: cKK9
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-05
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Optional: install pyyaml or spectral so make openapi.validate can run in this environment for task 003''s openapi edits.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
