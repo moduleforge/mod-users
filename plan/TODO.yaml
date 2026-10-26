@@ -281,7 +281,8 @@ phases:
           digest: Added EnsurePersonalParty (user-row lock for idempotency, owned-scope manage grant, three audit ops) with facade, manifest entry and unit and integration tests, including the B6 sequence and the U28 limitation. Re-ran phase 7 party flows, the ADR worked example and remediation tests with non-operator owned-scope administrators, plus a refusal case per flow. All suites pass against a real Postgres.
           git:
             branch: plan/identity-model-impl-08-005
-            commit: []
+            commit:
+                - ca1ae46
             merge: null
     - number: 9
       slug: users-gui-and-frontend-contract
