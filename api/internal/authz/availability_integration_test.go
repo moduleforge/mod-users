@@ -269,3 +269,38 @@ func TestInteg_Availability_ImpersonationSkipsCredentialRule(t *testing.T) {
 	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "available", "impersonation session skips the credential rule")
 	wantAvail(t, sessionAvail(t, imp, target.Personal), "not_held", "impersonation reaches only the impersonated profile")
 }
+
+// TestInteg_Availability_ExcludingNullEqualsPlain proves a NULL excluded
+// credential excludes nothing: profile_availability_excluding(s, p, NULL)
+// equals profile_availability(s, p) for every lock outcome.
+func TestInteg_Availability_ExcludingNullEqualsPlain(t *testing.T) {
+	party := seedOrg(t, "Excluding null party")
+	fxMustTx(t, func(tx pgx.Tx) { fxPolicy(t, tx, party, "authorized", nil, 1) })
+	m := seedMember(t, party)
+	admin := seedMember(t, party)
+
+	cred := fxPassword(t, integPool, m.User, nil)
+	s := sessionWith(t, m.User, 1, cred)
+
+	excludingNull := func(sessionID, profileID int64) string {
+		t.Helper()
+		var got string
+		if err := integPool.QueryRow(context.Background(),
+			`SELECT mod_users.profile_availability_excluding($1, $2, NULL)`, sessionID, profileID).Scan(&got); err != nil {
+			t.Fatalf("profile_availability_excluding: %v", err)
+		}
+		return got
+	}
+	check := func(what string, want string) {
+		t.Helper()
+		plain := sessionAvail(t, s, m.PartyProfile)
+		wantAvail(t, plain, want, what+" (profile_availability)")
+		wantAvail(t, excludingNull(s, m.PartyProfile), plain, what+" (excluding NULL)")
+	}
+
+	check("unauthorized factor", "credential_not_authorized")
+	fxExec(t, integPool, "authorize credential",
+		`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
+		cred, party, admin.PartyProfile)
+	check("authorized factor", "available")
+}

@@ -74,7 +74,11 @@ func (m *PolicyMismatch) Conflict() error {
 		msg = fmt.Sprintf("the party requires an OIDC credential from provider %q; the account has none", m.RequiredProviderID)
 	case MismatchACRTooLow:
 		rule = "min_acr"
-		msg = fmt.Sprintf("the party requires assurance level %d; the account's credentials reach at most %d", m.MinACR, m.HolderACR)
+		if m.HolderACR == 0 {
+			msg = fmt.Sprintf("the party requires assurance level %d; the account has no usable credential", m.MinACR)
+		} else {
+			msg = fmt.Sprintf("the party requires assurance level %d; the account's credentials reach at most %d", m.MinACR, m.HolderACR)
+		}
 	default:
 		msg = "the account's credentials do not meet the party's authentication policy"
 	}

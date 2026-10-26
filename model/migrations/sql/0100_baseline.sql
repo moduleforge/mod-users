@@ -1294,7 +1294,10 @@ BEGIN
     min_acr := 1;
   END IF;
 
-  SELECT LEAST(3, GREATEST(max(k.base_acr), CASE WHEN count(DISTINCT k.factor) >= 2 THEN 2 ELSE 1 END))::SMALLINT
+  SELECT CASE
+           WHEN count(*) = 0 THEN NULL
+           ELSE LEAST(3, GREATEST(max(k.base_acr), CASE WHEN count(DISTINCT k.factor) >= 2 THEN 2 ELSE 1 END))
+         END::SMALLINT
     INTO holder_acr
     FROM mod_users.credentials c
     JOIN mod_users.credential_kinds k ON k.kind = c.kind
@@ -1380,6 +1383,8 @@ $$;
 -- party admin or a gated session holder writing a credential_party_authorizations
 -- row). The rules themselves stay in profile_availability_for. An
 -- impersonation session keeps its stored acr (it holds no factors of its own).
+-- A NULL p_exclude_credential_id excludes nothing, so the result equals
+-- profile_availability.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.profile_availability_excluding(
   p_session_id BIGINT, p_profile_id BIGINT, p_exclude_credential_id BIGINT
@@ -1398,7 +1403,7 @@ AS $$
                      JOIN mod_users.credentials c ON c.id = f.credential_id
                     WHERE f.session_id = s.id
                       AND c.revoked_at IS NULL
-                      AND c.id <> p_exclude_credential_id),
+                      AND (p_exclude_credential_id IS NULL OR c.id <> p_exclude_credential_id)),
              CASE WHEN s.impersonated_profile_id IS NULL
                   THEN mod_users.session_acr_excluding(s.id, p_exclude_credential_id)
                   ELSE s.acr END,

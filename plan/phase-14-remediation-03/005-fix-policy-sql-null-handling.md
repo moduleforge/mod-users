@@ -22,3 +22,11 @@ This task fixes findings `4w6W` (bug, low) and `iaJb` (bug, low). Both are NULL-
 
 - Finding `4w6W` in this plan's `plan/findings.yaml` (bug, low): `model/migrations/sql/0100_baseline.sql` computes `holder_acr` as `LEAST(3, GREATEST(max(base_acr), 1|2))`, which is 1 for a holder with no usable credential. The `holder_acr IS NULL` guard in `holder_policy_mismatch` is therefore dead, and the 409 message is misleading.
 - Finding `iaJb` in this plan's `plan/findings.yaml` (bug, low): `profile_availability_excluding` in `model/migrations/sql/0100_baseline.sql` filters with `c.id <> p_exclude_credential_id`, so a NULL argument drops every factor. `session_acr_excluding` already handles NULL. Same inconsistency class as `4w6W`.
+
+## Status
+
+Outcome: succeeded (2026-10-25). Validation: both new integration tests pass against a throwaway Postgres (authz and integration suites green); `make clean.data` and `make build.api` pass. No signature changes, so sqlc was not regenerated.
+
+Changed: `model/migrations/sql/0100_baseline.sql` (holder_acr NULL with no usable credential; NULL-safe exclusion in `profile_availability_excluding`, comment updated), `api/internal/service/policy_mismatch.go` (409 message for HolderACR 0), `api/internal/authz/availability_integration_test.go`, `api/internal/integration/collaborator_integration_test.go`.
+
+Note: the make-driven integration target skips the DB suites unless the users-module-postgres container runs; they were run via the throwaway-Postgres recipe in the harness header.
