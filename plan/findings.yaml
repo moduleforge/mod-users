@@ -1,42 +1,5 @@
 version: 2
 items:
-    - title: holderProfile authorizes POST /v1/me/profile…
-      id: aNYW
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_holder.go
-        lines: 28-41,105-115
-        severity: major
-        confidence: medium
-        concerns: security
-        description:
-          holderProfile authorizes POST /v1/me/profiles/{uuid}/leave (and decline)
-          only on "session principal = profile holder", with no freshness gate and
-          no check that the profile is available to the session. A session reached
-          with a personal credential that the party gate locks out of the profile
-          (for example a stolen personal password, where the party requires an
-          authorized credential) can still end the holder's party profile.
-          Ending runs departureCleanupInTx: the party's credential authorizations
-          are deleted, credentials confined to the party are revoked, and a
-          managed user is disabled. Ending the bootstrap operator administrator's
-          profile this way removes the deployment's only operator administrator.
-          Re-bootstrapping is impossible (ErrAlreadyBootstrapped), so recovery
-          needs direct database access. This defeats the identity ADR's stated goal
-          that a stolen personal credential must not reach the gated profile, here
-          for a destructive and irreversible action.
-        recommendation:
-          For LeaveProfile, require that the session can reach the profile
-          (mod_users.profile_availability(session, profile) = 'available'), or
-          apply UserService.requireFresh as the administrator's PATCH does.
-          Accept and decline can stay ungated. Optionally refuse ending the last
-          active operator-party profile that holds the wildcard `manage` grant,
-          through both LeaveProfile and UpdateProfileStatus.
     - title: tokenActiveLocked keeps the setup token acti…
       id: cvMO
       date: "2026-10-26"
@@ -1344,4 +1307,9 @@ closed:
       title: Under credential_rule 'authorized', holder_p…
       disposition: fixed
       ref: phase-14-remediation-03/008-authorized-rule-invite-time-semantics.md
+      date: "2026-10-26"
+    - id: aNYW
+      title: holderProfile authorizes POST /v1/me/profile…
+      disposition: fixed
+      ref: phase-14-remediation-03/002-gate-holder-leave-on-profile-availability.md
       date: "2026-10-26"
