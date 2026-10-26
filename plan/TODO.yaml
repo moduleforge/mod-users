@@ -187,11 +187,13 @@ phases:
           slug: party-aware-ssh-profile-derivation
           title: Party-Aware SSH Profile Derivation
           path: phase-07-parties-profiles-and-bootstrap/005-party-aware-ssh-profile-derivation.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'SSHKeyResolver.AuthContextForOwner implements the ADR derivation: owner party with active principal profile and credential_profile_availability available gives that profile; otherwise ErrSSHKeyNotAuthorized carrying the party uuid; confined keys refused for their confining party. Exported ErrSSHKeyNotAuthorized, SSHKeyNotAuthorizedError and SSHKeyNotAuthorizedParty(err). Two round trips via coredb.ListProfilesByHolder then CredentialProfileAvailability.'
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-07-005
+            commit:
+                - 4aa0ac5
             merge: null
         - number: 6
           slug: party-flows-integration-tests
