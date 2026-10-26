@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 17
+    tasks_added: 18
 phases:
     - number: 6
       slug: users-identity-core
@@ -633,7 +633,7 @@ phases:
       title: Remediation Round 3
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 7
       tasks:
         - number: 1
@@ -658,6 +658,18 @@ phases:
           tier: sonnet-high
           findings:
             - aNYW
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: scope-setup-token-on-oidc-routes
+          title: Scope The Setup Token On OIDC Configuration Routes
+          path: phase-14-remediation-03/003-scope-setup-token-on-oidc-routes.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - cvMO
           git:
             branch: null
             commit: []
