@@ -15,6 +15,7 @@ import (
 )
 
 func TestAuthorizedInvite_SatisfiedAtInviteThenGatedUntilAuthorized(t *testing.T) {
+	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 	a := env.registerVerified(t)
@@ -42,6 +43,7 @@ func TestAuthorizedInvite_SatisfiedAtInviteThenGatedUntilAuthorized(t *testing.T
 }
 
 func TestAuthorizedInvite_NoUsableInteractiveCredentialStillNeedsConfirmation(t *testing.T) {
+	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 	a := env.registerVerified(t)
@@ -58,6 +60,7 @@ func TestAuthorizedInvite_NoUsableInteractiveCredentialStillNeedsConfirmation(t 
 }
 
 func TestAuthorizedInvite_ConfirmationNeedsUpdateOnTheParty(t *testing.T) {
+	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	provider := env.addProviderRow(t, "inv-"+uniq("idp"))
 	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
@@ -140,6 +143,7 @@ func TestAuthorizedInvite_RuleChangeDropsPolicyConfirmations(t *testing.T) {
 }
 
 func TestAuthorizedManagedUser_AutoAuthorizationNeedsUpdateOnTheParty(t *testing.T) {
+	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 

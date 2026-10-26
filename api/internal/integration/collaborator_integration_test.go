@@ -113,6 +113,7 @@ func (g gateParty) invite(t *testing.T, body map[string]any) *resp {
 }
 
 func TestCollaborator_InviteMismatchNeedsConfirmationAndWritesNothing(t *testing.T) {
+	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
 	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
@@ -166,6 +167,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
 
 	t.Run("provider rule needs an OIDC credential of the provider", func(t *testing.T) {
+		skipOperatorUnderOwningPartyGate(t)
 		env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
 		a := env.registerVerified(t)
 		g.invite(t, map[string]any{"holder_email": a.Email}).wantMismatch(t, "provider_required")
@@ -178,6 +180,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 	})
 
 	t.Run("authorized rule is met by any usable interactive credential", func(t *testing.T) {
+		skipOperatorUnderOwningPartyGate(t)
 		env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 		a := env.registerVerified(t)
 		uid := env.principalID(t, a.Email)
@@ -202,6 +205,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 	})
 
 	t.Run("min_acr follows the session_acr composition rule", func(t *testing.T) {
+		skipOperatorUnderOwningPartyGate(t)
 		env.setPolicy(t, g, map[string]any{"credential_rule": "any", "min_acr": 2}).wantStatus(t, http.StatusOK)
 		a := env.registerVerified(t)
 		uid := env.principalID(t, a.Email)
@@ -240,6 +244,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 	})
 
 	t.Run("a holder with no usable credential has a NULL holder_acr", func(t *testing.T) {
+		skipOperatorUnderOwningPartyGate(t)
 		env.setPolicy(t, g, map[string]any{"credential_rule": "any", "min_acr": 2}).wantStatus(t, http.StatusOK)
 		a := env.registerVerified(t)
 		uid := env.principalID(t, a.Email)
@@ -388,6 +393,7 @@ func TestCollaborator_GateDirect(t *testing.T) {
 }
 
 func TestCollaborator_AddToPartyActorGroupThroughAuthzRoute(t *testing.T) {
+	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
 	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
@@ -434,6 +440,7 @@ func TestCollaborator_AddToPartyActorGroupThroughAuthzRoute(t *testing.T) {
 // does not reach the collaborator gate, and a personal-password-only outsider
 // needs an explicit confirmation (while the same holder's invitation passes).
 func TestCollaborator_AuthorizedPartyStrictForOutsideCollaborator(t *testing.T) {
+	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 	outsider := env.registerVerified(t)
