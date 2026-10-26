@@ -767,7 +767,7 @@ phases:
           slug: order-credential-gate-locks-profile-first
           title: Take The Holder Profile Lock Before The Credential Lock In The Credential Write Gate
           path: phase-15-remediation-04/001-order-credential-gate-locks-profile-first.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Swapped the lock order in the credential write gate to profile (FOR SHARE) then credential (FOR UPDATE), commented the order, and added deterministic and looped race integration tests. The deterministic test reproduces 40P01 on the old order and passes on the new one.
           findings:
