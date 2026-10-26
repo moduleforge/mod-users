@@ -105,6 +105,7 @@ type fakeCoreQ struct {
 	getEntity         func(int64) (coredb.GetEntityByIDRow, error)
 	getPrincipal      func(int64) (coredb.Principal, error)
 	getPersonal       func(int64) (coredb.Profile, error)
+	listByHolder      func(int64) ([]coredb.Profile, error)
 }
 
 func (f *fakeCoreQ) GetServiceAccountByEntityID(_ context.Context, id int64) (coredb.ServiceAccount, error) {
@@ -121,6 +122,13 @@ func (f *fakeCoreQ) GetPrincipalByEntityID(_ context.Context, id int64) (coredb.
 
 func (f *fakeCoreQ) GetPersonalProfileByHolder(_ context.Context, id int64) (coredb.Profile, error) {
 	return f.getPersonal(id)
+}
+
+func (f *fakeCoreQ) ListProfilesByHolder(_ context.Context, id int64) ([]coredb.Profile, error) {
+	if f.listByHolder == nil {
+		return nil, nil
+	}
+	return f.listByHolder(id)
 }
 
 // observation is one recorded Observe call.

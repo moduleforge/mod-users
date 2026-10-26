@@ -59,3 +59,13 @@ other task. Touches only the SSH resolver files, its tests and docs rows.
 - [Work packages](../notes/work-packages.md), phase `parties-profiles-and-bootstrap`, package 5.
 - mod-core ADR `docs/architecture/identity-model.md`, "Credential gating" counter-case table (SSH
   row).
+
+## Status
+
+Outcome: succeeded (2026-10-25). `make build`, `make test`, `make lint` pass; the new integration tests pass against a throwaway Postgres 16; the `grep` checks hold (export present; no log call in the resolver).
+
+- Resolver: `api/internal/service/ssh_key_resolver.go` (party-aware `AuthContextForOwner`).
+- Facade export, accessor and package comment: `api/usersservice/service.go`.
+- Tests: `api/internal/integration/ssh_profile_integration_test.go`, `api/internal/service/ssh_key_resolver_credential_test.go`, `api/usersservice/ssh_error_test.go`.
+- Docs: `AGENTS.md` conventions row.
+- Decision: the active party profile is found via mod-core `ListProfilesByHolder` followed by `CredentialProfileAvailability` (two round trips) because the sqlc schema for this module cannot see mod-core's `public.profiles`, so a single combined query is not expressible without a new migration.

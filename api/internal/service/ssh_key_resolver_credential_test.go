@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/ssh"
 
 	coredb "github.com/moduleforge/core-model/db"
@@ -159,6 +160,39 @@ func TestSSHKeyResolver_AuthContextForOwner(t *testing.T) {
 		}
 		if ac.PrincipalID != 5 || ac.ProfileID != 55 || ac.CredentialID != 9 || ac.SessionID != 0 || ac.ACR != 1 || !ac.AuthTime.Equal(fixed) {
 			t.Errorf("AuthContext = %+v", ac)
+		}
+	})
+
+	t.Run("an active party profile is used when available, refused with the party uuid otherwise", func(t *testing.T) {
+		t.Parallel()
+		party := uuid.New()
+		cq := &fakeCoreQ{
+			getPersonal: profile,
+			getEntity:   func(int64) (coredb.GetEntityByIDRow, error) { return coredb.GetEntityByIDRow{Uuid: party}, nil },
+			listByHolder: func(int64) ([]coredb.Profile, error) {
+				return []coredb.Profile{
+					{EntityID: 55, HolderID: 5, Status: "active"},
+					{EntityID: 66, HolderID: 5, PartyID: pgtype.Int8{Int64: 99, Valid: true}, Status: "suspended"},
+					{EntityID: 77, HolderID: 5, PartyID: pgtype.Int8{Int64: 98, Valid: true}, Status: "active"},
+				}, nil
+			},
+		}
+		cred := SSHCredential{CredentialID: 9, PrincipalID: 5}
+		owner := int64(98)
+		ac, err := NewSSHKeyResolver(&fakeSSHQ{availability: "available"}, cq).AuthContextForOwner(context.Background(), cred, &owner)
+		if err != nil || ac.ProfileID != 77 {
+			t.Fatalf("profile = %d, %v; want 77", ac.ProfileID, err)
+		}
+		_, err = NewSSHKeyResolver(&fakeSSHQ{availability: "credential_not_authorized"}, cq).AuthContextForOwner(context.Background(), cred, &owner)
+		var na *SSHKeyNotAuthorizedError
+		if !errors.As(err, &na) || na.PartyUUID != party {
+			t.Fatalf("err = %v, want not authorized naming %s", err, party)
+		}
+		// A suspended party profile falls to the personal profile.
+		suspended := int64(99)
+		ac, err = NewSSHKeyResolver(&fakeSSHQ{availability: "available"}, cq).AuthContextForOwner(context.Background(), cred, &suspended)
+		if err != nil || ac.ProfileID != 55 {
+			t.Fatalf("suspended: profile = %d, %v; want personal 55", ac.ProfileID, err)
 		}
 	})
 
