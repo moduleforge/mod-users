@@ -301,7 +301,11 @@ SELECT count(*) FROM profiles p JOIN entities e ON e.id = p.entity_id
 			t.Fatalf("the PR2 token before leaving = %d", status)
 		}
 		c1 := env.signInAgain(t, j)
-		env.do(t, http.MethodPost, "/v1/me/profiles/"+j.pr2+"/leave", c1.access(), nil).wantStatus(t, http.StatusNoContent)
+		// The C1 session is locked out of PR2 by Acme's gate, so it cannot leave it;
+		// the C2 session, which the gate admits, can.
+		env.do(t, http.MethodPost, "/v1/me/profiles/"+j.pr2+"/leave", c1.access(), nil).
+			wantError(t, http.StatusUnauthorized, "users.profile_unavailable", "credential_not_authorized")
+		env.do(t, http.MethodPost, "/v1/me/profiles/"+j.pr2+"/leave", c2.access(), nil).wantStatus(t, http.StatusNoContent)
 
 		env.do(t, http.MethodGet, "/v1/probe", c2.access(), nil).wantError(t, http.StatusUnauthorized, "users.profile_unavailable", "")
 		if n := env.authorizationCount(t, j.c2UUID, acme.id); n != 0 {
@@ -353,8 +357,9 @@ func TestPartyFlows_ADRWorkedExample_ConfinedVariant(t *testing.T) {
 	wantAvailable(t, env.myProfiles(t, c1.access()), pr3)
 	wantLocked(t, env.myProfiles(t, c1.access()), j.pr2, "credential_not_authorized", svc.RemedySignInWithAuthorizedCredential)
 
-	// Leaving revokes C2 (reason departure) and, with it, the C2 session.
-	env.do(t, http.MethodPost, "/v1/me/profiles/"+j.pr2+"/leave", c1.access(), nil).wantStatus(t, http.StatusNoContent)
+	// Leaving, from the C2 session the gate admits, revokes C2 (reason
+	// departure) and, with it, the C2 session.
+	env.do(t, http.MethodPost, "/v1/me/profiles/"+j.pr2+"/leave", c2.access(), nil).wantStatus(t, http.StatusNoContent)
 	var revoked, reason *string
 	if err := env.pool.QueryRow(context.Background(),
 		`SELECT revoked_at::text, revoke_reason FROM mod_users.credentials WHERE uuid = $1::uuid`, j.c2UUID).Scan(&revoked, &reason); err != nil {

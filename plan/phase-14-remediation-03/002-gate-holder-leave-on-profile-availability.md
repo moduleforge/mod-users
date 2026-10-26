@@ -23,3 +23,13 @@ The task also restores a requirement dropped from the evaluation: the last-opera
 ## References
 
 - Finding `aNYW` in this plan's `plan/findings.yaml` (security, high): `holderProfile` in `api/internal/service/profile_holder.go` checks only holder identity, and `LeaveProfile` runs the destructive departure cleanup with no availability or freshness gate. A session the party gate locks out can still end the party profile, including the only operator admin's. The finding's optional recommendation, refusing to end the last wildcard-`manage` operator admin, is requirement 3 and is not tracked as a separate finding.
+
+## Status
+
+Outcome: succeeded (2026-10-25).
+
+- `LeaveProfile` now refuses with 401 `users.profile_unavailable` (lock reason in details, as on the session routes) unless `profile_availability(session, profile)` is `available`, evaluated in the leave transaction on the locked profile. A suspended profile reports `inactive` before the gate is evaluated, so that reason is accepted for a suspended profile (finding `twos` filed for the resulting gap). Accept and decline stay ungated.
+- Last operator admin guard: `requireNotLastOperatorAdmin` in `api/internal/service/profile_last_admin.go`, called by `LeaveProfile` and by `UpdateProfileStatus` to `ended`; 409 `users.last_operator_admin`. It counts only active operator-party profiles with a direct wildcard `manage` grant and serializes endings by locking the `platform_settings` row in the ending's transaction.
+- Docs: `api/openapi.yaml` (leave and `updateProfileStatus`), doc comments in `api/internal/service/profile_holder.go` and `profile_admin.go`.
+- Tests: `api/internal/integration/leave_gate_integration_test.go` (new); `api/internal/integration/party_flows_integration_test.go` updated so the worked example leaves PR2 from the C2 session the gate admits (the old C1 session is locked out and is now refused, which the test asserts).
+- Validation: `make build.api`, `make test.unit`, `make lint` and the integration suite (`./internal/authz`, `./internal/config`, `./internal/integration`) pass.

@@ -482,7 +482,8 @@ func (s *ProfileService) partyProfileByUUID(ctx context.Context, id uuid.UUID) (
 // Authority: `read` on the profile (a refusal is apiresp.ErrNotFound), then
 // `update` (403), then the freshness gate (409 users.step_up_required). A
 // status the profile cannot move to from its current one, including accepting
-// an invitation on the holder's behalf, is ErrProfileTransition (409).
+// an invitation on the holder's behalf, is ErrProfileTransition (409). Ending
+// the last active operator administrator is ErrLastOperatorAdmin (409).
 func (s *ProfileService) UpdateProfileStatus(ctx context.Context, profileUUID uuid.UUID, in UpdateProfileStatusInput) (PartyProfileView, error) {
 	ac, err := adminCaller(ctx)
 	if err != nil {
@@ -519,6 +520,9 @@ func (s *ProfileService) UpdateProfileStatus(ctx context.Context, profileUUID uu
 			return ErrProfileTransition
 		}
 		if to == ProfileStatusEnded {
+			if err := requireNotLastOperatorAdmin(ctx, tx, locked); err != nil {
+				return err
+			}
 			err = s.endLocked(ctx, tx, locked, reason)
 		} else {
 			_, err = s.transitionLocked(ctx, tx, locked, to, "")

@@ -2378,9 +2378,16 @@ paths:
         cleanup: the caller's credential authorizations for the party are
         deleted, their credentials confined to the party are revoked (which ends
         the sessions holding them), and a managed user left with no open profile
-        is disabled. Authorized like accept. 409
-        `users.profile_transition_invalid` for an invitation (decline it) or an
-        ended profile.
+        is disabled. Authorized like accept, and additionally gated: the
+        profile must be available to the caller's session
+        (`mod_users.profile_availability` is `available`), so a session the
+        party's authentication policy locks out cannot leave. A refusal is 401
+        `users.profile_unavailable` with the lock reason in `details`, as on
+        the session routes. A suspended profile has no gate to evaluate and can
+        be left. 409 `users.profile_transition_invalid` for an invitation
+        (decline it) or an ended profile; 409 `users.last_operator_admin` when
+        the profile is the last active operator-party profile holding the
+        wildcard `manage` grant (checked in the ending's transaction).
       tags: [Me]
       operationId: leaveProfile
       responses:
@@ -3238,7 +3245,9 @@ paths:
         caller may not read, an unknown profile and a personal profile are 404.
         Ending runs the departure cleanup of `POST /v1/me/profiles/{uuid}/leave`.
         409 `users.profile_transition_invalid` for a status the profile cannot
-        move to from its current one.
+        move to from its current one; 409 `users.last_operator_admin` when
+        ending the last active operator-party profile that holds the wildcard
+        `manage` grant (checked in the ending's transaction).
       tags: [Profiles]
       operationId: updateProfileStatus
       requestBody:
