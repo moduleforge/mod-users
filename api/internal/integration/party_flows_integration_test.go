@@ -568,16 +568,17 @@ func TestPartyFlows_ConfinedFactorNeverListsThePersonalProfileAsAvailable(t *tes
 // party's min_acr locks it on the next request.
 func TestPartyFlows_OutsideCollaboratorThroughTheRoutes(t *testing.T) {
 	g := env.newGateParty(t)
-	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
+	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
+	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
 	outsider := env.registerVerified(t)
 
-	g.invite(t, map[string]any{"holder_email": outsider.Email}).wantMismatch(t, "credential_not_authorized")
+	g.invite(t, map[string]any{"holder_email": outsider.Email}).wantMismatch(t, "provider_required")
 	v := g.invite(t, map[string]any{"holder_email": outsider.Email, "confirm_policy_mismatch": true}).
 		wantStatus(t, http.StatusCreated).obj(t)
 	profUUID := v["uuid"].(string)
 	env.do(t, http.MethodPost, "/v1/me/profiles/"+profUUID+"/accept", outsider.tk.access(), nil).wantStatus(t, http.StatusOK)
 
-	// Reachable although none of the outsider's credentials is authorized.
+	// Reachable although the outsider has no credential of the required provider.
 	tk := env.login(t, outsider)
 	wantAvailable(t, env.myProfiles(t, tk.access()), profUUID)
 	party := env.switchTo(t, tk.access(), profUUID).wantStatus(t, http.StatusOK).tok(t)
@@ -586,7 +587,7 @@ func TestPartyFlows_OutsideCollaboratorThroughTheRoutes(t *testing.T) {
 	}
 
 	// The confirmation never exempts min_acr: raising it locks the same token.
-	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized", "min_acr": 2}).wantStatus(t, http.StatusOK)
+	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider, "min_acr": 2}).wantStatus(t, http.StatusOK)
 	env.do(t, http.MethodGet, "/v1/probe", party.access(), nil).wantError(t, http.StatusUnauthorized, "users.profile_unavailable", "")
 	wantLocked(t, env.myProfiles(t, env.login(t, outsider).access()), profUUID, "acr_too_low", svc.RemedyStepUp)
 }

@@ -114,13 +114,14 @@ func (g gateParty) invite(t *testing.T, body map[string]any) *resp {
 
 func TestCollaborator_InviteMismatchNeedsConfirmationAndWritesNothing(t *testing.T) {
 	g := env.newGateParty(t)
-	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
+	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
+	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
 	a := env.registerVerified(t)
 	uid := env.principalID(t, a.Email)
 
 	env.obs.reset()
-	g.invite(t, map[string]any{"holder_email": a.Email}).wantMismatch(t, "credential_not_authorized")
-	g.invite(t, map[string]any{"holder_email": a.Email, "confirm_policy_mismatch": false}).wantMismatch(t, "credential_not_authorized")
+	g.invite(t, map[string]any{"holder_email": a.Email}).wantMismatch(t, "provider_required")
+	g.invite(t, map[string]any{"holder_email": a.Email, "confirm_policy_mismatch": false}).wantMismatch(t, "provider_required")
 	if n := env.profileCount(t, uid, g.id); n != 0 {
 		t.Fatalf("a refused invitation left %d profile(s)", n)
 	}
@@ -176,7 +177,7 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 		g.invite(t, map[string]any{"holder_email": a.Email}).wantStatus(t, http.StatusCreated)
 	})
 
-	t.Run("authorized rule is met by an authorized or confined credential", func(t *testing.T) {
+	t.Run("authorized rule is met by any usable interactive credential", func(t *testing.T) {
 		env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 		a := env.registerVerified(t)
 		uid := env.principalID(t, a.Email)
@@ -186,6 +187,11 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 		env.exec(t, "authorize", `INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
 			cred, g.id, adminProfile)
 		g.invite(t, map[string]any{"holder_email": a.Email}).wantStatus(t, http.StatusCreated)
+
+		// An unauthorized password is just as good: no credential can be
+		// authorized before the profile exists, so authorization follows acceptance.
+		c := env.registerVerified(t)
+		g.invite(t, map[string]any{"holder_email": c.Email}).wantStatus(t, http.StatusCreated)
 
 		// A credential confined to another party is unusable for this one.
 		b := env.registerVerified(t)
@@ -295,7 +301,8 @@ func gateCtx(principalID, profileID int64) context.Context {
 
 func TestCollaborator_GateDirect(t *testing.T) {
 	g := env.newGateParty(t)
-	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
+	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
+	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
 	member := env.newGateMember(t, g)                // a profile of the party
 	outsider := env.registerVerified(t)              // a user with only a personal profile
 	outsiderID := env.principalID(t, outsider.Email) // the holder
@@ -382,7 +389,8 @@ func TestCollaborator_GateDirect(t *testing.T) {
 
 func TestCollaborator_AddToPartyActorGroupThroughAuthzRoute(t *testing.T) {
 	g := env.newGateParty(t)
-	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
+	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
+	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)
 	member := env.newGateMember(t, g)
 	outsider := env.registerVerified(t)
 	outsiderID := env.principalID(t, outsider.Email)
@@ -403,7 +411,7 @@ func TestCollaborator_AddToPartyActorGroupThroughAuthzRoute(t *testing.T) {
 	// An outside profile whose holder cannot meet the policy needs confirmation.
 	before := members()
 	body := map[string]any{"member_uuid": env.profileUUID(t, personal)}
-	env.do(t, http.MethodPost, path, g.adminTok.access(), body).wantMismatch(t, "credential_not_authorized")
+	env.do(t, http.MethodPost, path, g.adminTok.access(), body).wantMismatch(t, "provider_required")
 	if members() != before || env.confirmationRow(t, personal, g.id) != 0 {
 		t.Fatalf("a refused add wrote a member or a confirmation")
 	}
