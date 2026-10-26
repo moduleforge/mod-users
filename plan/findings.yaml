@@ -572,6 +572,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Integration subtest in TestBootstrap_TokenLifecycle (bootstrap_integration_test.go) was NOT executed. It compiles (go vet -tags integration clean). Run it against a throwaway Postgres with a users superuser before the phase gate, or set AUTHZ_DEV_PG_CONFIRM_SHARED=1 deliberately.
+    - title: 'Behavioral consequence: a handler whose cache'
+      id: hyek
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Behavioral consequence: a handler whose cache was never populated now rejects every token without a read. main.go, the harness and unit tests all call RefreshState at boot; any new wiring must call RefreshState at startup.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
