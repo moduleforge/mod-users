@@ -12,6 +12,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -229,6 +230,29 @@ func TestCollaborator_InviteMismatchByRule(t *testing.T) {
 		env.exec(t, "revoke email_otp", `UPDATE mod_users.credentials SET revoked_at = now(), revoke_reason = 'user' WHERE principal_id = $1 AND kind = 'email_otp'`, uid)
 		if reason, acr := env.mismatch(t, uid, g.id); reason != "acr_too_low" || acr != 1 {
 			t.Fatalf("after revoking: mismatch = %q, acr %d; want acr_too_low, 1", reason, acr)
+		}
+	})
+
+	t.Run("a holder with no usable credential has a NULL holder_acr", func(t *testing.T) {
+		env.setPolicy(t, g, map[string]any{"credential_rule": "any", "min_acr": 2}).wantStatus(t, http.StatusOK)
+		a := env.registerVerified(t)
+		uid := env.principalID(t, a.Email)
+		env.exec(t, "revoke all", `UPDATE mod_users.credentials SET revoked_at = now(), revoke_reason = 'user' WHERE principal_id = $1`, uid)
+		var acr *int16
+		if err := env.pool.QueryRow(context.Background(),
+			`SELECT holder_acr FROM mod_users.holder_policy_mismatch($1, $2)`, uid, g.id).Scan(&acr); err != nil {
+			t.Fatalf("holder_policy_mismatch: %v", err)
+		}
+		if acr != nil {
+			t.Fatalf("holder_acr = %d, want NULL with no usable credential", *acr)
+		}
+		if reason, _ := env.mismatch(t, uid, g.id); reason != "acr_too_low" {
+			t.Fatalf("mismatch = %q, want acr_too_low", reason)
+		}
+		r := g.invite(t, map[string]any{"holder_email": a.Email})
+		r.wantMismatch(t, "acr_too_low")
+		if strings.Contains(string(r.raw), "at most 1") {
+			t.Fatalf("409 detail claims acr 1 for a holder with no usable credential: %s", r.raw)
 		}
 	})
 }
