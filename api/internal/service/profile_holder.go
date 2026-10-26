@@ -29,10 +29,12 @@ import (
 // Leaving is behind the party gate. Accept and decline are open to a session
 // the gate locks out (the invitation is how the holder reaches the party), but
 // leaving runs the destructive departure cleanup, so LeaveProfile refuses
-// unless profile_availability(session, profile) is `available`, evaluated in
-// the leave transaction on the locked profile. A suspended profile reports
-// `inactive` before the gate is evaluated, so that reason is accepted there;
-// the gate is not evaluated for a suspended profile.
+// unless profile_gate(session, profile) is `available`, evaluated in the leave
+// transaction on the locked profile. profile_gate is profile_availability
+// without the profile's status check, so the gate decides for a suspended
+// profile as well as for an active one (profile_availability reports a
+// suspended profile as `inactive` before the gate); a locked-out session
+// cannot leave a suspended profile and the departure cleanup does not run.
 
 // holderProfile resolves the profile the caller holds, for a holder action.
 func (s *ProfileService) holderProfile(ctx context.Context, profileUUID uuid.UUID) (opctx.AuthContext, coredb.Profile, error) {
@@ -124,8 +126,9 @@ func (s *ProfileService) DeclineInvitation(ctx context.Context, profileUUID uuid
 // A profile that is invited (decline it instead) or already ended is
 // ErrProfileTransition.
 //
-// Unlike accept and decline it is gated: the profile must be available to the
-// caller's session (ProfileUnavailable, 401, with the lock reason otherwise),
+// Unlike accept and decline it is gated: the party gate must be met by the
+// caller's session, for a suspended profile as for an active one
+// (ProfileUnavailable, 401, with the lock reason otherwise),
 // and the last active operator administrator cannot leave
 // (ErrLastOperatorAdmin).
 func (s *ProfileService) LeaveProfile(ctx context.Context, profileUUID uuid.UUID) error {
@@ -134,12 +137,14 @@ func (s *ProfileService) LeaveProfile(ctx context.Context, profileUUID uuid.UUID
 		return err
 	}
 	guard := func(tx pgx.Tx, locked coredb.Profile) error {
-		avail, err := s.usersQ(tx).ProfileAvailability(ctx, usersdb.ProfileAvailabilityParams{SessionID: ac.SessionID, ProfileID: locked.EntityID})
+		// The gate is evaluated whatever the profile's status (active or
+		// suspended): ProfileAvailability reports a suspended profile as
+		// inactive before the party gate, so it cannot decide here.
+		avail, err := s.usersQ(tx).ProfileGate(ctx, usersdb.ProfileGateParams{SessionID: ac.SessionID, ProfileID: locked.EntityID})
 		if err != nil {
-			return fmt.Errorf("users: profile availability: %w", err)
+			return fmt.Errorf("users: profile gate: %w", err)
 		}
-		suspended := locked.Status == ProfileStatusSuspended && avail == availabilityInactive
-		if avail != availabilityAvailable && !suspended {
+		if avail != availabilityAvailable {
 			return ProfileUnavailable(avail)
 		}
 		return requireNotLastOperatorAdmin(ctx, tx, locked)

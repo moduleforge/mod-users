@@ -28,10 +28,6 @@ const (
 // availabilityAvailable is profile_availability's success value.
 const availabilityAvailable = "available"
 
-// availabilityInactive is profile_availability's reason for a profile that is
-// not active.
-const availabilityInactive = "inactive"
-
 // PartyView is the party of a party profile in a ProfileView.
 type PartyView struct {
 	UUID        uuid.UUID `json:"uuid"`
