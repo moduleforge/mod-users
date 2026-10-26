@@ -24,11 +24,13 @@ var ErrLastOperatorAdmin = apiresp.Conflict(apiresp.FieldError{
 
 // operatorAdminProfileSQL selects the active operator-party profiles holding a
 // direct entity-scope wildcard `manage` grant (target NULL, as Bootstrap
-// creates it). A grant inherited through an actor group is not counted.
+// creates it), whose holder principal is not disabled. A grant inherited
+// through an actor group is not counted.
 const operatorAdminProfileSQL = `
 SELECT p.entity_id
   FROM public.profiles p
   JOIN public.platform_settings s ON s.id = 1 AND p.party_id = s.operator_party_id
+  JOIN public.principals pr ON pr.entity_id = p.holder_id AND pr.disabled_at IS NULL
  WHERE p.status = 'active'
    AND EXISTS (
      SELECT 1
@@ -51,6 +53,14 @@ const lockPlatformSettingsForEndSQL = `SELECT 1 FROM public.platform_settings WH
 // and before the transition. Profiles that are not active administrators of the
 // operator party pass untouched. transitionLocked calls it, so every path that
 // ends or suspends a profile, EndInTx included, inherits it.
+//
+// Counted administrators are active operator-party profiles whose holder
+// principal is not disabled (principals.disabled_at IS NULL).
+//
+// Boundary: the guard does not cover revocation of a wildcard-`manage` grant in
+// mod-authz (removing the grant leaves the profile active but no longer an
+// administrator), and it does not cover gate-locked administrators (an
+// administrator whose profile the party gate would lock out is still counted).
 //
 // Recorded approximation (an explicit decision, not an oversight): the guard
 // reads the mod-authz-owned tables public.grants and public.authz_operations,

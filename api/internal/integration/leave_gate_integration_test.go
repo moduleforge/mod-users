@@ -228,6 +228,24 @@ func TestLeaveGate_AdministratorMayEndAnAdminWhileAnotherRemains(t *testing.T) {
 }
 
 // Two administrators leaving at once cannot both succeed.
+// An administrator whose principal is disabled is not a usable administrator,
+// so it does not count toward the remaining administrators.
+func TestLeaveGate_DisabledPrincipalAdminDoesNotCountAsRemaining(t *testing.T) {
+	f := bootstrapOperator(t)
+	s := f.s
+	_, secondUUID := f.secondAdmin(t)
+	s.exec(t, "disable second admin principal",
+		`UPDATE principals SET disabled_at = now() WHERE entity_id = (SELECT p.holder_id FROM profiles p JOIN entities e ON e.id = p.entity_id WHERE e.uuid = $1::uuid)`, secondUUID)
+
+	leave := "/v1/me/profiles/" + f.adminUUID + "/leave"
+	s.do(t, http.MethodPost, leave, f.adminTok.access(), nil).wantError(t, http.StatusConflict, "conflict", "users.last_operator_admin")
+	s.do(t, http.MethodPatch, "/v1/profiles/"+f.adminUUID, f.adminTok.access(), map[string]string{"status": "ended", "end_reason": "test"}).
+		wantError(t, http.StatusConflict, "conflict", "users.last_operator_admin")
+	if got := s.profileStatus(t, f.adminUUID); got != "active" {
+		t.Fatalf("admin status after refused endings = %s, want active", got)
+	}
+}
+
 func TestLeaveGate_ConcurrentEndingsLeaveOneAdministrator(t *testing.T) {
 	f := bootstrapOperator(t)
 	s := f.s
