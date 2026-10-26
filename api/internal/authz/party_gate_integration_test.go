@@ -140,16 +140,26 @@ func TestInteg_PartyGate_AppliesToEveryArm(t *testing.T) {
 	if err := integAZ.AuthorizeTypeIn(sessionCtx(t, user, profile, 2, pw2), "read", orgType, g.party); err != nil {
 		t.Errorf("AuthorizeTypeIn owned-scope at min_acr: err = %v, want nil", err)
 	}
+}
 
-	// The gate runs in the prelude, before the wildcard arm: an operator
-	// profile reaching another party's content is held to that party's policy.
+// Decision D: platform operator profiles are exempt from the owning-party
+// gate, while non-operator outside collaborators stay gated by the same restrictive policy.
+func TestInteg_PartyGate_OperatorExempt(t *testing.T) {
+	g := seedGateParty(t, "authorized", 3)
+
 	opUser, opProfile := seedOperatorUser(t)
 	seedWildcardGrant(t, opProfile, "read")
 	opPW := fxPassword(t, integPool, opUser, nil)
-	requireForbidden403(t, integAZ.Authorize(sessionCtx(t, opUser, opProfile, 1, opPW), "read", &g.content), "wildcard holder outside the owning party below min_acr")
-	if err := integAZ.Authorize(sessionCtx(t, opUser, opProfile, 2, opPW), "read", &g.content); err != nil {
-		t.Errorf("wildcard holder at min_acr: err = %v, want nil", err)
+	// acr 1 and an unauthorized credential: both the credential rule and
+	// min_acr of the owning party are unmet, and the operator still passes.
+	if err := integAZ.Authorize(sessionCtx(t, opUser, opProfile, 1, opPW), "read", &g.content); err != nil {
+		t.Errorf("operator profile under a restrictive owning-party policy: err = %v, want nil", err)
 	}
+
+	// A non-operator outside collaborator holding a targeted grant stays gated
+	// (the schema allows wildcard grants to operator actors only).
+	cpw := fxPassword(t, integPool, g.collabUser, nil)
+	requireForbidden403(t, integAZ.Authorize(sessionCtx(t, g.collabUser, g.collabProfile, 1, cpw), "read", &g.content), "non-operator collaborator")
 }
 
 func TestInteg_PartyGate_Skips(t *testing.T) {

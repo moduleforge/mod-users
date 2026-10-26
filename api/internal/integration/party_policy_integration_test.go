@@ -35,19 +35,6 @@ func (s *stack) newGateParty(t *testing.T) gateParty {
 	return g
 }
 
-// skipOperatorUnderOwningPartyGate skips a scenario whose administrator is
-// newGateParty's operator profile acting on a party that the scenario gives a
-// restrictive authentication policy. The authorization engine's owning-party
-// gate holds every acting profile outside the target's owning party, operator
-// profiles included, to that party's credential_rule and min_acr, so the
-// operator's session no longer passes. The scenarios are reworked with the
-// engine test matrix (task 002, authorization-engine-tests).
-func skipOperatorUnderOwningPartyGate(t *testing.T) {
-	t.Helper()
-	t.Skip("task 002 (authorization-engine-tests): the owning-party gate holds this operator administrator, " +
-		"who is outside the party, to the party's restrictive authn policy")
-}
-
 // setPolicy PUTs the policy as the administrator.
 func (s *stack) setPolicy(t *testing.T, g gateParty, body map[string]any) *resp {
 	t.Helper()
@@ -140,7 +127,6 @@ func authPath(g gateParty, credUUID string) string {
 func confPath(g gateParty, credUUID string) string { return g.path("/confinements/" + credUUID) }
 
 func TestPartyPolicy_AuthnPolicyCRUDAndChecks(t *testing.T) {
-	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 
 	// No row: the effective default.

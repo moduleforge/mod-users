@@ -1569,7 +1569,11 @@ $$;
 --
 -- True, without consulting the factors, when p_party_id is NULL, the acting
 -- profile p_profile_id belongs to p_party_id, p_party_id is the acting
--- profile's own subject (a personal profile reaching its own records), or the
+-- profile's own subject (a personal profile reaching its own records), the
+-- acting profile is a platform operator profile (public.core_is_operator_profile;
+-- decision D: a customer party's policy never binds the operator, so the
+-- platform can always administer, support and impersonate; operation-level
+-- min_acr and step-up still apply), or the
 -- owner carries no restrictive policy (no row, or 'any' with min_acr 1; this
 -- also covers owners that are not parties). Otherwise the factors are those of
 -- the interactive session p_session_id (its unrevoked factors and
@@ -1610,6 +1614,10 @@ BEGIN
   END IF;
 
   IF p_party_id = public.profile_own_subject(p_profile_id) THEN
+    RETURN true;
+  END IF;
+
+  IF public.core_is_operator_profile(p_profile_id) THEN
     RETURN true;
   END IF;
 

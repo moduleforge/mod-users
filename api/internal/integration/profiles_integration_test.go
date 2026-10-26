@@ -895,7 +895,6 @@ SELECT count(*) FROM mod_users.credentials c JOIN mod_users.cred_password p ON p
 	})
 
 	t.Run("an authorized party's managed user can sign in", func(t *testing.T) {
-		skipOperatorUnderOwningPartyGate(t)
 		g := env.newGateParty(t)
 		env.setPolicy(t, g, map[string]any{"credential_rule": "authorized"}).wantStatus(t, http.StatusOK)
 		email := uniq("managed") + "@example.test"

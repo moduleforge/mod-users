@@ -567,7 +567,6 @@ func TestPartyFlows_ConfinedFactorNeverListsThePersonalProfileAsAvailable(t *tes
 // profile is then reachable despite the credential rule, and raising the
 // party's min_acr locks it on the next request.
 func TestPartyFlows_OutsideCollaboratorThroughTheRoutes(t *testing.T) {
-	skipOperatorUnderOwningPartyGate(t)
 	g := env.newGateParty(t)
 	provider := env.addProviderRow(t, "collab-"+uniq("idp"))
 	env.setPolicy(t, g, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": provider}).wantStatus(t, http.StatusOK)

@@ -30,8 +30,10 @@
 //     with mod_users.session_meets_party_policy. A profile_policy_confirmations
 //     row exempts the credential rule only. A failure is ErrForbidden, like a
 //     failed grant arm. Acting profiles inside the owning party, personal
-//     profiles reaching their own records, system-actor contexts and the
-//     anonymous context skip it. It costs one query per checked target.
+//     profiles reaching their own records, platform operator profiles
+//     (core_is_operator_profile; decision D: a customer party's policy never
+//     binds the operator, while the operation-level gate still applies),
+//     system-actor contexts and the anonymous context skip it. It costs one query per checked target.
 //  3. The wildcard arm: the actor chain (the profile and the actor groups it
 //     belongs to, transitively) holds a grant with scope 'entity' and
 //     target_id NULL for an operation in the requested operation's
