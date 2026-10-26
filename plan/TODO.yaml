@@ -968,6 +968,7 @@ phases:
           path: phase-17-remediation-06/001-last-operator-admin-disable-contract.md
           done: false
           tier: sonnet-low
+          digest: Widened the shared last-operator-admin 409 (field and message) to cover the disable path. Updated godoc, OpenAPI disable description and AGENTS.md row. Build, unit and integration tests pass.
           findings:
             - sDO1
           git:
