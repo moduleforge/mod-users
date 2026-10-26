@@ -736,7 +736,7 @@ phases:
           findings:
             - Pxlw
           git:
-            branch: null
+            branch: plan/identity-model-impl-14-007
             commit: []
             merge: null
         - number: 8
