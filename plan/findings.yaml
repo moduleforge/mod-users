@@ -27,6 +27,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'api/internal/authz/authz.go authorizePrelude calls checkPartyPolicy (SELECT mod_users.session_meets_party_policy(...)) for every Authorize with a target and every AuthorizeTypeIn from a session or credential context, not only for cross-party ones: deciding whether the acting profile is outside the owner''s party needs the target''s owner_id, which is only known in SQL. That adds one round trip to every targeted check (three in total for Authorize: party gate, wildcard, grant-or-own). The function returns early without touching factors for in-party actors and owners without a restrictive policy, so the cost is the round trip, not the work. Folding the gate into the wildcard query (one statement returning both booleans) would remove the extra round trip without changing semantics.'
+    - title: Two ErrStepUpRequired sentinels
+      id: Lt3W
+      date: "2026-10-26"
+      tags:
+        - type:style
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: 'The users.step_up_required action-required error is built twice from useraction.StepUpRequired: service.ErrStepUpRequired (api/internal/service/session_errors.go) and authz.ErrStepUpRequired (api/internal/authz/authz.go, the engine''s assurance-gate refusal). Both render identically through apiresp.WriteError, but they are distinct pointers, so errors.Is(err, service.ErrStepUpRequired) does not match an engine refusal and vice versa; callers have to match on errors.As(*apiresp.ActionRequiredError) plus Action().Code. internal/authz cannot import internal/service without pulling the whole service graph into the engine. Declaring the single shared value next to the action code in api/internal/useraction and aliasing it from both packages would give one identity.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
