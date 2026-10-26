@@ -201,8 +201,8 @@ items:
       tags:
         - type:security
         - plan/phase:remediation-03
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:medium
       text: mod_users.profile_availability_for (model/migrations/sql/0100_baseline.sql) returns 'inactive' for any non-active profile before it evaluates the party gate (credential rule, provider, min_acr). ProfileService.LeaveProfile (api/internal/service/profile_holder.go) must keep allowing a holder to leave a suspended profile, so it accepts 'inactive' for a suspended profile, which means a session the party gate would lock out can still leave (and run the departure cleanup for) a suspended profile. Closing it needs an availability evaluation that applies the gate independent of profile status, for example a status-agnostic variant of profile_availability_for.
     - title: mod_users.holder_policy_mismatch now treats…
       id: ggb7
