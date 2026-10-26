@@ -657,7 +657,7 @@ phases:
           slug: gate-holder-leave-on-profile-availability
           title: Gate Holder Leave On Profile Availability
           path: phase-14-remediation-03/002-gate-holder-leave-on-profile-availability.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: LeaveProfile now requires profile_availability to be available for the caller's session, checked in the leave transaction. LeaveProfile and the administrator's PATCH to ended also refuse with 409 users.last_operator_admin to end the last active wildcard-manage operator admin. The last-admin check serializes on the platform_settings row. Suspended-profile gap filed as finding twos.
           findings:
