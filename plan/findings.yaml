@@ -359,6 +359,15 @@ items:
           Location: /v1/bootstrap entry (431-438); also api/cmd/server/main.go 434-440. /v1/bootstrap is a public route group deliberately outside requireOIDCConfirmed. architecture.md says every module route entry lists requireOIDCConfirmed first and D20(3) enumerates the documented exceptions (credential-in-body routes, requireOIDCConfirmed, requireVerifiedEmail); a public route that bypasses the OIDC gate with the X-Setup-Token header as its credential is not among them. The justification (bootstrap may precede OIDC configuration) is sound and recorded only in code and manifest comments.
         recommendation:
           Add the bootstrap route to the documented exceptions in architecture.md (API layer and D20) with the rationale.
+    - title: Sibling symlinks mod-core, mod-audit and mod-
+      id: Fjaa
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-03
+        - priority:unspecified
+        - effort:unspecified
+      text: Sibling symlinks mod-core, mod-audit and mod-authz under worktrees/plan/ were repointed to the master checkouts by the make preflight during validation and were restored by the agent to each repo's worktrees/plan/identity-model-impl. The same-named symlinks under mod-users/worktrees/ carry a 20:02 timestamp and were left untouched. Manager should verify the sibling links are intact and that make preflight does not repoint them in this layout. Validation logs are under worktrees/plan/identity-model-impl-14-001/.flow/validation-logs/.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
