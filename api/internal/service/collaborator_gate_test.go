@@ -51,10 +51,13 @@ type gateUsersQ struct {
 	row   usersdb.HolderPolicyMismatchRow
 	err   error
 	calls int
+	// got records the params of every HolderPolicyMismatch call.
+	got []usersdb.HolderPolicyMismatchParams
 }
 
-func (f *gateUsersQ) HolderPolicyMismatch(context.Context, usersdb.HolderPolicyMismatchParams) (usersdb.HolderPolicyMismatchRow, error) {
+func (f *gateUsersQ) HolderPolicyMismatch(_ context.Context, a usersdb.HolderPolicyMismatchParams) (usersdb.HolderPolicyMismatchRow, error) {
 	f.calls++
+	f.got = append(f.got, a)
 	return f.row, f.err
 }
 
@@ -69,8 +72,9 @@ func mismatchRow(reason string, minACR, holderACR int16) usersdb.HolderPolicyMis
 
 func newTestGate(cq *gateCoreQ, uq *gateUsersQ) *CollaboratorGate {
 	return &CollaboratorGate{
-		newQ:     func(pgx.Tx) usersdb.Querier { return uq },
-		newCoreQ: func(pgx.Tx) coredb.Querier { return cq },
+		newQ:       func(pgx.Tx) usersdb.Querier { return uq },
+		newCoreQ:   func(pgx.Tx) coredb.Querier { return cq },
+		policyLock: noopPolicyLock,
 	}
 }
 
@@ -230,6 +234,24 @@ func TestInviteInTx_MismatchIsRefusedBeforeAnythingIsWritten(t *testing.T) {
 	}
 	if mq.calls != 1 {
 		t.Fatalf("mismatch checks = %d, want 1", mq.calls)
+	}
+	if len(mq.got) != 1 || !mq.got[0].InviteTime || mq.got[0].HolderID != 40 || mq.got[0].PartyID != party {
+		t.Fatalf("invitation mismatch params = %+v, want one call for holder 40, party %d, InviteTime=true", mq.got, party)
+	}
+}
+
+// The outside-collaborator gate must check the policy in collaborator mode
+// (InviteTime=false): a collaborator gains no profile in the party, so the
+// relaxed invitee rule must not apply.
+func TestCollaboratorGate_ChecksPolicyWithInviteTimeFalse(t *testing.T) {
+	t.Parallel()
+	uq := &gateUsersQ{row: mismatchRow("", 1, 1)}
+	g := newTestGate(&gateCoreQ{profile: partyProfile(7, 40, 6)}, uq)
+	if err := g.CheckOutsideCollaborator(actingCtx(2), nil, 5, 7, false); err != nil {
+		t.Fatalf("matching outsider: %v", err)
+	}
+	if len(uq.got) != 1 || uq.got[0].InviteTime || uq.got[0].HolderID != 40 || uq.got[0].PartyID != 5 {
+		t.Fatalf("collaborator mismatch params = %+v, want one call for holder 40, party 5, InviteTime=false", uq.got)
 	}
 }
 

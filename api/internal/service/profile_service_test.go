@@ -376,6 +376,7 @@ func (f *profileUsersQ) GetUserByEntityIDForUpdate(_ context.Context, id int64) 
 func newInviteTestService(az *opAuthorizer, cq *profileCoreQ, uq *profileUsersQ) *ProfileService {
 	s := NewProfileService(nil, uq, cq, az, nil, &UserService{now: time.Now}, nil, nil)
 	s.newQ = func(pgx.Tx) usersdb.Querier { return uq }
+	s.policyLock = noopPolicyLock
 	s.newCoreQ = func(pgx.Tx) coredb.Querier { return cq }
 	return s
 }

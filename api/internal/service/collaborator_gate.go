@@ -22,6 +22,9 @@ import (
 type CollaboratorGate struct {
 	newQ     func(pgx.Tx) usersdb.Querier
 	newCoreQ func(pgx.Tx) coredb.Querier
+	// policyLock is the test seam for the shared policy lock; nil means the
+	// production locker (lockPartyPolicyShared).
+	policyLock policySharedLocker
 }
 
 // NewCollaboratorGate constructs a CollaboratorGate.
@@ -69,7 +72,7 @@ func (g *CollaboratorGate) CheckOutsideCollaborator(ctx context.Context, tx pgx.
 	if p.PartyID.Valid && p.PartyID.Int64 == owningPartyID {
 		return nil
 	}
-	if err := partyPolicySharedLocker(ctx, tx, owningPartyID); err != nil {
+	if err := g.policyLock.orDefault()(ctx, tx, owningPartyID); err != nil {
 		return err
 	}
 	if _, err := cq.GetProfilePolicyConfirmation(ctx, coredb.GetProfilePolicyConfirmationParams{

@@ -29,3 +29,12 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 
 - Finding `Eqyx` in this plan's `plan/findings.yaml`: the package-level `init()` in `party_policy_lock_seam_test.go` overrides `partyPolicySharedLocker` for every test in package `service`, so the seam is not scoped per test and parallel tests can race on it. Requirements 1 to 3 address it.
 - Finding `inY7` in this plan's `plan/findings.yaml`: the `HolderPolicyMismatch` fakes in `collaborator_gate_test.go` do not capture their params, so the `InviteTime` mode each caller passes is untested. Requirements 4 and 5 address it.
+
+## Status
+
+Outcome: succeeded (2026-10-26).
+
+- The package-level `partyPolicySharedLocker` variable and the test `init()` are gone. The seam is now a per-instance `policyLock` field (type `policySharedLocker`, nil means `lockPartyPolicyShared`) on `CollaboratorGate` and `ProfileService`; tests opt in with `noopPolicyLock`. Production default is unchanged and still fails closed on a nil tx.
+- `gateUsersQ` captures `HolderPolicyMismatchParams` in `got`; new/extended tests assert `InviteTime=false` (gate) and `InviteTime=true` (invite path). Flipping either caller's argument made the matching test fail; both were restored.
+- Validation: grep clean; `go test ./...` and `go test -race ./internal/service`, `make build.api`, `make lint.api` pass. Integration tests were not run (unit-test-only change).
+- Files: api/internal/service/party_policy_lock.go, collaborator_gate.go, profile_service.go, party_policy_lock_seam_test.go, collaborator_gate_test.go, profile_admit_test.go, profile_service_test.go.
