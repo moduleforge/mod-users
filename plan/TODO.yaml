@@ -240,7 +240,7 @@ phases:
           slug: authorization-engine-tests
           title: Authorization Engine Tests
           path: phase-08-users-authorization-engine/002-authorization-engine-tests.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: 'Authorization engine test suite added (requirements 2-6): own-arm, owned-scope, AuthorizeTypeIn, assurance gate, parity matrix, client-credentials gate. Test code only; no production change. Mutation check confirmed new tests catch removed owner and ownership_confers predicates. Integration run: 132 passing, no skips.'
           git:
