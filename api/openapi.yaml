@@ -2845,6 +2845,7 @@ paths:
       summary: Disable a principal
       description: |
         Disables the principal and revokes its sessions. Requires `update` on the principal and a step-up. The body is optional.
+        Disabling the principal of the last effective operator administrator is refused with 409 `users.last_operator_admin`.
       tags: [Principals]
       operationId: disablePrincipal
       requestBody:
