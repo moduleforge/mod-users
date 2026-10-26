@@ -2,8 +2,11 @@ package authz_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
@@ -773,6 +776,147 @@ func TestAuthorizeType_AssuranceGate(t *testing.T) {
 
 	requireStepUp(t, az.AuthorizeType(ctx, "create", 7))
 	requireStepUp(t, az.AuthorizeTypeIn(ctx, "create", 7, 40))
+}
+
+// TestAuthorize_AssuranceGate_ClientCredentials covers a client-credentials
+// context (CredentialID != 0, SessionID == 0): it is gated like a session, by
+// ACR against min_acr and by AuthTime against max_auth_age, on every entry
+// point, and a refusal comes before any grant arm.
+func TestAuthorize_AssuranceGate_ClientCredentials(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	credential := func(acr int16, authAge time.Duration) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, CredentialID: 4, SessionID: 0, ACR: acr, AuthTime: now.Add(-authAge),
+		})
+	}
+
+	cases := []struct {
+		name     string
+		ctx      context.Context
+		op       string
+		wantStep bool
+	}{
+		{"meets min_acr, op without max_auth_age", credential(1, 24*time.Hour), "read", false},
+		{"below min_acr", credential(0, 0), "read", true},
+		{"fresh on impersonate", credential(1, time.Minute), "impersonate", false},
+		{"fresh on credentials", credential(1, time.Minute), "credentials", false},
+		{"exactly max_auth_age old is still fresh", credential(1, 10*time.Minute), "credentials", false},
+		{"one nanosecond past max_auth_age on credentials", credential(1, 10*time.Minute+time.Nanosecond), "credentials", true},
+		{"stale on impersonate", credential(1, time.Hour), "impersonate", true},
+		{"zero AuthTime on credentials", opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 1001, ProfileID: 1, CredentialID: 4, ACR: 1}), "credentials", true},
+	}
+	entryPoints := []struct {
+		name string
+		call func(az *authz.Authorizer, ctx context.Context, op string) error
+	}{
+		{"Authorize", func(az *authz.Authorizer, ctx context.Context, op string) error {
+			return az.Authorize(ctx, op, ptr(int64(99)))
+		}},
+		{"AuthorizeType", func(az *authz.Authorizer, ctx context.Context, op string) error {
+			return az.AuthorizeType(ctx, op, 7)
+		}},
+		{"AuthorizeTypeIn", func(az *authz.Authorizer, ctx context.Context, op string) error {
+			return az.AuthorizeTypeIn(ctx, op, 7, 40)
+		}},
+	}
+	for _, ep := range entryPoints {
+		for _, tc := range cases {
+			t.Run(ep.name+"/"+tc.name, func(t *testing.T) {
+				calls := 0
+				az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+				az.SetNow(func() time.Time { return now })
+
+				err := ep.call(az, tc.ctx, tc.op)
+				if tc.wantStep {
+					requireStepUp(t, err)
+					if calls != 0 {
+						t.Errorf("the assurance gate must run before the wildcard arm, got %d wildcard call(s)", calls)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("expected the wildcard holder to pass, got: %v", err)
+				}
+			})
+		}
+	}
+}
+
+// TestAuthorize_AssuranceGate_SkippedContexts verifies the system-actor and
+// anonymous contexts skip the gate on every entry point, even for the
+// operations with a max_auth_age and with no AuthTime at all.
+func TestAuthorize_AssuranceGate_SkippedContexts(t *testing.T) {
+	contexts := map[string]context.Context{
+		"system actor": opctx.WithSystemActor(context.Background(), 5, 6),
+		"anonymous": opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 2, ProfileID: 3, Anonymous: true}),
+		"anonymous with a stale session id": opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 2, ProfileID: 3, SessionID: 9, ACR: 0, Anonymous: true}),
+	}
+	for name, ctx := range contexts {
+		for _, op := range []string{"read", "impersonate", "credentials", "manage"} {
+			t.Run(name+"/"+op, func(t *testing.T) {
+				az := authz.NewWithStubOpReg(wildcardAllowFn)
+				if err := az.Authorize(ctx, op, ptr(int64(99))); err != nil {
+					t.Errorf("Authorize: %v, want the gate skipped", err)
+				}
+				if err := az.AuthorizeType(ctx, op, 7); err != nil {
+					t.Errorf("AuthorizeType: %v, want the gate skipped", err)
+				}
+				if err := az.AuthorizeTypeIn(ctx, op, 7, 40); err != nil {
+					t.Errorf("AuthorizeTypeIn: %v, want the gate skipped", err)
+				}
+			})
+		}
+	}
+}
+
+// TestAuthorize_StepUp_IsTheSharedActionRequiredError verifies the refusal
+// satisfies mod-core's apiresp action-required type with errors.As, including
+// when another layer wraps it, and that apiresp.WriteError renders it as a 409
+// users.step_up_required action from every entry point.
+func TestAuthorize_StepUp_IsTheSharedActionRequiredError(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
+	ctx := opctx.WithAuthContext(context.Background(), opctx.AuthContext{ProfileID: 1, SessionID: 9, ACR: 0})
+
+	refusals := map[string]error{
+		"Authorize":       az.Authorize(ctx, "read", ptr(int64(99))),
+		"AuthorizeType":   az.AuthorizeType(ctx, "create", 7),
+		"AuthorizeTypeIn": az.AuthorizeTypeIn(ctx, "create", 7, 40),
+	}
+	for name, err := range refusals {
+		for form, e := range map[string]error{
+			"direct":         err,
+			"wrapped":        fmt.Errorf("remove login method: %w", err),
+			"double-wrapped": fmt.Errorf("service: %w", fmt.Errorf("authorize: %w", err)),
+		} {
+			t.Run(name+"/"+form, func(t *testing.T) {
+				requireStepUp(t, e)
+
+				rec := httptest.NewRecorder()
+				apiresp.WriteError(rec, httptest.NewRequest(http.MethodPost, "/", nil), e)
+				if rec.Code != http.StatusConflict {
+					t.Fatalf("WriteError status = %d, want %d", rec.Code, http.StatusConflict)
+				}
+				var body struct {
+					Action struct {
+						Code string `json:"code"`
+					} `json:"action"`
+					Error json.RawMessage `json:"error"`
+				}
+				if jerr := json.Unmarshal(rec.Body.Bytes(), &body); jerr != nil {
+					t.Fatalf("decode body %q: %v", rec.Body.String(), jerr)
+				}
+				if body.Action.Code != "users.step_up_required" {
+					t.Errorf("rendered action code = %q, want users.step_up_required (body %s)", body.Action.Code, rec.Body.String())
+				}
+				if len(body.Error) != 0 {
+					t.Errorf("a step-up is an action, not an error envelope: %s", rec.Body.String())
+				}
+			})
+		}
+	}
 }
 
 // --- Prelude: owning-party gate (decision C) ---

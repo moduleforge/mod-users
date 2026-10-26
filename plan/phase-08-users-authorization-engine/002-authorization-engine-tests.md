@@ -91,3 +91,24 @@ Dependency: requires task 001. It can run in parallel with tasks 003, 004 and 00
 - After the owned-scope and own-arm suites.
 - After the assurance-gate and `AuthorizeTypeIn` matrix.
 - After the parity suite.
+
+## Status
+
+Outcome: succeeded (2026-10-26). `make test`, `make lint` and the authz integration suite (`go test -tags=integration -p 1 -count=1 ./internal/authz/...`, 132 passing tests, no skips, against a throwaway postgres:16) all pass; both greps in `## Validation` return nothing. No production code changed and no engine defect was found.
+
+Test files, all under `api/internal/authz/`:
+
+- Migrated suites. Task 001 had already moved the five existing suites to the new semantics (scope, profile actor) and left no `t.Skip` naming this task. This task removed the remaining `assume` wording from `authz_integration_test.go`, `instance_semantics_integration_test.go` and `type_target_integration_test.go`.
+- `authz_test.go`. New unit tests for the client-credentials gate on all three entry points, the skipped system and anonymous contexts, and the step-up refusal as the shared action-required error (`errors.As`, wrapped, and rendered by `apiresp.WriteError` as 409 `users.step_up_required`).
+- `owned_scope_integration_test.go`, `own_arm_integration_test.go`, `authorize_type_in_integration_test.go`, `assurance_gate_integration_test.go`, `parity_integration_test.go` (new or extended), and `party_gate_integration_test.go` (client-credentials cases added).
+
+Requirement 2 to 6 case map:
+
+- Req 2 (owned scope): exact type and subtype denied `TestInteg_OwnedScope_ExactType`; `include_subtypes` `TestInteg_OwnedScope_IncludeSubtypes`; NULL type `TestInteg_OwnedScope_AnyType`; owner's own record `TestInteg_OwnedScope_NeverReachesOwnerRecord`; actor group `TestInteg_OwnedScope_ThroughActorGroups`; owner A versus owner B `TestInteg_OwnedScope_OwnerIsolation`.
+- Req 3 (own arm): personal profile only (party, service account, anonymous get nothing) `TestInteg_OwnArm_OnlyPersonalProfilesOfUsers`; `ownership_confers` only `TestInteg_OwnArm_OnlyConferringOperations`; impersonate never conferred `TestInteg_OwnArm_ImpersonateNeverConferred`; impersonation follows the acting profile `TestInteg_OwnArm_FollowsTheActingProfile`.
+- Req 4 (assurance gate): `TestInteg_AssuranceGate_SeededPolicies` (ACR, `max_auth_age` for impersonate and credentials, fresh passes, client credentials, rendering), `TestInteg_AssuranceGate_SkippedContexts`, `TestInteg_AssuranceGate_ImpersonationIsNotExempt`, and the unit tests `TestAuthorize_AssuranceGate`, `TestAuthorize_AssuranceGate_ClientCredentials`, `TestAuthorize_AssuranceGate_SkippedContexts`, `TestAuthorize_StepUp_IsTheSharedActionRequiredError`.
+- Req 5 (`AuthorizeTypeIn`): wildcard `TestInteg_AuthorizeTypeIn_Wildcard`; exact type entity and supertype/subtype grants that must not pass `TestInteg_AuthorizeTypeIn_TypeEntityGrant`; owned scope with and without `include_subtypes` `TestInteg_AuthorizeTypeIn_OwnedScope`; own arm with `ownerID` equal and different `TestInteg_AuthorizeTypeIn_OwnArm`; deny `TestInteg_AuthorizeTypeIn_Deny`; unit `TestAuthorizeTypeIn`.
+- Req 6 (parity with the generated list functions, slug list per U18 with `user` and `profile`): `TestInteg_Parity_Matrix`, `TestInteg_Parity_OwnArm`, `TestInteg_Parity_OwnedScope`.
+- Req 7 (owning-party gate): `party_gate_integration_test.go` (`TestInteg_PartyGate_*`, including the new `TestInteg_PartyGate_ClientCredentials`); operator exemption per decision D is `TestInteg_PartyGate_OperatorExempt`.
+
+Decisions: no `skipOperatorUnderOwningPartyGate` helper exists or was created (decision D). The parity slug list is the dev server's `authzSlugs` without `tag` (mod-users registers no `tag` type) plus the roots `entity` and `type` and the per-run test types. Mutation check: removing `e.id <> e.owner_id` and the `ownership_confers` predicate from `authz.go` (restored afterwards) made the owned-scope, own-arm, `AuthorizeTypeIn` and parity tests fail.

@@ -40,7 +40,7 @@ package authz_test
 // mod-authz, and mod-users' own integration suites — see
 // mod-core/api/authz/setup/grant_table_integration_test.go) is reachable at
 // "localhost" and NOT at the container's docker-network IP; the opposite of
-// what resolveHost's docker-inspect fallback below assumes. Set
+// what resolveHost's docker-inspect fallback below takes for granted. Set
 // AUTHZ_DEV_PG_HOST=localhost explicitly rather than relying on the
 // fallback. This cost prior tasks real time (authz-entity-ownership
 // follow-ups 4gUq, GBUZ) — do not rediscover it.
@@ -56,7 +56,7 @@ package authz_test
 //
 // Scenarios verified (per Final design step 9):
 //  1. Wildcard manage admin — passes every Authorize check including nil-target.
-//  2. Wildcard read holder — passes read/list, denied on update/delete/assume.
+//  2. Wildcard read holder — passes read/list, denied on update/delete/impersonate.
 //  3. Targeted grant holder — permitted only on the granted target.
 //  4. No-grants user — denied everywhere (nil-target and specific target).
 //  5. Bootstrap first user — first registered account automatically holds wildcard manage.
@@ -327,7 +327,7 @@ func TestInteg_WildcardManageAdmin_PassesAll(t *testing.T) {
 		t.Errorf("wildcard admin: delete target: got %v, want nil", err)
 	}
 	if err := integAZ.Authorize(ctx, "impersonate", &targetID); err != nil {
-		t.Errorf("wildcard admin: assume target: got %v, want nil", err)
+		t.Errorf("wildcard admin: impersonate target: got %v, want nil", err)
 	}
 }
 
@@ -361,7 +361,7 @@ func TestInteg_WildcardReadHolder_ReadAllowedWriteDenied(t *testing.T) {
 	_ = opIDs
 	_ = readIDs
 
-	// update/delete/assume should be denied for a read-only wildcard holder.
+	// update/delete/impersonate should be denied for a read-only wildcard holder.
 	if err := integAZ.Authorize(ctx, "update", &targetID); err == nil {
 		t.Errorf("wildcard read: update target: got nil, want ErrForbidden")
 	}
@@ -369,7 +369,7 @@ func TestInteg_WildcardReadHolder_ReadAllowedWriteDenied(t *testing.T) {
 		t.Errorf("wildcard read: delete target: got nil, want ErrForbidden")
 	}
 	if err := integAZ.Authorize(ctx, "impersonate", &targetID); err == nil {
-		t.Errorf("wildcard read: assume target: got nil, want ErrForbidden")
+		t.Errorf("wildcard read: impersonate target: got nil, want ErrForbidden")
 	}
 
 	// Nil-target with manage op: read-wildcard holder should be denied (no manage grant).
@@ -565,7 +565,7 @@ func TestInteg_OIDCRoleAdminPathRemoved(t *testing.T) {
 // TestInteg_OwnerPredicate_OwnerAllowedAnyOperation seeds actor A and a
 // organization entity with owner_id = A via seedOwnedOrg, records no
 // grant of any kind, and asserts Authorize returns nil for read, update,
-// delete, and a non-CRUD verb (assume) — operation by operation, so the
+// delete, and a non-CRUD verb (grant) — operation by operation, so the
 // requirement that the own-arm is not gated on the operation or on opIDs is
 // pinned per-operation rather than by a single passing call. This is
 // exactly the case that returned ErrForbidden before task 001: organization

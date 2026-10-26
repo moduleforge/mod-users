@@ -238,6 +238,64 @@ func TestInteg_PartyGate_SSHFallback(t *testing.T) {
 	}
 }
 
+// TestInteg_PartyGate_ClientCredentials runs the gate for a non-interactive
+// caller: an outside collaborator acting through a single API key (CredentialID
+// set, SessionID zero). The key's factors and base_acr take the session's
+// place.
+func TestInteg_PartyGate_ClientCredentials(t *testing.T) {
+	keyCtx := func(g gateParty, keyID int64, acr int16) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: g.collabUser, ProfileID: g.collabProfile, CredentialID: keyID, ACR: acr, AuthTime: time.Now(),
+		})
+	}
+
+	t.Run("credential_rule authorized", func(t *testing.T) {
+		g := seedGateParty(t, "authorized", 1)
+		key, _ := fxAPIKey(t, integPool, g.collabUser)
+		ctx := keyCtx(g, key, 1)
+
+		requireForbidden403(t, integAZ.Authorize(ctx, "read", &g.content), "unauthorized API key")
+		requireForbidden403(t, integAZ.AuthorizeTypeIn(ctx, "read", organizationTypeID(t), g.party), "unauthorized API key, AuthorizeTypeIn")
+
+		authorizeCredential(t, key, g.party, g.collabProfile)
+		if err := integAZ.Authorize(ctx, "read", &g.content); err != nil {
+			t.Errorf("authorized API key: err = %v, want nil", err)
+		}
+	})
+
+	t.Run("min_acr above the key's base_acr", func(t *testing.T) {
+		g := seedGateParty(t, "any", 2)
+		key, _ := fxAPIKey(t, integPool, g.collabUser)
+		requireForbidden403(t, integAZ.Authorize(keyCtx(g, key, 1), "read", &g.content), "API key below the party's min_acr")
+
+		// A confirmation exempts the credential rule only, never min_acr.
+		fxExec(t, integPool, "confirm collaborator",
+			`INSERT INTO profile_policy_confirmations (profile_id, party_id, confirmed_by_profile_id) VALUES ($1, $2, $1)`,
+			g.collabProfile, g.party)
+		requireForbidden403(t, integAZ.Authorize(keyCtx(g, key, 1), "read", &g.content), "confirmed collaborator, API key below min_acr")
+	})
+
+	t.Run("confirmation exempts the credential rule", func(t *testing.T) {
+		g := seedGateParty(t, "authorized", 1)
+		key, _ := fxAPIKey(t, integPool, g.collabUser)
+		requireForbidden403(t, integAZ.Authorize(keyCtx(g, key, 1), "read", &g.content), "unconfirmed, unauthorized key")
+		fxExec(t, integPool, "confirm collaborator",
+			`INSERT INTO profile_policy_confirmations (profile_id, party_id, confirmed_by_profile_id) VALUES ($1, $2, $1)`,
+			g.collabProfile, g.party)
+		if err := integAZ.Authorize(keyCtx(g, key, 1), "read", &g.content); err != nil {
+			t.Errorf("confirmed collaborator, unauthorized key under credential_rule authorized: err = %v, want nil", err)
+		}
+	})
+
+	t.Run("policy met", func(t *testing.T) {
+		g := seedGateParty(t, "any", 1)
+		key, _ := fxAPIKey(t, integPool, g.collabUser)
+		if err := integAZ.Authorize(keyCtx(g, key, 1), "read", &g.content); err != nil {
+			t.Errorf("API key meeting the policy: err = %v, want nil", err)
+		}
+	})
+}
+
 // TestInteg_OwnArm_OwnershipConfers pins the own arm's operation gate: owning
 // the target confers read, update and grant, never impersonate, manage or
 // login.
