@@ -116,10 +116,10 @@ items:
       id: oufL
       date: "2026-10-26"
       tags:
-        - type:ambiguity
+        - type:enhancement
         - plan/phase:remediation-04
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:medium
       text: 'Out of scope, existing behavior: whether PutAuthnPolicy should authorize or flag existing unauthorized credentials of managed users when switching to authorized. Admin-recoverable; not changed by this task.'
     - title: The PUT authn-policy description says changi…
       id: xWC3
