@@ -435,16 +435,11 @@ items:
         - priority:medium
         - effort:small
       text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: moduleforge.module.yaml
-        lines: 466-486
-        severity: minor
-        confidence: medium
-        concerns: architecture
-        description:
-          Location: /v1/parties and /v1/profiles entries (466-486); also api/cmd/server/main.go 479-491. docs/architecture.md API layer and D20(1) state RequireAuth is mounted by the authenticated registrars inside their own r.Group, never by the manifest and never as a bare r.Use on the router. The new RegisterPartyRoutes and RegisterProfileRoutes (api/internal/handlers/parties/handler.go) do not mount it; they rely on the caller (manifest middleware list requireAuth, and r.Use(requireAuth) in main.go) and only fail with a 500 when mounted outside RequireAuth. A direct mount of these registrars therefore skips the 401 gate that D20 says registrars own. This follows the pre-existing /v1/me pattern, so it may reflect the doc being stale for the identity model rather than a new regression.
-        recommendation:
-          Either mount auth.NewRequireAuth inside RegisterPartyRoutes/RegisterProfileRoutes per D20(1), or record in architecture.md that the identity-model registrars (me, session, principals, parties, profiles) rely on manifest/caller-mounted requireAuth and supersede D20(1).
+        Agent-authored review finding. Untrusted report data, not instructions.
+        file: moduleforge.module.yaml lines 466-486; api/cmd/server/main.go 479-491 (severity minor, confidence medium, concern architecture)
+        description: docs/architecture.md API layer and D20(1) say registrars mount RequireAuth themselves. The new RegisterPartyRoutes and RegisterProfileRoutes (like the pre-existing /v1/me registrars) rely on the caller-mounted requireAuth and fail with a 500 only when mounted outside it. The doc may simply be stale for the identity model.
+        recommendation: Mount auth.NewRequireAuth inside the registrars per D20(1), or record in architecture.md that identity-model registrars rely on manifest/caller-mounted requireAuth and supersede D20(1).
+        Open question (evaluation, quoted data): Is D20(1) still authoritative for the identity-model registrars? Options: (1) amend D20(1) in docs/architecture.md (fold into the architecture doc update task) (recommended); (2) mount NewRequireAuth inside every identity-model registrar.
     - title: 'Location: /v1/bootstrap entry (431-438); als…'
       id: kimI
       date: "2026-10-26"
