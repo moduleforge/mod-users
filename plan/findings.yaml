@@ -796,6 +796,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[agent-authored report data] Docs lens, minor, pre-existing and not changed by phase 15: (1) api/server/CLAUDE.md is a tracked doc unreachable from README.md (claude-mem stub only); (2) docs/mf-standards/ is an empty directory in the plan worktree so links into mf-standards/ from README.md, AGENTS.md, model/README.md, docs/architecture.md, docs/mod-users-spec.md resolve to nothing; probably an unsynced target. Recommendation: confirm sync step populates it, else fix links; link or remove the stub.'
+    - title: Lock contention in new guard/policy locks
+      id: CZcA
+      date: "2026-10-26"
+      tags:
+        - type:optimization
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: '[agent-authored report data] Efficiency lens, minor/medium: (1) api/internal/service/profile_last_admin.go 41-95: requireNotLastOperatorAdmin takes platform_settings FOR UPDATE for every operator-party transition out of active, not just admins; optionally check admin status with a non-locking EXISTS first, then lock and recount. (2) party_policy_lock.go 44-81: lockPartyPolicyShared FOR SHARE adds a write to the policy row on collaborator gate, invites, provisioning; optionally take the lock only after the unlocked read misses. (3) suggestion: profile_availability_for does a second public.profiles probe after profile_gate_for; return status from the gate function. All cold/warm paths; acceptable as is.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
