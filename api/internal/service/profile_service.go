@@ -582,8 +582,8 @@ func (s *ProfileService) requireParty(ctx context.Context, cq coredb.Querier, pa
 	return nil
 }
 
-// resolveInvitee loads the users row of the invited holder. An unknown email or
-// entity is apiresp.ErrNotFound; an entity that is a principal but not a user
+// resolveInvitee loads the users row of the invited holder. An unknown or
+// unverified email, or an unknown entity, is apiresp.ErrNotFound; an entity that is a principal but not a user
 // (a service account) is ErrHolderNotAdmissible.
 func (s *ProfileService) resolveInvitee(ctx context.Context, tx pgx.Tx, req inviteRequest, canonEmail string) (usersdb.User, error) {
 	q := s.usersQ(tx)
@@ -607,6 +607,11 @@ func (s *ProfileService) resolveInvitee(ctx context.Context, tx pgx.Tx, req invi
 		}
 		if err != nil {
 			return usersdb.User{}, fmt.Errorf("users: look up invitee: %w", err)
+		}
+		// An unverified address proves nothing about who holds it: it is
+		// indistinguishable from an unknown one.
+		if ident.VerifiedAt == nil {
+			return usersdb.User{}, apiresp.ErrNotFound
 		}
 		holderID = ident.UserID
 	}
@@ -852,8 +857,13 @@ type ProvisionedManagedUser struct {
 // for a malformed email or password, ErrIdentifierTaken when the address is
 // registered.
 //
+// When the party's credential_rule is `authorized`, the new password is also
+// authorized for the party (authorized by the acting profile), so the user can
+// sign in from the first attempt.
+//
 // Observations: `create` `user`, `create` `user_identifier`, `create`
-// `profile` and `create` `credential`; the lifecycle observers see a change
+// `profile`, `create` `credential` and, under the `authorized` rule, `create`
+// `credential_party_authorization`; the lifecycle observers see a change
 // from "" to `active`.
 func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx, in ManagedUserInput) (ProvisionedManagedUser, error) {
 	if in.PartyID <= 0 {
@@ -866,7 +876,8 @@ func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx
 	if err := ValidatePassword(in.Password); err != nil {
 		return ProvisionedManagedUser{}, err
 	}
-	if _, err := adminCaller(ctx); err != nil {
+	ac, err := adminCaller(ctx)
+	if err != nil {
 		return ProvisionedManagedUser{}, err
 	}
 	cq := s.coreQuerier(tx)
@@ -905,6 +916,28 @@ func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx
 	})
 	if err != nil {
 		return ProvisionedManagedUser{}, err
+	}
+	uq := s.usersQ(tx)
+	policy, err := uq.GetPartyAuthnPolicy(ctx, party)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		// No policy row: credential_rule `any`.
+	case err != nil:
+		return ProvisionedManagedUser{}, fmt.Errorf("users: load party authn policy: %w", err)
+	case policy.CredentialRule == CredentialRuleAuthorized:
+		if _, err := uq.AuthorizeCredentialForParty(ctx, usersdb.AuthorizeCredentialForPartyParams{
+			CredentialID: cred.ID, PartyID: party, AuthorizedByProfileID: ac.ProfileID,
+		}); err != nil {
+			return ProvisionedManagedUser{}, fmt.Errorf("users: authorize managed user password: %w", err)
+		}
+		partyEnt, err := cq.GetEntityByID(ctx, party)
+		if err != nil {
+			return ProvisionedManagedUser{}, fmt.Errorf("users: load party: %w", err)
+		}
+		if err := observeInTx(ctx, s.obs, tx, opCreate, resourceCredentialPartyAuthorization, party,
+			nil, authorizationAudit(cred.UUID, partyEnt.Uuid)); err != nil {
+			return ProvisionedManagedUser{}, err
+		}
 	}
 	return ProvisionedManagedUser{User: created, Profile: prof, IdentifierID: ident.ID, CredentialID: cred.ID}, nil
 }

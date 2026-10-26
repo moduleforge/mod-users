@@ -37,7 +37,7 @@ func (s *stack) openProfiles(t *testing.T, holderID, partyID int64) int64 {
 func TestAdmitInTx_CreatesAnActiveProfile(t *testing.T) {
 	lc := env.watchLifecycle()
 	f := env.newParty(t)
-	a := env.register(t)
+	a := env.registerVerified(t)
 	uid := env.principalID(t, a.Email)
 
 	env.obs.reset()
@@ -79,7 +79,7 @@ func TestAdmitInTx_CreatesAnActiveProfile(t *testing.T) {
 
 func TestAdmitInTx_NullInviterWhenZero(t *testing.T) {
 	f := env.newParty(t)
-	a := env.register(t)
+	a := env.registerVerified(t)
 	p, err := env.admit(t, f, svc.AdmitInput{PartyID: f.partyID, HolderUserID: env.principalID(t, a.Email)})
 	if err != nil {
 		t.Fatalf("AdmitInTx: %v", err)
@@ -139,7 +139,7 @@ func TestAdmitInTx_InvitedProfileBecomesActive(t *testing.T) {
 func TestAdmitInTx_SuspendedProfileIsRefused(t *testing.T) {
 	lc := env.watchLifecycle()
 	f := env.newParty(t)
-	a := env.register(t)
+	a := env.registerVerified(t)
 	uid := env.principalID(t, a.Email)
 	_, id := env.seedPartyProfile(t, uid, f.partyID, "suspended")
 
@@ -213,7 +213,7 @@ func TestAdmitInTx_Refusals(t *testing.T) {
 func TestAdmitInTx_ObserverErrorAbortsTheTransaction(t *testing.T) {
 	lc := env.watchLifecycle()
 	f := env.newParty(t)
-	a := env.register(t)
+	a := env.registerVerified(t)
 	uid := env.principalID(t, a.Email)
 	lc.failWith(errors.New("seat release failed"))
 	defer lc.reset()
@@ -246,7 +246,7 @@ func TestAdmitInTx_InvitedActivationRollsBackWithTheObserver(t *testing.T) {
 func TestAdmitInTx_ConcurrentAdmissionsYieldOneProfile(t *testing.T) {
 	env.watchLifecycle()
 	f := env.newParty(t)
-	a := env.register(t)
+	a := env.registerVerified(t)
 	uid := env.principalID(t, a.Email)
 
 	const n = 6

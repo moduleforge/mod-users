@@ -103,16 +103,16 @@ func (s *stack) asSession(t *testing.T, a account, profileID int64) ordertest.Id
 
 func TestOrder_PrincipalsRoutes(t *testing.T) {
 	h := env.orderRouter()
-	admin := env.register(t)
+	admin := env.registerVerified(t)
 	_, opProfile := env.makeOperator(t, admin)
 	operator := env.asSession(t, admin, opProfile)
 
-	user := env.register(t)
+	user := env.registerVerified(t)
 	userProfile := env.personalProfileID(t, env.principalID(t, user.Email))
 	ordinary := env.asSession(t, user, userProfile)
 
 	target := func() string {
-		return "/v1/principals/" + env.entityUUID(t, env.principalID(t, env.register(t).Email))
+		return "/v1/principals/" + env.entityUUID(t, env.principalID(t, env.registerVerified(t).Email))
 	}
 	missing := "/v1/principals/" + "22222222-2222-2222-2222-222222222222"
 
@@ -207,7 +207,7 @@ func TestOrder_PrincipalsRoutes(t *testing.T) {
 
 func TestOrder_MeRoutes(t *testing.T) {
 	h := env.orderRouter()
-	a := env.register(t)
+	a := env.registerVerified(t)
 	env.verifyRegisteredEmail(t, a)
 	uid := env.principalID(t, a.Email)
 	self := env.asSession(t, a, env.personalProfileID(t, uid))
@@ -279,7 +279,7 @@ func TestOrder_MeRoutes(t *testing.T) {
 	// Self-service authority is structural: another user's object is the same
 	// 404 as a missing one (never a distinguishable 403), and a stale session
 	// gets the step-up action only after the object check passes shape.
-	other := env.register(t)
+	other := env.registerVerified(t)
 	otherCred := env.do(t, http.MethodPost, "/v1/me/credentials/ssh-keys", other.tk.access(), map[string]string{"public_key": newSSHPublicKey(t)}).
 		wantStatus(t, http.StatusCreated).obj(t)["uuid"].(string)
 	for _, c := range []struct{ method, path string }{
@@ -322,18 +322,18 @@ func TestOrder_PartyRoutes(t *testing.T) {
 	operator := env.asSession(t, f.admin, f.adminProf)
 	missing := "22222222-2222-2222-2222-222222222222"
 
-	freshHolder := func() string { return env.register(t).Email }
+	freshHolder := func() string { return env.registerVerified(t).Email }
 	invitedEmail := freshHolder()
 	env.inviteEmail(t, f, invitedEmail).wantStatus(t, http.StatusCreated)
-	takenEmail := env.register(t).Email
+	takenEmail := env.registerVerified(t).Email
 
 	activeProfile := func() string {
-		uid := env.principalID(t, env.register(t).Email)
+		uid := env.principalID(t, env.registerVerified(t).Email)
 		_, id := env.seedPartyProfile(t, uid, f.partyID, "active")
 		return id
 	}
 	endedProfile := func() string {
-		uid := env.principalID(t, env.register(t).Email)
+		uid := env.principalID(t, env.registerVerified(t).Email)
 		pid, id := env.seedPartyProfile(t, uid, f.partyID, "active")
 		env.exec(t, "end profile", `UPDATE profiles SET status = 'ended', ended_at = now(), end_reason = 'seeded' WHERE entity_id = $1`, pid)
 		return id
@@ -378,7 +378,7 @@ func TestOrder_PartyRoutes(t *testing.T) {
 
 func TestOrder_MeProfileRoutes(t *testing.T) {
 	h := env.orderRouter()
-	a := env.register(t)
+	a := env.registerVerified(t)
 	uid := env.principalID(t, a.Email)
 	self := env.asSession(t, a, env.personalProfileID(t, uid))
 	missing := "33333333-3333-3333-3333-333333333333"
@@ -418,7 +418,7 @@ func TestOrder_MeProfileRoutes(t *testing.T) {
 	)
 
 	// Another account's profile is the same 404 as a missing one.
-	other := env.register(t)
+	other := env.registerVerified(t)
 	foreign := profile("invited")
 	otherSession := env.asSession(t, other, env.personalProfileID(t, env.principalID(t, other.Email)))
 	for _, action := range []string{"/accept", "/decline", "/leave"} {
