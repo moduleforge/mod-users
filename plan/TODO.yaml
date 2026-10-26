@@ -845,7 +845,7 @@ phases:
           slug: require-party-update-for-managed-password-authorization
           title: Require Party Update Before Auto-Authorizing A Managed User Password
           path: phase-15-remediation-04/006-require-party-update-for-managed-password-authorization.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: ProvisionManagedUserInTx writes the credential_party_authorizations row under an authorized party only when the caller holds update on the party. Without update the user is still provisioned and the password stays unauthorized. New integration test covers the no-update case; all validation passed.
           findings:
