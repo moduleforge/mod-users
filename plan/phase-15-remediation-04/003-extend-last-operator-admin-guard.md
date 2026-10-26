@@ -27,3 +27,7 @@ This task fixes findings `Kfjo` (security, priority medium), `kPpy` (bug, priori
 - Finding `kPpy` in this plan's `plan/findings.yaml` (type:bug, priority:low): the exported `EndInTx` in `api/internal/service/profile_service.go` does not call the guard, so it can end the last operator administrator.
 - Finding `Ts9r` in this plan's `plan/findings.yaml` (type:optimization, priority:low): `requireNotLastOperatorAdmin` runs two queries with the same large SQL text on an admin ending; the recommendation is one query with `FILTER`.
 - Finding `Xqat` in this plan's `plan/findings.yaml` (type:documentation, priority:low): the guard reads mod-authz-owned tables with raw SQL and hardcodes the Bootstrap grant shape, and the approximation is not recorded as a decision.
+
+## Status
+
+Outcome: succeeded (2026-10-26). The guard now lives in `transitionLocked` (`api/internal/service/profile_service.go`) for any transition out of `active`, so `EndInTx`, `UpdateProfileStatus` (ending and suspension) and `LeaveProfile` inherit it; the explicit calls in `profile_admin.go` and `profile_holder.go` were removed. `requireNotLastOperatorAdmin` (`api/internal/service/profile_last_admin.go`) takes the `platform_settings` lock (only for the operator party) then runs one `count(*) FILTER` query. Doc comment and `AGENTS.md` row record the approximation. New integration tests in `api/internal/integration/leave_gate_integration_test.go`. Validation: build.api, test.unit pass; integration suite passed against a throwaway Postgres container.

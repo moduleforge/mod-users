@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -13,12 +14,12 @@ import (
 // CodeLastOperatorAdmin is the detail code of ErrLastOperatorAdmin.
 const CodeLastOperatorAdmin = "users.last_operator_admin"
 
-// ErrLastOperatorAdmin is returned when ending a profile would leave the
+// ErrLastOperatorAdmin is returned when ending or suspending a profile would leave the
 // operator party with no active profile holding the wildcard `manage` grant
 // (users.last_operator_admin, 409).
 var ErrLastOperatorAdmin = apiresp.Conflict(apiresp.FieldError{
 	Field: "status", Code: CodeLastOperatorAdmin,
-	Message: "the profile is the last active operator administrator and cannot be ended",
+	Message: "the profile is the last active operator administrator and cannot be ended or suspended",
 })
 
 // operatorAdminProfileSQL selects the active operator-party profiles holding a
@@ -35,36 +36,51 @@ SELECT p.entity_id
        JOIN public.authz_operations o ON o.id = g.operation_id
       WHERE g.actor_id = p.entity_id AND o.slug = $1 AND g.target_id IS NULL AND g.scope = 'entity')`
 
-// lockPlatformSettingsForEndSQL serializes endings of operator administrators:
-// each ending takes this row before counting the remaining administrators, so
-// of two concurrent endings the second sees the first's committed result.
-const lockPlatformSettingsForEndSQL = `SELECT 1 FROM public.platform_settings WHERE id = 1 FOR UPDATE`
+// lockPlatformSettingsForEndSQL serializes the transitions that take an
+// operator administrator out of `active`: each takes this row, only when the
+// profile's party is the operator party, before counting the remaining
+// administrators, so of two concurrent transitions (an ending and a suspension
+// alike) the second sees the first's committed result. No row (a party other
+// than the operator party, or no platform_settings row) means nothing to guard.
+const lockPlatformSettingsForEndSQL = `SELECT 1 FROM public.platform_settings WHERE id = 1 AND operator_party_id = $1 FOR UPDATE`
 
-// requireNotLastOperatorAdmin refuses (ErrLastOperatorAdmin) to end the locked
-// profile p when it is an active operator administrator and no other active
-// operator administrator exists. It runs in the ending's transaction. Profiles
-// that are not active administrators of the operator party pass untouched.
+// requireNotLastOperatorAdmin refuses (ErrLastOperatorAdmin) to take the locked
+// profile p out of `active` (ending or suspending it) when it is an active
+// operator administrator and no other active operator administrator exists. It
+// runs in the transition's transaction, after the platform_settings row lock
+// and before the transition. Profiles that are not active administrators of the
+// operator party pass untouched. transitionLocked calls it, so every path that
+// ends or suspends a profile, EndInTx included, inherits it.
+//
+// Recorded approximation (an explicit decision, not an oversight): the guard
+// reads the mod-authz-owned tables public.grants and public.authz_operations,
+// and public.platform_settings, with raw SQL rather than through the
+// authorizer. It hardcodes the shape of the grant Bootstrap creates (a direct
+// entity-scope wildcard `manage` grant, target NULL). It deliberately ignores a
+// `manage` grant inherited through an actor group, so a group-derived
+// administrator is neither counted nor protected: the guard can then refuse a
+// transition that would not remove the last effective administrator, and a
+// differently shaped grant is not seen. Resolving administrators through the
+// authorizer interface is the longer-term alternative.
 func requireNotLastOperatorAdmin(ctx context.Context, tx pgx.Tx, p coredb.Profile) error {
 	if p.Status != ProfileStatusActive || !p.PartyID.Valid {
 		return nil
 	}
-	var isAdmin bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (`+operatorAdminProfileSQL+` AND p.entity_id = $2)`,
-		manageOperationSlug, p.EntityID).Scan(&isAdmin); err != nil {
-		return fmt.Errorf("users: check operator administrator: %w", err)
-	}
-	if !isAdmin {
-		return nil
-	}
-	if _, err := tx.Exec(ctx, lockPlatformSettingsForEndSQL); err != nil {
+	var locked int
+	if err := tx.QueryRow(ctx, lockPlatformSettingsForEndSQL, p.PartyID.Int64).Scan(&locked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
 		return fmt.Errorf("users: lock platform settings: %w", err)
 	}
-	var others bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (`+operatorAdminProfileSQL+` AND p.entity_id <> $2)`,
-		manageOperationSlug, p.EntityID).Scan(&others); err != nil {
+	var self, others int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FILTER (WHERE a.entity_id = $2), count(*) FILTER (WHERE a.entity_id <> $2) FROM (`+
+			operatorAdminProfileSQL+`) a`,
+		manageOperationSlug, p.EntityID).Scan(&self, &others); err != nil {
 		return fmt.Errorf("users: count operator administrators: %w", err)
 	}
-	if !others {
+	if self > 0 && others == 0 {
 		return ErrLastOperatorAdmin
 	}
 	return nil

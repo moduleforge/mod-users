@@ -6,9 +6,14 @@ package integration
 // operator administrator cannot be ended, by leaving or by an administrator.
 
 import (
+	"errors"
 	"net/http"
 	"sync"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+
+	svc "github.com/moduleforge/mod-users/api/internal/service"
 )
 
 // A session the party gate locks out of the profile cannot leave it: the
@@ -263,5 +268,87 @@ func TestLeaveGate_ConcurrentEndingsLeaveOneAdministrator(t *testing.T) {
 	}
 	if left != 1 || refused != 1 {
 		t.Fatalf("left %d refused %d, want one of each", left, refused)
+	}
+}
+
+// Suspending the last active operator administrator is refused; with a second
+// administrator present, suspending one succeeds.
+func TestLeaveGate_LastOperatorAdminCannotBeSuspended(t *testing.T) {
+	f := bootstrapOperator(t)
+	s := f.s
+	suspend := map[string]string{"status": "suspended"}
+
+	s.do(t, http.MethodPatch, "/v1/profiles/"+f.adminUUID, f.adminTok.access(), suspend).
+		wantError(t, http.StatusConflict, "conflict", "users.last_operator_admin")
+	if got := s.profileStatus(t, f.adminUUID); got != "active" {
+		t.Fatalf("admin status after refused suspension = %s, want active", got)
+	}
+
+	_, secondUUID := f.secondAdmin(t)
+	s.do(t, http.MethodPatch, "/v1/profiles/"+secondUUID, f.adminTok.access(), suspend).wantStatus(t, http.StatusOK)
+	if got := s.profileStatus(t, secondUUID); got != "suspended" {
+		t.Errorf("second admin status = %s, want suspended", got)
+	}
+	// The remaining administrator is now the last: refused again.
+	s.do(t, http.MethodPatch, "/v1/profiles/"+f.adminUUID, f.adminTok.access(), suspend).
+		wantError(t, http.StatusConflict, "conflict", "users.last_operator_admin")
+}
+
+// The exported EndInTx primitive applies the same guard as the HTTP paths.
+func TestLeaveGate_EndInTxRefusesTheLastOperatorAdmin(t *testing.T) {
+	f := bootstrapOperator(t)
+	s := f.s
+
+	ctx := s.authCtx(t, f.adminTok.access())
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		return s.profiles.EndInTx(ctx, tx, f.adminProf, "test")
+	})
+	if !errors.Is(err, svc.ErrLastOperatorAdmin) {
+		t.Fatalf("EndInTx err = %v, want ErrLastOperatorAdmin (users.last_operator_admin)", err)
+	}
+	if got := s.profileStatus(t, f.adminUUID); got != "active" {
+		t.Errorf("admin status after refused EndInTx = %s, want active", got)
+	}
+}
+
+// An ending (through the exported EndInTx) and a suspension (over HTTP) of the
+// last two administrators serialize: they cannot both commit.
+func TestLeaveGate_ConcurrentEndAndSuspendLeaveOneAdministrator(t *testing.T) {
+	f := bootstrapOperator(t)
+	s := f.s
+	_, secondUUID := f.secondAdmin(t)
+	secondProf := s.scanInt64(t, "second admin profile", `SELECT id FROM entities WHERE uuid = $1`, secondUUID)
+
+	ctx := s.authCtx(t, f.adminTok.access())
+	var endErr error
+	var suspended *resp
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		endErr = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+			return s.profiles.EndInTx(ctx, tx, secondProf, "test")
+		})
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		suspended = s.do(t, http.MethodPatch, "/v1/profiles/"+f.adminUUID, f.adminTok.access(), map[string]string{"status": "suspended"})
+	}()
+	close(start)
+	wg.Wait()
+
+	endOK := endErr == nil
+	suspendOK := suspended.status == http.StatusOK
+	if endOK == suspendOK {
+		t.Fatalf("ended ok=%v (err %v), suspended ok=%v (status %d: %s); want exactly one to succeed", endOK, endErr, suspendOK, suspended.status, suspended.raw)
+	}
+	if !endOK && !errors.Is(endErr, svc.ErrLastOperatorAdmin) {
+		t.Errorf("EndInTx err = %v, want ErrLastOperatorAdmin", endErr)
+	}
+	if !suspendOK && suspended.status != http.StatusConflict {
+		t.Errorf("suspend status = %d: %s, want 409", suspended.status, suspended.raw)
 	}
 }

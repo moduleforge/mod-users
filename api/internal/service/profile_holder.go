@@ -147,7 +147,7 @@ func (s *ProfileService) LeaveProfile(ctx context.Context, profileUUID uuid.UUID
 		if avail != availabilityAvailable {
 			return ProfileUnavailable(avail)
 		}
-		return requireNotLastOperatorAdmin(ctx, tx, locked)
+		return nil
 	}
 	return s.holderTransition(ctx, p, []string{ProfileStatusActive, ProfileStatusSuspended}, ProfileStatusEnded, EndReasonLeft, guard)
 }
