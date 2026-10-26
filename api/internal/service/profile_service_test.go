@@ -368,6 +368,11 @@ func (f *profileUsersQ) GetUserByEntityID(_ context.Context, id int64) (usersdb.
 	return f.user(id)
 }
 
+// GetUserByEntityIDForUpdate is the holder lock the invitation takes.
+func (f *profileUsersQ) GetUserByEntityIDForUpdate(_ context.Context, id int64) (usersdb.User, error) {
+	return f.user(id)
+}
+
 func newInviteTestService(az *opAuthorizer, cq *profileCoreQ, uq *profileUsersQ) *ProfileService {
 	s := NewProfileService(nil, uq, cq, az, nil, &UserService{now: time.Now}, nil, nil)
 	s.newQ = func(pgx.Tx) usersdb.Querier { return uq }

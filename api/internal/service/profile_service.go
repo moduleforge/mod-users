@@ -480,6 +480,10 @@ func validateInvite(in InviteInput, holderUUID uuid.UUID) (canonEmail string, er
 //
 // Observations: `create` `profile`; the lifecycle observers see a change from
 // "" to `invited`.
+//
+// Concurrency: the holder's `mod_users.users` row is locked before the duplicate
+// check and the insert, as AdmitInTx does, so an invitation and an admission of
+// one holder into one party run one after the other.
 func (s *ProfileService) InviteInTx(ctx context.Context, tx pgx.Tx, in InviteInput) (Profile, error) {
 	return s.invite(ctx, tx, inviteRequest{InviteInput: in})
 }
@@ -582,7 +586,9 @@ func (s *ProfileService) requireParty(ctx context.Context, cq coredb.Querier, pa
 	return nil
 }
 
-// resolveInvitee loads the users row of the invited holder. An unknown or
+// resolveInvitee loads and locks (FOR UPDATE) the users row of the invited
+// holder, the same holder lock AdmitInTx takes, so a concurrent invitation and
+// admission of one holder serialize. An unknown or
 // unverified email, or an unknown entity, is apiresp.ErrNotFound; an entity that is a principal but not a user
 // (a service account) is ErrHolderNotAdmissible.
 func (s *ProfileService) resolveInvitee(ctx context.Context, tx pgx.Tx, req inviteRequest, canonEmail string) (usersdb.User, error) {
@@ -615,7 +621,7 @@ func (s *ProfileService) resolveInvitee(ctx context.Context, tx pgx.Tx, req invi
 		}
 		holderID = ident.UserID
 	}
-	user, err := q.GetUserByEntityID(ctx, holderID)
+	user, err := q.GetUserByEntityIDForUpdate(ctx, holderID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if _, perr := s.coreQuerier(tx).GetPrincipalByEntityID(ctx, holderID); perr == nil {
 			return usersdb.User{}, ErrHolderNotAdmissible

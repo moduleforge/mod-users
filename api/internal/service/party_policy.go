@@ -477,7 +477,8 @@ type credentialWriteGate struct {
 // party's gate through another factor; every other caller is refused (404 when
 // it cannot read the party, 403 otherwise). The credential must be a live one
 // of a principal holding a profile in the party that is not ended (404), and
-// the caller's authentication must be fresh (409).
+// the caller's authentication must be fresh (409). The holder's profile is read
+// FOR SHARE after the credential lock, so the write serializes with an ending.
 func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx, partyUUID, credUUID uuid.UUID) (credentialWriteGate, error) {
 	ac, err := writeCaller(ctx)
 	if err != nil {
@@ -513,15 +514,6 @@ func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx,
 	if missing || cred.RevokedAt != nil {
 		return credentialWriteGate{}, apiresp.ErrNotFound
 	}
-	var held bool
-	if err := tx.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM public.profiles WHERE holder_id = $1 AND party_id = $2 AND status <> 'ended')`,
-		cred.PrincipalID, partyID).Scan(&held); err != nil {
-		return credentialWriteGate{}, fmt.Errorf("users: check holder profile: %w", err)
-	}
-	if !held {
-		return credentialWriteGate{}, apiresp.ErrNotFound
-	}
 	if err := s.users.requireFresh(ac); err != nil {
 		return credentialWriteGate{}, err
 	}
@@ -532,6 +524,21 @@ func (s *PartyPolicyService) gateCredentialWrite(ctx context.Context, tx pgx.Tx,
 	}
 	if err != nil {
 		return credentialWriteGate{}, fmt.Errorf("users: lock credential: %w", err)
+	}
+	// Read the holder's open profile under a row lock, after the credential
+	// lock. EndInTx and the departure cleanup lock that profile FOR UPDATE, so
+	// the share lock makes this write wait for a concurrent ending: either the
+	// ending commits first and the profile reads as ended here (404), or this
+	// write commits first and the cleanup, which runs after, removes what it
+	// wrote. A plain read would let the write land after the cleanup ran.
+	var heldID int64
+	if err := tx.QueryRow(ctx,
+		`SELECT entity_id FROM public.profiles WHERE holder_id = $1 AND party_id = $2 AND status <> 'ended' FOR SHARE`,
+		cred.PrincipalID, partyID).Scan(&heldID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return credentialWriteGate{}, apiresp.ErrNotFound
+		}
+		return credentialWriteGate{}, fmt.Errorf("users: check holder profile: %w", err)
 	}
 	return credentialWriteGate{ac: ac, partyID: partyID, cred: cred}, nil
 }

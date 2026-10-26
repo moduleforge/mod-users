@@ -22,3 +22,13 @@ This task fixes findings `oO0S` (bug, medium) and `5iFg` (bug, low). `oO0S` conc
 
 - Finding `oO0S` in this plan's `plan/findings.yaml` (bug, medium): `gateCredentialWrite` in `api/internal/service/party_policy.go` checks the held profile with a plain `SELECT EXISTS` and locks only the credential. A concurrent ending can leave an orphan authorization or an unclearable confinement.
 - Finding `5iFg` in this plan's `plan/findings.yaml` (bug, low): `InviteInTx` in `api/internal/service/profile_service.go` takes no holder lock, so a concurrent invite and `AdmitInTx` for the same holder can make `AdmitInTx` return `ErrProfileExists` into the caller's transaction.
+
+## Status
+
+Outcome: succeeded (2026-10-25).
+
+- `gateCredentialWrite` (`api/internal/service/party_policy.go`) now takes the credential lock first, then reads the holder's open profile with `SELECT entity_id ... FOR SHARE`, replacing the bare `EXISTS`.
+- `InviteInTx` (`api/internal/service/profile_service.go`) locks the holder through `GetUserByEntityIDForUpdate` in `resolveInvitee`, before the duplicate check and insert; `AdmitInTx`'s doc comment (`api/internal/service/profile_admit.go`) states the shared-lock guarantee.
+- Unit fake `profileUsersQ` gained `GetUserByEntityIDForUpdate` (`api/internal/service/profile_service_test.go`).
+- New integration tests in `api/internal/integration/profile_writers_integration_test.go`; both fail on the pre-change code and pass now.
+- Validation: `make build.api` and `make test.unit` pass; the integration suite passes against a throwaway Postgres (logs under `.flow/validation-logs/`).

@@ -104,7 +104,11 @@ func validateAdmit(in AdmitInput) error {
 // `mod_users.users` row and re-reading the open profile under that lock, so two
 // concurrent admissions of one holder into one party yield one profile and no
 // error, without relying on (and so without aborting the transaction through)
-// the profiles_one_open_per_holder_party unique index.
+// the profiles_one_open_per_holder_party unique index. InviteInTx takes the same
+// holder lock, so a concurrent invitation and admission serialize too: whichever
+// runs second sees the first's profile and AdmitInTx never returns
+// ErrProfileExists. (An invitation that runs after an admission still returns
+// ErrProfileExists, its documented refusal.)
 func (s *ProfileService) AdmitInTx(ctx context.Context, tx pgx.Tx, in AdmitInput) (Profile, error) {
 	if err := validateAdmit(in); err != nil {
 		return Profile{}, err
