@@ -861,6 +861,7 @@ phases:
           path: phase-15-remediation-04/007-exclude-disabled-principals-from-admin-count.md
           done: false
           tier: sonnet-med
+          digest: operatorAdminProfileSQL joins principals on holder_id with disabled_at IS NULL, so disabled-principal admins are not counted as remaining. New integration test covers the disabled second admin. Remaining gaps (mod-authz grant revocation, gate-locked admins, group-inherited admins) are documented as the guard boundary.
           findings:
             - DO7p
           git:
