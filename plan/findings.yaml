@@ -282,8 +282,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:remediation-04
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: '[agent-authored report data] Docs lens (readme-reachability report, medium/high): lock-order contract not documented in AGENTS.md or docs/architecture.md: profile lock before credential lock; platform_settings lock first for operator-party transitions; per-party advisory lock (lockPartyPolicyExclusive/Shared in api/internal/service/party_policy_lock.go) then policy row. Also: add party_policy_lock.go to AGENTS.md key-files row (line ~192) and profile_gate/profile_gate_for to model/README.md wrapper list (lines 26-27). Recommendation: add a Lock order subsection to docs/architecture.md and pointer in AGENTS.md.'
     - title: Unreachable CLAUDE.md, dangling mf-standards
       id: ZrCC
