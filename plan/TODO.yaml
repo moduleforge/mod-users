@@ -909,7 +909,7 @@ phases:
           slug: close-admin-disable-race-and-fail-closed-policy-lock
           title: Serialize Principal Disable With Last-Admin Guard And Fail Closed On Nil Policy Lock Tx
           path: phase-16-remediation-05/002-close-admin-disable-race-and-fail-closed-policy-lock.md
-          done: false
+          done: true
           tier: sonnet-med
           findings:
             - 6dyh
