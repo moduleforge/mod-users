@@ -321,20 +321,6 @@ items:
           Take the same GetUserByEntityIDForUpdate lock on the holder in invite before the duplicate check
           and insert, so admissions and invitations serialize. Alternatively, narrow the AdmitInTx comment to
           say a concurrent invitation can still yield ErrProfileExists.
-    - title: An invitation with confirm_policy_mismatch w…
-      id: t2OR
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go lines 525-541 (severity minor, confidence low, concern security)
-        description: An invitation with confirm_policy_mismatch writes a permanent profile_policy_confirmations row exempting the new profile from the party's credential_rule. It needs only AuthorizeTypeIn(create, profile, party), while changing the rule needs `update` on the party (PutAuthnPolicy), so an inviter without policy authority can exempt a member, and the exemption outlives later policy changes. Resolution (a) deliberately places the exemption on the invitation.
-        recommendation: Require `update` on the party to record a confirmation; consider dropping confirmations when PutAuthnPolicy changes credential_rule.
-        Open question (evaluation, quoted data; decide with xhLc): What authority must a caller hold to record a policy-mismatch confirmation, and should confirmations survive a credential_rule change? Options: (1) require `update` on the party for confirm_policy_mismatch=true (else 403) and drop the party's confirmations when credential_rule changes (recommended); (2) require `update` only; (3) keep current behavior per resolution (a).
     - title: tokenActiveLocked keeps the setup token acti…
       id: cvMO
       date: "2026-10-26"
@@ -981,4 +967,9 @@ closed:
       title: Through the holder door, UnconfineCredential…
       disposition: promoted
       ref: E3ly
+      date: "2026-10-26"
+    - id: t2OR
+      title: An invitation with confirm_policy_mismatch w…
+      disposition: promoted
+      ref: t2OR
       date: "2026-10-26"
