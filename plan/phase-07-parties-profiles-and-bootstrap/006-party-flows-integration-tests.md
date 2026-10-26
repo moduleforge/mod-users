@@ -87,3 +87,18 @@ executes before it.
 - After the worked-example test.
 - After the transition and managed-user tests.
 - After the gating, confinement and compliance tests.
+
+## Status
+
+Outcome: succeeded (2026-10-25). New file `api/internal/integration/party_flows_integration_test.go`.
+
+Scenario map (requirement to test):
+
+- 1.1 to 1.6: `TestPartyFlows_ADRWorkedExample` subtests 1 to 6; 1.7: `TestPartyFlows_ADRWorkedExample_ConfinedVariant`.
+- 2: `TestProfiles_InviteRefusals`, `TestProfiles_AcceptDeclineLeave`, `TestProfiles_AdminStatusChanges`, `TestProfiles_UnauthorizedCallersSeeNotFound` (existing); new `TestPartyFlows_SuspendedProfileTokenIsRefusedUntilResumed`, `TestPartyFlows_HolderAndAdministratorAuthority`.
+- 3: `TestProfiles_ManagedUsers` (existing); new `TestPartyFlows_ManagedUserCreatedThroughTheRouteIsNotInvitable`.
+- 4: new `TestPartyFlows_ProviderPolicyRemedy`, `TestPartyFlows_MinACRLockAndStepUpUnlock`, `TestPartyFlows_ConfinedFactorNeverListsThePersonalProfileAsAvailable`.
+- 5: `TestPartyFlows_OutsideCollaboratorThroughTheRoutes`; existing `TestCollaborator_Compliance_*`, `TestCollaborator_AddToPartyActorGroupThroughAuthzRoute`.
+- 6: `TestPartyFlows_TrustedAdmissionIsReachableThroughTheRoutes` (plus existing `TestAdmitInTx_*`).
+
+Decision: in the worked example Acme's `authorized` rule is set after John's admission, because inviting a holder with no authorized credential under that rule needs a policy-mismatch confirmation, which exempts the rule and would contradict step 4. Phase gate: `make build`, `make test`, `make lint`, `cd model && make verify` and the authz, config and integration suites all pass. No defects found in tasks 001 to 005 and 007 code.
