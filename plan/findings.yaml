@@ -1,5 +1,59 @@
 version: 2
-items: []
+items:
+    - title: List path skips owning-party gate
+      id: Ddx9
+      date: "2026-10-26"
+      tags:
+        - type:security
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-users'' single-row engine (api/internal/authz/authz.go, authorizePrelude -> checkPartyPolicy -> mod_users.session_meets_party_policy in model/migrations/sql/0100_baseline.sql) refuses an acting profile outside the target''s owning party whose session or credential does not meet that party''s credential_rule / min_acr. The list side does not: mod-core''s GrantTableGenerator (core-api/authz/setup/grant_table.go, GenerateForResource) emits accessible_<slug>_ids_for_actor(p_actor_entity_id, p_op_ids) with only the actor and op ids as inputs, so it has no session or credential to evaluate and admits the same rows through the entity, owned-scope and own arms. A collaborator whose session is below the owning party''s min_acr, or whose credential is not authorized under credential_rule ''authorized'', is refused on a single party-owned row but still sees it in list endpoints that join the access functions (for example the principal list through accessible_user_ids_for_actor). This breaks the list/single-row parity both sides document. The fix needs a mod-core change: either the generated functions take the session or credential (or a precomputed set of parties whose policy the caller meets) and filter out rows whose owner_id is a restrictive-policy party the actor is outside of, or GrantTableGenerator exposes a hook through which a module supplies that predicate. mod-users cannot change the generated SQL itself.'
+    - title: Core Authorizer contract omits party gate
+      id: qvSR
+      date: "2026-10-26"
+      tags:
+        - type:conflict
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-core''s Authorizer contract (core-api/authz/authz.go, the "Trust and assurance" paragraph of the Authorizer interface doc, and the AuthContext.ImpersonatorPrincipalID comment in core-api/opctx/opctx.go) says a conforming implementation applies only the operation-level assurance gate itself and trusts liveness and profile availability to the middleware. mod-users'' production engine (api/internal/authz/authz.go, authorizePrelude) now also enforces the owning party''s credential_rule and min_acr for acting profiles outside the target''s owning party (mod_users.session_meets_party_policy, refusal ErrForbidden), and OwnerScopedTypeAuthorizer''s doc lists only the four arms. The contract text should allow, or describe, an implementation-level owning-party gate in the prelude so consumers do not read an unexpected 403 for a wildcard or grant holder as a contract violation. Documentation-only change in mod-core.'
+    - title: Party gate adds a query per check
+      id: IIA3
+      date: "2026-10-26"
+      tags:
+        - type:optimization
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/internal/authz/authz.go authorizePrelude calls checkPartyPolicy (SELECT mod_users.session_meets_party_policy(...)) for every Authorize with a target and every AuthorizeTypeIn from a session or credential context, not only for cross-party ones: deciding whether the acting profile is outside the owner''s party needs the target''s owner_id, which is only known in SQL. That adds one round trip to every targeted check (three in total for Authorize: party gate, wildcard, grant-or-own). The function returns early without touching factors for in-party actors and owners without a restrictive policy, so the cost is the round trip, not the work. Folding the gate into the wildcard query (one statement returning both booleans) would remove the extra round trip without changing semantics.'
+    - title: Two ErrStepUpRequired sentinels
+      id: Lt3W
+      date: "2026-10-26"
+      tags:
+        - type:style
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: 'The users.step_up_required action-required error is built twice from useraction.StepUpRequired: service.ErrStepUpRequired (api/internal/service/session_errors.go) and authz.ErrStepUpRequired (api/internal/authz/authz.go, the engine''s assurance-gate refusal). Both render identically through apiresp.WriteError, but they are distinct pointers, so errors.Is(err, service.ErrStepUpRequired) does not match an engine refusal and vice versa; callers have to match on errors.As(*apiresp.ActionRequiredError) plus Action().Code. internal/authz cannot import internal/service without pulling the whole service graph into the engine. Declaring the single shared value next to the action code in api/internal/useraction and aliasing it from both packages would give one identity.'
+    - title: '[decision] Are operator profiles subject to t'
+      id: JgvC
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: '[decision] Are operator profiles subject to the owning-party gate (requirement 13 literal reading)? Current implementation holds operator profiles to customer-party credential_rule and min_acr. 14 phase-7 scenarios in api/internal/integration (authorized_invite, collaborator, party_flows, party_policy, profiles) were skipped via skipOperatorUnderOwningPartyGate (message names task 002). Exempting operators means adding a core_is_operator_profile skip to mod_users.session_meets_party_policy and removing the skip helper; moving the gate after the wildcard arm alone is not enough. Risks: a party can lock platform operators out; operators cannot impersonate such a party''s members (affects task 003). Needs a user decision before task 002 proceeds.'
+    - title: '[docs] Phase 10 task 001 source list names th'
+      id: pKAO
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: '[docs] Phase 10 task 001 source list names the engine pieces but not the owning-party gate (decision C). Only the localAuthz facade paragraph in docs/architecture.md was updated by this task. The phase 10 doc rewrite must cover the owning-party gate.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
