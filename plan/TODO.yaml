@@ -641,7 +641,7 @@ phases:
           slug: require-verified-invitee-and-authorize-managed-password
           title: Require Verified Email For Invitations And Authorize Managed-User Passwords
           path: phase-14-remediation-03/001-require-verified-invitee-and-authorize-managed-password.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Unverified email identifiers now resolve as not-found for invitations (profile_service.go resolveInvitee); managed-user provisioning under an authorized credential rule authorizes the new password in the same transaction; integration and unit tests added; full integration suite passed.
           findings:
