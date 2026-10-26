@@ -680,7 +680,7 @@ phases:
             branch: plan/identity-model-impl-14-003
             commit:
                 - 16678b8
-            merge: null
+            merge: b2a026a1ff33abc3d82afdba7d20769b3e38a46f
         - number: 4
           slug: serialize-profile-writers-with-endings
           title: Serialize Credential Gate And Invitations With Profile Writers
