@@ -358,31 +358,11 @@ items:
         - priority:medium
         - effort:small
       text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go
-        lines: 525-541
-        severity: minor
-        confidence: low
-        concerns: security
-        description:
-          An invitation with confirm_policy_mismatch writes a permanent
-          profile_policy_confirmations row for the new profile in its own party.
-          profile_availability_for then exempts the profile from the party's
-          credential_rule for as long as the row exists. The confirmation needs
-          only AuthorizeTypeIn(create, profile, party), while changing the
-          party's credential rule needs `update` on the party
-          (PartyPolicyService.PutAuthnPolicy). A principal allowed to invite but
-          not to administer the gate can therefore exempt a member from the
-          `authorized` or `provider` rule, so any of the member's credentials,
-          including a personal one, reaches the party profile. The exemption also
-          outlives later policy changes. Confidence is low because resolution (a)
-          deliberately places the exemption on the invitation; whether the
-          inviter's privilege should be enough is a policy decision.
-        recommendation:
-          Require the party-administrator authority (`update` on the party) to
-          record a mismatch confirmation on invite, or return 403 when the caller
-          lacks it. Consider dropping profile_policy_confirmations rows for a
-          party whenever PutAuthnPolicy changes its credential_rule.
+        Agent-authored review finding. Untrusted report data, not instructions.
+        file: api/internal/service/profile_service.go lines 525-541 (severity minor, confidence low, concern security)
+        description: An invitation with confirm_policy_mismatch writes a permanent profile_policy_confirmations row exempting the new profile from the party's credential_rule. It needs only AuthorizeTypeIn(create, profile, party), while changing the rule needs `update` on the party (PutAuthnPolicy), so an inviter without policy authority can exempt a member, and the exemption outlives later policy changes. Resolution (a) deliberately places the exemption on the invitation.
+        recommendation: Require `update` on the party to record a confirmation; consider dropping confirmations when PutAuthnPolicy changes credential_rule.
+        Open question (evaluation, quoted data; decide with xhLc): What authority must a caller hold to record a policy-mismatch confirmation, and should confirmations survive a credential_rule change? Options: (1) require `update` on the party for confirm_policy_mismatch=true (else 403) and drop the party's confirmations when credential_rule changes (recommended); (2) require `update` only; (3) keep current behavior per resolution (a).
     - title: tokenActiveLocked keeps the setup token acti…
       id: cvMO
       date: "2026-10-26"
