@@ -253,12 +253,14 @@ func TestSessionConfigFrom(t *testing.T) {
 		Auth: config.AuthConfig{
 			DefaultAudience: "aud", AccessTokenTTL: time.Hour, SessionMaxAge: 2 * time.Hour,
 			SessionIdleTimeout: 3 * time.Hour, ClientCredentialsTTL: 4 * time.Minute,
+			ImpersonationTTL: 5 * time.Minute, ImpersonationMax: 6 * time.Minute,
 		},
 	}
 	got := SessionConfigFrom(cfg)
 	want := SessionConfig{
 		Issuer: "the-issuer", DefaultAudience: "aud", AccessTokenTTL: time.Hour, SessionMaxAge: 2 * time.Hour,
 		IdleTimeout: 3 * time.Hour, ClientCredentialsTTL: 4 * time.Minute,
+		ImpersonationTTL: 5 * time.Minute, ImpersonationMax: 6 * time.Minute,
 	}
 	if got != want {
 		t.Errorf("SessionConfigFrom = %+v, want %+v", got, want)

@@ -15,6 +15,11 @@ const (
 	CodeRefreshReuse        = "users.refresh_reuse"
 	CodeAppLoginNotGranted  = "users.app_login_not_granted"
 	CodeBYOIdentityDisabled = "users.byo_identity_disabled"
+
+	// CodeImpersonationNotAllowed is the 403 of an impersonation that may not
+	// start or continue: nesting, one's own profile, a switch or fork inside an
+	// impersonation, a renew or end outside one.
+	CodeImpersonationNotAllowed = "users.impersonation_not_allowed"
 )
 
 // LockAppLoginNotGranted is the lock reason a profile view carries when the
@@ -72,6 +77,15 @@ var (
 	// platform does not allow bring-your-own identities
 	// (platform_settings.allow_byo_identity).
 	ErrBYOIdentityDisabled = &AuthError{Status: http.StatusForbidden, Code: CodeBYOIdentityDisabled, Message: "self-registration is disabled"}
+
+	// ErrImpersonationNotAllowed is returned when an impersonation may not
+	// start (the caller's session is itself an impersonation, or the target
+	// profile is the caller's own, or the database refused the nesting with
+	// MF101) and when a session route that an impersonation session may not
+	// use is called inside one (profile switch, fork). Renew and end return it
+	// outside an impersonation session. It is a 403 and unwraps to
+	// apiresp.ErrForbidden.
+	ErrImpersonationNotAllowed = &AuthError{Status: http.StatusForbidden, Code: CodeImpersonationNotAllowed, Message: "this impersonation is not allowed"}
 )
 
 // ProfileUnavailable returns the 401 users.profile_unavailable refusal with

@@ -29,6 +29,7 @@ var section101 = map[string]bool{
 	"create user_identifier": true, "update user_identifier": true, "delete user_identifier": true,
 	"create credential": true, "update credential": true, "revoke credential": true,
 	"login session": true, "update session": true, "revoke session": true,
+	"impersonate impersonation": true, "update impersonation": true, "revoke impersonation": true,
 	"create profile": true, "update profile": true,
 	"create credential_party_authorization": true,
 	"delete credential_party_authorization": true,

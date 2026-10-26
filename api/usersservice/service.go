@@ -141,6 +141,32 @@ func NewSessionService(
 	return inner.NewSessionService(pool, q, coreQ, az, obs, signer, challenges, cfg)
 }
 
+// ImpersonationService starts, renews and ends impersonation sessions: a child
+// session of the administrator's own, with a recorded reason, a lifetime capped
+// by AUTH_IMPERSONATION_TTL and AUTH_IMPERSONATION_MAX, a fresh authentication
+// requirement, no nesting and the real administrator always recorded.
+type ImpersonationService = inner.ImpersonationService
+
+// StartImpersonationInput is the input of ImpersonationService.Start.
+type StartImpersonationInput = inner.StartImpersonationInput
+
+// ErrImpersonationNotAllowed: users.impersonation_not_allowed (403), the same
+// value as the inner package's.
+var ErrImpersonationNotAllowed = inner.ErrImpersonationNotAllowed
+
+// NewImpersonationService constructs an ImpersonationService. q must be backed
+// by pool; sessions supplies token issue and the impersonation lifetimes
+// (carried by its SessionConfig).
+func NewImpersonationService(
+	pool *pgxpool.Pool,
+	q usersdb.Querier,
+	az coreAuthz.Authorizer,
+	obs *observer.ObserverGroup,
+	sessions *SessionService,
+) *ImpersonationService {
+	return inner.NewImpersonationService(pool, q, az, obs, sessions)
+}
+
 // ProfileService owns the lifecycle of party profiles: invitation, acceptance,
 // suspension, resumption and ending (with departure cleanup), managed users and
 // the lifecycle observers.

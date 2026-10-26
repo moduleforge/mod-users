@@ -26,6 +26,7 @@ import (
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/auth"
+	"github.com/moduleforge/mod-users/api/internal/handlers"
 	"github.com/moduleforge/mod-users/api/internal/handlers/me"
 	"github.com/moduleforge/mod-users/api/internal/handlers/parties"
 	"github.com/moduleforge/mod-users/api/internal/handlers/principals"
@@ -42,12 +43,13 @@ func (s *stack) identityFromAuthContext(next http.Handler) http.Handler {
 			return
 		}
 		id := &auth.Identity{
-			PrincipalID:   ac.PrincipalID,
-			PrincipalKind: auth.PrincipalKindUser,
-			ProfileID:     ac.ProfileID,
-			SessionID:     ac.SessionID,
-			ACR:           ac.ACR,
-			AuthTime:      ac.AuthTime,
+			PrincipalID:             ac.PrincipalID,
+			PrincipalKind:           auth.PrincipalKindUser,
+			ProfileID:               ac.ProfileID,
+			SessionID:               ac.SessionID,
+			ACR:                     ac.ACR,
+			AuthTime:                ac.AuthTime,
+			ImpersonatorPrincipalID: ac.ImpersonatorPrincipalID,
 		}
 		var sessionUUID, principalUUID, profileUUID string
 		if err := s.pool.QueryRow(r.Context(), `
@@ -74,6 +76,10 @@ func (s *stack) orderRouter() http.Handler {
 	r.Route("/v1/principals", func(r chi.Router) {
 		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
 		principals.RegisterPrincipalRoutes(r, principals.NewPrincipalsHandler(s.users))
+	})
+	r.Route("/v1/impersonations", func(r chi.Router) {
+		r.Use(coreAuthz.RequireAuth, s.identityFromAuthContext)
+		handlers.RegisterImpersonationRoutes(r, handlers.NewImpersonationHandler(s.imps))
 	})
 	partiesH := parties.NewPartiesHandler(s.profiles, s.partyPolicy)
 	r.Route("/v1/parties", func(r chi.Router) {
