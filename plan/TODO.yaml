@@ -182,7 +182,7 @@ phases:
             branch: plan/identity-model-impl-07-004
             commit:
                 - 768bb8f
-            merge: null
+            merge: 390093d3ef1510f9eca9f35b7fff368921599c0a
         - number: 5
           slug: party-aware-ssh-profile-derivation
           title: Party-Aware SSH Profile Derivation
