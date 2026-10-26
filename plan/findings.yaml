@@ -260,6 +260,15 @@ items:
         - priority:medium
         - effort:small
       text: '[agent-authored report data] Docs lens (readme-reachability report, medium/high): lock-order contract not documented in AGENTS.md or docs/architecture.md: profile lock before credential lock; platform_settings lock first for operator-party transitions; per-party advisory lock (lockPartyPolicyExclusive/Shared in api/internal/service/party_policy_lock.go) then policy row. Also: add party_policy_lock.go to AGENTS.md key-files row (line ~192) and profile_gate/profile_gate_for to model/README.md wrapper list (lines 26-27). Recommendation: add a Lock order subsection to docs/architecture.md and pointer in AGENTS.md.'
+    - title: Run TestLeaveGate_ConcurrentDisableAndSuspend
+      id: tmcn
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-05
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Run TestLeaveGate_ConcurrentDisableAndSuspend in an environment where the Docker/Postgres integration harness starts: go test -tags=integration -run TestLeaveGate_ConcurrentDisableAndSuspend ./internal/integration/ from api/. Not yet observed to execute.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
