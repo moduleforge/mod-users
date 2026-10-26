@@ -901,7 +901,7 @@ phases:
           findings:
             - ggb7
           git:
-            branch: null
+            branch: plan/identity-model-impl-16-001
             commit: []
             merge: null
         - number: 2
