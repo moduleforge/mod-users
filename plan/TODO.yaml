@@ -271,7 +271,7 @@ phases:
             branch: plan/identity-model-impl-08-004
             commit:
                 - 974157a
-            merge: null
+            merge: 3d8cd9db69540c98514aef48d383fc93d6bd26d8
         - number: 5
           slug: personal-party
           title: Personal Party
