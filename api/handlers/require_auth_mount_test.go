@@ -120,7 +120,7 @@ func TestRequireAuthMount_EveryRouteAnswers401First(t *testing.T) {
 		"POST /v1/me/credentials/oidc/{provider}/start",
 		"GET /v1/session/", "POST /v1/session/switch", "POST /v1/session/step-up/oidc/{provider}/start",
 		"POST /v1/impersonations/", "POST /v1/impersonations/current/renew", "DELETE /v1/impersonations/current",
-			"GET /v1/principals/", "POST /v1/principals/{uuid}/disable",
+		"GET /v1/principals/", "POST /v1/principals/{uuid}/disable",
 		"POST /v1/me/profiles/{uuid}/accept", "POST /v1/me/profiles/{uuid}/decline", "POST /v1/me/profiles/{uuid}/leave",
 		"GET /v1/parties/{party_uuid}/profiles", "POST /v1/parties/{party_uuid}/profiles",
 		"POST /v1/parties/{party_uuid}/managed-users", "PATCH /v1/profiles/{uuid}",

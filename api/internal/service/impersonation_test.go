@@ -180,4 +180,3 @@ func TestSwitchRefusesInsideAnImpersonation(t *testing.T) {
 		t.Fatalf("Switch err = %v, want ErrImpersonationNotAllowed", err)
 	}
 }
-

@@ -48,11 +48,13 @@ Access tokens are EdDSA (Ed25519) JWTs that carry a server-side session or non-i
 | `AUTH_SESSION_MAX_AGE` | `720h` | Absolute session lifetime |
 | `AUTH_SESSION_IDLE_TIMEOUT` | `168h` | Refresh-lineage expiry |
 | `AUTH_CLIENT_CREDENTIALS_TTL` | `15m` | Client-credentials access-token lifetime |
-| `AUTH_IMPERSONATION_TTL` | `30m` | Lifetime of one impersonation token or renewal |
-| `AUTH_IMPERSONATION_MAX` | `60m` | Total impersonation time from its start |
+| `AUTH_IMPERSONATION_TTL` | `30m` | Lifetime of one impersonation session at its start and of each renewal (`POST /v1/impersonations/current/renew`) |
+| `AUTH_IMPERSONATION_MAX` | `60m` | Longest an impersonation session lives from its start, renewals included (not shorter than the TTL) |
 | `AUTH_SELF_SERVICE_MAX_AUTH_AGE` | `10m` | How recent `auth_time` must be for self-service credential and identifier changes |
 | `AUTH_DEFAULT_AUDIENCE` | `mod-users` | `aud` of a token whose session has no app |
 | `AUTH_ACCEPTED_AUDIENCES` | unset: the default audience plus any registered app slug | Comma-separated `aud` values bearer tokens may carry |
+
+Impersonation is a separate child session, not a switch of the administrator's own: `POST /v1/impersonations` (`profile_uuid`, `reason`) needs the `impersonate` operation on the target profile (a party administrator's owned-scope `manage` grant reaches the party's profiles; a personal profile needs an operator-party profile with a wildcard `impersonate` or `manage` grant, and a customer party's authentication policy never binds the operator) and an authentication no older than ten minutes (`409 users.step_up_required` otherwise). The answer is a token response without a refresh token whose `act.sub` is the administrator's principal uuid; it expires within `AUTH_IMPERSONATION_TTL`. An impersonation never nests and cannot switch or fork (`403 users.impersonation_not_allowed`); `POST /v1/impersonations/current/renew` extends it up to `AUTH_IMPERSONATION_MAX` from its start and `DELETE /v1/impersonations/current` ends it. Revoking or expiring the administrator's session ends the impersonation on its next request. The audit log records `impersonate`, `update` and `revoke` on resource `impersonation`, with the administrator as the impersonator on every request made inside the session.
 
 CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and any entry containing `*` is rejected at startup outside local mode. Entries are bare `scheme://host[:port]` origins (no trailing slash or path), matched case-insensitively. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
 

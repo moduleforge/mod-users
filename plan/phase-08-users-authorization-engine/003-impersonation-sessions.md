@@ -105,3 +105,15 @@ architectural_impact: true
 - After `ImpersonationService` and its unit tests.
 - After the handler, routes, manifest, `main.go` and `openapi.yaml` wiring.
 - After the integration tests.
+
+## Status
+
+Outcome: succeeded (2026-10-26).
+
+Validation: `make build`, `make test`, `make lint` and `cd model && make verify` pass; the `internal/authz`, `internal/config` and `internal/integration` suites pass against a throwaway `postgres:16` (removed afterwards); `grep -n 'impersonations' api/openapi.yaml moduleforge.module.yaml` shows the routes and manifest entries.
+
+Source files: `api/internal/service/impersonation.go` (service), `api/internal/handlers/impersonation.go` (handler and routes), `api/handlers/handlers.go` and `api/usersservice/service.go` (facade), `api/cmd/server/main.go`, `moduleforge.module.yaml`, `api/openapi.yaml`, `api/internal/service/session_service.go` (`SessionConfig` lifetimes, impersonation sessions list only the impersonated profile), `api/internal/service/session_flows.go` (switch and fork refuse), `api/internal/service/session_errors.go`, `api/internal/service/helpers.go`, `AGENTS.md`, `README.md`.
+
+Requirement 5 to test map (`api/internal/integration/impersonation_integration_test.go`): no nesting through the API and SQL `TestImpersonation_NoNesting`; administrator from the parent's principal, no refresh token `TestImpersonation_StartCreatesAChildSession`; Acme admin reach `TestImpersonation_PartyAdminReach`; personal profile needs operator authority `TestImpersonation_PersonalProfileNeedsOperatorAuthority` (and restrictive-policy members `TestImpersonation_OperatorReachesMembersOfRestrictiveParties`); own arm `TestImpersonation_OwnArmNeverConfersImpersonate`; stale `auth_time` `TestImpersonation_StaleAuthTimeNeedsStepUp`; TTL and cap `TestImpersonation_TTLAndRenewalCap`; parent ends child `TestImpersonation_ParentLiveness`; switch and fork `TestImpersonation_SwitchAndForkRefused`; observer ops and real audit rows `TestImpersonation_Observations`; route order with `ordertest.Impersonating` `TestOrder_ImpersonationRoutes`. Unit tests: `api/internal/service/impersonation_test.go`, `api/internal/handlers/impersonation_test.go`.
+
+Decisions: start answers 201; the child session carries no app (token audience is the default audience); renew sets the expiry to now + TTL capped at created_at + MAX and answers 409 `users.impersonation_limit_reached` when that is not later than the current expiry; an unknown target is 404 only for a caller allowed to impersonate every profile, else the same 403 as an unauthorized target; the lifetimes ride on `SessionConfig`, so `moduleforge.module.yaml` needs no extra `impersonationService` argument.

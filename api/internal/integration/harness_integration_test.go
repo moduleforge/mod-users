@@ -227,6 +227,7 @@ type stack struct {
 	gate        *svc.CollaboratorGate
 	creds       *svc.CredentialService
 	sessions    *svc.SessionService
+	imps        *svc.ImpersonationService
 	chal        *svc.ChallengeService
 	dir         *svc.DirectoryService
 	boot        *svc.BootstrapService
@@ -484,6 +485,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 	users := svc.NewUserService(queries, coreQueries, az, group, coreSvcs.NaturalPerson, creds)
 	sessions := svc.NewSessionService(pool, queries, coreQueries, az, group, signer, chal, svc.SessionConfigFrom(cfg))
 	users.WithSelfService(pool, sessions, chal, opReg, cfg.Auth.SelfServiceMaxAuthAge)
+	imps := svc.NewImpersonationService(pool, queries, az, group, sessions)
 	profiles := svc.NewProfileService(pool, queries, coreQueries, az, group, users, creds, sessions)
 	dir := svc.NewDirectoryService(pool)
 
@@ -498,6 +500,10 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 		r.Use(requireAuth)
 		session.RegisterSessionRoutes(r, session.NewSessionHandler(sessions))
 		r.Post("/step-up/oidc/{provider}/start", oidcH.StepUpStart)
+	})
+	r.Route("/v1/impersonations", func(r chi.Router) {
+		r.Use(requireAuth)
+		handlers.RegisterImpersonationRoutes(r, handlers.NewImpersonationHandler(imps))
 	})
 	r.Route("/v1/me", func(r chi.Router) {
 		r.Use(requireAuth)
@@ -563,7 +569,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 	return &stack{
 		pool: pool, cfg: cfg, signer: signer, signKey: key, handler: r, obs: rec, group: group,
 		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, partyPolicy: partyPolicy, gate: gate, creds: creds,
-		sessions: sessions, chal: chal, dir: dir, boot: boot, onboarding: onboarding, q: queries, coreQ: coreQueries, opReg: opReg,
+		sessions: sessions, imps: imps, chal: chal, dir: dir, boot: boot, onboarding: onboarding, q: queries, coreQ: coreQueries, opReg: opReg,
 		auditApplied: auditApplied,
 	}, nil
 }
