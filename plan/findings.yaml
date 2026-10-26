@@ -527,6 +527,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Decide whether to queue a docs task for the global lock-order contract from finding zwbM (platform_settings, users row, profile, credential), to be recorded in AGENTS.md or docs/architecture.md. Not required by this task; no lock-order rule is stated anywhere yet.
+    - title: Sibling links under worktrees/plan/ (mod-core
+      id: TA9q
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: Sibling links under worktrees/plan/ (mod-core, mod-authz, mod-audit) appear unchanged; the agent had no earlier snapshot to compare, so this is unverified.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
