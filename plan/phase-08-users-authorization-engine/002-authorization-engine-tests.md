@@ -60,7 +60,8 @@ Dependency: requires task 001. It can run in parallel with tasks 003, 004 and 00
    - the own arm with `ownerID` equal to and different from `profile_own_subject(actor)`
    - the deny case
 6. **Parity with generated list functions.** Install mod-core's generator output for the test slugs on the same fixtures through `setup.ApplyFuncs`, with the slug list per U18 (including `user` and `profile`). For every (actor, operation, entity) triple in the owned-scope and own-arm fixtures, assert that `Authorize` and membership in the corresponding `accessible_*_ids_for_actor` result agree.
-7. Unit tests in `authz_test.go` use the `export_test.go` stubs, including the owned-scope stub, and mod-core's `AuthContext`-based identities in place of `ordertest.Actor`, `ordertest.Sudo` and `ordertest.SudoOnly`.
+7. **Owning-party gate matrix (task 001 requirement 13).** A collaborator session (acting profile outside the owning party) with `acr` below the owning party's `min_acr`, and one with an unauthorized credential under `credential_rule` `authorized`, are refused on that party's content; the same sessions meeting the policy pass; a `profile_policy_confirmations` row exempts only the credential rule, never `min_acr`; inside-party actors, system actors and the SSH personal-profile fallback are covered.
+8. Unit tests in `authz_test.go` use the `export_test.go` stubs, including the owned-scope stub, and mod-core's `AuthContext`-based identities in place of `ordertest.Actor`, `ordertest.Sudo` and `ordertest.SudoOnly`.
 
 ## Validation
 

@@ -11,10 +11,11 @@ Rewrite the production `Authorizer` in `api/internal/authz/authz.go` to the ADR'
 - the owned-scope arm with `include_subtypes`
 - the per-operation own arm through `authz_operations.ownership_confers`
 - `AuthorizeTypeIn`
+- the owning-party gate: the owning party's authentication policy (`credential_rule`, `min_acr`) enforced per request for actors whose acting profile is outside the target's owning party (amended resolution (a) and U5)
 
 Suggested roles: `plugins/flow/roles/developer-go.md` (primary) and `plugins/flow/roles/developer-sql.md` (the arm predicates). No standard skill covers this task.
 
-Scope: `api/internal/authz/authz.go`, `api/localAuthz/authz.go` and `api/internal/authz/export_test.go`, plus the minimum test edits needed to keep existing suites compiling. The full engine test matrix belongs to task 002 (`authorization-engine-tests`). Impersonation, the `credentials` routes, the app gate and the personal party are tasks 003 to 005.
+Scope: `api/internal/authz/authz.go`, `api/localAuthz/authz.go` and `api/internal/authz/export_test.go`, plus the owning-party gate's SQL function `mod_users.session_meets_party_policy` (`model/migrations/sql/0100_baseline.sql`, edited in place per plan policy), a touch of `api/internal/service/ssh_key_resolver.go` if the gate needs context it does not yet carry, and the minimum test edits needed to keep existing suites compiling. The full engine test matrix belongs to task 002 (`authorization-engine-tests`). Impersonation, the `credentials` routes, the app gate and the personal party are tasks 003 to 005.
 
 This task runs first in the phase. Tasks 002 to 005 depend on it and can run in parallel with each other once it lands.
 
@@ -61,6 +62,11 @@ This task runs first in the phase. Tasks 002 to 005 depend on it and can run in 
 10. **Test stubs.** Add an owned-scope stub to `api/internal/authz/export_test.go`, alongside the existing wildcard, grant-or-own and type-grant stubs ([API surface section 6.6](../notes/mod-users-api-surface.md#66-test-helpers)). Remove stubs whose arms no longer exist.
 11. **Keep green.** Existing tests that encode removed semantics must not be left failing. This includes the own arm without `ownership_confers` and the unscoped grant reads. Either adjust the assertion to the new semantics, or mark the case with a `t.Skip` naming task 002. Do not leave `api/` uncompilable.
 12. **Binding names.** Do not rename anything marked binding in API surface section 6.2. If a change is unavoidable, record it in the report and flag it.
+13. **Owning-party gate (decision C, amending resolution (a) and U5; finding `RU9G`).** The owning party's authentication policy (`credential_rule`, `min_acr`) is enforced per request inside mod-users' own authorization engine for actors whose acting profile is outside the target's owning party (outside collaborators reaching the party's content through actor groups or grants). mod-authz is not changed and no sibling edit is made.
+    - Add a gate in the `Authorizer` prelude, for example the SQL function `mod_users.session_meets_party_policy(session, party)`, consulted when the acting profile is not in the target's owning party. It costs one extra query per cross-party `Authorize`. Resolve the owning party the same way the owned-scope arm does (`target.owner_id`; for `AuthorizeTypeIn`, `ownerID`).
+    - It applies the party's `credential_rule` (including the `profile_policy_confirmations` exemption of the credential rule only, as in `profile_availability`) and `min_acr` to the session's factors. A failure is a refusal like a failed grant arm (not a 409 action).
+    - Acting profiles inside the owning party, personal profiles reaching their own records, system-actor contexts and the anonymous context skip it.
+    - The same check applies on the SSH path: where `SSHKeyResolver` falls back to the personal profile (`AuthContextForOwner`), a cross-party access is gated by the owning party's policy too.
 
 ## Validation
 
@@ -70,6 +76,8 @@ This task runs first in the phase. Tasks 002 to 005 depend on it and can run in 
 - `cd model && make verify` passes.
 - The authz integration suite passes against a throwaway Postgres per `AGENTS.md`, "Authz integration tests against a throwaway Postgres" (`go test -tags=integration -p 1 -count=1 ./internal/authz/...`), with mod-core and mod-authz migrations composed from the plan worktrees.
 - `grep -rniE 'assume|sudo|account holder' api/internal/authz/authz.go api/localAuthz/authz.go` returns no package-documentation hits.
+- Tests (the full matrix is task 002): a collaborator session with `acr` below the owning party's `min_acr`, and one whose credential is unauthorized under `credential_rule` `authorized`, are refused on that party's content; the same sessions at or above the policy pass; the SSH-fallback path is covered by the same refusal.
+- `grep -n 'session_meets_party_policy' model/migrations/sql/0100_baseline.sql api/internal/authz/authz.go` shows the function and its use.
 - `grep -n 'OwnerScopedTypeAuthorizer' api/localAuthz/authz.go` shows the compile-time assertion.
 - In a manual read of the own-arm SQL, the predicate matches API surface 6.2 item 6 exactly and references `ownership_confers`.
 
@@ -89,9 +97,10 @@ architectural_impact: true
 - [API surface section 6.2](../notes/mod-users-api-surface.md#62-localauthz-binding): the engine semantics, which are binding.
 - [API surface section 9](../notes/mod-users-api-surface.md#9-required-from-mod-authz-to-be-planned-by-mod-authz-names-fixed-here-or-by-mod-core): the mod-authz prerequisites.
 - [Decisions](../notes/decisions-and-resolutions.md#planning-decisions):
-  - U5: liveness lives in the middleware; the `Authorizer` enforces only the operation gate.
+  - U5, as amended 2026-10-26: liveness lives in the middleware; the `Authorizer` enforces the operation-level gate and, for cross-party actors, the owning party's policy (requirement 13).
   - U14: assurance gate scope.
   - U20: `AuthorizeTypeIn` fallback.
+- [Decisions, amendments](../notes/decisions-and-resolutions.md#amendments-2026-10-26): amendment C to resolution (a) and U5 (finding `RU9G`).
 - [Work packages](../notes/work-packages.md#phase-users-authorization-engine): package 1.
 - mod-core ADR `docs/architecture/identity-model.md`, section "Authorization engine".
 
