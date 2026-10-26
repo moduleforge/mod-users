@@ -708,7 +708,8 @@ phases:
             - iaJb
           git:
             branch: plan/identity-model-impl-14-005
-            commit: []
+            commit:
+                - 7b08d96
             merge: null
         - number: 6
           slug: correct-openapi-and-architecture-doc-drift
