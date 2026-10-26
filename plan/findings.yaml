@@ -655,25 +655,6 @@ items:
           The last-operator-admin guard covers only the holder leave and admin UpdateProfileStatus-to-ended paths. It does not cover suspending the last admin (UpdateProfileStatus to suspended), the public EndInTx entry point, or revoking the direct wildcard grant, and the remaining-admin count (status = 'active') ignores admins whose principal is disabled (principals.disabled_at) or whose profile is gate-locked, so an operator can still be left with no usable administrator. The platform_settings FOR UPDATE serialization of two concurrent endings is correct under READ COMMITTED (the second count sees the first's committed end), and lock order is profile then platform_settings on both guarded paths, so no deadlock was found there.
         recommendation:
           Document the guard's boundary, or extend it to suspension and to counting only admins whose principal is not disabled; decide whether EndInTx callers must go through it.
-    - title: api/server/CLAUDE.md is not reachable from R…
-      id: 76Ma
-      date: "2026-10-26"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-03
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/server/CLAUDE.md
-        lines: 1
-        severity: minor
-        confidence: medium
-        concerns: documentation
-        description:
-          api/server/CLAUDE.md is not reachable from README.md via relative links (agent-instruction file, so likely intentional).
-        recommendation:
-          Link it from README.md or AGENTS.md, or accept as a tool-loaded agent file.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -1493,4 +1474,9 @@ closed:
         the plan worktree's copy is an uninitialized, empty submodule directory. This environment state
         existed before this phase and was not caused by it, and no change to repository content would
         resolve it.
+      date: "2026-10-26"
+    - id: 76Ma
+      title: api/server/CLAUDE.md is not reachable from R…
+      disposition: promoted
+      ref: 76Ma
       date: "2026-10-26"
