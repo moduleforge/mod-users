@@ -776,7 +776,8 @@ phases:
             - zwbM
           git:
             branch: plan/identity-model-impl-15-001
-            commit: []
+            commit:
+                - dccd764
             merge: null
         - number: 2
           slug: gate-suspended-profile-leave
