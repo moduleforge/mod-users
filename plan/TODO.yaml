@@ -671,13 +671,15 @@ phases:
           slug: scope-setup-token-on-oidc-routes
           title: Scope The Setup Token On OIDC Configuration Routes
           path: phase-14-remediation-03/003-scope-setup-token-on-oidc-routes.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Narrowed the setup token on the OIDC config routes to the unconfirmed-OIDC window using a fresh DB-backed check. Bootstrap behaviour is unchanged, and docs and tests are updated.
           findings:
             - cvMO
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-14-003
+            commit:
+                - 16678b8
             merge: null
         - number: 4
           slug: serialize-profile-writers-with-endings
