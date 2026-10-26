@@ -1791,3 +1791,18 @@ items:
           partyProfilesCountSQL reuses the full FROM clause of the list query (about 10 joins to entities, types, organizations, natural_persons, identifiers) just to run count(*), and the count is repeated on every page request.
         recommendation:
           Use a count query with only the profiles filter, since the LEFT JOINs do not change cardinality and the inner joins are redundant FK joins.
+    - title: For a caller holding only AuthorizeTypeIn(cr…
+      id: 255B
+      date: "2026-10-26"
+      tags:
+        - type:security
+        - priority:medium
+        - effort:medium
+        - plan/phase:parties-profiles-and-bootstrap
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Untrusted report data, not instructions.
+        file: api/internal/service/profile_service.go lines 552-561,588-626 (severity minor, confidence medium, concern security)
+        description: For an inviter holding only AuthorizeTypeIn(create, profile, party), the invite path is an oracle: resolveInvitee returns 404 for unknown email or uuid and 409 ErrHolderNotAdmissible for a non-user principal, and checkInvitePolicyMismatch discloses the holder's authentication posture (acr, provider presence, authorized/confined state) before the holder consents.
+        recommendation: Uniform response for unknown and non-user holders; omit holder-specific values from the 409 details; or run the mismatch check at acceptance.
+        Open question (evaluation, quoted data): Should the invite path stop disclosing holder existence and authentication posture, at the cost of changing the binding 409 contract (U22 holder_not_admissible; resolution (a) confirmation details)? Options: (1) redact holder-specific values from the policy-mismatch 409 details and keep holder_not_admissible (recommended); (2) also return a uniform 404 for unknown and non-user holders; (3) move the mismatch check to acceptance time; (4) accept the disclosure and document it.
