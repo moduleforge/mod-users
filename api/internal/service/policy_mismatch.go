@@ -73,7 +73,7 @@ func (m *PolicyMismatch) Conflict() error {
 	var msg string
 	switch m.Reason {
 	case MismatchCredentialNotAuthorized:
-		msg = "the party requires a credential authorized for it; none of the account's credentials is"
+		msg = "the party requires a credential authorized for it; the account has no usable credential that is"
 	case MismatchProviderRequired:
 		msg = fmt.Sprintf("the party requires an OIDC credential from provider %q; the account has none", m.RequiredProviderID)
 	case MismatchACRTooLow:

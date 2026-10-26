@@ -24,7 +24,9 @@ for the rationale behind the Postgres + goose choices.
   - `challenges.sql` — `auth_challenges` (`create_challenge_with_cooldown`, consume, attempt counter)
   - `sessions.sql` — sessions, factors, refresh lineages (rotation, reuse lookup) and the
     `session_liveness`, `credential_liveness`, `profile_availability`,
-    `credential_profile_availability` and `session_acr` wrappers
+    `credential_profile_availability`, `profile_gate`, `profile_gate_for` and `session_acr` wrappers
+    (`profile_gate` is `profile_availability` without the profile-status check, and `profile_gate_for`
+    is its status-agnostic core; the leave route uses `profile_gate`)
   - `party_policies.sql` — `party_authn_policies` and `credential_party_authorizations`, and the
     `holder_policy_mismatch` wrapper (whether a holder's credentials can meet a party's policy; the
     shared by the invitation and outside-collaborator checks, with an invite-time mode: relaxed, the
