@@ -1821,3 +1821,18 @@ items:
         description: Through the holder door, UnconfineCredential lets a holder clear a confinement when their session satisfies the party gate through another factor, including credentials the party itself confined (JIT guest IdP account from a party-bound provider, managed-user path, or an admin-set confinement). A holder who unconfines before leaving escapes departure revocation and can use the party-issued credential for their personal profile and other parties.
         recommendation: Limit DELETE /v1/parties/{party_uuid}/confinements/{credential_uuid} to the administrator door, or allow the holder door only for holder-set confinements, never for credentials JIT-created from a party-bound provider.
         Open question (evaluation, quoted data; decide together with Pxlw): May a holder remove a confinement the party imposed through the holder door? Options: (1) holder door refused for party-controlled credentials (managed-user credentials and OIDC credentials from a party-bound provider), allowed otherwise, no schema change (recommended); (2) record who set each confinement (schema change) and let the holder remove only holder-set ones; (3) administrator door only for unconfine.
+    - title: An invitation with confirm_policy_mismatch w…
+      id: t2OR
+      date: "2026-10-26"
+      tags:
+        - type:security
+        - priority:medium
+        - effort:small
+        - plan/phase:parties-profiles-and-bootstrap
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Untrusted report data, not instructions.
+        file: api/internal/service/profile_service.go lines 525-541 (severity minor, confidence low, concern security)
+        description: An invitation with confirm_policy_mismatch writes a permanent profile_policy_confirmations row exempting the new profile from the party's credential_rule. It needs only AuthorizeTypeIn(create, profile, party), while changing the rule needs `update` on the party (PutAuthnPolicy), so an inviter without policy authority can exempt a member, and the exemption outlives later policy changes. Resolution (a) deliberately places the exemption on the invitation.
+        recommendation: Require `update` on the party to record a confirmation; consider dropping confirmations when PutAuthnPolicy changes credential_rule.
+        Open question (evaluation, quoted data; decide with xhLc): What authority must a caller hold to record a policy-mismatch confirmation, and should confirmations survive a credential_rule change? Options: (1) require `update` on the party for confirm_policy_mismatch=true (else 403) and drop the party's confirmations when credential_rule changes (recommended); (2) require `update` only; (3) keep current behavior per resolution (a).
