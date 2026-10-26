@@ -554,6 +554,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Task 007 builds on this: operatorAdminProfileSQL is where the disabled-principal exclusion belongs.'
+    - title: Finding line numbers (566-590, 388-400) cited
+      id: sWRq
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-04
+        - priority:unspecified
+        - effort:unspecified
+      text: Finding line numbers (566-590, 388-400) cited in the findings are stale against the current file.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
