@@ -702,6 +702,7 @@ phases:
           path: phase-14-remediation-03/005-fix-policy-sql-null-handling.md
           done: false
           tier: sonnet-med
+          digest: Fixed both NULL-handling defects in 0100_baseline.sql, added one integration test for each, and tweaked the 409 message for a zero holder acr. Verified on a throwaway Postgres.
           findings:
             - 4w6W
             - iaJb
