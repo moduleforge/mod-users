@@ -824,7 +824,8 @@ phases:
             - ICke
           git:
             branch: plan/identity-model-impl-15-004
-            commit: []
+            commit:
+                - 2dc69b9
             merge: null
         - number: 5
           slug: purge-confirmations-on-provider-change
