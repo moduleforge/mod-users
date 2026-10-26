@@ -885,6 +885,10 @@ type ProvisionedManagedUser struct {
 // for a malformed email or password, ErrIdentifierTaken when the address is
 // registered.
 //
+// The party's policy is read under the shared per-party policy lock
+// (lockPartyPolicyShared), so the authorization decision serializes with
+// PutAuthnPolicy.
+//
 // When the party's credential_rule is `authorized` and the caller holds
 // `update` on the party (the authority of the credential-authorization
 // administrator door), the new password is also authorized for the party
@@ -948,6 +952,13 @@ func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx
 		PrincipalID: userID, IdentifierID: &ident.ID, Password: in.Password, DefaultProfileID: &prof.ID,
 	})
 	if err != nil {
+		return ProvisionedManagedUser{}, err
+	}
+	// Read the policy under the shared per-party policy lock so the decision
+	// below serializes with a concurrent PutAuthnPolicy: a switch to
+	// `authorized` either commits before this read (and is seen) or waits until
+	// this transaction commits.
+	if err := lockPartyPolicyShared(ctx, tx, party); err != nil {
 		return ProvisionedManagedUser{}, err
 	}
 	uq := s.usersQ(tx)
