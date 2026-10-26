@@ -664,7 +664,8 @@ phases:
             - aNYW
           git:
             branch: plan/identity-model-impl-14-002
-            commit: []
+            commit:
+                - d977d63
             merge: null
         - number: 3
           slug: scope-setup-token-on-oidc-routes
