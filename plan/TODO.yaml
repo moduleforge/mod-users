@@ -973,7 +973,8 @@ phases:
             - sDO1
           git:
             branch: plan/identity-model-impl-17-001
-            commit: []
+            commit:
+                - 7d76b18
             merge: null
         - number: 2
           slug: scope-policy-lock-test-seam-and-assert-invite-time
