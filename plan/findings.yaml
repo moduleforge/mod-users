@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Run TestLeaveGate_ConcurrentDisableAndSuspend
-      id: tmcn
-      date: "2026-10-26"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-05
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Run TestLeaveGate_ConcurrentDisableAndSuspend in an environment where the Docker/Postgres integration harness starts: go test -tags=integration -run TestLeaveGate_ConcurrentDisableAndSuspend ./internal/integration/ from api/. Not yet observed to execute.'
     - title: 'Optional: install pyyaml or spectral so make'
       id: cKK9
       date: "2026-10-26"
@@ -1270,4 +1261,18 @@ closed:
       title: After task 008 MismatchCredentialNotAuthoriz…
       disposition: fixed
       ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: tmcn
+      title: Run TestLeaveGate_ConcurrentDisableAndSuspend
+      disposition: dismissed
+      reason: |-
+        Reclassified from the default ambiguity stamp: it is an unverified-test
+        deficiency (bug), not an open question. Already fixed: the test has now been
+        observed to execute and pass against a real postgres:16. Evidence under
+        project_root: .flow/validation-logs/leavegate-x5.log lines 1-12 (five
+        "=== RUN / --- PASS: TestLeaveGate_ConcurrentDisableAndSuspendLeaveAnEffectiveAdministrator",
+        "ok github.com/moduleforge/mod-users/api/internal/integration"),
+        .flow/validation-logs/leavegate-race.log lines 1-4 (the -race run, PASS), and
+        .flow/validation-logs/integration-full.log line 852 (the full integration
+        package "ok", no SKIP or FAIL lines).
       date: "2026-10-26"
