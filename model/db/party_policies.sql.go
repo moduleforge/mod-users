@@ -168,12 +168,13 @@ func (q *Queries) GetPartyAuthnPolicy(ctx context.Context, partyID int64) (Party
 
 const holderPolicyMismatch = `-- name: HolderPolicyMismatch :one
 SELECT reason, credential_rule, required_provider_id, min_acr, holder_acr
-FROM mod_users.holder_policy_mismatch($1::bigint, $2::bigint)
+FROM mod_users.holder_policy_mismatch($1::bigint, $2::bigint, $3::boolean)
 `
 
 type HolderPolicyMismatchParams struct {
-	HolderID int64 `json:"holder_id"`
-	PartyID  int64 `json:"party_id"`
+	HolderID   int64 `json:"holder_id"`
+	PartyID    int64 `json:"party_id"`
+	InviteTime bool  `json:"invite_time"`
 }
 
 type HolderPolicyMismatchRow struct {
@@ -186,8 +187,11 @@ type HolderPolicyMismatchRow struct {
 
 // Whether the holder's current credentials can meet the party's authentication
 // policy (mod_users.holder_policy_mismatch). reason is NULL when they can.
+// invite_time true relaxes the 'authorized' rule to any usable interactive
+// credential (no profile exists yet); false is the strict outside-collaborator
+// check requiring an explicit authorization or confinement.
 func (q *Queries) HolderPolicyMismatch(ctx context.Context, arg HolderPolicyMismatchParams) (HolderPolicyMismatchRow, error) {
-	row := q.db.QueryRow(ctx, holderPolicyMismatch, arg.HolderID, arg.PartyID)
+	row := q.db.QueryRow(ctx, holderPolicyMismatch, arg.HolderID, arg.PartyID, arg.InviteTime)
 	var i HolderPolicyMismatchRow
 	err := row.Scan(
 		&i.Reason,

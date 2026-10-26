@@ -560,7 +560,7 @@ func (s *ProfileService) checkInvitePolicyMismatch(ctx context.Context, tx pgx.T
 	if err := lockPartyPolicyShared(ctx, tx, in.PartyID); err != nil {
 		return false, err
 	}
-	mm, err := detectPolicyMismatch(ctx, s.usersQ(tx), holderID, in.PartyID)
+	mm, err := detectPolicyMismatch(ctx, s.usersQ(tx), holderID, in.PartyID, true)
 	if err != nil || mm == nil {
 		return false, err
 	}

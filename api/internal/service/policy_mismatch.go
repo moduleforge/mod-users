@@ -43,9 +43,13 @@ type PolicyMismatch struct {
 // authentication policy of partyID. The rule itself lives in SQL
 // (mod_users.holder_policy_mismatch) next to profile_availability_for, so the
 // invitation check and the per-request gate cannot drift. It returns nil when
-// the holder can meet the policy.
-func detectPolicyMismatch(ctx context.Context, q usersdb.Querier, holderID, partyID int64) (*PolicyMismatch, error) {
-	row, err := q.HolderPolicyMismatch(ctx, usersdb.HolderPolicyMismatchParams{HolderID: holderID, PartyID: partyID})
+// the holder can meet the policy. inviteTime relaxes the 'authorized' credential
+// rule to any usable interactive credential, since an invitee has no profile yet
+// to authorize a credential for; the outside-collaborator path passes false, as
+// a collaborator never gains a profile in the party and so needs an explicit
+// authorization or a confirmation.
+func detectPolicyMismatch(ctx context.Context, q usersdb.Querier, holderID, partyID int64, inviteTime bool) (*PolicyMismatch, error) {
+	row, err := q.HolderPolicyMismatch(ctx, usersdb.HolderPolicyMismatchParams{HolderID: holderID, PartyID: partyID, InviteTime: inviteTime})
 	if err != nil {
 		return nil, fmt.Errorf("users: check party policy: %w", err)
 	}
@@ -69,7 +73,7 @@ func (m *PolicyMismatch) Conflict() error {
 	var msg string
 	switch m.Reason {
 	case MismatchCredentialNotAuthorized:
-		msg = "the party requires a credential authorized for it; the account has none"
+		msg = "the party requires a credential authorized for it; none of the account's credentials is"
 	case MismatchProviderRequired:
 		msg = fmt.Sprintf("the party requires an OIDC credential from provider %q; the account has none", m.RequiredProviderID)
 	case MismatchACRTooLow:
