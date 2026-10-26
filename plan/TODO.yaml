@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 6
-    tasks_added: 35
+    tasks_added: 36
 phases:
     - number: 6
       slug: users-identity-core
@@ -958,5 +958,18 @@ phases:
       slug: remediation-06
       title: Remediation Round 6
       kind: remediation
+      tasks_added: 1
       remediates_phase: 7
-      tasks: []
+      tasks:
+        - number: 1
+          slug: last-operator-admin-disable-contract
+          title: Align Last Operator Admin Error And Contract With Principal Disable
+          path: phase-17-remediation-06/001-last-operator-admin-disable-contract.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - sDO1
+          git:
+            branch: null
+            commit: []
+            merge: null
