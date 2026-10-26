@@ -717,6 +717,7 @@ phases:
           path: phase-14-remediation-03/006-correct-openapi-and-architecture-doc-drift.md
           done: false
           tier: sonnet-low
+          digest: Corrected the OpenAPI step-up ordering for principal disable and enable and added POST /v1/bootstrap to the two documented-exception lists in docs/architecture.md. openapi.validate could not run (python3 yaml module and spectral missing); Ruby YAML parse only.
           findings:
             - qvpE
             - kimI
