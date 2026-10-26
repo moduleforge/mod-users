@@ -56,6 +56,15 @@ Access tokens are EdDSA (Ed25519) JWTs that carry a server-side session or non-i
 
 CORS is default-deny: set `CORS_ORIGINS` to a comma-separated list of exact front-end origins. An unset value emits no CORS headers outside `DEPLOY_MODE=local`, and any entry containing `*` is rejected at startup outside local mode. Entries are bare `scheme://host[:port]` origins (no trailing slash or path), matched case-insensitively. Upgrading deployments that relied on the old implicit wildcard must read [docs/cors.md](./docs/cors.md).
 
+## First run: setup token, bootstrap, OIDC configuration
+
+A fresh deployment has no operator party and an unconfirmed OIDC configuration. At boot the server mints one setup token and prints it (stderr banner for `TOKEN_DISPLAY=stderr` or `both`; for `localhost`, read it from `GET /v1/oidc-config/setup-token` over loopback). The same token serves both first-run steps and stays valid until both are done:
+
+1. **Bootstrap** the operator account: `POST /v1/bootstrap` with the token in the `X-Setup-Token` header and a body `{"operator": {"kind": "organization", "legal_name": ..., "legal_form": ..., "jurisdiction": ...}, "admin": {"email": ..., "password": ..., "given_name": ..., "family_name": ...}}` (or `"operator": {"kind": "natural_person"}` to make the first user's own person record the operator party). One transaction creates the first user (verified email, password, email-code credential, own person record, personal profile), the operator party (claimed with mod-core's `core_claim_operator_party`, the single winner of concurrent attempts), the administrator's party profile with a wildcard `manage` grant, and the operator party's authentication policy (`credential_rule: authorized`, the bootstrap password authorized and set to land on the administrator profile). It answers `201` with a session on the administrator profile; a second bootstrap gets `409 users.already_bootstrapped`, a missing or wrong token `401 users.setup_token_invalid`. `GET /v1/bootstrap/status` reports `bootstrapped` and `oidc_confirmed`. Both routes are public and are not behind the OIDC-confirmed gate.
+2. **Configure OIDC** at `/oidc-config` (`POST /v1/oidc-config/confirm`, possibly as an opt-out). Confirming OIDC while the bootstrap is pending keeps the token for the bootstrap.
+
+Whichever step completes last clears the token. From then on, OIDC configuration requires an operator administrator session: a session whose acting profile is an operator profile holding wildcard `manage` (the administrator's personal-profile session is refused). Signing in with the bootstrap password lands on the administrator profile; signing in with an email code lands on the personal profile, with the administrator profile locked by the operator party's policy. With `TOKEN_DISPLAY=none` no token is shown, so the bootstrap cannot run until a display mode is configured.
+
 ## Party profiles and managed users
 
 A party (an organization or a natural person) admits users through profiles. All routes are bearer-authenticated; a party or profile the caller may not read answers `404`, the same as an unknown one, before any `403`.
