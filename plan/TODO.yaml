@@ -247,7 +247,7 @@ phases:
             branch: plan/identity-model-impl-08-002
             commit:
                 - c44b3e5
-            merge: null
+            merge: 4386907a9a770235605018caa4617b2579109785
         - number: 3
           slug: impersonation-sessions
           title: Impersonation Sessions
