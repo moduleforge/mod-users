@@ -79,8 +79,8 @@ type ownedTypes struct {
 
 func registerOwnedTypes(t *testing.T) ownedTypes {
 	t.Helper()
-	parent, _ := registerTestType(t, "owned-parent")
-	child, _ := registerTestTypeUnder(t, "owned-child", typeSlugForID(t, parent))
+	parent, _ := registerTestType(t, "owned_parent")
+	child, _ := registerTestTypeUnder(t, "owned_child", typeSlugForID(t, parent))
 	return ownedTypes{parent: parent, child: child, other: organizationTypeID(t)}
 }
 
