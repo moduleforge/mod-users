@@ -14,12 +14,14 @@ import (
 // CodeLastOperatorAdmin is the detail code of ErrLastOperatorAdmin.
 const CodeLastOperatorAdmin = "users.last_operator_admin"
 
-// ErrLastOperatorAdmin is returned when ending or suspending a profile would leave the
-// operator party with no active profile holding the wildcard `manage` grant
+// ErrLastOperatorAdmin is returned when ending or suspending a profile, or
+// disabling a principal (requireNotLastOperatorAdminForDisable, behind
+// POST /v1/principals/{uuid}/disable), would leave the operator party with no
+// effective operator administrator holding the wildcard `manage` grant
 // (users.last_operator_admin, 409).
 var ErrLastOperatorAdmin = apiresp.Conflict(apiresp.FieldError{
-	Field: "status", Code: CodeLastOperatorAdmin,
-	Message: "the profile is the last active operator administrator and cannot be ended or suspended",
+	Field: "operator_administrator", Code: CodeLastOperatorAdmin,
+	Message: "this is the last effective operator administrator and cannot be ended, suspended or disabled",
 })
 
 // operatorAdminProfileSQL selects the active operator-party profiles holding a

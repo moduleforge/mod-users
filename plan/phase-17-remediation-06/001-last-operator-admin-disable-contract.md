@@ -25,3 +25,7 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 ## References
 
 - Finding `sDO1` in this plan's `plan/findings.yaml`: the 409 `users.last_operator_admin` from `POST /v1/principals/{uuid}/disable` reuses the ending/suspension message and profile `status` field, which does not describe the disable path enforced by `requireNotLastOperatorAdminForDisable`. This task aligns the error message, its godoc, the OpenAPI contract and the AGENTS.md rows with that path.
+
+## Status
+
+Outcome: succeeded (2026-10-26). `ErrLastOperatorAdmin` widened (field `operator_administrator`, message covers ended, suspended or disabled) with godoc naming the disable path; `api/openapi.yaml` disable description names the 409 `users.last_operator_admin`; AGENTS.md `profile_last_admin.go` row covers `requireNotLastOperatorAdminForDisable`. Validation: `make build.api`, `make test.unit` pass; openapi YAML parses (via Bun; `make openapi.validate` lacks pyyaml); integration leave-gate tests pass on throwaway postgres:16. Files: `api/internal/service/profile_last_admin.go`, `api/openapi.yaml`, `AGENTS.md`.
