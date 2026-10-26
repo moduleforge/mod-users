@@ -15,8 +15,8 @@ items:
       tags:
         - type:enhancement
         - plan/phase:parties-profiles-and-bootstrap
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'mod-core''s coredb has no way to read a profiles row with FOR UPDATE (GetProfileByEntityID is a plain read). api/internal/service/profile_service.go lockProfile therefore runs its own SELECT ... FROM public.profiles WHERE entity_id = $1 FOR UPDATE and scans into coredb.Profile, coupling mod-users to mod-core''s column list. Request for mod-core (finding only, not edited here): add a GetProfileByEntityIDForUpdate query to model/queries/profiles.sql so lockProfile can use the generated method and a column change in profiles fails the build instead of the scan at runtime.'
     - title: OpenAPI step-up order note is stale
       id: qvpE
