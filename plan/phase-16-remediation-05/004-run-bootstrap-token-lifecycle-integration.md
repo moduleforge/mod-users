@@ -29,3 +29,7 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 
 - Finding `PlQx` in this plan's plan/findings.yaml (type:bug, priority:high): the TestBootstrap_TokenLifecycle integration subtest compiled but was never run, so the phase 15 bootstrap change is unverified. This task runs it and fixes what it exposes.
 - Finding `hyek` in this plan's plan/findings.yaml (type:documentation, priority:low): the OIDC config handler behavioral contract (an unpopulated cache rejects every token) requires RefreshState at every construction site, which api/cmd/server/main.go:168 does; this task confirms the other sites and records the requirement in the constructor godoc.
+
+## Status
+
+succeeded, 2026-10-26. TestBootstrap_TokenLifecycle executed against a throwaway postgres:16 container (4 subtests RUN and PASS, no skip); full integration suite and make test.unit pass; container removed. Every NewOIDCConfigHandler construction site already calls RefreshState (api/cmd/server/main.go, the integration harness, unit tests); the only exceptions are the intentional MarkExternallyManaged and BadDB-error tests. Constructor godoc now states RefreshState must be called before serving, in api/internal/handlers/oidc_config.go and api/handlers/handlers.go.

@@ -56,6 +56,10 @@ type (
 // platform reads platform_settings so the setup token stays active while the
 // bootstrap is pending (decision U9); a nil platform treats the deployment as
 // bootstrapped.
+//
+// Callers MUST call RefreshState on the returned handler before serving: its
+// cache starts unpopulated, and a handler whose cache was never populated
+// rejects every token.
 func NewOIDCConfigHandler(
 	queries *usersdb.Queries,
 	oauth *auth.OAuth,

@@ -108,10 +108,13 @@ type OIDCConfigHandler struct {
 	currentPlain string // plaintext setup token kept in-memory for /setup-token; cleared once the token is.
 }
 
-// NewOIDCConfigHandler constructs the handler. Callers should run
-// RefreshState once at boot so the initial cached snapshot reflects
-// current DB + OAuth init outcomes; RequireOIDCConfirmed then reads
-// from the cache.
+// NewOIDCConfigHandler constructs the handler. Callers MUST call
+// RefreshState before serving: the cache starts unpopulated, and a handler
+// whose cache was never populated rejects every token. The refresh makes the
+// initial cached snapshot reflect current DB + OAuth init outcomes;
+// RequireOIDCConfirmed then reads from the cache. The only exception is a
+// handler that is switched to the externally-managed state with
+// MarkExternallyManaged, which needs no database read.
 func NewOIDCConfigHandler(deps OIDCConfigDeps) *OIDCConfigHandler {
 	return &OIDCConfigHandler{deps: deps, bootstrapped: deps.Platform == nil}
 }
