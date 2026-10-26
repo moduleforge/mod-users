@@ -169,6 +169,14 @@ DELETE FROM mod_users.session_refresh_tokens WHERE expires_at < $1;
 -- confined, credential_not_authorized, provider_required, acr_too_low).
 SELECT mod_users.profile_availability(@session_id::bigint, @profile_id::bigint)::text AS availability;
 
+-- name: ProfileGate :one
+-- ProfileAvailability without the profile's status check: 'available' or the
+-- first failing gate reason (not_held, principal_disabled, confined,
+-- credential_not_authorized, provider_required, acr_too_low), whatever the
+-- profile's status. For a profile that is not active, which ProfileAvailability
+-- reports as inactive before the party gate is reached.
+SELECT mod_users.profile_gate(@session_id::bigint, @profile_id::bigint)::text AS availability;
+
 -- name: ProfileAvailabilityExcluding :one
 -- ProfileAvailability evaluated as if the session did not hold the credential
 -- (its factor and its contribution to the acr left out): whether the session

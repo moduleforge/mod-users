@@ -23,3 +23,13 @@ This task fixes findings `twos` (security, priority medium) and `nA1G` (security
 
 - Finding `twos` in this plan's `plan/findings.yaml` (type:security, priority:medium): `profile_availability_for` returns `inactive` before the party gate is evaluated, and the leave path accepts `inactive` for a suspended profile, so a session the gate would lock out can still leave and run departure cleanup.
 - Finding `nA1G` in this plan's `plan/findings.yaml` (type:security, priority:medium): the leave guard in `api/internal/service/profile_holder.go` accepts `avail == 'inactive'` for a suspended profile; the recommendation is to evaluate the party gate separately for suspended profiles.
+
+## Status
+
+Outcome: succeeded (2026-10-26).
+
+- Added `mod_users.profile_gate_for` (the status-agnostic core of the availability rule) and `mod_users.profile_gate(session, profile)` in `model/migrations/sql/0100_baseline.sql`; `profile_availability_for` now wraps `profile_gate_for` and applies the `inactive` status check after the held check, so its results are unchanged. New sqlc query `ProfileGate` (`model/queries/sessions.sql`, regenerated `model/db`).
+- `LeaveProfile` (`api/internal/service/profile_holder.go`) decides on `ProfileGate` alone for active and suspended profiles; the departure cleanup runs only when the gate is met. The unused `availabilityInactive` constant was removed (`api/internal/service/session_views.go`).
+- `api/openapi.yaml` leave description corrected.
+- Tests: `api/internal/integration/leave_gate_integration_test.go` (suspended holder refused for `authorized` and `provider` rules with profile, authorization and confined credential unchanged; suspended holder with the gate met can leave).
+- Validation: `make build.api`, `make test.unit`, `make -C api lint`, and the integration suites (authz, config, integration) against a throwaway Postgres passed.

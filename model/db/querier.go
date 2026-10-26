@@ -240,6 +240,12 @@ type Querier interface {
 	// (its factor and its contribution to the acr left out): whether the session
 	// satisfies the profile's party gate through another factor.
 	ProfileAvailabilityExcluding(ctx context.Context, arg ProfileAvailabilityExcludingParams) (string, error)
+	// ProfileAvailability without the profile's status check: 'available' or the
+	// first failing gate reason (not_held, principal_disabled, confined,
+	// credential_not_authorized, provider_required, acr_too_low), whatever the
+	// profile's status. For a profile that is not active, which ProfileAvailability
+	// reports as inactive before the party gate is reached.
+	ProfileGate(ctx context.Context, arg ProfileGateParams) (string, error)
 	// Idempotent guard: only an unrevoked credential is revoked (no row otherwise).
 	RevokeCredential(ctx context.Context, arg RevokeCredentialParams) (Credential, error)
 	// Ends the impersonation sessions started from a parent session.

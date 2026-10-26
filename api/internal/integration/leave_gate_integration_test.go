@@ -49,6 +49,98 @@ func TestLeaveGate_LockedSessionCannotLeave(t *testing.T) {
 	}
 }
 
+// suspendedLeaveFixture is a member holding a suspended profile in a party,
+// with the email credential authorized for the party and confined to it, and a
+// password-only session: the state in which the party gate decides whether the
+// holder may leave.
+type suspendedLeaveFixture struct {
+	g         gateParty
+	m         gateMember
+	personal  tokens
+	emailUUID string
+	pwUUID    string
+	leave     string
+}
+
+// authorizePassword also authorizes the password credential (while the profile
+// is still active: authorizations need an active profile), so the gate is met.
+func newSuspendedLeaveFixture(t *testing.T, policy map[string]any, authorizePassword bool) suspendedLeaveFixture {
+	t.Helper()
+	g := env.newGateParty(t)
+	m := env.newGateMember(t, g)
+	env.verifyRegisteredEmail(t, m.acct)
+	f := suspendedLeaveFixture{
+		g: g, m: m,
+		pwUUID:    env.credentialUUID(t, m.acct.tk.access(), "password"),
+		emailUUID: env.credentialUUID(t, m.acct.tk.access(), "email_otp"),
+		leave:     "/v1/me/profiles/" + m.profUUID + "/leave",
+	}
+	env.setPolicy(t, g, policy).wantStatus(t, http.StatusOK)
+	env.do(t, http.MethodPut, authPath(g, f.emailUUID), g.adminTok.access(), nil).wantStatus(t, http.StatusOK)
+	if authorizePassword {
+		env.do(t, http.MethodPut, authPath(g, f.pwUUID), g.adminTok.access(), nil).wantStatus(t, http.StatusOK)
+	}
+	env.exec(t, "confine email credential",
+		`UPDATE mod_users.credentials SET confined_to_party_id = $2 WHERE uuid = $1::uuid`, f.emailUUID, g.id)
+	f.personal = env.login(t, m.acct)
+	env.exec(t, "suspend profile", `UPDATE profiles SET status = 'suspended' WHERE entity_id = $1`, m.profileID)
+	return f
+}
+
+// wantUnchanged fails unless the suspended profile, its authorization and its
+// confined credential are as the fixture left them.
+func (f suspendedLeaveFixture) wantUnchanged(t *testing.T) {
+	t.Helper()
+	if got := env.profileStatus(t, f.m.profUUID); got != "suspended" {
+		t.Errorf("status after a refused leave = %s, want suspended", got)
+	}
+	if n := env.authorizationCount(t, f.emailUUID, f.g.id); n != 1 {
+		t.Errorf("authorizations after a refused leave = %d, want 1", n)
+	}
+	if got := env.confinedTo(t, f.emailUUID); got != f.g.id {
+		t.Errorf("confinement after a refused leave = %d, want %d", got, f.g.id)
+	}
+	if n := env.scanInt64(t, "revoked count",
+		`SELECT count(*) FROM mod_users.credentials WHERE uuid = $1::uuid AND revoked_at IS NOT NULL`, f.emailUUID); n != 0 {
+		t.Errorf("confined credential revoked by a refused leave")
+	}
+}
+
+// A suspended profile is not exempt from the party gate on leave: a session the
+// gate locks out is refused with the gate's reason, and nothing changes.
+func TestLeaveGate_SuspendedProfileLockedSessionCannotLeave(t *testing.T) {
+	// An unauthorized password under the 'authorized' rule.
+	f := newSuspendedLeaveFixture(t, map[string]any{"credential_rule": "authorized"}, false)
+	env.do(t, http.MethodPost, f.leave, f.personal.access(), nil).
+		wantError(t, http.StatusUnauthorized, "users.profile_unavailable", "credential_not_authorized")
+	f.wantUnchanged(t)
+
+	// A policy requiring an OIDC provider the session does not hold.
+	prov := env.addProviderRow(t, uniq("leave-prov"))
+	f = newSuspendedLeaveFixture(t, map[string]any{"credential_rule": "provider", "required_oidc_provider_id": prov}, false)
+	env.do(t, http.MethodPost, f.leave, f.personal.access(), nil).
+		wantError(t, http.StatusUnauthorized, "users.profile_unavailable", "provider_required")
+	f.wantUnchanged(t)
+}
+
+// A suspended holder whose gate is met can still leave, and the departure
+// cleanup runs.
+func TestLeaveGate_SuspendedProfileGateMetCanLeave(t *testing.T) {
+	f := newSuspendedLeaveFixture(t, map[string]any{"credential_rule": "authorized"}, true)
+
+	env.do(t, http.MethodPost, f.leave, f.personal.access(), nil).wantStatus(t, http.StatusNoContent)
+	if got := env.profileStatus(t, f.m.profUUID); got != "ended" {
+		t.Errorf("status after leave = %s, want ended", got)
+	}
+	if n := env.authorizationCount(t, f.emailUUID, f.g.id); n != 0 {
+		t.Errorf("authorizations after leave = %d, want 0 (departure cleanup)", n)
+	}
+	if n := env.scanInt64(t, "revoked count",
+		`SELECT count(*) FROM mod_users.credentials WHERE uuid = $1::uuid AND revoked_at IS NOT NULL`, f.emailUUID); n != 1 {
+		t.Errorf("confined credential not revoked by the departure cleanup")
+	}
+}
+
 // operatorFixture is a bootstrapped deployment: its operator party and the
 // bootstrap administrator.
 type operatorFixture struct {

@@ -516,6 +516,27 @@ func (q *Queries) ProfileAvailabilityExcluding(ctx context.Context, arg ProfileA
 	return availability, err
 }
 
+const profileGate = `-- name: ProfileGate :one
+SELECT mod_users.profile_gate($1::bigint, $2::bigint)::text AS availability
+`
+
+type ProfileGateParams struct {
+	SessionID int64 `json:"session_id"`
+	ProfileID int64 `json:"profile_id"`
+}
+
+// ProfileAvailability without the profile's status check: 'available' or the
+// first failing gate reason (not_held, principal_disabled, confined,
+// credential_not_authorized, provider_required, acr_too_low), whatever the
+// profile's status. For a profile that is not active, which ProfileAvailability
+// reports as inactive before the party gate is reached.
+func (q *Queries) ProfileGate(ctx context.Context, arg ProfileGateParams) (string, error) {
+	row := q.db.QueryRow(ctx, profileGate, arg.SessionID, arg.ProfileID)
+	var availability string
+	err := row.Scan(&availability)
+	return availability, err
+}
+
 const revokeImpersonationChildren = `-- name: RevokeImpersonationChildren :many
 UPDATE mod_users.sessions
 SET revoked_at = now(),

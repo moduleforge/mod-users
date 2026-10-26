@@ -1130,14 +1130,15 @@ AS $$
 $$;
 -- +goose StatementEnd
 
--- profile_availability_for: the shared rule behind profile_availability
--- (session factors) and credential_profile_availability (one credential), so
--- the interactive and non-interactive paths cannot drift. Returns 'available'
+-- profile_gate_for: the status-agnostic core of profile_availability_for. It
+-- evaluates everything but the profile's own status, so it answers "would the
+-- principal's session satisfy the profile's gate" for a profile in any status
+-- (the leave path uses it for a suspended profile, which profile_availability
+-- reports as 'inactive' before the party gate is reached). Returns 'available'
 -- or the first failing lock reason, in this order:
 --
 --   not_held                  the profile is not held by the principal, or an
 --                             impersonation targets another profile;
---   inactive                  the profile is not active;
 --   principal_disabled        the principal's kill switch is set;
 --   confined                  a factor is confined to another party (a
 --                             personal profile is hidden by any confinement);
@@ -1152,7 +1153,7 @@ $$;
 -- profile_policy_confirmations row for the party (an outside collaborator);
 -- min_acr is never skipped for a party profile.
 -- +goose StatementBegin
-CREATE FUNCTION mod_users.profile_availability_for(
+CREATE FUNCTION mod_users.profile_gate_for(
   p_principal_id            BIGINT,
   p_impersonated_profile_id BIGINT,
   p_credential_ids          BIGINT[],
@@ -1167,22 +1168,17 @@ AS $$
 DECLARE
   v_holder_id   BIGINT;
   v_party_id    BIGINT;
-  v_status      TEXT;
   v_rule        TEXT;
   v_provider_id TEXT;
   v_min_acr     SMALLINT;
 BEGIN
-  SELECT p.holder_id, p.party_id, p.status INTO v_holder_id, v_party_id, v_status
+  SELECT p.holder_id, p.party_id INTO v_holder_id, v_party_id
     FROM public.profiles p WHERE p.entity_id = p_profile_id;
   IF NOT FOUND
      OR v_holder_id IS DISTINCT FROM p_principal_id
      OR (p_impersonated_profile_id IS NOT NULL AND p_profile_id <> p_impersonated_profile_id)
   THEN
     RETURN 'not_held';
-  END IF;
-
-  IF v_status <> 'active' THEN
-    RETURN 'inactive';
   END IF;
 
   IF EXISTS (
@@ -1245,6 +1241,43 @@ BEGIN
   END IF;
 
   RETURN 'available';
+END;
+$$;
+-- +goose StatementEnd
+
+-- profile_availability_for: the shared rule behind profile_availability
+-- (session factors) and credential_profile_availability (one credential), so
+-- the interactive and non-interactive paths cannot drift. It is
+-- profile_gate_for with the profile's status applied between the held check
+-- and the rest: 'not_held' first, then 'inactive' when the profile is not
+-- active, then profile_gate_for's order (principal_disabled, confined,
+-- credential_not_authorized, provider_required, acr_too_low), else
+-- 'available'.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.profile_availability_for(
+  p_principal_id            BIGINT,
+  p_impersonated_profile_id BIGINT,
+  p_credential_ids          BIGINT[],
+  p_acr                     SMALLINT,
+  p_profile_id              BIGINT
+) RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+  v_gate TEXT;
+BEGIN
+  v_gate := mod_users.profile_gate_for(
+    p_principal_id, p_impersonated_profile_id, p_credential_ids, p_acr, p_profile_id);
+  IF v_gate <> 'not_held' AND EXISTS (
+    SELECT 1 FROM public.profiles p
+     WHERE p.entity_id = p_profile_id AND p.status <> 'active'
+  ) THEN
+    RETURN 'inactive';
+  END IF;
+  RETURN v_gate;
 END;
 $$;
 -- +goose StatementEnd
@@ -1355,6 +1388,34 @@ SET search_path = pg_catalog, pg_temp
 AS $$
   SELECT COALESCE((
     SELECT mod_users.profile_availability_for(
+             s.principal_id,
+             s.impersonated_profile_id,
+             ARRAY(SELECT f.credential_id
+                     FROM mod_users.session_factors f
+                     JOIN mod_users.credentials c ON c.id = f.credential_id
+                    WHERE f.session_id = s.id
+                      AND c.revoked_at IS NULL),
+             s.acr,
+             p_profile_id)
+      FROM mod_users.sessions s
+     WHERE s.id = p_session_id
+  ), 'not_held');
+$$;
+-- +goose StatementEnd
+
+-- profile_gate(p_session_id, p_profile_id): profile_availability without the
+-- profile's status check (profile_gate_for over the session's unrevoked
+-- factors and acr): whether the session satisfies the profile's gate whatever
+-- the profile's status. Used by the leave path for a suspended profile.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.profile_gate(p_session_id BIGINT, p_profile_id BIGINT) RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+  SELECT COALESCE((
+    SELECT mod_users.profile_gate_for(
              s.principal_id,
              s.impersonated_profile_id,
              ARRAY(SELECT f.credential_id
@@ -1611,8 +1672,10 @@ DROP FUNCTION IF EXISTS mod_users.session_liveness(UUID, UUID, UUID);
 DROP FUNCTION IF EXISTS mod_users.credential_profile_availability(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_excluding(BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability(BIGINT, BIGINT);
+DROP FUNCTION IF EXISTS mod_users.profile_gate(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.holder_policy_mismatch(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
+DROP FUNCTION IF EXISTS mod_users.profile_gate_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr(BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr_excluding(BIGINT, BIGINT);
 
