@@ -2404,7 +2404,7 @@ paths:
         the session routes, and changes nothing. 409 `users.profile_transition_invalid` for an invitation
         (decline it) or an ended profile; 409 `users.last_operator_admin` when
         the profile is the last active operator-party profile holding the
-        wildcard `manage` grant (checked in the ending's transaction).
+        wildcard `manage` grant (checked in the transaction).
       tags: [Me]
       operationId: leaveProfile
       responses:
@@ -2999,7 +2999,12 @@ paths:
         credential bound to the identifier, whose landing profile is that party
         profile. Authorized as `create` on the user type and on the profile type
         within the party, after the read check that masks the party. 409
-        `users.identifier_taken` when the address is registered.
+        `users.identifier_taken` when the address is registered. Under the
+        party's `authorized` credential rule the new password is authorized for
+        the party only when the caller holds `update` on the party; otherwise
+        the request still succeeds (201) and the password stays unauthorized,
+        so the user cannot sign in to the party until an administrator
+        authorizes it.
       tags: [Parties]
       operationId: createManagedUser
       requestBody:
@@ -3063,8 +3068,8 @@ paths:
         request. 400 for an unknown rule, a `min_acr` outside 1 to 3, a provider
         given without the `provider` rule or missing with it, and a provider that
         does not exist (`users.oidc_provider_unknown`). Changing
-        `credential_rule` also deletes the party's policy confirmations (a write
-        that leaves the rule unchanged keeps them). Under `authorized`, an
+        `credential_rule` or the required OIDC provider also deletes the party's
+        policy confirmations (a write that leaves both unchanged keeps them). Under `authorized`, an
         invitation is accepted when the holder has any usable interactive
         credential; the member stays locked (`credential_not_authorized`) after
         acceptance until an administrator or the holder authorizes a
@@ -3290,8 +3295,8 @@ paths:
         Ending runs the departure cleanup of `POST /v1/me/profiles/{uuid}/leave`.
         409 `users.profile_transition_invalid` for a status the profile cannot
         move to from its current one; 409 `users.last_operator_admin` when
-        ending the last active operator-party profile that holds the wildcard
-        `manage` grant (checked in the ending's transaction).
+        ending or suspending the last active operator-party profile that holds
+        the wildcard `manage` grant (checked in the transaction).
       tags: [Profiles]
       operationId: updateProfileStatus
       requestBody:
