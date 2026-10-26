@@ -957,6 +957,7 @@ phases:
     - number: 17
       slug: remediation-06
       title: Remediation Round 6
+      diff_base: f83b7494035e434de75dad3747fe63692c1f4c59
       kind: remediation
       tasks_added: 2
       remediates_phase: 7
