@@ -840,7 +840,7 @@ phases:
             branch: plan/identity-model-impl-15-005
             commit:
                 - c20e828
-            merge: null
+            merge: 2fe2cf9045669e20c31cfd3f2a89b7a170dbdaf2
         - number: 6
           slug: require-party-update-for-managed-password-authorization
           title: Require Party Update Before Auto-Authorizing A Managed User Password
