@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -10,6 +11,7 @@ import (
 	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/opctx"
 	coredb "github.com/moduleforge/core-model/db"
+	usersdb "github.com/moduleforge/mod-users/model/db"
 )
 
 // This file holds the holder's own profile actions behind
@@ -23,6 +25,14 @@ import (
 // actions are not behind the freshness gate: accepting an invitation or
 // leaving a party is not a change to the holder's sign-in methods, and the
 // administrator's counterpart (suspend, resume, end) is gated instead.
+//
+// Leaving is behind the party gate. Accept and decline are open to a session
+// the gate locks out (the invitation is how the holder reaches the party), but
+// leaving runs the destructive departure cleanup, so LeaveProfile refuses
+// unless profile_availability(session, profile) is `available`, evaluated in
+// the leave transaction on the locked profile. A suspended profile reports
+// `inactive` before the gate is evaluated, so that reason is accepted there;
+// the gate is not evaluated for a suspended profile.
 
 // holderProfile resolves the profile the caller holds, for a holder action.
 func (s *ProfileService) holderProfile(ctx context.Context, profileUUID uuid.UUID) (opctx.AuthContext, coredb.Profile, error) {
@@ -42,8 +52,10 @@ func (s *ProfileService) holderProfile(ctx context.Context, profileUUID uuid.UUI
 
 // holderTransition locks the profile, requires its current status to be one of
 // from (ErrProfileTransition otherwise) and moves it to to. Ending runs the
-// departure cleanup of EndInTx with reason.
-func (s *ProfileService) holderTransition(ctx context.Context, p coredb.Profile, from []string, to, reason string) error {
+// departure cleanup of EndInTx with reason. guard, when non-nil, runs in the
+// transaction on the locked profile after the status check and before the
+// change; its error aborts the transition.
+func (s *ProfileService) holderTransition(ctx context.Context, p coredb.Profile, from []string, to, reason string, guard func(tx pgx.Tx, locked coredb.Profile) error) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		locked, err := lockProfile(ctx, tx, p.EntityID)
 		if err != nil {
@@ -55,6 +67,11 @@ func (s *ProfileService) holderTransition(ctx context.Context, p coredb.Profile,
 		}
 		if !ok {
 			return ErrProfileTransition
+		}
+		if guard != nil {
+			if err := guard(tx, locked); err != nil {
+				return err
+			}
 		}
 		if to == ProfileStatusEnded {
 			return s.endLocked(ctx, tx, locked, reason)
@@ -73,7 +90,7 @@ func (s *ProfileService) AcceptInvitation(ctx context.Context, profileUUID uuid.
 	if err != nil {
 		return ProfileView{}, err
 	}
-	if err := s.holderTransition(ctx, p, []string{ProfileStatusInvited}, ProfileStatusActive, ""); err != nil {
+	if err := s.holderTransition(ctx, p, []string{ProfileStatusInvited}, ProfileStatusActive, "", nil); err != nil {
 		return ProfileView{}, err
 	}
 	if s.sessions == nil {
@@ -99,17 +116,33 @@ func (s *ProfileService) DeclineInvitation(ctx context.Context, profileUUID uuid
 	if err != nil {
 		return err
 	}
-	return s.holderTransition(ctx, p, []string{ProfileStatusInvited}, ProfileStatusEnded, EndReasonDeclined)
+	return s.holderTransition(ctx, p, []string{ProfileStatusInvited}, ProfileStatusEnded, EndReasonDeclined, nil)
 }
 
 // LeaveProfile leaves a party (POST /v1/me/profiles/{uuid}/leave): `active` or
 // `suspended` to `ended` with end reason "left", running the departure cleanup.
 // A profile that is invited (decline it instead) or already ended is
 // ErrProfileTransition.
+//
+// Unlike accept and decline it is gated: the profile must be available to the
+// caller's session (ProfileUnavailable, 401, with the lock reason otherwise),
+// and the last active operator administrator cannot leave
+// (ErrLastOperatorAdmin).
 func (s *ProfileService) LeaveProfile(ctx context.Context, profileUUID uuid.UUID) error {
-	_, p, err := s.holderProfile(ctx, profileUUID)
+	ac, p, err := s.holderProfile(ctx, profileUUID)
 	if err != nil {
 		return err
 	}
-	return s.holderTransition(ctx, p, []string{ProfileStatusActive, ProfileStatusSuspended}, ProfileStatusEnded, EndReasonLeft)
+	guard := func(tx pgx.Tx, locked coredb.Profile) error {
+		avail, err := s.usersQ(tx).ProfileAvailability(ctx, usersdb.ProfileAvailabilityParams{SessionID: ac.SessionID, ProfileID: locked.EntityID})
+		if err != nil {
+			return fmt.Errorf("users: profile availability: %w", err)
+		}
+		suspended := locked.Status == ProfileStatusSuspended && avail == availabilityInactive
+		if avail != availabilityAvailable && !suspended {
+			return ProfileUnavailable(avail)
+		}
+		return requireNotLastOperatorAdmin(ctx, tx, locked)
+	}
+	return s.holderTransition(ctx, p, []string{ProfileStatusActive, ProfileStatusSuspended}, ProfileStatusEnded, EndReasonLeft, guard)
 }
