@@ -778,7 +778,7 @@ phases:
             branch: plan/identity-model-impl-15-001
             commit:
                 - dccd764
-            merge: null
+            merge: 4d61b975ff55c66a26d116c6e795a66b86997918
         - number: 2
           slug: gate-suspended-profile-leave
           title: Evaluate The Party Gate When A Holder Leaves A Suspended Profile
