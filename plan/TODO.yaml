@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 4
-    tasks_added: 24
+    tasks_added: 25
 phases:
     - number: 6
       slug: users-identity-core
@@ -759,7 +759,7 @@ phases:
       title: Remediation Round 4
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 7
       tasks:
         - number: 1
@@ -772,6 +772,19 @@ phases:
             - 9Mvf
             - PL6d
             - zwbM
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: gate-suspended-profile-leave
+          title: Evaluate The Party Gate When A Holder Leaves A Suspended Profile
+          path: phase-15-remediation-04/002-gate-suspended-profile-leave.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - twos
+            - nA1G
           git:
             branch: null
             commit: []
