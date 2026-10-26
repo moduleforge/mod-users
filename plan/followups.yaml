@@ -1960,3 +1960,13 @@ items:
           api/server/CLAUDE.md is not reachable from README.md via relative links (agent-instruction file, so likely intentional).
         recommendation:
           Link it from README.md or AGENTS.md, or accept as a tool-loaded agent file.
+    - title: 'Out of scope, existing behavior: whether PutA'
+      id: oufL
+      date: "2026-10-26"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:medium
+        - plan/phase:remediation-04
+        - plan/slug:identity-model-impl
+      text: 'Out of scope, existing behavior: whether PutAuthnPolicy should authorize or flag existing unauthorized credentials of managed users when switching to authorized. Admin-recoverable; not changed by this task.'
