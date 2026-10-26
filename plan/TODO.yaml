@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 4
-    tasks_added: 25
+    tasks_added: 26
 phases:
     - number: 6
       slug: users-identity-core
@@ -759,7 +759,7 @@ phases:
       title: Remediation Round 4
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 7
       tasks:
         - number: 1
@@ -785,6 +785,21 @@ phases:
           findings:
             - twos
             - nA1G
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: extend-last-operator-admin-guard
+          title: Extend The Last Operator Admin Guard To Suspension And EndInTx
+          path: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - Kfjo
+            - kPpy
+            - Ts9r
+            - Xqat
           git:
             branch: null
             commit: []
