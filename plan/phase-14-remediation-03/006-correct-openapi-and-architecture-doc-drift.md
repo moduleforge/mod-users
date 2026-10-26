@@ -22,3 +22,9 @@ This task fixes findings `qvpE` (documentation, low) and `kimI` (documentation, 
 
 - Finding `qvpE` in this plan's `plan/findings.yaml` (documentation, low): `api/openapi.yaml` (lines ~33-35) says step-up comes before authorization on principal disable and enable. `UserService.writablePrincipal` in `api/internal/service/principal_admin.go` authorizes first.
 - Finding `kimI` in this plan's `plan/findings.yaml` (documentation, low): the API-layer documented exceptions (around `docs/architecture.md` line 101) and D20(3) omit `POST /v1/bootstrap`, which sits outside `requireOIDCConfirmed` with `X-Setup-Token` as its credential.
+
+## Status
+
+- Outcome: succeeded (2026-10-25).
+- Validation: openapi description now says principal disable/enable authorize (`read` then `update`) before the step-up check, matching `writablePrincipal`; `docs/architecture.md` API-layer exceptions and D20(3) list `POST /v1/bootstrap`; `make openapi.validate` passed.
+- Files: `api/openapi.yaml`, `docs/architecture.md`.

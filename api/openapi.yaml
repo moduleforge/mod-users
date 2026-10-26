@@ -32,7 +32,9 @@ info:
       `users.already_bootstrapped`.
     - Step-up (`409 users.step_up_required`, an action-required response) comes
       after the 400 shape checks and before authorization on the self-service
-      writes and the principal disable and enable.
+      writes. On principal disable and enable it comes after authorization:
+      the caller needs `read` (404 otherwise) then `update` (403), and only
+      then is step-up freshness checked.
     - Party administration masks existence: a party or profile the caller may
       not read answers 404, the same as an unknown one, before any 403. The
       403 is for an operation the caller may see but not perform (inviting,
