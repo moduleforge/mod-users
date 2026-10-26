@@ -203,7 +203,7 @@ phases:
           tier: sonnet-high
           digest: 'Added api/internal/integration/party_flows_integration_test.go with 11 tests: the ADR worked example (steps 1-6) and its confined variant, token behavior across suspend and resume, holder vs admin authority, route-created managed user not invitable, provider-policy remedy, min_acr lock and step-up unlock, confined factor, outside collaborator via routes, trusted admission via routes. No defects found in 001-005 or 007; no fixes made.'
           git:
-            branch: null
+            branch: plan/identity-model-impl-07-006
             commit: []
             merge: null
         - number: 7
