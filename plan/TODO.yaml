@@ -730,13 +730,15 @@ phases:
           slug: restrict-admin-confinement-to-party-controlled-credentials
           title: Restrict Administrator Confinement To Party-Controlled Credentials
           path: phase-14-remediation-03/007-restrict-admin-confinement-to-party-controlled-credentials.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: The administrator door of ConfineCredential now confines only party-controlled credentials (managed-user, and OIDC from a party-bound provider) and otherwise returns 404. The holder door of UnconfineCredential is refused for party-controlled credentials. The held-profile check requires active. No schema change. Four existing tests adapted. OpenAPI, README, AGENTS.md and doc comments updated.
           findings:
             - Pxlw
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-14-007
+            commit:
+                - 843012c
             merge: null
         - number: 8
           slug: authorized-rule-invite-time-semantics
