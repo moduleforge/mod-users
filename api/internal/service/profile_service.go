@@ -664,6 +664,13 @@ func (s *ProfileService) transitionLocked(ctx context.Context, tx pgx.Tx, p core
 	if !transitionAllowed(p.Status, to) {
 		return coredb.Profile{}, ErrProfileTransition
 	}
+	// Taking an active operator administrator out of active (ending or
+	// suspending it) is refused for the last one; every caller inherits this.
+	if to != ProfileStatusActive {
+		if err := requireNotLastOperatorAdmin(ctx, tx, p); err != nil {
+			return coredb.Profile{}, err
+		}
+	}
 	cq := s.coreQuerier(tx)
 	updated, err := cq.UpdateProfileStatus(ctx, coredb.UpdateProfileStatusParams{
 		EntityID:  p.EntityID,
@@ -717,7 +724,8 @@ func validateEndReason(reason string) (string, error) {
 // performs no authorization: the caller authorizes (the holder on their own
 // profile, an administrator with `update` on it, or a trusted flow). reason is
 // required (a 400 field error otherwise). Ending an ended profile changes
-// nothing. A personal profile is apiresp.ErrNotFound.
+// nothing. A personal profile is apiresp.ErrNotFound. Ending the last active
+// operator administrator is ErrLastOperatorAdmin (409).
 //
 // Departure cleanup, in the caller's transaction: the holder's
 // credential_party_authorizations rows for the party are deleted
