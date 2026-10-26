@@ -155,33 +155,6 @@ items:
           Accept and decline can stay ungated. Optionally refuse ending the last
           active operator-party profile that holds the wildcard `manage` grant,
           through both LeaveProfile and UpdateProfileStatus.
-    - title: AdmitInTx serializes per holder by locking t…
-      id: 5iFg
-      date: "2026-10-26"
-      tags:
-        - type:bug
-        - plan/phase:parties-profiles-and-bootstrap
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_admit.go
-        lines: 103-107,119-156
-        severity: minor
-        confidence: high
-        concerns: correctness
-        description:
-          AdmitInTx serializes per holder by locking the mod_users.users row, which only works if every
-          writer of open profiles takes the same lock. InviteInTx (invite) and ProvisionManagedUserInTx do
-          not. If an invitation and an admission for the same holder and party run concurrently, AdmitInTx
-          can see no open profile, then block on and fail the profiles_one_open_per_holder_party insert. It
-          then returns ErrProfileExists, which aborts the caller's (mod-billing's) transaction. The doc
-          comment promises "one profile and no error" only for two admissions, but a caller would reasonably
-          read it more broadly.
-        recommendation:
-          Take the same GetUserByEntityIDForUpdate lock on the holder in invite before the duplicate check
-          and insert, so admissions and invitations serialize. Alternatively, narrow the AdmitInTx comment to
-          say a concurrent invitation can still yield ErrProfileExists.
     - title: tokenActiveLocked keeps the setup token acti…
       id: cvMO
       date: "2026-10-26"
@@ -1585,4 +1558,14 @@ closed:
         model/migrations/sql/0100_baseline.sql (around lines 1303-1306) computes holder_acr with
         CASE WHEN count(*) = 0 THEN NULL ELSE ... END. policy_mismatch.go:79-80 renders the
         HolderACR 0 case as "the account has no usable credential".
+      date: "2026-10-26"
+    - id: 5iFg
+      title: AdmitInTx serializes per holder by locking t…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 004 (commit dba63b9). resolveInvitee takes
+        GetUserByEntityIDForUpdate on the holder (api/internal/service/profile_service.go:635)
+        before the duplicate check and insert, the same lock AdmitInTx takes. AdmitInTx's doc
+        comment (profile_admit.go) states the shared-lock guarantee. A concurrency test is in
+        profile_writers_integration_test.go.
       date: "2026-10-26"
