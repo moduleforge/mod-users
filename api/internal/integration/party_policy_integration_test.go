@@ -29,6 +29,12 @@ func (g gateParty) path(rest string) string { return "/v1/parties/" + g.uuid + r
 func (s *stack) newGateParty(t *testing.T) gateParty {
 	t.Helper()
 	g := gateParty{admin: s.register(t)}
+	if ownedScopeAdmins {
+		g.id = s.seedParty(t, "Gate Party "+uniq("p"))
+		g.uuid = s.entityUUID(t, g.id)
+		g.adminTok, _ = s.makeOwnedAdmin(t, g.admin, g.id)
+		return g
+	}
 	g.adminTok, _ = s.makeOperator(t, g.admin)
 	g.id = s.seedParty(t, "Gate Party "+uniq("p"))
 	g.uuid = s.entityUUID(t, g.id)
@@ -38,7 +44,11 @@ func (s *stack) newGateParty(t *testing.T) gateParty {
 // setPolicy PUTs the policy as the administrator.
 func (s *stack) setPolicy(t *testing.T, g gateParty, body map[string]any) *resp {
 	t.Helper()
-	return s.do(t, http.MethodPut, g.path("/authn-policy"), g.adminTok.access(), body)
+	r := s.do(t, http.MethodPut, g.path("/authn-policy"), g.adminTok.access(), body)
+	if ownedScopeAdmins && r.status == http.StatusOK {
+		s.keepOwnedAdminUnlocked(t, g.id, body)
+	}
+	return r
 }
 
 // gateMember is a user holding an active profile in the party.

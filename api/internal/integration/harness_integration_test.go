@@ -224,6 +224,7 @@ type stack struct {
 	users       *svc.UserService
 	profiles    *svc.ProfileService
 	partyPolicy *svc.PartyPolicyService
+	personal    *svc.PersonalPartyService
 	gate        *svc.CollaboratorGate
 	creds       *svc.CredentialService
 	sessions    *svc.SessionService
@@ -516,6 +517,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 		principals.RegisterPrincipalRoutes(r, principals.NewPrincipalsHandler(users))
 	})
 	partyPolicy := svc.NewPartyPolicyService(pool, coreQueries, az, group, users)
+	personal := svc.NewPersonalPartyService(group)
 	partiesH := parties.NewPartiesHandler(profiles, partyPolicy)
 	r.Route("/v1/parties", func(r chi.Router) {
 		r.Use(requireAuth)
@@ -569,7 +571,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 
 	return &stack{
 		pool: pool, cfg: cfg, signer: signer, signKey: key, handler: r, obs: rec, group: group,
-		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, partyPolicy: partyPolicy, gate: gate, creds: creds,
+		mail: mb, oauth: oauth, az: az, authn: authn, users: users, profiles: profiles, partyPolicy: partyPolicy, personal: personal, gate: gate, creds: creds,
 		sessions: sessions, imps: imps, chal: chal, dir: dir, boot: boot, onboarding: onboarding, q: queries, coreQ: coreQueries, opReg: opReg,
 		auditApplied: auditApplied,
 	}, nil

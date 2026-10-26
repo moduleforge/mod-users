@@ -6,10 +6,10 @@ package integration
 // triggers and the real mod-audit observer: invitations, the holder's accept,
 // decline and leave, the administrator's suspend, resume and end, departure
 // cleanup, managed users, lifecycle observers and the masking and error order
-// of the routes. Party administration is reachable only by operator-party
-// administrators until the authorization-engine phase (decision U27), so every
-// administrator here is an operator-party profile with a wildcard grant
-// (makeOperator).
+// of the routes. By default every administrator here is an operator-party
+// profile with a wildcard grant (makeOperator); owned_scope_party_integration_test.go
+// re-runs these flows with non-operator administrators holding owned-scope
+// grants (decision U27).
 
 import (
 	"context"
@@ -94,6 +94,13 @@ type partyFixture struct {
 func (s *stack) newParty(t *testing.T) partyFixture {
 	t.Helper()
 	f := partyFixture{admin: s.registerVerified(t)}
+	if ownedScopeAdmins {
+		f.partyName = "Profile Party " + uniq("p")
+		f.partyID = s.seedParty(t, f.partyName)
+		f.partyUUID = s.entityUUID(t, f.partyID)
+		f.adminTok, f.adminProf = s.makeOwnedAdmin(t, f.admin, f.partyID)
+		return f
+	}
 	f.adminTok, f.adminProf = s.makeOperator(t, f.admin)
 	f.partyName = "Profile Party " + uniq("p")
 	f.partyID = s.seedParty(t, f.partyName)

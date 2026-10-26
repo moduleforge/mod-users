@@ -404,6 +404,10 @@ func main() {
 	// partyPolicyService: the party authentication policy, credential
 	// authorizations and confinements behind /v1/parties/{party_uuid}.
 	partyPolicySvc := usersservice.NewPartyPolicyService(pool, coreQueries, az, observerGroup, userSvc)
+	// personalPartyService: EnsurePersonalParty, a Go API for mod-billing's
+	// personal team plans. It has no HTTP route, so the dev server only
+	// constructs it to keep the wiring identical to the manifest's.
+	_ = usersservice.NewPersonalPartyService(observerGroup)
 	// bootstrapService: the first-run bootstrap (POST /v1/bootstrap) and the
 	// operator-administrator check behind the OIDC configuration routes.
 	bootstrapSvc := usersservice.NewBootstrapService(pool, az, observerGroup, userSvc, credSvc, sessionSvc, profileSvc)

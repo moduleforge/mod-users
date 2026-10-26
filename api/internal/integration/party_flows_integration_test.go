@@ -11,11 +11,12 @@ package integration
 // the policy administration lives in profiles_, party_policy_ and
 // collaborator_integration_test.go.
 //
-// Until the authorization-engine phase the party routes' type grants and the
-// wildcard fallback go only to operator actors (decision U27), so in the worked
-// example Acme is the deployment's operator party and its administrator Alice
-// holds the bootstrap wildcard grant; Beta stays a non-operator party whose
-// profiles Alice administers through that wildcard.
+// By default, in the worked example Acme is the deployment's operator party and
+// its administrator Alice holds the bootstrap wildcard grant; Beta stays a
+// non-operator party whose profiles Alice administers through that wildcard.
+// owned_scope_party_integration_test.go re-runs the example with a
+// non-operator Acme: Alice is a member of Acme holding an owned-scope grant on
+// it, and Beta has its own administrator (decision U27).
 
 import (
 	"context"
@@ -100,6 +101,17 @@ type acmeFixture struct {
 func (s *stack) newAcme(t *testing.T) acmeFixture {
 	t.Helper()
 	alice := s.registerVerified(t)
+	if ownedScopeAdmins {
+		// A non-operator Acme: Alice is a member of the party and holds an
+		// owned-scope manage grant on it (plus the entity grant on the party
+		// record, which an owned-scope grant never reaches, mod-core D7).
+		party := s.seedParty(t, "Acme "+uniq("p"))
+		tok, profileID := s.makeOwnedAdmin(t, alice, party)
+		return acmeFixture{
+			gateParty:    gateParty{id: party, uuid: s.entityUUID(t, party), admin: alice, adminTok: tok},
+			aliceProfile: profileID,
+		}
+	}
 	tok, profileID := s.makeOperator(t, alice)
 	party := s.operatorPartyID(t)
 	t.Cleanup(func() {
@@ -201,7 +213,12 @@ func (s *stack) addAcmePassword(t *testing.T, j *john) {
 // joinBeta has Alice invite John to Beta and John accept from the C1 session.
 func (s *stack) joinBeta(t *testing.T, a acmeFixture, j john, beta int64) string {
 	t.Helper()
-	invited := s.do(t, http.MethodPost, "/v1/parties/"+s.entityUUID(t, beta)+"/profiles", a.adminTok.access(),
+	adminTok := a.adminTok
+	if ownedScopeAdmins {
+		// Beta has its own administrator; Alice administers Acme only.
+		adminTok, _ = s.makeOwnedAdmin(t, s.registerVerified(t), beta)
+	}
+	invited := s.do(t, http.MethodPost, "/v1/parties/"+s.entityUUID(t, beta)+"/profiles", adminTok.access(),
 		map[string]any{"holder_email": j.homeEmail}).wantStatus(t, http.StatusCreated).obj(t)
 	pr3 := invited["uuid"].(string)
 	s.do(t, http.MethodPost, "/v1/me/profiles/"+pr3+"/accept", j.c1.access(), nil).wantStatus(t, http.StatusOK)

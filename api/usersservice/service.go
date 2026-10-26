@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	gossh "golang.org/x/crypto/ssh"
 
@@ -255,6 +256,38 @@ func NewPartyPolicyService(
 	users *UserService,
 ) *PartyPolicyService {
 	return inner.NewPartyPolicyService(pool, coreQ, az, obs, users)
+}
+
+// PersonalPartyService gives a user a party of their own for personal team
+// plans: EnsurePersonalParty idempotently creates the user's natural_person,
+// links it and creates the personal profile's owned-scope manage grant over it,
+// all in the caller's transaction. The grant is invisible to the production
+// Authorizer until that transaction commits, so a caller that must authorize
+// against it commits first (mod-billing's B6).
+type PersonalPartyService = inner.PersonalPartyService
+
+// PersonalParty is the outcome of PersonalPartyService.EnsurePersonalParty.
+type PersonalParty = inner.PersonalParty
+
+// Errors of EnsurePersonalParty, the same values as the inner package's
+// (ErrGuestMustUpgrade is declared with the profile lifecycle errors).
+var (
+	// ErrPersonalProfileRequired: users.personal_profile_required (403), the
+	// acting profile is not a user's personal profile.
+	ErrPersonalProfileRequired = inner.ErrPersonalProfileRequired
+	// ErrPersonalPartyNotOwned: users.person_not_owned (409), users.person_id
+	// links a person the user does not own.
+	ErrPersonalPartyNotOwned = inner.ErrPersonalPartyNotOwned
+)
+
+// ensurePersonalPartyShape is a compile-time assertion of the binding
+// signature of PersonalPartyService.EnsurePersonalParty (mod-billing calls it).
+var _ func(*PersonalPartyService, context.Context, pgx.Tx) (PersonalParty, error) = (*PersonalPartyService).EnsurePersonalParty
+
+// NewPersonalPartyService constructs a PersonalPartyService; obs receives the
+// in-transaction observations.
+func NewPersonalPartyService(obs *observer.ObserverGroup) *PersonalPartyService {
+	return inner.NewPersonalPartyService(obs)
 }
 
 // BootstrapService runs the first-run bootstrap of a deployment (the first
