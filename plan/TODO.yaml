@@ -865,7 +865,7 @@ phases:
           findings:
             - DO7p
           git:
-            branch: null
+            branch: plan/identity-model-impl-15-007
             commit: []
             merge: null
         - number: 8
