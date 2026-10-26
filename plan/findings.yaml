@@ -45,6 +45,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[decision] Are operator profiles subject to the owning-party gate (requirement 13 literal reading)? Current implementation holds operator profiles to customer-party credential_rule and min_acr. 14 phase-7 scenarios in api/internal/integration (authorized_invite, collaborator, party_flows, party_policy, profiles) were skipped via skipOperatorUnderOwningPartyGate (message names task 002). Exempting operators means adding a core_is_operator_profile skip to mod_users.session_meets_party_policy and removing the skip helper; moving the gate after the wildcard arm alone is not enough. Risks: a party can lock platform operators out; operators cannot impersonate such a party''s members (affects task 003). Needs a user decision before task 002 proceeds.'
+    - title: '[docs] Phase 10 task 001 source list names th'
+      id: pKAO
+      date: "2026-10-26"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-authorization-engine
+        - priority:unspecified
+        - effort:unspecified
+      text: '[docs] Phase 10 task 001 source list names the engine pieces but not the owning-party gate (decision C). Only the localAuthz facade paragraph in docs/architecture.md was updated by this task. The phase 10 doc rewrite must cover the owning-party gate.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
