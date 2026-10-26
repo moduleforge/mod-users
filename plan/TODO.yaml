@@ -896,7 +896,7 @@ phases:
           slug: strict-collaborator-policy-mismatch
           title: Keep Collaborator Policy Mismatch Strict Under Authorized Rule
           path: phase-16-remediation-05/001-strict-collaborator-policy-mismatch.md
-          done: false
+          done: true
           tier: sonnet-high
           findings:
             - ggb7
