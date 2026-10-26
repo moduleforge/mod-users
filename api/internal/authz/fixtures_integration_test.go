@@ -22,6 +22,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -344,7 +345,12 @@ func seedOperatorUser(t *testing.T) (userID, profileID int64) {
 	return userID, profileID
 }
 
-// actorCtx returns a context acting as the profile with the given entity id.
+// actorCtx returns a context acting as the profile with the given entity id,
+// in a session that just authenticated (AuthTime now), so the engine's
+// assurance gate passes for every seeded operation, including those with a
+// max_auth_age (impersonate, credentials). The session id is a placeholder: the
+// owning-party gate reads the session's factors only for an owner with a
+// restrictive policy, and those scenarios use real sessions.
 func actorCtx(profileID int64) context.Context {
 	var principal int64
 	_ = integPool.QueryRow(context.Background(), `SELECT holder_id FROM profiles WHERE entity_id = $1`, profileID).Scan(&principal)
@@ -353,6 +359,7 @@ func actorCtx(profileID int64) context.Context {
 		ProfileID:   profileID,
 		SessionID:   1,
 		ACR:         1,
+		AuthTime:    time.Now(),
 	})
 }
 
