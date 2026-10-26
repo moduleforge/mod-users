@@ -283,7 +283,7 @@ phases:
             branch: plan/identity-model-impl-08-005
             commit:
                 - ca1ae46
-            merge: null
+            merge: b8afa14489472a31c39a102a802ed05e75d09468
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
