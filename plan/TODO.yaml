@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 7
-    tasks_added: 39
+    tasks_added: 40
 phases:
     - number: 6
       slug: users-identity-core
@@ -1007,7 +1007,7 @@ phases:
       title: Remediation Round 7
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1032,6 +1032,20 @@ phases:
           tier: opus-med
           findings:
             - Y3B8
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: credentials-refuse-impersonation
+          title: Refuse Credential Administration And Personal-Party Creation While Impersonating
+          path: phase-18-remediation-07/003-credentials-refuse-impersonation.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - ejk3
+            - Mdgf
+            - Vj21
           git:
             branch: null
             commit: []
