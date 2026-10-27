@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 7
-    tasks_added: 37
+    tasks_added: 38
 phases:
     - number: 6
       slug: users-identity-core
@@ -1006,5 +1006,21 @@ phases:
       slug: remediation-07
       title: Remediation Round 7
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 8
-      tasks: []
+      tasks:
+        - number: 1
+          slug: party-is-own-owning-party
+          title: Gate The Party Record By Its Own Policy And Document One-Level Ownership
+          path: phase-18-remediation-07/001-party-is-own-owning-party.md
+          done: false
+          tier: opus-med
+          findings:
+            - bYK4
+            - N4y2
+            - iacw
+          git:
+            branch: null
+            commit: []
+            merge: null
