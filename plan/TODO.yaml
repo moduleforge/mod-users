@@ -1015,7 +1015,7 @@ phases:
           slug: party-is-own-owning-party
           title: Gate The Party Record By Its Own Policy And Document One-Level Ownership
           path: phase-18-remediation-07/001-party-is-own-owning-party.md
-          done: false
+          done: true
           tier: opus-med
           digest: Authorize treats a legal_entity target as its own owning party (Decision F); checkPartyPolicy requires both target party policy and direct owner policy. Closes bYK4 and N4y2. One-level ownership documented. Owner gate kept (confirm reading). Integration suites pass on throwaway postgres:16.
           findings:
