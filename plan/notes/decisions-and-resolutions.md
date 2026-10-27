@@ -221,3 +221,22 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
 - **Decision E (mod-core gaps from task 001).** Findings Ddx9 (list endpoints from `GrantTableGenerator`
   lack the owning-party gate) and qvSR (Authorizer contract text contradicts the gate) are fixed in
   mod-core in a remediation phase before mod-core lands. User decision.
+
+## Amendments (2026-10-27, phase 8 gate)
+
+- **Decision F (party is its own owning party; bYK4, N4y2).** A `legal_entity` target is treated as its own
+  owning party in `checkPartyPolicy` / `session_meets_party_policy`, so `Authorize` on the party record is
+  gated by that party's policy. Nested ownership is one-level only and documented as such. User decision.
+- **Decision G (impersonation applies the impersonated actor's rules; Y3B8).** While impersonating, the
+  impersonated actor's rules apply to every operation, so impersonation never weakens any party's
+  credential rule (no `p_skip_credential_rule` for impersonation). The only operations not gated on the
+  impersonated party's authorizations are stopping the impersonation and (disallowed) nested impersonation;
+  nesting is prevented by construction (the no-nesting trigger), not by an authorization check. The
+  implementer must settle which session factors satisfy those rules for the child session; if that makes
+  operator impersonation of restrictive-policy members impossible (conflicts with Decision D and task 003),
+  surface it to the manager. User decision.
+- **Decision H (credentials admin under impersonation; ejk3).** Refuse credentials administration when
+  `ImpersonatorPrincipalID != 0` and copy the parent session's `auth_time` into the child at Start. Also
+  closes the `EnsurePersonalParty` impersonation gap (Mdgf). User decision.
+- **Decision I (impersonation Renew; 0chQ, LAgn).** Renew re-checks `impersonate` from the parent session;
+  the acting profile is recorded on the child session (baseline-migration column). User decision.
