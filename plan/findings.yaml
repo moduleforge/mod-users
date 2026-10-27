@@ -286,6 +286,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Option A ordering note: if A is chosen, consider running task 004 first (adds the acting-profile column, Decision I) so the operator exemption keys on the parent''s acting profile.'
+    - title: 'Conflict evidence: model/migrations/sql/0100_'
+      id: HAsS
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-07
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Conflict evidence: model/migrations/sql/0100_baseline.sql session_meets_party_policy (~1638/1665) and profile_gate_for (~1279) skip credential_rule on impersonation; api/internal/integration/impersonation_integration_test.go:375-384 premise (member holds no authorized credential; operator not bound) expects Start 201.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
