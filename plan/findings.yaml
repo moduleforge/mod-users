@@ -6,8 +6,8 @@ items:
       tags:
         - type:security
         - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
+        - priority:high
+        - effort:large
       text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-users'' single-row engine (api/internal/authz/authz.go, authorizePrelude -> checkPartyPolicy -> mod_users.session_meets_party_policy in model/migrations/sql/0100_baseline.sql) refuses an acting profile outside the target''s owning party whose session or credential does not meet that party''s credential_rule / min_acr. The list side does not: mod-core''s GrantTableGenerator (core-api/authz/setup/grant_table.go, GenerateForResource) emits accessible_<slug>_ids_for_actor(p_actor_entity_id, p_op_ids) with only the actor and op ids as inputs, so it has no session or credential to evaluate and admits the same rows through the entity, owned-scope and own arms. A collaborator whose session is below the owning party''s min_acr, or whose credential is not authorized under credential_rule ''authorized'', is refused on a single party-owned row but still sees it in list endpoints that join the access functions (for example the principal list through accessible_user_ids_for_actor). This breaks the list/single-row parity both sides document. The fix needs a mod-core change: either the generated functions take the session or credential (or a precomputed set of parties whose policy the caller meets) and filter out rows whose owner_id is a restrictive-policy party the actor is outside of, or GrantTableGenerator exposes a hook through which a module supplies that predicate. mod-users cannot change the generated SQL itself.'
     - title: Core Authorizer contract omits party gate
       id: qvSR
