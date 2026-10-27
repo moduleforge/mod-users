@@ -1024,7 +1024,8 @@ phases:
             - iacw
           git:
             branch: plan/identity-model-impl-18-001
-            commit: []
+            commit:
+                - 51d7959
             merge: null
         - number: 2
           slug: impersonated-actor-rules-apply
