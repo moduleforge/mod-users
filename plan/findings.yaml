@@ -15,8 +15,8 @@ items:
       tags:
         - type:style
         - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'The users.step_up_required action-required error is built twice from useraction.StepUpRequired: service.ErrStepUpRequired (api/internal/service/session_errors.go) and authz.ErrStepUpRequired (api/internal/authz/authz.go, the engine''s assurance-gate refusal). Both render identically through apiresp.WriteError, but they are distinct pointers, so errors.Is(err, service.ErrStepUpRequired) does not match an engine refusal and vice versa; callers have to match on errors.As(*apiresp.ActionRequiredError) plus Action().Code. internal/authz cannot import internal/service without pulling the whole service graph into the engine. Declaring the single shared value next to the action code in api/internal/useraction and aliasing it from both packages would give one identity.'
     - title: '[decision] Are operator profiles subject to t'
       id: JgvC
