@@ -12,6 +12,11 @@ impersonation, setup-token bootstrap and the profile-as-subject authorization en
 (`plugins/flow/task-procedures/update-architecture-docs/SKILL.md`) for the existing files, and
 additionally author one new architecture document the procedure does not create.
 
+The scope also covers changes folded in from the phase 8 gate findings pKAO (owning-party gate
+documentation), Q1lB and Hd71 (removal of the `/assume` route and the admin-assume JWT), and EfE8
+(stale D9 SSH-key text), recorded as findings in this plan's `plan/findings.yaml`. Those findings
+were dismissed as already planned against this task on the condition that this task covers them.
+
 Out of scope: `README.md` beyond the single link named below, `AGENTS.md`, sub-project READMEs,
 `docs/consumer-upgrade-notes.md` and the other operational docs (tasks
 `002-write-consumer-upgrade-notes` and `003-review-repository-docs`), and code changes.
@@ -77,6 +82,23 @@ Out of scope: `README.md` beyond the single link named below, `AGENTS.md`, sub-p
    may be referenced as the source of the model, using the project's existing cross-repository
    reference style.
 6. Edit stale sections in place per the procedure; do not restructure accurate content.
+7. **Decision D9 (SSH keys as credentials; EfE8).** Rewrite the D9 text in `docs/architecture.md` and
+   `docs/architecture/ssh-keys.md` (lines ~51-55) to the credentials operation: management of SSH keys
+   is the `credentials` operation (ownership_confers true, max_auth_age 10 minutes) on the principal
+   entity under `/v1/principals/{uuid}/credentials*`. Drop the `assume` and manage-implies-assume
+   wording. Mark the old `/v1/user-accounts` SSH-key routes as removed.
+8. **Owning-party gate (pKAO).** Document in `docs/architecture.md` and `docs/mod-users-spec.md`
+   where party gating is described: `credential_rule` and `min_acr` are enforced on outside actors;
+   a party record is its own owning party (a legal entity gates its own record); platform operator
+   profiles are exempt from the owning-party gate; nested ownership is one level only (no ancestor
+   walk); and while impersonating, the impersonated actor's rules apply to every operation, so
+   impersonation never skips a party's `credential_rule`. Carry the reasoning into the docs, not the
+   decision ids.
+9. **Removal of `/assume` and the admin-assume JWT (Q1lB, Hd71).** Rewrite `docs/mod-users-spec.md`
+   section 10 and lines ~114-120, 218, 308 and 362, and `docs/architecture.md` lines ~84, 235, 267
+   and 273, to describe `/v1/impersonations` child sessions and the `impersonate` operation instead.
+   Remove the `/assume` route wording and the admin-assume JWT wording everywhere they appear in these
+   files, so that no remaining text describes an assume route or assumed-user token.
 
 ## Validation
 
@@ -95,6 +117,13 @@ Out of scope: `README.md` beyond the single link named below, `AGENTS.md`, sub-p
   code (spot-check against `api/openapi.yaml`, `model/migrations/sql/0100_baseline.sql` and
   `api/internal/config/config.go`).
 - Relative links in the edited and new files resolve.
+- `grep -rniE "/assume|manage.implies.assume|admin.assume|assumed.user" docs/architecture.md docs/mod-users-spec.md docs/architecture/ssh-keys.md`
+  returns no route, operation or token wording (any remaining hit is a justified historical mention).
+- `grep -rn "/v1/user-accounts" docs/architecture.md docs/architecture/ssh-keys.md` shows only text
+  that states those SSH-key routes were removed.
+- `grep -n "/v1/impersonations" docs/mod-users-spec.md docs/architecture.md` finds the child-session
+  description that replaces the assume wording, and `grep -n "/v1/principals/.*credentials"
+  docs/architecture/ssh-keys.md` finds the credentials-operation description of D9.
 
 ## Metadata
 
