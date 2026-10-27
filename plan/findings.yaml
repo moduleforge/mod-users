@@ -9,15 +9,6 @@ items:
         - priority:high
         - effort:large
       text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-users'' single-row engine (api/internal/authz/authz.go, authorizePrelude -> checkPartyPolicy -> mod_users.session_meets_party_policy in model/migrations/sql/0100_baseline.sql) refuses an acting profile outside the target''s owning party whose session or credential does not meet that party''s credential_rule / min_acr. The list side does not: mod-core''s GrantTableGenerator (core-api/authz/setup/grant_table.go, GenerateForResource) emits accessible_<slug>_ids_for_actor(p_actor_entity_id, p_op_ids) with only the actor and op ids as inputs, so it has no session or credential to evaluate and admits the same rows through the entity, owned-scope and own arms. A collaborator whose session is below the owning party''s min_acr, or whose credential is not authorized under credential_rule ''authorized'', is refused on a single party-owned row but still sees it in list endpoints that join the access functions (for example the principal list through accessible_user_ids_for_actor). This breaks the list/single-row parity both sides document. The fix needs a mod-core change: either the generated functions take the session or credential (or a precomputed set of parties whose policy the caller meets) and filter out rows whose owner_id is a restrictive-policy party the actor is outside of, or GrantTableGenerator exposes a hook through which a module supplies that predicate. mod-users cannot change the generated SQL itself.'
-    - title: Party gate adds a query per check
-      id: IIA3
-      date: "2026-10-26"
-      tags:
-        - type:optimization
-        - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
-      text: 'api/internal/authz/authz.go authorizePrelude calls checkPartyPolicy (SELECT mod_users.session_meets_party_policy(...)) for every Authorize with a target and every AuthorizeTypeIn from a session or credential context, not only for cross-party ones: deciding whether the acting profile is outside the owner''s party needs the target''s owner_id, which is only known in SQL. That adds one round trip to every targeted check (three in total for Authorize: party gate, wildcard, grant-or-own). The function returns early without touching factors for in-party actors and owners without a restrictive policy, so the cost is the round trip, not the work. Folding the gate into the wildcard query (one statement returning both booleans) would remove the extra round trip without changing semantics.'
     - title: Two ErrStepUpRequired sentinels
       id: Lt3W
       date: "2026-10-26"
@@ -1600,4 +1591,14 @@ closed:
       title: Core Authorizer contract omits party gate
       disposition: promoted
       ref: qvSR
+      date: "2026-10-27"
+    - id: IIA3
+      title: Party gate adds a query per check
+      disposition: dismissed
+      reason: |-
+        Duplicate of MaQM: both describe the same extra round trip that
+        checkPartyPolicy adds before the wildcard and grant-or-own queries in
+        api/internal/authz/authz.go authorizePrelude, with the same remedy (fold the
+        gate and the wildcard arm into one statement). MaQM is promoted and carries
+        the issue.
       date: "2026-10-27"
