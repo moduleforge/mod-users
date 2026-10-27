@@ -250,6 +250,15 @@ items:
         - plan/phase:remediation-07
         - effort:unspecified
       text: 'Add an amendment line to plan/notes/mod-users-api-surface.md section 6.2, after the 2026-10-26 decision C amendment paragraph. Proposed text: "Amendment (2026-10-27, decision F, findings bYK4, N4y2, iacw): a party is its own owning party. When the Authorize target is itself a legal_entity, the prelude''s owning-party gate checks the target''s own policy in addition to its entities.owner_id, and both must pass. Nested ownership is one level only: the gate checks the target (when it is a party) and its direct owner, never the owner''s owner or any further ancestor." Raised by task 001 (remediation-07); its validation check 3 fails until this line is present.'
+    - title: Confirm decision F owner-gate reading
+      id: u7Fd
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - priority:high
+        - plan/phase:remediation-07
+        - effort:unspecified
+      text: 'Confirm the reading of Decision F adopted by task 001 (remediation-07): the owner''s policy gate is kept alongside the target-as-party gate, not replaced by it. Replacing it would ungate party-owned legal entities (for example managed users, owner_id = managing party) from their owner''s policy and would regress the existing party_gate cases, so this needs a decision if replace semantics was intended. Current implementation: checkPartyPolicy requires session_meets_party_policy(owner_id) AND (target not in legal_entities OR session_meets_party_policy(target)).'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
