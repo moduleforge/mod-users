@@ -9,15 +9,6 @@ items:
         - priority:high
         - effort:large
       text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-users'' single-row engine (api/internal/authz/authz.go, authorizePrelude -> checkPartyPolicy -> mod_users.session_meets_party_policy in model/migrations/sql/0100_baseline.sql) refuses an acting profile outside the target''s owning party whose session or credential does not meet that party''s credential_rule / min_acr. The list side does not: mod-core''s GrantTableGenerator (core-api/authz/setup/grant_table.go, GenerateForResource) emits accessible_<slug>_ids_for_actor(p_actor_entity_id, p_op_ids) with only the actor and op ids as inputs, so it has no session or credential to evaluate and admits the same rows through the entity, owned-scope and own arms. A collaborator whose session is below the owning party''s min_acr, or whose credential is not authorized under credential_rule ''authorized'', is refused on a single party-owned row but still sees it in list endpoints that join the access functions (for example the principal list through accessible_user_ids_for_actor). This breaks the list/single-row parity both sides document. The fix needs a mod-core change: either the generated functions take the session or credential (or a precomputed set of parties whose policy the caller meets) and filter out rows whose owner_id is a restrictive-policy party the actor is outside of, or GrantTableGenerator exposes a hook through which a module supplies that predicate. mod-users cannot change the generated SQL itself.'
-    - title: '[decision] Are operator profiles subject to t'
-      id: JgvC
-      date: "2026-10-26"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
-      text: '[decision] Are operator profiles subject to the owning-party gate (requirement 13 literal reading)? Current implementation holds operator profiles to customer-party credential_rule and min_acr. 14 phase-7 scenarios in api/internal/integration (authorized_invite, collaborator, party_flows, party_policy, profiles) were skipped via skipOperatorUnderOwningPartyGate (message names task 002). Exempting operators means adding a core_is_operator_profile skip to mod_users.session_meets_party_policy and removing the skip helper; moving the gate after the wildcard arm alone is not enough. Risks: a party can lock platform operators out; operators cannot impersonate such a party''s members (affects task 003). Needs a user decision before task 002 proceeds.'
     - title: '[docs] Phase 10 task 001 source list names th'
       id: pKAO
       date: "2026-10-26"
@@ -1597,4 +1588,15 @@ closed:
       title: Two ErrStepUpRequired sentinels
       disposition: promoted
       ref: Lt3W
+      date: "2026-10-27"
+    - id: JgvC
+      title: '[decision] Are operator profiles subject to t'
+      disposition: dismissed
+      reason: |-
+        Stale: the open question was settled by Decision D (plan/notes/
+        decisions-and-resolutions.md, Amendments 2026-10-26 phase 8): operator
+        profiles are exempt from the owning-party gate via a core_is_operator_profile
+        skip in session_meets_party_policy, and the skipOperatorUnderOwningPartyGate
+        helper is removed (grep -rn skipOperatorUnderOwningPartyGate api/ returns
+        nothing). Superseded by Decision D per the user.
       date: "2026-10-27"
