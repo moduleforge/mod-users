@@ -237,6 +237,57 @@ func TestPartyPolicy_EntityScopeAdministratorMayWrite(t *testing.T) {
 		wantStatus(t, http.StatusOK)
 }
 
+// Decision F: a party is its own owning party, so writing a restrictive
+// party's authn policy is gated by that party's policy. A non-member holding an
+// entity-scope update grant on the party record, from a session that does not
+// meet the policy, is refused and writes nothing; the operator administrator
+// (exempt, decision D) and a compliant member with the same grant are admitted.
+func TestPartyPolicy_PartyRecordGate_NonMemberUpdateGrantCannotWeakenThePolicy(t *testing.T) {
+	g := env.newGateParty(t)
+	env.setPolicy(t, g, map[string]any{"credential_rule": "authorized", "min_acr": 1}).wantStatus(t, http.StatusOK)
+	updateGrant := func(profileID int64) {
+		env.exec(t, "entity-scope update grant on the party record", `
+INSERT INTO grants (actor_id, operation_id, target_id, granted_by, scope)
+SELECT $1, o.id, $2, NULL, 'entity' FROM authz_operations o WHERE o.slug = 'update'`, profileID, g.id)
+	}
+	weaken := map[string]any{"credential_rule": "any", "min_acr": 1}
+	keep := map[string]any{"credential_rule": "authorized", "min_acr": 1}
+	ruleOf := func() string {
+		v := env.do(t, http.MethodGet, g.path("/authn-policy"), g.adminTok.access(), nil).wantStatus(t, http.StatusOK).obj(t)
+		rule, _ := v["credential_rule"].(string)
+		return rule
+	}
+
+	// The non-member acts through its personal profile with a password the
+	// party has not authorized.
+	outsider := env.register(t)
+	outsiderID := env.principalID(t, outsider.Email)
+	updateGrant(env.personalProfileID(t, outsiderID))
+	r := env.do(t, http.MethodPut, g.path("/authn-policy"), outsider.tk.access(), weaken)
+	if r.status != http.StatusForbidden && r.status != http.StatusNotFound {
+		t.Fatalf("non-member below the party's policy: status = %d, want 403 or 404; body=%s", r.status, r.raw)
+	}
+	if got := ruleOf(); got != "authorized" {
+		t.Fatalf("credential_rule after the refused write = %q, want authorized", got)
+	}
+
+	// A compliant member holding the same grant is admitted.
+	m := env.newGateMember(t, g)
+	env.exec(t, "authorize the member's password",
+		`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id)
+		 SELECT c.id, $2, $3 FROM mod_users.credentials c WHERE c.principal_id = $1 AND c.kind = 'password' AND c.revoked_at IS NULL`,
+		m.userID, g.id, m.profileID)
+	updateGrant(m.profileID)
+	memberTok, _ := env.partySession(t, m)
+	env.do(t, http.MethodPut, g.path("/authn-policy"), memberTok.access(), keep).wantStatus(t, http.StatusOK)
+
+	// The operator administrator, outside the party, is exempt.
+	env.setPolicy(t, g, keep).wantStatus(t, http.StatusOK)
+	if got := ruleOf(); got != "authorized" {
+		t.Fatalf("credential_rule = %q, want authorized", got)
+	}
+}
+
 func TestPartyPolicy_AdminAuthorizesListsAndRemovesACredential(t *testing.T) {
 	g := env.newGateParty(t)
 	m := env.newGateMember(t, g)

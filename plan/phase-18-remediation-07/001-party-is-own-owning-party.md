@@ -30,6 +30,16 @@ Scope is limited to fixing the linked findings. Anything beyond that is out of s
 3. grep shows the one-level ownership note in api/internal/authz/authz.go and in API surface 6.2.
 4. Sibling links still resolve to the paths under MODULEFORGE_SIBLINGS_DIR after the task.
 
+## Status
+
+- Outcome: succeeded (2026-10-27).
+- Change: `checkPartyPolicy` (`api/internal/authz/authz.go`) now evaluates `mod_users.session_meets_party_policy` for the Authorize target itself when it is a `legal_entity` (a row in `public.legal_entities`), in addition to its `entities.owner_id`; both must pass. AuthorizeTypeIn is unchanged (its ownerID is already the gate party). The SQL function body is unchanged (no migration change beyond its header comment in `model/migrations/sql/0100_baseline.sql`); no sqlc regeneration.
+- Decision: the owner's gate is kept alongside the target-as-party gate rather than replaced. Replacing it would ungate party-owned legal entities (for example managed users, `owner_id` = managing party) from the managing party's policy, and would break the existing party_gate cases, whose content entities are organizations owned by the gated party.
+- Decision D preserved: the operator skip lives inside the function and applies to each call.
+- One-level note: package documentation of `api/internal/authz/authz.go` and `docs/architecture.md`. The API surface 6.2 amendment line (`plan/notes/mod-users-api-surface.md`) is not edited by this task (plan file outside the task agent's write scope); requested from the manager.
+- Tests: `TestInteg_PartyGate_PartyRecordIsGatedByItsOwnPolicy` (`api/internal/authz/party_gate_integration_test.go`) and `TestPartyPolicy_PartyRecordGate_NonMemberUpdateGrantCannotWeakenThePolicy` (`api/internal/integration/party_policy_integration_test.go`); both fail against the pre-change engine.
+- Validation: make build, make test, make lint, model verify pass; the authz, config and integration suites pass against a throwaway postgres:16; sibling links resolve to the plan worktrees (restored after make repointed them through the siblings dir).
+
 ## References
 
 - Finding bYK4 in this plan's `plan/findings.yaml` (security, high): an outside collaborator with an entity-scope update or manage grant on a restrictive party's record can weaken that party's authn policy from a session that does not meet it.

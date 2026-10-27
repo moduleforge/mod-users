@@ -162,6 +162,73 @@ func TestInteg_PartyGate_OperatorExempt(t *testing.T) {
 	requireForbidden403(t, integAZ.Authorize(sessionCtx(t, g.collabUser, g.collabProfile, 1, cpw), "read", &g.content), "non-operator collaborator")
 }
 
+// Decision F: a party is its own owning party. Authorize on the party record
+// itself (an organization with no owner, so owner_id resolves to NULL) is
+// gated by the party's own policy: an outside collaborator holding an
+// entity-scope update grant on the record is refused from a session that does
+// not meet the policy and admitted once it does, while an operator (decision D)
+// and a compliant member pass.
+func TestInteg_PartyGate_PartyRecordIsGatedByItsOwnPolicy(t *testing.T) {
+	party := seedUnownedOrg(t, "Party Record "+fxTag("p"))
+	fxMustTx(t, func(tx pgx.Tx) { fxPolicy(t, tx, party, "authorized", nil, 2) })
+
+	t.Run("outside collaborator with an update grant", func(t *testing.T) {
+		user, profile := seedUserEntity(t)
+		targetedGrant(t, profile, party, "update")
+		pw := fxPassword(t, integPool, user, nil)
+
+		requireForbidden403(t, integAZ.Authorize(sessionCtx(t, user, profile, 1, pw), "update", &party),
+			"collaborator below min_acr with an unauthorized credential")
+		requireForbidden403(t, integAZ.Authorize(sessionCtx(t, user, profile, 2, pw), "update", &party),
+			"collaborator at min_acr with an unauthorized credential")
+
+		authorizeCredential(t, pw, party, profile)
+		requireForbidden403(t, integAZ.Authorize(sessionCtx(t, user, profile, 1, pw), "update", &party),
+			"collaborator with an authorized credential below min_acr")
+		if err := integAZ.Authorize(sessionCtx(t, user, profile, 2, pw), "update", &party); err != nil {
+			t.Errorf("collaborator meeting the party's own policy: err = %v, want nil", err)
+		}
+	})
+
+	t.Run("operator", func(t *testing.T) {
+		opUser, opProfile := seedOperatorUser(t)
+		seedWildcardGrant(t, opProfile, "update")
+		opPW := fxPassword(t, integPool, opUser, nil)
+		if err := integAZ.Authorize(sessionCtx(t, opUser, opProfile, 1, opPW), "update", &party); err != nil {
+			t.Errorf("operator profile on a restrictive party's record: err = %v, want nil", err)
+		}
+	})
+
+	t.Run("compliant member", func(t *testing.T) {
+		user, _ := seedUserEntity(t)
+		var member int64
+		fxMustTx(t, func(tx pgx.Tx) { member = fxPartyProfile(t, tx, user, party, "active") })
+		targetedGrant(t, member, party, "update")
+		pw := fxPassword(t, integPool, user, nil)
+		authorizeCredential(t, pw, party, member)
+		if err := integAZ.Authorize(sessionCtx(t, user, member, 2, pw), "update", &party); err != nil {
+			t.Errorf("compliant member on its own party's record: err = %v, want nil", err)
+		}
+	})
+
+	// The owner's gate is kept: a party-owned party is gated by its own policy
+	// and its direct owner's (one level, no ancestor walk).
+	t.Run("party owned by a restrictive party", func(t *testing.T) {
+		child := seedOwnedOrg(t, party, "Child Party "+fxTag("c"))
+		user, profile := seedUserEntity(t)
+		targetedGrant(t, profile, child, "update")
+		pw := fxPassword(t, integPool, user, nil)
+		requireForbidden403(t, integAZ.Authorize(sessionCtx(t, user, profile, 1, pw), "update", &child),
+			"collaborator below the owning party's policy on a child party without a policy")
+
+		grandchild := seedOwnedOrg(t, child, "Grandchild Party "+fxTag("g"))
+		targetedGrant(t, profile, grandchild, "update")
+		if err := integAZ.Authorize(sessionCtx(t, user, profile, 1, pw), "update", &grandchild); err != nil {
+			t.Errorf("grandchild of the restrictive party (one-level gate): err = %v, want nil", err)
+		}
+	})
+}
+
 func TestInteg_PartyGate_Skips(t *testing.T) {
 	g := seedGateParty(t, "authorized", 3)
 

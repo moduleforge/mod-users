@@ -22,11 +22,19 @@
 //     context skip it; an impersonating context always carries a session and
 //     never does.
 //  2. The owning-party gate, when the check names an owner: the target's
-//     entities.owner_id for Authorize, ownerID for AuthorizeTypeIn. When the
-//     acting profile is outside that party (an outside collaborator reaching
-//     the party's content through actor groups or grants, or a personal
-//     profile through the SSH fallback), the session's factors (or the single
-//     credential's) must meet the owning party's credential_rule and min_acr,
+//     entities.owner_id for Authorize, ownerID for AuthorizeTypeIn. A party
+//     is its own owning party (decision F): when Authorize's target is itself
+//     a legal_entity, the target is a gate party too, alongside its
+//     owner_id, so Authorize(update, &party) is gated by that party's own
+//     policy even when the party has no owner.
+//     Nested ownership is one level only: the gate checks the target (when it
+//     is a party) and its direct owner, never the owner's owner or any
+//     further ancestor, so content owned by a party that is itself owned by
+//     another party is not gated by the outer party's policy. When the acting
+//     profile is outside a gate party (an outside collaborator reaching the
+//     party's content through actor groups or grants, or a personal profile
+//     through the SSH fallback), the session's factors (or the single
+//     credential's) must meet that party's credential_rule and min_acr,
 //     with mod_users.session_meets_party_policy. A profile_policy_confirmations
 //     row exempts the credential rule only. A failure is ErrForbidden, like a
 //     failed grant arm. Acting profiles inside the owning party, personal
@@ -177,8 +185,9 @@ type Authorizer struct {
 }
 
 // partyPolicyQuery is the input of the owning-party gate. Exactly one of
-// TargetEntityID (Authorize: the owner is resolved from entities.owner_id)
-// and OwnerID (AuthorizeTypeIn) is non-zero.
+// TargetEntityID (Authorize: the gate parties are entities.owner_id and, when
+// it is a legal_entity, the target itself) and OwnerID (AuthorizeTypeIn) is
+// non-zero.
 type partyPolicyQuery struct {
 	ProfileID      int64
 	SessionID      int64
@@ -641,19 +650,29 @@ SELECT
 
 // checkPartyPolicy runs the owning-party gate:
 // mod_users.session_meets_party_policy over the context's session (or
-// credential), the acting profile, and the owner: q.OwnerID when set, else the
-// owner_id of q.TargetEntityID (NULL for a target with no owner or no entities
-// row, which the function passes). Zero session and credential ids are passed
-// as NULL.
+// credential) and the acting profile, for each gate party of the check:
+//
+//   - AuthorizeTypeIn: q.OwnerID.
+//   - Authorize: the owner_id of q.TargetEntityID (NULL for a target with no
+//     owner or no entities row, which the function passes) and, when the
+//     target is itself a legal_entity (a party), the target too (decision F:
+//     a party is its own owning party, so its own record is gated by its own
+//     policy, even when it has no owner). Both must be met: the owner's gate
+//     is kept so a party-owned legal_entity, such as a managed user, stays
+//     gated by the managing party. One level only, with no ancestor walk.
+//
+// Zero session and credential ids are passed as NULL.
 func (a *Authorizer) checkPartyPolicy(ctx context.Context, q partyPolicyQuery) (bool, error) {
 	const partyPolicySQL = `
-SELECT mod_users.session_meets_party_policy(
-    NULLIF($1::bigint, 0),
-    NULLIF($2::bigint, 0),
-    $3::bigint,
-    CASE WHEN $5::bigint > 0 THEN $5::bigint
-         ELSE (SELECT e.owner_id FROM entities e WHERE e.id = $4::bigint)
-    END)`
+SELECT CASE
+  WHEN $5::bigint > 0 THEN
+    mod_users.session_meets_party_policy(NULLIF($1::bigint, 0), NULLIF($2::bigint, 0), $3::bigint, $5::bigint)
+  ELSE
+    mod_users.session_meets_party_policy(NULLIF($1::bigint, 0), NULLIF($2::bigint, 0), $3::bigint,
+      (SELECT e.owner_id FROM entities e WHERE e.id = $4::bigint))
+    AND (NOT EXISTS (SELECT 1 FROM public.legal_entities le WHERE le.entity_id = $4::bigint)
+      OR mod_users.session_meets_party_policy(NULLIF($1::bigint, 0), NULLIF($2::bigint, 0), $3::bigint, $4::bigint))
+END`
 
 	var met bool
 	if err := a.pool.QueryRow(ctx, partyPolicySQL, q.SessionID, q.CredentialID, q.ProfileID, q.TargetEntityID, q.OwnerID).Scan(&met); err != nil {
