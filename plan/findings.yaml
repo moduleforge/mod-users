@@ -18,15 +18,6 @@ items:
         - priority:high
         - effort:medium
       text: ImpersonationService.Renew (api/internal/service/impersonation.go) extends an impersonation session without re-authorizing the administrator's `impersonate` authority on the target profile. The session row stores the administrator's session (impersonator_session_id) but not the profile the administrator acted as, and the renew request runs as the impersonated profile, so the engine cannot be asked on the administrator's behalf. A grant revoked after the start therefore stays effective until the session ends, bounded by AUTH_IMPERSONATION_MAX (60m default). Closing the gap needs the administrator's acting profile recorded on the child session (a mod_users.sessions column in the baseline migration) or a re-check keyed on the parent session's principal.
-    - title: Spec still documents /assume
-      id: Q1lB
-      date: "2026-10-26"
-      tags:
-        - type:documentation
-        - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
-      text: 'docs/mod-users-spec.md (scenario 10 "Admin: assume a user''s identity", the credential-install and audit paragraphs, the checklist entry for POST /v1/users/{uuid}/assume) and docs/architecture.md (the route table row "grant/assume sub-routes", decision D9 and the type-grant warning that speak of the `assume` operation) still describe the removed assume route and operation. Impersonation is now the /v1/impersonations child session with the `impersonate` operation (api/internal/service/impersonation.go); both documents need rewriting to that model.'
     - title: The owning party is resolved only as the tar…
       id: N4y2
       date: "2026-10-27"
@@ -1598,4 +1589,13 @@ closed:
         already planned: phase-10-doc-updates/001-update-architecture-docs.md is the
         phase 10 architecture-doc rewrite, which is being amended to cover the
         owning-party gate, the exact gap this item flags in its source list.
+      date: "2026-10-27"
+    - id: Q1lB
+      title: Spec still documents /assume
+      disposition: dismissed
+      reason: |-
+        already planned: phase-10-doc-updates/001-update-architecture-docs.md is the
+        phase 10 rewrite of the architecture docs, being amended to cover the /assume
+        removal, which is exactly the stale /assume wording in docs/mod-users-spec.md
+        and docs/architecture.md this item reports.
       date: "2026-10-27"
