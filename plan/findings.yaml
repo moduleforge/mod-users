@@ -9,15 +9,6 @@ items:
         - priority:high
         - effort:large
       text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-users'' single-row engine (api/internal/authz/authz.go, authorizePrelude -> checkPartyPolicy -> mod_users.session_meets_party_policy in model/migrations/sql/0100_baseline.sql) refuses an acting profile outside the target''s owning party whose session or credential does not meet that party''s credential_rule / min_acr. The list side does not: mod-core''s GrantTableGenerator (core-api/authz/setup/grant_table.go, GenerateForResource) emits accessible_<slug>_ids_for_actor(p_actor_entity_id, p_op_ids) with only the actor and op ids as inputs, so it has no session or credential to evaluate and admits the same rows through the entity, owned-scope and own arms. A collaborator whose session is below the owning party''s min_acr, or whose credential is not authorized under credential_rule ''authorized'', is refused on a single party-owned row but still sees it in list endpoints that join the access functions (for example the principal list through accessible_user_ids_for_actor). This breaks the list/single-row parity both sides document. The fix needs a mod-core change: either the generated functions take the session or credential (or a precomputed set of parties whose policy the caller meets) and filter out rows whose owner_id is a restrictive-policy party the actor is outside of, or GrantTableGenerator exposes a hook through which a module supplies that predicate. mod-users cannot change the generated SQL itself.'
-    - title: Two ErrStepUpRequired sentinels
-      id: Lt3W
-      date: "2026-10-26"
-      tags:
-        - type:style
-        - plan/phase:users-authorization-engine
-        - priority:low
-        - effort:small
-      text: 'The users.step_up_required action-required error is built twice from useraction.StepUpRequired: service.ErrStepUpRequired (api/internal/service/session_errors.go) and authz.ErrStepUpRequired (api/internal/authz/authz.go, the engine''s assurance-gate refusal). Both render identically through apiresp.WriteError, but they are distinct pointers, so errors.Is(err, service.ErrStepUpRequired) does not match an engine refusal and vice versa; callers have to match on errors.As(*apiresp.ActionRequiredError) plus Action().Code. internal/authz cannot import internal/service without pulling the whole service graph into the engine. Declaring the single shared value next to the action code in api/internal/useraction and aliasing it from both packages would give one identity.'
     - title: '[decision] Are operator profiles subject to t'
       id: JgvC
       date: "2026-10-26"
@@ -1601,4 +1592,9 @@ closed:
         api/internal/authz/authz.go authorizePrelude, with the same remedy (fold the
         gate and the wildcard arm into one statement). MaQM is promoted and carries
         the issue.
+      date: "2026-10-27"
+    - id: Lt3W
+      title: Two ErrStepUpRequired sentinels
+      disposition: promoted
+      ref: Lt3W
       date: "2026-10-27"
