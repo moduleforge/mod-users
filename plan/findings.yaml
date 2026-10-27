@@ -9,15 +9,6 @@ items:
         - priority:high
         - effort:large
       text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-users'' single-row engine (api/internal/authz/authz.go, authorizePrelude -> checkPartyPolicy -> mod_users.session_meets_party_policy in model/migrations/sql/0100_baseline.sql) refuses an acting profile outside the target''s owning party whose session or credential does not meet that party''s credential_rule / min_acr. The list side does not: mod-core''s GrantTableGenerator (core-api/authz/setup/grant_table.go, GenerateForResource) emits accessible_<slug>_ids_for_actor(p_actor_entity_id, p_op_ids) with only the actor and op ids as inputs, so it has no session or credential to evaluate and admits the same rows through the entity, owned-scope and own arms. A collaborator whose session is below the owning party''s min_acr, or whose credential is not authorized under credential_rule ''authorized'', is refused on a single party-owned row but still sees it in list endpoints that join the access functions (for example the principal list through accessible_user_ids_for_actor). This breaks the list/single-row parity both sides document. The fix needs a mod-core change: either the generated functions take the session or credential (or a precomputed set of parties whose policy the caller meets) and filter out rows whose owner_id is a restrictive-policy party the actor is outside of, or GrantTableGenerator exposes a hook through which a module supplies that predicate. mod-users cannot change the generated SQL itself.'
-    - title: Core Authorizer contract omits party gate
-      id: qvSR
-      date: "2026-10-26"
-      tags:
-        - type:documentation
-        - plan/phase:users-authorization-engine
-        - priority:medium
-        - effort:small
-      text: 'needs-sibling: mod-core (the needs-sibling tag qualifier is not registered, so this marker stands in for it). mod-core''s Authorizer contract (core-api/authz/authz.go, the "Trust and assurance" paragraph of the Authorizer interface doc, and the AuthContext.ImpersonatorPrincipalID comment in core-api/opctx/opctx.go) says a conforming implementation applies only the operation-level assurance gate itself and trusts liveness and profile availability to the middleware. mod-users'' production engine (api/internal/authz/authz.go, authorizePrelude) now also enforces the owning party''s credential_rule and min_acr for acting profiles outside the target''s owning party (mod_users.session_meets_party_policy, refusal ErrForbidden), and OwnerScopedTypeAuthorizer''s doc lists only the four arms. The contract text should allow, or describe, an implementation-level owning-party gate in the prelude so consumers do not read an unexpected 403 for a wildcard or grant holder as a contract violation. Documentation-only change in mod-core.'
     - title: Party gate adds a query per check
       id: IIA3
       date: "2026-10-26"
@@ -1605,3 +1596,8 @@ closed:
       disposition: fixed
       ref: phase-17-remediation-06/002-scope-policy-lock-test-seam-and-assert-invite-time.md
       date: "2026-10-26"
+    - id: qvSR
+      title: Core Authorizer contract omits party gate
+      disposition: promoted
+      ref: qvSR
+      date: "2026-10-27"
