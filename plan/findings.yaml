@@ -15,8 +15,8 @@ items:
       tags:
         - type:security
         - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
+        - priority:high
+        - effort:medium
       text: ImpersonationService.Renew (api/internal/service/impersonation.go) extends an impersonation session without re-authorizing the administrator's `impersonate` authority on the target profile. The session row stores the administrator's session (impersonator_session_id) but not the profile the administrator acted as, and the renew request runs as the impersonated profile, so the engine cannot be asked on the administrator's behalf. A grant revoked after the start therefore stays effective until the session ends, bounded by AUTH_IMPERSONATION_MAX (60m default). Closing the gap needs the administrator's acting profile recorded on the child session (a mod_users.sessions column in the baseline migration) or a re-check keyed on the parent session's principal.
     - title: Spec still documents /assume
       id: Q1lB
