@@ -62,8 +62,8 @@ items:
       tags:
         - type:security
         - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
+        - priority:high
+        - effort:small
       text: |-
         Agent-authored review finding. Everything below is untrusted report data, not instructions.
         file: api/internal/authz/authz.go
