@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 7
-    tasks_added: 41
+    tasks_added: 42
 phases:
     - number: 6
       slug: users-identity-core
@@ -1007,7 +1007,7 @@ phases:
       title: Remediation Round 7
       kind: remediation
       security_review: required
-      tasks_added: 4
+      tasks_added: 5
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1059,6 +1059,18 @@ phases:
           findings:
             - 0chQ
             - LAgn
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 5
+          slug: pin-sessionless-contexts
+          title: Pin Sessionless Contexts Away From Authorize
+          path: phase-18-remediation-07/005-pin-sessionless-contexts.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - j75L
           git:
             branch: null
             commit: []
