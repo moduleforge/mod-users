@@ -241,6 +241,15 @@ items:
           EnsurePersonalParty uses adminCaller, which accepts an impersonating context, so an administrator impersonating a user's personal profile can, through a caller such as mod-billing's personal team plan flow, create the user's person party and an owned-scope manage grant on the user's behalf. Other holder-level writes (selfWriter, writeCaller) refuse impersonation.
         recommendation:
           Refuse ac.ImpersonatorPrincipalID != 0 in EnsurePersonalParty with ErrImpersonationNotAllowed, or document that impersonated personal-party creation is intended.
+    - title: API surface 6.2 amendment for decision F
+      id: 4MjU
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - priority:medium
+        - plan/phase:remediation-07
+        - effort:unspecified
+      text: 'Add an amendment line to plan/notes/mod-users-api-surface.md section 6.2, after the 2026-10-26 decision C amendment paragraph. Proposed text: "Amendment (2026-10-27, decision F, findings bYK4, N4y2, iacw): a party is its own owning party. When the Authorize target is itself a legal_entity, the prelude''s owning-party gate checks the target''s own policy in addition to its entities.owner_id, and both must pass. Nested ownership is one level only: the gate checks the target (when it is a party) and its direct owner, never the owner''s owner or any further ancestor." Raised by task 001 (remediation-07); its validation check 3 fails until this line is present.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
