@@ -1036,7 +1036,7 @@ phases:
           findings:
             - Y3B8
           git:
-            branch: null
+            branch: plan/identity-model-impl-18-002
             commit: []
             merge: null
         - number: 3
