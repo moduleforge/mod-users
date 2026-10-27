@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 7
-    tasks_added: 38
+    tasks_added: 39
 phases:
     - number: 6
       slug: users-identity-core
@@ -1007,7 +1007,7 @@ phases:
       title: Remediation Round 7
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1020,6 +1020,18 @@ phases:
             - bYK4
             - N4y2
             - iacw
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: impersonated-actor-rules-apply
+          title: Apply The Impersonated Actor's Party Rules During Impersonation
+          path: phase-18-remediation-07/002-impersonated-actor-rules-apply.md
+          done: false
+          tier: opus-med
+          findings:
+            - Y3B8
           git:
             branch: null
             commit: []
