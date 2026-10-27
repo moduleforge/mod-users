@@ -1564,8 +1564,12 @@ $$;
 -- an acting profile outside the party that owns the target (an outside
 -- collaborator reaching the party's content through actor groups or grants, or
 -- a personal profile through the SSH fallback) must also meet the owning
--- party's credential_rule and min_acr. p_party_id is the target's owner
--- (entities.owner_id; the owner argument of an owner-scoped type check).
+-- party's credential_rule and min_acr. p_party_id is one gate party of the
+-- check: the target's owner (entities.owner_id; the owner argument of an
+-- owner-scoped type check) or, when the target is itself a legal_entity, the
+-- target (decision F: a party is its own owning party). The engine calls this
+-- function once per gate party and requires every call to pass; nested
+-- ownership is one level only (no ancestor walk).
 --
 -- True, without consulting the factors, when p_party_id is NULL, the acting
 -- profile p_profile_id belongs to p_party_id, p_party_id is the acting
