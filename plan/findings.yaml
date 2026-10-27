@@ -174,36 +174,6 @@ items:
           the nearest ancestor owner that is a legal entity with a policy row, for example with a
           bounded recursive walk up owner_id in session_meets_party_policy. If it is not, state the
           one-level limit in the authz.go package documentation and in API surface 6.2.
-    - title: Decision D9 in docs/architecture.md, and the…
-      id: EfE8
-      date: "2026-10-27"
-      tags:
-        - type:bug
-        - plan/phase:users-authorization-engine
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/architecture.md
-        lines: 235
-        severity: minor
-        confidence: high
-        concerns: correctness
-        description:
-          Decision D9 in docs/architecture.md, and the matching D9 section of
-          docs/architecture/ssh-keys.md (lines 51-55), still say that operator SSH-key install and
-          revoke authorize the assume operation on /v1/user-accounts/{uuid}/ssh-keys. The diff adds
-          the replacement path, POST /v1/principals/{uuid}/credentials/ssh-keys and DELETE
-          /v1/principals/{uuid}/credentials/{credential_uuid}, which authorize the credentials
-          operation. assume no longer exists, and ownership confers credentials through the own arm
-          only for a personal profile. A reader following D9 would grant the wrong operation and
-          call the wrong routes. Part of this text was already stale before the diff, but the diff
-          is what puts the new mechanism in place.
-        recommendation:
-          Rewrite D9 in both documents to describe the credentials operation (ownership_confers
-          true, max_auth_age 10 minutes) on the principal entity under /v1/principals/{uuid}/credentials*.
-          Drop the assume and manage-implies-assume wording, and mark the old /v1/user-accounts
-          SSH-key routes as removed.
     - title: Renew extends the child session to now plus…
       id: LAgn
       date: "2026-10-27"
@@ -1588,4 +1558,13 @@ closed:
         being amended to cover the /assume removal, which covers rewriting spec
         section 10 and the architecture.md lines this item cites (it is the same
         issue as Q1lB, which it names).
+      date: "2026-10-27"
+    - id: EfE8
+      title: Decision D9 in docs/architecture.md, and the…
+      disposition: dismissed
+      reason: |-
+        Reclassified from bug to documentation (doc drift). already planned:
+        phase-10-doc-updates/001-update-architecture-docs.md is being amended to
+        cover D9 and docs/architecture/ssh-keys.md, which is exactly the stale D9
+        text in docs/architecture.md and ssh-keys.md this item reports.
       date: "2026-10-27"
