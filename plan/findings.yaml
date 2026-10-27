@@ -259,6 +259,15 @@ items:
         - plan/phase:remediation-07
         - effort:unspecified
       text: 'Confirm the reading of Decision F adopted by task 001 (remediation-07): the owner''s policy gate is kept alongside the target-as-party gate, not replaced by it. Replacing it would ungate party-owned legal entities (for example managed users, owner_id = managing party) from their owner''s policy and would regress the existing party_gate cases, so this needs a decision if replace semantics was intended. Current implementation: checkPartyPolicy requires session_meets_party_policy(owner_id) AND (target not in legal_entities OR session_meets_party_policy(target)).'
+    - title: Sibling links repointed by make runs
+      id: FZVc
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - priority:medium
+        - plan/phase:remediation-07
+        - effort:unspecified
+      text: Running make build, test, or lint with MODULEFORGE_SIBLINGS_DIR set repoints the worktrees/plan/mod-core, mod-authz, and mod-audit links through /Users/zane/playground/.flow/siblings/mod-users. Task 001 restored them with ln -sfn. Later remediation-07 tasks will hit the same repoint, so the link check must run after every make invocation.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
