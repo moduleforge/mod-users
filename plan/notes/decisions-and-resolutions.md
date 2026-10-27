@@ -240,3 +240,7 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
   closes the `EnsurePersonalParty` impersonation gap (Mdgf). User decision.
 - **Decision I (impersonation Renew; 0chQ, LAgn).** Renew re-checks `impersonate` from the parent session;
   the acting profile is recorded on the child session (baseline-migration column). User decision.
+- **Decision I (clarification, 2026-10-27).** Renew re-checks that the administrator still holds `impersonate`
+  but does NOT re-apply the operation's `max_auth_age`; the impersonation still ends at
+  `AUTH_IMPERSONATION_MAX`. User decision. J55x (no audit trail for refused impersonation starts) is
+  promoted to the project backlog; Ddx9 is promoted for the mod-core remediation phase (Decision E).
