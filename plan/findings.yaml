@@ -19,15 +19,6 @@ items:
           gated treats every non-anonymous AuthContext with SessionID == 0 and CredentialID == 0 as a trusted system actor and skips both the assurance gate and the owning-party gate. mod-core opctx.AuthContext (core-api/opctx/opctx.go) carries no explicit system-actor marker, so trust is inferred from absent fields. mod-users itself builds sessionless contexts for real users (withActingProfile in api/internal/service/helpers.go, UnauthenticatedActingContext, CreatedUser.ActingContext, the idp_jit context in api/internal/handlers/auth/oidc_flows.go). Today they appear to feed observations only, but any future Authorize call on such a context, or a sibling module constructing a profile-only context, fails open on both gates.
         recommendation:
           Skip the gates only for an explicit marker, for example a SystemActor flag set by opctx.WithSystemActor (a mod-core change, to be requested from mod-core) or a core_is_operator_profile system_actor check on the profile, and fail closed (ErrStepUpRequired or ErrForbidden) for other sessionless, credential-less contexts. Meanwhile add a unit test that pins which helpers produce sessionless contexts and that none reaches Authorize.
-    - title: 'Option A ordering note: if A is chosen, consi'
-      id: 7KQz
-      date: "2026-10-27"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-07
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Option A ordering note: if A is chosen, consider running task 004 first (adds the acting-profile column, Decision I) so the operator exemption keys on the parent''s acting profile.'
     - title: 'Conflict evidence: model/migrations/sql/0100_'
       id: HAsS
       date: "2026-10-27"
@@ -1868,4 +1859,15 @@ closed:
       title: checkAppGate maps only ErrForbidden and ErrU…
       disposition: fixed
       ref: phase-18-remediation-07/006-app-gate-step-up-mapping.md
+      date: "2026-10-29"
+    - id: 7KQz
+      title: 'Option A ordering note: if A is chosen, consi'
+      disposition: dismissed
+      reason: |-
+        Stale. This was an ordering note that applied only if Option A were chosen. The user chose
+        Option A (decisions-and-resolutions.md, Decision G resolution 2026-10-29). Phase 18 tasks
+        002 and 004 have since both completed (their Status sections say "succeeded 2026-10-29"),
+        so task order can no longer change. The substance of the note, keying the operator
+        exemption on the recorded acting profile, is now settled by Decision J. It is fixed by
+        remediation spec impersonator-profile-credential-exemption (DChD, crQE, bKBt).
       date: "2026-10-29"
