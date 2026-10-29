@@ -1031,13 +1031,15 @@ phases:
           slug: impersonated-actor-rules-apply
           title: Apply The Impersonated Actor's Party Rules During Impersonation
           path: phase-18-remediation-07/002-impersonated-actor-rules-apply.md
-          done: false
+          done: true
           tier: opus-med
+          digest: Removed the blanket impersonation skip of credential_rule. New SQL helper mod_users.session_policy_factors makes impersonation sessions face the impersonated profile's own party gate and every owning-party gate using the administrator's parent-session factors and acr. Only a platform-operator administrator skips credential_rule; min_acr always applies. Operator status approximated at principal level until task 004 records the acting profile (finding crQE); confinement of parent factors left as before (finding bFGy). Integration tests ran and passed against throwaway postgres:16.
           findings:
             - Y3B8
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-18-002
+            commit:
+                - d143bca
             merge: null
         - number: 3
           slug: credentials-refuse-impersonation

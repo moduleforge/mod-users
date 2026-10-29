@@ -268,6 +268,51 @@ items:
         - plan/phase:remediation-07
         - effort:unspecified
       text: Running make build, test, or lint with MODULEFORGE_SIBLINGS_DIR set repoints the worktrees/plan/mod-core, mod-authz, and mod-audit links through /Users/zane/playground/.flow/siblings/mod-users. Task 001 restored them with ln -sfn. Later remediation-07 tasks will hit the same repoint, so the link check must run after every make invocation.
+    - title: 'NEEDS USER DECISION (halt): choose option A ('
+      id: l8jM
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-07
+        - priority:unspecified
+        - effort:unspecified
+      text: 'NEEDS USER DECISION (halt): choose option A (extend Decision D into impersonation: operator impersonators exempt from customer-party credential_rules; others use parent session factors), B (keep Decision G strict: parent factors everywhere, no operator exemption; amend Decision D and task 003 premise), or C (remove skip only in session_meets_party_policy; keep own-party skip in profile_gate_for; needs acceptance of wording change to requirement 2 and G). Then amend plan/notes/decisions-and-resolutions.md and, if needed, task 003 test premise, and re-dispatch task 002.'
+    - title: 'Option A ordering note: if A is chosen, consi'
+      id: 7KQz
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-07
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Option A ordering note: if A is chosen, consider running task 004 first (adds the acting-profile column, Decision I) so the operator exemption keys on the parent''s acting profile.'
+    - title: 'Conflict evidence: model/migrations/sql/0100_'
+      id: HAsS
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-07
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Conflict evidence: model/migrations/sql/0100_baseline.sql session_meets_party_policy (~1638/1665) and profile_gate_for (~1279) skip credential_rule on impersonation; api/internal/integration/impersonation_integration_test.go:375-384 premise (member holds no authorized credential; operator not bound) expects Start 201.'
+    - title: Operator impersonation test is principal-wide
+      id: crQE
+      date: "2026-10-29"
+      tags:
+        - type:security
+        - plan/phase:remediation-07
+        - priority:unspecified
+        - effort:unspecified
+      text: mod_users.session_policy_factors (model/migrations/sql/0100_baseline.sql) sets skip_credential_rule for an impersonation session when the parent session's principal holds ANY active operator profile (public.core_is_operator_profile over public.profiles.holder_id), because mod_users.sessions does not record the administrator's acting profile at ImpersonationService.Start (api/internal/service/impersonation.go). A person holding both an operator profile and a customer-party administrator profile who impersonates through the customer profile therefore also skips every customer party's credential_rule (min_acr still applies; authorizations stay the impersonated profile's). Once the child session records the administrator's acting profile, session_policy_factors should test core_is_operator_profile on that recorded profile (and its active status) instead of on the principal's profiles.
+    - title: Confinement not applied to parent factors
+      id: bFGy
+      date: "2026-10-29"
+      tags:
+        - type:security
+        - plan/phase:remediation-07
+        - priority:unspecified
+        - effort:unspecified
+      text: mod_users.profile_gate_for (model/migrations/sql/0100_baseline.sql) skips the 'confined' check when p_impersonated_profile_id is set, so an impersonation session is never locked as 'confined' even though its party-policy factors are now the administrator's parent-session credentials (mod_users.session_policy_factors). This preserves prior behavior (the child session holds no factors), but a parent credential confined to party X can drive an impersonation of a member of party Y. Decide whether confinement of the administrator's factors should bind the impersonated profile's party, and how that interacts with operator credentials confined to the operator party.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials

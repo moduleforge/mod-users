@@ -244,3 +244,13 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
   but does NOT re-apply the operation's `max_auth_age`; the impersonation still ends at
   `AUTH_IMPERSONATION_MAX`. User decision. J55x (no audit trail for refused impersonation starts) is
   promoted to the project backlog; Ddx9 is promoted for the mod-core remediation phase (Decision E).
+- **Decision G (resolution of the G/D conflict, 2026-10-29; option A).** While impersonating, the impersonated
+  member's authorizations resolve what the session may do, and every party policy applies as for that
+  member, with one exception: the credential check that matches the session's credentials against the
+  member's (`credential_rule`) is exempt when the impersonator is a platform operator, because the
+  operator's credentials cannot be authorized for the member's party (this extends Decision D). Non-operator
+  impersonators get no skip of any party's `credential_rule`; it is evaluated on the parent (administrator)
+  session's factors. `min_acr` and step-up are evaluated on the parent session's factors for everyone.
+  Task 003's `TestImpersonation_OperatorReachesMembersOfRestrictiveParties` stays valid. User decision.
+- **Decision F (confirmed, 2026-10-29).** Both gates apply: a party record is gated by its own policy, and a
+  record owned by a party remains gated by its owner's policy. User confirmation.
