@@ -3644,6 +3644,8 @@ paths:
         `users.step_up_required`, checked after authorization). A profile the
         caller may not read, an unknown profile and a personal profile are 404.
         Ending runs the departure cleanup of `POST /v1/me/profiles/{uuid}/leave`.
+        Ending a profile under impersonation is refused with a plain 403,
+        before the profile lookup. Suspending and resuming are not refused.
         409 `users.profile_transition_invalid` for a status the profile cannot
         move to from its current one; 409 `users.last_operator_admin` when
         ending or suspending the last active operator-party profile that holds
