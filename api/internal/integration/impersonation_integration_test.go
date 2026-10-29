@@ -142,7 +142,6 @@ func TestImpersonation_StartCreatesAChildSession(t *testing.T) {
 	parentUUID := admin.acct.tk.Session.UUID
 	parent := env.sessionRow(t, parentUUID)
 
-	started := time.Now()
 	r := env.startImp(t, admin.tok.access(), m.profUUID, "  support ticket 4711  ").wantStatus(t, http.StatusCreated)
 	tk := r.tok(t)
 
@@ -176,8 +175,8 @@ func TestImpersonation_StartCreatesAChildSession(t *testing.T) {
 	if child.Acr != parent.Acr || strings.Join(child.Amr, ",") != strings.Join(parent.Amr, ",") {
 		t.Errorf("child acr/amr = %d %v, want the parent's %d %v", child.Acr, child.Amr, parent.Acr, parent.Amr)
 	}
-	if d := child.AuthTime.Time.Sub(started); d < -5*time.Second || d > 5*time.Second {
-		t.Errorf("child auth_time = %v, want now", child.AuthTime.Time)
+	if !child.AuthTime.Time.Equal(parent.AuthTime.Time) {
+		t.Errorf("child auth_time = %v, want the parent's %v", child.AuthTime.Time, parent.AuthTime.Time)
 	}
 	if ttl := child.ExpiresAt.Time.Sub(child.CreatedAt.Time); ttl < 29*time.Minute || ttl > 31*time.Minute {
 		t.Errorf("child lifetime = %v, want AUTH_IMPERSONATION_TTL (30m)", ttl)
@@ -211,6 +210,29 @@ func TestImpersonation_StartCreatesAChildSession(t *testing.T) {
 	// The administrator's own session is unaffected.
 	if _, p := env.probe(t, "/v1/probe", admin.tok.access()); p.ImpersonatorP != 0 || p.PrincipalID != admin.userID {
 		t.Errorf("the administrator's own session probes as %+v", p)
+	}
+}
+
+// The child session inherits the parent's auth_time: an impersonation never
+// looks more recently authenticated than the administrator who started it, so
+// it cannot pass a freshness gate the administrator's own session would fail.
+func TestImpersonation_ChildInheritsTheParentAuthTime(t *testing.T) {
+	acme := env.seedParty(t, "Imp AuthTime "+uniq("p"))
+	admin := env.newImpAdmin(t, acme)
+	m := env.newMember(t, acme)
+
+	// Age the parent within the impersonate operation's max_auth_age.
+	env.exec(t, "age the parent auth_time",
+		`UPDATE mod_users.sessions SET auth_time = now() - interval '5 minutes' WHERE uuid = $1::uuid`, admin.acct.tk.Session.UUID)
+	parent := env.sessionRow(t, admin.acct.tk.Session.UUID)
+
+	tk := env.startImp(t, admin.tok.access(), m.profUUID, "auth time").wantStatus(t, http.StatusCreated).tok(t)
+	child := env.sessionRow(t, tk.Session.UUID)
+	if !child.AuthTime.Time.Equal(parent.AuthTime.Time) {
+		t.Fatalf("child auth_time = %v, want the parent's %v", child.AuthTime.Time, parent.AuthTime.Time)
+	}
+	if age := time.Since(child.AuthTime.Time); age < 4*time.Minute {
+		t.Errorf("child auth_time is %v old, want about 5 minutes", age)
 	}
 }
 

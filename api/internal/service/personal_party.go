@@ -103,7 +103,8 @@ func (s *PersonalPartyService) authzQ(tx pgx.Tx) authzdb.Querier {
 //
 // The acting profile (opctx.Auth(ctx).ProfileID) must be a user's personal
 // profile. Refusals: ErrGuestMustUpgrade (409 users.guest_upgrade_required) for
-// a guest; ErrPersonalProfileRequired (403) for a managed user, a party profile
+// a guest; ErrImpersonationNotAllowed (403 users.impersonation_not_allowed) for
+// an impersonating context; ErrPersonalProfileRequired (403) for a managed user, a party profile
 // or a non-user principal; ErrPersonalPartyNotOwned (409 users.person_not_owned)
 // when users.person_id links a person the user does not own; apiresp.
 // ErrUnauthenticated without an acting profile.
@@ -138,6 +139,11 @@ func (s *PersonalPartyService) EnsurePersonalParty(ctx context.Context, tx pgx.T
 	ac, err := adminCaller(ctx)
 	if err != nil {
 		return PersonalParty{}, err
+	}
+	// An impersonating administrator never creates a person, a link or a grant
+	// for the impersonated user.
+	if ac.ImpersonatorPrincipalID != 0 {
+		return PersonalParty{}, ErrImpersonationNotAllowed
 	}
 	cq := s.coreQuerier(tx)
 	uq := s.usersQ(tx)

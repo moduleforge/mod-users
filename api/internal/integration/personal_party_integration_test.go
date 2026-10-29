@@ -232,6 +232,20 @@ func TestEnsurePersonalParty_Refusals(t *testing.T) {
 			t.Errorf("err = %v, want ErrUnauthenticated", err)
 		}
 	})
+	t.Run("impersonating", func(t *testing.T) {
+		opTok, _ := env.makeOperator(t, env.registerVerified(t))
+		_, victimID, _, _ := env.personalUser(t)
+		tk := env.startImp(t, opTok.access(), env.profileUUID(t, env.personalProfileID(t, victimID)), "support").
+			wantStatus(t, http.StatusCreated).tok(t)
+		before := env.ownedPersons(t, victimID)
+		if _, err := env.ensurePersonal(env.impCtx(t, tk.access())); !errors.Is(err, svc.ErrImpersonationNotAllowed) {
+			t.Errorf("err = %v, want ErrImpersonationNotAllowed", err)
+		}
+		if after := env.ownedPersons(t, victimID); after != before {
+			t.Errorf("a refused call left %d persons, was %d", after, before)
+		}
+		assertNothingWritten(t, victimID)
+	})
 	t.Run("guest", func(t *testing.T) {
 		var guest tokens
 		env.do(t, http.MethodPost, "/v1/auth/anonymous", "", map[string]string{"device_id": uniq("dev")}).
