@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 8
-    tasks_added: 46
+    tasks_added: 47
 phases:
     - number: 6
       slug: users-identity-core
@@ -1104,7 +1104,7 @@ phases:
       title: Remediation Round 8
       kind: remediation
       security_review: required
-      tasks_added: 3
+      tasks_added: 4
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1142,6 +1142,20 @@ phases:
           tier: opus-med
           findings:
             - YqJd
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 4
+          slug: test-precision-nesting-and-static-audit
+          title: Tighten Nesting, Party-Record Gate And Sessionless Audit Tests
+          path: phase-19-remediation-08/004-test-precision-nesting-and-static-audit.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - gxvu
+            - ehkS
+            - FvL1
           git:
             branch: null
             commit: []
