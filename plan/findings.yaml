@@ -37,15 +37,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: mod_users.profile_gate_for (model/migrations/sql/0100_baseline.sql) skips the 'confined' check when p_impersonated_profile_id is set, so an impersonation session is never locked as 'confined' even though its party-policy factors are now the administrator's parent-session credentials (mod_users.session_policy_factors). This preserves prior behavior (the child session holds no factors), but a parent credential confined to party X can drive an impersonation of a member of party Y. Decide whether confinement of the administrator's factors should bind the impersonated profile's party, and how that interacts with operator credentials confined to the operator party.
-    - title: Validation 3 for task 004 (manager-owned plan
-      id: Jj1G
-      date: "2026-10-29"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-07
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Validation 3 for task 004 (manager-owned plan note): add an amendment line under section 2.9 of plan/notes/mod-users-api-surface.md. Suggested text: Amendment (2026-10-29, decision I, findings 0chQ/LAgn): impersonator_profile_id BIGINT NULL referencing public.profiles (the administrator''s acting profile at start); sessions_impersonation_complete also requires (impersonator_session_id IS NULL) = (impersonator_profile_id IS NULL); MF101: impersonator_profile_id is held by the parent session''s principal and is immutable. Renew re-authorizes impersonate from the parent session as that profile (without max_auth_age) and revokes the child (impersonation_ended) with 403 on refusal.'
     - title: mod_users.session_policy_factors sets skip_c…
       id: DChD
       date: "2026-10-29"
@@ -1872,4 +1863,15 @@ closed:
         TestImpersonation_OperatorReachesMembersOfRestrictiveParties stays valid.
         Task 002 implemented that resolution. Decision J (2026-10-29, phase 18 gate) then
         narrowed the exemption to the recorded acting profile. No open decision remains.
+      date: "2026-10-29"
+    - id: Jj1G
+      title: Validation 3 for task 004 (manager-owned plan
+      disposition: dismissed
+      reason: |-
+        Already fixed. plan/notes/mod-users-api-surface.md lines 718-723, under "Amendments
+        (2026-10-29, phase 8 remediation)", now hold the Section 2.9 amendment for
+        sessions.impersonator_profile_id. It covers the administrator's acting profile, the
+        NULL-pairing check with the impersonation columns, MF101 coverage, and its use by Renew
+        to re-check impersonate from the parent session. That is the manager-owned validation 3
+        of task 004.
       date: "2026-10-29"
