@@ -25,8 +25,8 @@ items:
       tags:
         - type:security
         - plan/phase:remediation-07
-        - priority:unspecified
-        - effort:unspecified
+        - priority:high
+        - effort:small
       text: mod_users.session_policy_factors (model/migrations/sql/0100_baseline.sql) sets skip_credential_rule for an impersonation session when the parent session's principal holds ANY active operator profile (public.core_is_operator_profile over public.profiles.holder_id), because mod_users.sessions does not record the administrator's acting profile at ImpersonationService.Start (api/internal/service/impersonation.go). A person holding both an operator profile and a customer-party administrator profile who impersonates through the customer profile therefore also skips every customer party's credential_rule (min_acr still applies; authorizations stay the impersonated profile's). Once the child session records the administrator's acting profile, session_policy_factors should test core_is_operator_profile on that recorded profile (and its active status) instead of on the principal's profiles.
     - title: Confinement not applied to parent factors
       id: bFGy
