@@ -1202,14 +1202,16 @@ phases:
           slug: refuse-impersonated-profile-end
           title: Refuse Ending A Profile Under Impersonation
           path: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added a 403 refusal for ending a profile under impersonation in UpdateProfileStatus, ordered after validation and before the profile lookup. An integration test confirms the profile, the holder's party authorizations and the confined credentials are unchanged, and it fails when the refusal is removed. The openapi description and the Decision K doc bullet were updated.
           findings:
             - uBfI
             - zzo0
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-20-001
+            commit:
+                - ee6dae3
             merge: null
         - number: 2
           slug: precision-sql-comments-openapi-order-liveness-test
