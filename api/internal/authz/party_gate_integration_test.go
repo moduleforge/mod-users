@@ -108,6 +108,46 @@ func TestInteg_PartyGate_AuthorizedRule(t *testing.T) {
 	}
 }
 
+// TestInteg_PartyGate_ImpersonationUsesParentFactors proves decision G as
+// resolved on the owning-party gate: an impersonation of the collaborator
+// meets the party's credential rule with the administrator's parent-session
+// factors, never skipped for a non-operator administrator; an operator
+// administrator skips the credential rule but not min_acr.
+func TestInteg_PartyGate_ImpersonationUsesParentFactors(t *testing.T) {
+	g := seedGateParty(t, "authorized", 1)
+	// The collaborator's own credential is authorized; it is not the
+	// impersonation's factor.
+	authorizeCredential(t, fxPassword(t, integPool, g.collabUser, nil), g.party, g.collabProfile)
+
+	impCtx := func(adminUser int64, adminCred int64, acr int) (context.Context, int64) {
+		t.Helper()
+		parent, _ := fxSession(t, integPool, adminUser, sessionOpts{ACR: acr})
+		fxFactor(t, integPool, parent, adminCred, nil)
+		child, _ := fxSession(t, integPool, g.collabUser, sessionOpts{ACR: acr, ParentID: &parent, ImpersonateProfile: &g.collabProfile})
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: g.collabUser, ProfileID: g.collabProfile, SessionID: child,
+			ImpersonatorPrincipalID: adminUser, ACR: int16(acr), AuthTime: time.Now(),
+		}), parent
+	}
+
+	admin, _ := seedUserEntity(t)
+	adminPw := fxPassword(t, integPool, admin, nil)
+	ctx, _ := impCtx(admin, adminPw, 1)
+	requireForbidden403(t, integAZ.Authorize(ctx, "read", &g.content), "non-operator administrator's factor not authorized for the party")
+	authorizeCredential(t, adminPw, g.party, g.collabProfile)
+	if err := integAZ.Authorize(ctx, "read", &g.content); err != nil {
+		t.Errorf("administrator's factor authorized for the party: err = %v, want nil", err)
+	}
+
+	opUser, _ := seedOperatorUser(t)
+	opCtx, _ := impCtx(opUser, fxPassword(t, integPool, opUser, nil), 1)
+	if err := integAZ.Authorize(opCtx, "read", &g.content); err != nil {
+		t.Errorf("operator administrator under the credential rule: err = %v, want nil", err)
+	}
+	fxExec(t, integPool, "raise min_acr", `UPDATE mod_users.party_authn_policies SET min_acr = 2 WHERE party_id = $1`, g.party)
+	requireForbidden403(t, integAZ.Authorize(opCtx, "read", &g.content), "operator administrator below the party's min_acr")
+}
+
 func TestInteg_PartyGate_ConfirmationExemptsCredentialRule(t *testing.T) {
 	g := seedGateParty(t, "authorized", 1)
 	pw := fxPassword(t, integPool, g.collabUser, nil)

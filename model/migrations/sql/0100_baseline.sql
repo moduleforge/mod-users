@@ -1131,6 +1131,74 @@ AS $$
 $$;
 -- +goose StatementEnd
 
+-- session_policy_factors(p_session_id, p_exclude_credential_id): the factors
+-- a session presents to a party's authentication policy (decision G, as
+-- resolved). For an ordinary session they are its own unrevoked factors and
+-- its stored acr. An impersonation session holds no factors of its own: while
+-- impersonating, the impersonated profile's rules apply to every operation
+-- (its own party's policy and the policy of every party whose content it
+-- reaches), and they are evaluated on the administrator's authentication, the
+-- parent session (impersonator_session_id): its unrevoked factors for the
+-- credential rule, and its stored acr for min_acr. The parent's acr, not the
+-- child's copy, so a policy's min_acr reflects the administrator's session as
+-- it is now. The credential exclusion (p_exclude_credential_id, NULL for none)
+-- applies to whichever session supplies the factors.
+--
+-- skip_credential_rule is true only for an impersonation whose administrator
+-- is a platform operator: the parent session's principal holds an active
+-- operator profile (public.core_is_operator_profile). Decision D extended: an
+-- operator's credentials can never be authorized for a customer party, so a
+-- customer party's credential rule never binds an operator impersonation;
+-- min_acr still does. A non-operator administrator skips no party's credential
+-- rule. The parent session does not record the administrator's acting
+-- profile, so the operator test is on the parent principal's profiles.
+--
+-- No row (all NULL) for an unknown session.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.session_policy_factors(
+  p_session_id             BIGINT,
+  p_exclude_credential_id  BIGINT,
+  OUT credential_ids       BIGINT[],
+  OUT acr                  SMALLINT,
+  OUT skip_credential_rule BOOLEAN
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+  v_factor_session_id BIGINT;
+  v_impersonation     BOOLEAN;
+  v_factor_principal  BIGINT;
+BEGIN
+  SELECT COALESCE(s.impersonator_session_id, s.id), s.impersonator_session_id IS NOT NULL
+    INTO v_factor_session_id, v_impersonation
+    FROM mod_users.sessions s WHERE s.id = p_session_id;
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  SELECT fs.acr, fs.principal_id INTO acr, v_factor_principal
+    FROM mod_users.sessions fs WHERE fs.id = v_factor_session_id;
+
+  credential_ids := ARRAY(
+    SELECT f.credential_id
+      FROM mod_users.session_factors f
+      JOIN mod_users.credentials c ON c.id = f.credential_id
+     WHERE f.session_id = v_factor_session_id
+       AND c.revoked_at IS NULL
+       AND (p_exclude_credential_id IS NULL OR c.id <> p_exclude_credential_id));
+
+  skip_credential_rule := v_impersonation AND EXISTS (
+    SELECT 1 FROM public.profiles p
+     WHERE p.holder_id = v_factor_principal
+       AND p.status = 'active'
+       AND public.core_is_operator_profile(p.entity_id));
+END;
+$$;
+-- +goose StatementEnd
+
 -- party_policy_gate_for(p_party_id, p_profile_id, p_skip_credential_rule,
 -- p_credential_ids, p_acr): the party authentication policy part of the gate,
 -- shared by profile_gate_for (the acting profile's own party) and
@@ -1142,7 +1210,7 @@ $$;
 -- (p_acr is NULL or below min_acr). No policy row means 'any' with min_acr 1.
 --
 -- The credential rule is skipped when p_skip_credential_rule is true (an
--- impersonation session, which holds no factors of its own) and when a
+-- impersonation by a platform operator; session_policy_factors) and when a
 -- profile_policy_confirmations row exists for (p_profile_id, p_party_id);
 -- min_acr is never skipped.
 -- +goose StatementBegin
@@ -1226,16 +1294,25 @@ $$;
 --   acr_too_low               p_acr is below the party's min_acr.
 --
 -- The party gate applies only to party profiles and is party_policy_gate_for.
--- Its credential rule is skipped for impersonation sessions and for a profile
--- with a profile_policy_confirmations row for the party (an outside
--- collaborator); min_acr is never skipped for a party profile.
+-- Its credential rule is skipped when p_skip_credential_rule is true (an
+-- impersonation by a platform operator) and for a profile with a
+-- profile_policy_confirmations row for the party (an outside collaborator);
+-- min_acr is never skipped for a party profile.
+--
+-- Under impersonation (p_impersonated_profile_id set) p_credential_ids and
+-- p_acr are the administrator's parent-session factors
+-- (session_policy_factors), which apply to the party gate only: the
+-- confinement check is not applied to them, since they are not the
+-- impersonated holder's credentials (the child session holds none, so it has
+-- never been confined).
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.profile_gate_for(
   p_principal_id            BIGINT,
   p_impersonated_profile_id BIGINT,
   p_credential_ids          BIGINT[],
   p_acr                     SMALLINT,
-  p_profile_id              BIGINT
+  p_profile_id              BIGINT,
+  p_skip_credential_rule    BOOLEAN
 ) RETURNS TEXT
 LANGUAGE plpgsql
 STABLE
@@ -1262,7 +1339,7 @@ BEGIN
     RETURN 'principal_disabled';
   END IF;
 
-  IF EXISTS (
+  IF p_impersonated_profile_id IS NULL AND EXISTS (
     SELECT 1 FROM mod_users.credentials c
      WHERE c.id = ANY (p_credential_ids)
        AND c.confined_to_party_id IS NOT NULL
@@ -1276,7 +1353,7 @@ BEGIN
   END IF;
 
   RETURN mod_users.party_policy_gate_for(
-    v_party_id, p_profile_id, p_impersonated_profile_id IS NOT NULL, p_credential_ids, p_acr);
+    v_party_id, p_profile_id, COALESCE(p_skip_credential_rule, false), p_credential_ids, p_acr);
 END;
 $$;
 -- +goose StatementEnd
@@ -1295,7 +1372,8 @@ CREATE FUNCTION mod_users.profile_availability_for(
   p_impersonated_profile_id BIGINT,
   p_credential_ids          BIGINT[],
   p_acr                     SMALLINT,
-  p_profile_id              BIGINT
+  p_profile_id              BIGINT,
+  p_skip_credential_rule    BOOLEAN
 ) RETURNS TEXT
 LANGUAGE plpgsql
 STABLE
@@ -1306,7 +1384,7 @@ DECLARE
   v_gate TEXT;
 BEGIN
   v_gate := mod_users.profile_gate_for(
-    p_principal_id, p_impersonated_profile_id, p_credential_ids, p_acr, p_profile_id);
+    p_principal_id, p_impersonated_profile_id, p_credential_ids, p_acr, p_profile_id, p_skip_credential_rule);
   IF v_gate <> 'not_held' AND EXISTS (
     SELECT 1 FROM public.profiles p
      WHERE p.entity_id = p_profile_id AND p.status <> 'active'
@@ -1441,8 +1519,10 @@ $$;
 
 -- profile_availability(p_session_id, p_profile_id): whether the session may
 -- act as the profile, with every unrevoked session factor counted and sessions.acr as
--- the assurance. Used by login landing, profile switch, refresh, per-request
--- liveness and the profile list.
+-- the assurance (for an impersonation session, the parent session's factors and
+-- acr, with the credential rule skipped only for an operator administrator;
+-- session_policy_factors). Used by login landing, profile switch, refresh,
+-- per-request liveness and the profile list.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.profile_availability(p_session_id BIGINT, p_profile_id BIGINT) RETURNS TEXT
 LANGUAGE sql
@@ -1454,23 +1534,22 @@ AS $$
     SELECT mod_users.profile_availability_for(
              s.principal_id,
              s.impersonated_profile_id,
-             ARRAY(SELECT f.credential_id
-                     FROM mod_users.session_factors f
-                     JOIN mod_users.credentials c ON c.id = f.credential_id
-                    WHERE f.session_id = s.id
-                      AND c.revoked_at IS NULL),
-             s.acr,
-             p_profile_id)
+             pf.credential_ids,
+             pf.acr,
+             p_profile_id,
+             pf.skip_credential_rule)
       FROM mod_users.sessions s
+     CROSS JOIN LATERAL mod_users.session_policy_factors(s.id, NULL) pf
      WHERE s.id = p_session_id
   ), 'not_held');
 $$;
 -- +goose StatementEnd
 
 -- profile_gate(p_session_id, p_profile_id): profile_availability without the
--- profile's status check (profile_gate_for over the session's unrevoked
--- factors and acr): whether the session satisfies the profile's gate whatever
--- the profile's status. Used by the leave path for a suspended profile.
+-- profile's status check (profile_gate_for over the session's policy factors,
+-- session_policy_factors): whether the session satisfies the profile's gate
+-- whatever the profile's status. Used by the leave path for a suspended
+-- profile.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.profile_gate(p_session_id BIGINT, p_profile_id BIGINT) RETURNS TEXT
 LANGUAGE sql
@@ -1482,14 +1561,12 @@ AS $$
     SELECT mod_users.profile_gate_for(
              s.principal_id,
              s.impersonated_profile_id,
-             ARRAY(SELECT f.credential_id
-                     FROM mod_users.session_factors f
-                     JOIN mod_users.credentials c ON c.id = f.credential_id
-                    WHERE f.session_id = s.id
-                      AND c.revoked_at IS NULL),
-             s.acr,
-             p_profile_id)
+             pf.credential_ids,
+             pf.acr,
+             p_profile_id,
+             pf.skip_credential_rule)
       FROM mod_users.sessions s
+     CROSS JOIN LATERAL mod_users.session_policy_factors(s.id, NULL) pf
      WHERE s.id = p_session_id
   ), 'not_held');
 $$;
@@ -1502,9 +1579,10 @@ $$;
 -- gate through another factor", so a credential cannot authorize itself (a
 -- party admin or a gated session holder writing a credential_party_authorizations
 -- row). The rules themselves stay in profile_availability_for. An
--- impersonation session keeps its stored acr (it holds no factors of its own).
--- A NULL p_exclude_credential_id excludes nothing, so the result equals
--- profile_availability.
+-- impersonation session is evaluated on its parent session's factors with
+-- the credential left out of them, and the parent's stored acr
+-- (session_policy_factors). A NULL p_exclude_credential_id excludes nothing,
+-- so the result equals profile_availability.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.profile_availability_excluding(
   p_session_id BIGINT, p_profile_id BIGINT, p_exclude_credential_id BIGINT
@@ -1518,17 +1596,14 @@ AS $$
     SELECT mod_users.profile_availability_for(
              s.principal_id,
              s.impersonated_profile_id,
-             ARRAY(SELECT f.credential_id
-                     FROM mod_users.session_factors f
-                     JOIN mod_users.credentials c ON c.id = f.credential_id
-                    WHERE f.session_id = s.id
-                      AND c.revoked_at IS NULL
-                      AND (p_exclude_credential_id IS NULL OR c.id <> p_exclude_credential_id)),
+             pf.credential_ids,
              CASE WHEN s.impersonated_profile_id IS NULL
                   THEN mod_users.session_acr_excluding(s.id, p_exclude_credential_id)
-                  ELSE s.acr END,
-             p_profile_id)
+                  ELSE pf.acr END,
+             p_profile_id,
+             pf.skip_credential_rule)
       FROM mod_users.sessions s
+     CROSS JOIN LATERAL mod_users.session_policy_factors(s.id, p_exclude_credential_id) pf
      WHERE s.id = p_session_id
   ), 'not_held');
 $$;
@@ -1550,7 +1625,8 @@ AS $$
              NULL,
              ARRAY[c.id],
              k.base_acr,
-             p_profile_id)
+             p_profile_id,
+             false)
       FROM mod_users.credentials c
       JOIN mod_users.credential_kinds k ON k.kind = c.kind
      WHERE c.id = p_credential_id
@@ -1580,9 +1656,12 @@ $$;
 -- min_acr and step-up still apply), or the
 -- owner carries no restrictive policy (no row, or 'any' with min_acr 1; this
 -- also covers owners that are not parties). Otherwise the factors are those of
--- the interactive session p_session_id (its unrevoked factors and
--- sessions.acr; an impersonation session skips the credential rule, as in
--- profile_availability), else of the single unrevoked credential
+-- the interactive session p_session_id (session_policy_factors: its unrevoked
+-- factors and sessions.acr; for an impersonation session, which holds no
+-- factors of its own, the parent session's factors and acr, so the
+-- administrator's authentication must meet the party's policy, and the
+-- credential rule is skipped only when the administrator is a platform
+-- operator, decision G as resolved), else of the single unrevoked credential
 -- p_credential_id with its kind's base_acr, and the result is
 -- party_policy_gate_for(...) = 'available': a profile_policy_confirmations row
 -- for (p_profile_id, p_party_id) exempts the credential rule only, never
@@ -1604,7 +1683,7 @@ AS $$
 DECLARE
   v_credential_ids BIGINT[];
   v_acr            SMALLINT;
-  v_impersonation  BOOLEAN := false;
+  v_skip_rule      BOOLEAN := false;
 BEGIN
   IF p_party_id IS NULL THEN
     RETURN true;
@@ -1634,17 +1713,11 @@ BEGIN
   END IF;
 
   IF p_session_id IS NOT NULL THEN
-    SELECT s.acr,
-           s.impersonated_profile_id IS NOT NULL,
-           ARRAY(SELECT f.credential_id
-                   FROM mod_users.session_factors f
-                   JOIN mod_users.credentials c ON c.id = f.credential_id
-                  WHERE f.session_id = s.id
-                    AND c.revoked_at IS NULL)
-      INTO v_acr, v_impersonation, v_credential_ids
-      FROM mod_users.sessions s
-     WHERE s.id = p_session_id;
-    IF NOT FOUND THEN
+    SELECT pf.acr, pf.skip_credential_rule, pf.credential_ids
+      INTO v_acr, v_skip_rule, v_credential_ids
+      FROM mod_users.session_policy_factors(p_session_id, NULL) pf;
+    IF v_credential_ids IS NULL THEN
+      -- Unknown session: session_policy_factors returns all NULL.
       RETURN false;
     END IF;
   ELSIF p_credential_id IS NOT NULL THEN
@@ -1662,7 +1735,7 @@ BEGIN
   END IF;
 
   RETURN mod_users.party_policy_gate_for(
-    p_party_id, p_profile_id, v_impersonation, v_credential_ids, v_acr) = 'available';
+    p_party_id, p_profile_id, COALESCE(v_skip_rule, false), v_credential_ids, v_acr) = 'available';
 END;
 $$;
 -- +goose StatementEnd
@@ -1848,9 +1921,10 @@ DROP FUNCTION IF EXISTS mod_users.profile_availability_excluding(BIGINT, BIGINT,
 DROP FUNCTION IF EXISTS mod_users.profile_availability(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_gate(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.holder_policy_mismatch(BIGINT, BIGINT, BOOLEAN);
-DROP FUNCTION IF EXISTS mod_users.profile_availability_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
-DROP FUNCTION IF EXISTS mod_users.profile_gate_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT);
+DROP FUNCTION IF EXISTS mod_users.profile_availability_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT, BOOLEAN);
+DROP FUNCTION IF EXISTS mod_users.profile_gate_for(BIGINT, BIGINT, BIGINT[], SMALLINT, BIGINT, BOOLEAN);
 DROP FUNCTION IF EXISTS mod_users.party_policy_gate_for(BIGINT, BIGINT, BOOLEAN, BIGINT[], SMALLINT);
+DROP FUNCTION IF EXISTS mod_users.session_policy_factors(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr(BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_acr_excluding(BIGINT, BIGINT);
 

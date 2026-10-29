@@ -7,7 +7,8 @@ package authz_test
 // profile_availability_for rule): every lock reason, confinement over every
 // factor, the credential_rule values, the outside-collaborator confirmation
 // that exempts the credential rule but never min_acr, the personal-profile
-// bypass of the party gate, and the impersonation bypass.
+// bypass of the party gate, and impersonation evaluated on the parent
+// session's factors (operators skip only the credential rule).
 
 import (
 	"context"
@@ -253,21 +254,68 @@ func TestInteg_Availability_MinACRAndConfirmations(t *testing.T) {
 	wantAvail(t, sessionAvail(t, pwHigh, m.PartyProfile), "available", "confirmed profile with sufficient acr")
 }
 
-func TestInteg_Availability_ImpersonationSkipsCredentialRule(t *testing.T) {
+// TestInteg_Availability_ImpersonationUsesParentFactors proves decision G as
+// resolved: an impersonation session (no factors of its own) meets the
+// impersonated profile's party policy with the parent (administrator)
+// session's factors and acr. Only an operator administrator skips the
+// credential rule; min_acr binds every administrator.
+func TestInteg_Availability_ImpersonationUsesParentFactors(t *testing.T) {
 	party := seedOrg(t, "Impersonation party")
 	fxMustTx(t, func(tx pgx.Tx) { fxPolicy(t, tx, party, "authorized", nil, 1) })
 	target := seedMember(t, party)
-	admin, _ := seedUserEntity(t)
-	parent, _ := fxSession(t, integPool, admin, sessionOpts{})
+	authorizer := seedMember(t, party)
+	setMinACR := func(party int64, minACR int) {
+		t.Helper()
+		fxExec(t, integPool, "set min_acr", `UPDATE mod_users.party_authn_policies SET min_acr = $2 WHERE party_id = $1`, party, minACR)
+	}
 
-	// The target's own session fails the credential rule; the impersonation
-	// session, which has no factors of its own, skips it.
-	own := sessionWith(t, target.User, 1, fxPassword(t, integPool, target.User, nil))
+	// The target's own session fails the credential rule.
+	targetCred := fxPassword(t, integPool, target.User, nil)
+	own := sessionWith(t, target.User, 1, targetCred)
 	wantAvail(t, sessionAvail(t, own, target.PartyProfile), "credential_not_authorized", "target's own session")
 
+	// A non-operator administrator whose factor is not authorized for the party.
+	admin, _ := seedUserEntity(t)
+	adminCred := fxPassword(t, integPool, admin, nil)
+	parent := sessionWith(t, admin, 1, adminCred)
 	imp, _ := fxSession(t, integPool, target.User, sessionOpts{ParentID: &parent, ImpersonateProfile: &target.PartyProfile})
-	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "available", "impersonation session skips the credential rule")
+	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "credential_not_authorized", "non-operator administrator, unauthorized factor")
 	wantAvail(t, sessionAvail(t, imp, target.Personal), "not_held", "impersonation reaches only the impersonated profile")
+
+	// The target's own authorized credential does not help: it is not a factor
+	// of the impersonation.
+	fxExec(t, integPool, "authorize target credential",
+		`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
+		targetCred, party, authorizer.PartyProfile)
+	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "credential_not_authorized", "target's credential is not the session's")
+
+	// Authorizing the administrator's own factor satisfies the rule.
+	fxExec(t, integPool, "authorize admin credential",
+		`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
+		adminCred, party, authorizer.PartyProfile)
+	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "available", "administrator's authorized factor")
+	var excl string
+	if err := integPool.QueryRow(context.Background(),
+		`SELECT mod_users.profile_availability_excluding($1, $2, $3)`, imp, target.PartyProfile, adminCred).Scan(&excl); err != nil {
+		t.Fatalf("profile_availability_excluding: %v", err)
+	}
+	wantAvail(t, excl, "credential_not_authorized", "excluding the administrator's only authorized factor")
+
+	// min_acr is the parent session's acr, for the non-operator administrator.
+	setMinACR(party, 2)
+	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "acr_too_low", "parent acr below min_acr")
+	fxExec(t, integPool, "raise parent acr", `UPDATE mod_users.sessions SET acr = 2 WHERE id = $1`, parent)
+	wantAvail(t, sessionAvail(t, imp, target.PartyProfile), "available", "parent acr meets min_acr")
+	setMinACR(party, 1)
+
+	// An operator administrator, with no factor authorized for the party: the
+	// credential rule is skipped (decision D extended), min_acr is not.
+	opUser, _ := seedOperatorUser(t)
+	opParent := sessionWith(t, opUser, 1, fxPassword(t, integPool, opUser, nil))
+	opImp, _ := fxSession(t, integPool, target.User, sessionOpts{ParentID: &opParent, ImpersonateProfile: &target.PartyProfile})
+	wantAvail(t, sessionAvail(t, opImp, target.PartyProfile), "available", "operator administrator skips the credential rule")
+	setMinACR(party, 3)
+	wantAvail(t, sessionAvail(t, opImp, target.PartyProfile), "acr_too_low", "operator administrator below min_acr")
 }
 
 // TestInteg_Availability_ExcludingNullEqualsPlain proves a NULL excluded
