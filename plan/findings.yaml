@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: gated treats every non-anonymous AuthContext…
-      id: j75L
-      date: "2026-10-27"
-      tags:
-        - type:security
-        - plan/phase:users-authorization-engine
-        - priority:medium
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/authz/authz.go
-        lines: 386-391
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          gated treats every non-anonymous AuthContext with SessionID == 0 and CredentialID == 0 as a trusted system actor and skips both the assurance gate and the owning-party gate. mod-core opctx.AuthContext (core-api/opctx/opctx.go) carries no explicit system-actor marker, so trust is inferred from absent fields. mod-users itself builds sessionless contexts for real users (withActingProfile in api/internal/service/helpers.go, UnauthenticatedActingContext, CreatedUser.ActingContext, the idp_jit context in api/internal/handlers/auth/oidc_flows.go). Today they appear to feed observations only, but any future Authorize call on such a context, or a sibling module constructing a profile-only context, fails open on both gates.
-        recommendation:
-          Skip the gates only for an explicit marker, for example a SystemActor flag set by opctx.WithSystemActor (a mod-core change, to be requested from mod-core) or a core_is_operator_profile system_actor check on the profile, and fail closed (ErrStepUpRequired or ErrForbidden) for other sessionless, credential-less contexts. Meanwhile add a unit test that pins which helpers produce sessionless contexts and that none reaches Authorize.
     - title: The exported primitive EndInTx runs the full…
       id: x0mv
       date: "2026-10-29"
@@ -1644,4 +1625,9 @@ closed:
       title: The Decision L liveness assertion for the im…
       disposition: fixed
       ref: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
+      date: "2026-10-29"
+    - id: j75L
+      title: gated treats every non-anonymous AuthContext…
+      disposition: promoted
+      ref: j75L
       date: "2026-10-29"
