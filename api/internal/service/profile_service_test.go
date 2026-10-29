@@ -664,3 +664,50 @@ func TestProvisionManagedUserInTx_ValidatesAndAuthorizesBeforeAnyWrite(t *testin
 		t.Fatalf("refused = %v, want forbidden", err)
 	}
 }
+
+// An impersonation session cannot create a managed user (decision K): the
+// refusal is ErrImpersonationNotAllowed, after the 401 and 400 checks and
+// before the authorizer, the party lookup or any write.
+func TestManagedUserCreation_RefusesImpersonation(t *testing.T) {
+	t.Parallel()
+	imp := authCtx(opctx.AuthContext{PrincipalID: 1, ProfileID: 2, SessionID: 3, AuthTime: time.Now(), ImpersonatorPrincipalID: 9})
+	valid := ManagedUserInput{PartyID: 5, Email: "m@example.com", Password: "correct-horse-battery"}
+
+	t.Run("ProvisionManagedUserInTx", func(t *testing.T) {
+		t.Parallel()
+		az := &opAuthorizer{}
+		s := newInviteTestService(az, &profileCoreQ{}, &profileUsersQ{})
+		if _, err := s.ProvisionManagedUserInTx(imp, nil, valid); !errors.Is(err, ErrImpersonationNotAllowed) {
+			t.Fatalf("impersonating = %v, want ErrImpersonationNotAllowed", err)
+		}
+		if len(az.called) != 0 {
+			t.Errorf("authorizer consulted under impersonation: %v", az.called)
+		}
+		// A malformed request is still 400 first.
+		if _, err := s.ProvisionManagedUserInTx(imp, nil, ManagedUserInput{PartyID: 5, Email: "nope", Password: "correct-horse-battery"}); !errors.Is(err, apiresp.ErrInvalidInput) {
+			t.Errorf("impersonating, bad email = %v, want invalid input", err)
+		}
+	})
+
+	t.Run("CreateManagedUser", func(t *testing.T) {
+		t.Parallel()
+		az := &opAuthorizer{}
+		// No pool and an empty core querier: a refusal that reached the party
+		// lookup would be 404, and one that reached the transaction an
+		// unwired-pool error.
+		s := NewProfileService(nil, nil, &profileCoreQ{}, az, nil, &UserService{now: time.Now}, nil, nil)
+		party := uuid.New()
+		if _, err := s.CreateManagedUser(context.Background(), party, "m@example.com", "correct-horse-battery"); !errors.Is(err, apiresp.ErrUnauthenticated) {
+			t.Errorf("no auth = %v, want unauthenticated", err)
+		}
+		if _, err := s.CreateManagedUser(imp, party, "nope", "correct-horse-battery"); !errors.Is(err, apiresp.ErrInvalidInput) {
+			t.Errorf("impersonating, bad email = %v, want invalid input", err)
+		}
+		if _, err := s.CreateManagedUser(imp, party, "m@example.com", "correct-horse-battery"); !errors.Is(err, ErrImpersonationNotAllowed) {
+			t.Fatalf("impersonating = %v, want ErrImpersonationNotAllowed", err)
+		}
+		if len(az.called) != 0 {
+			t.Errorf("authorizer consulted under impersonation: %v", az.called)
+		}
+	})
+}

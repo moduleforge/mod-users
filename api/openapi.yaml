@@ -3317,7 +3317,10 @@ paths:
         the party only when the caller holds `update` on the party; otherwise
         the request still succeeds (201) and the password stays unauthorized,
         so the user cannot sign in to the party until an administrator
-        authorizes it.
+        authorizes it. Refused with 403 `users.impersonation_not_allowed`
+        while the caller is impersonating (an impersonation may not set a
+        password or authorize a credential), after the 401 and 400 checks and
+        before the party lookup; nothing is written.
       tags: [Parties]
       operationId: createManagedUser
       requestBody:

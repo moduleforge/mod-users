@@ -28,3 +28,11 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 ## References
 
 - Finding `YqJd` in this plan's `plan/findings.yaml` (`ProvisionManagedUserInTx`, reached from `CreateManagedUser`, accepts an impersonating context and lets an impersonator set a password and write credential party authorizations).
+
+## Status
+
+- **Outcome:** succeeded (2026-10-29).
+- **Change:** `ProvisionManagedUserInTx` (`api/internal/service/profile_service.go`) refuses an `AuthContext` with `ImpersonatorPrincipalID != 0` with `ErrImpersonationNotAllowed` right after the 400 and 401 checks, before the authorizer and any read or write. `CreateManagedUser` (`api/internal/service/profile_admin.go`) refuses the same way after 401 and 400, before the party lookup (404) and the transaction, so the route order is 401, 400, 403, 404/409. `api/openapi.yaml` `createManagedUser` states the refusal.
+- **Tests:** `TestManagedUserCreation_RefusesImpersonation` (`api/internal/service/profile_service_test.go`); `TestManagedUser_RefusedWhileImpersonating` (`api/internal/integration/managed_user_impersonation_integration_test.go`): an operator impersonating a party administrator who holds `update` on an `authorized`-rule party gets 403 `users.impersonation_not_allowed`, with no user, identifier, credential or `credential_party_authorizations` row written. A non-impersonated control call shows the same administrator can provision and authorize. Without the fix the integration test fails with 201.
+- **Validation:** `make -C model compose/build/test.unit` and `make -C api build/test.unit/lint` passed, and so did `go vet -tags=integration`. The integration suites (`internal/authz`, `internal/config`, `internal/integration`) passed against a throwaway postgres:16, which was removed afterwards.
+- **Write paths audited:** see the task report. The only unrefused credential/authorization writes left are the departure cleanup of an administrator's `PATCH /v1/profiles/{uuid}` to `ended`, which is raised to the manager and not changed here.

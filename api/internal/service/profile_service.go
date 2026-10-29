@@ -885,8 +885,11 @@ type ProvisionedManagedUser struct {
 //
 // Authorization is AuthorizeTypeIn(create, user, party) (UserService) and
 // AuthorizeTypeIn(create, profile, party), both before any write. Errors: 400
-// for a malformed email or password, ErrIdentifierTaken when the address is
-// registered.
+// for a malformed email or password, ErrImpersonationNotAllowed (403
+// users.impersonation_not_allowed) for an impersonation session (an
+// impersonator may not set a password or write a credential party
+// authorization; refused before any read or write), ErrIdentifierTaken when
+// the address is registered.
 //
 // The party's policy is read under the shared per-party policy lock
 // (lockPartyPolicyShared), so the authorization decision serializes with
@@ -919,6 +922,11 @@ func (s *ProfileService) ProvisionManagedUserInTx(ctx context.Context, tx pgx.Tx
 	ac, err := adminCaller(ctx)
 	if err != nil {
 		return ProvisionedManagedUser{}, err
+	}
+	// An impersonation session may not create a user's credential or authorize
+	// one for a party (decision K): refused before any read or write.
+	if ac.ImpersonatorPrincipalID != 0 {
+		return ProvisionedManagedUser{}, ErrImpersonationNotAllowed
 	}
 	cq := s.coreQuerier(tx)
 	profileType, err := cq.GetTypeBySlug(ctx, profileTypeSlug)
