@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 8
-    tasks_added: 47
+    tasks_added: 48
 phases:
     - number: 6
       slug: users-identity-core
@@ -1104,7 +1104,7 @@ phases:
       title: Remediation Round 8
       kind: remediation
       security_review: required
-      tasks_added: 4
+      tasks_added: 5
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1156,6 +1156,24 @@ phases:
             - gxvu
             - ehkS
             - FvL1
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 5
+          slug: docs-impersonation-reauth-and-decisions
+          title: Document Impersonation Re-Auth, Refusals And Decisions G J K L M
+          path: phase-19-remediation-08/005-docs-impersonation-reauth-and-decisions.md
+          done: false
+          tier: sonnet-high
+          findings:
+            - IDjP
+            - 7TSm
+            - SO3A
+            - HGTD
+            - 33w3
+            - MGUW
+            - MkEx
           git:
             branch: null
             commit: []
