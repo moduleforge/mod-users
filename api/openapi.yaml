@@ -2405,6 +2405,15 @@ paths:
         with 403 `users.impersonation_not_allowed` outside an impersonation session and
         409 `users.impersonation_limit_reached` when the maximum leaves no room to
         extend. The body is ignored. Audit: op `update`, resource `impersonation`.
+
+        Renewal re-authorizes `impersonate` on the impersonated profile from the
+        administrator's session, as the acting profile recorded when the
+        impersonation started (the parent session's factors and `acr` apply).
+        A refusal answers 403 and ends the impersonation. A parent session that
+        has ended answers 401 `users.session_revoked`. The operation's
+        `max_auth_age` is not re-applied, so a stale administrator
+        authentication does not block a renewal; the impersonation still ends
+        at `AUTH_IMPERSONATION_MAX`.
       tags: [Impersonations]
       operationId: renewImpersonation
       responses:
@@ -3084,13 +3093,18 @@ paths:
       description: |
         Authorizes the `credentials` operation on the principal (a stale
         authentication is 409 `users.step_up_required`; the operation's
-        `max_auth_age` is 10 minutes). Order: 401, 400, 404 (a principal the
-        caller cannot read), 403, 409. Newest first; never a hash or secret.
+        `max_auth_age` is 10 minutes). Order: 401, 400, 403 (impersonating,
+        `users.impersonation_not_allowed`), 404 (a principal the caller cannot
+        read), 403 (the caller's own principal, or `credentials` refused), 409.
+        Newest first; never a hash or secret.
 
         All four credential routes under this path are refused with 403
         `users.impersonation_not_allowed` while the caller is impersonating, and
         with 403 when the principal is the caller's own (self-service credential
-        changes use `/v1/me/credentials`).
+        changes use `/v1/me/credentials`). Own-principal routes are refused for
+        every caller, service accounts included: a service account cannot rotate
+        its own keys here, and keys are rotated only by their owner or an
+        operator.
       tags: [Principals]
       operationId: listPrincipalCredentials
       responses:
@@ -3123,6 +3137,13 @@ paths:
         personal profile that owns a self-owned service account may rotate its
         key through the own arm; a party-owned account needs an owned-scope or
         entity grant on the party.
+
+        Refused with 403 `users.impersonation_not_allowed` while the caller is
+        impersonating, and with 403 when the principal is the caller's own, in
+        the order 401, 400, 403 (impersonating), 404, 403 (own principal or
+        `credentials`), 409. Own-principal routes are refused for every caller,
+        service accounts included; keys are rotated only by their owner or an
+        operator.
       tags: [Principals]
       operationId: issuePrincipalAPIKey
       requestBody:
@@ -3158,6 +3179,13 @@ paths:
         Authorizes `credentials` on the principal (not `assume` or
         `impersonate`). A fingerprint that is active anywhere is 409
         `users.ssh_key_in_use`; a guest is 409 `users.guest_upgrade_required`.
+
+        Refused with 403 `users.impersonation_not_allowed` while the caller is
+        impersonating, and with 403 when the principal is the caller's own, in
+        the order 401, 400, 403 (impersonating), 404, 403 (own principal or
+        `credentials`), 409. Own-principal routes are refused for every caller,
+        service accounts included; keys are rotated only by their owner or an
+        operator.
       tags: [Principals]
       operationId: installPrincipalSSHKey
       requestBody:
@@ -3195,6 +3223,13 @@ paths:
         with reason `admin`, which also ends every session that holds it as a
         factor. There is no last-credential check. A credential that does not
         exist, belongs to another principal or is already revoked is 404.
+
+        Refused with 403 `users.impersonation_not_allowed` while the caller is
+        impersonating, and with 403 when the principal is the caller's own, in
+        the order 401, 400, 403 (impersonating), 404, 403 (own principal or
+        `credentials`), 409. Own-principal routes are refused for every caller,
+        service accounts included; keys are rotated only by their owner or an
+        operator.
       tags: [Principals]
       operationId: revokePrincipalCredential
       responses:

@@ -67,9 +67,14 @@ type InstallPrincipalSSHKeyInput struct {
 }
 
 // credentialsTarget runs the shared front of every credential-administration
-// method: the caller must be an authenticated actor (401), the principal must
-// exist and be readable by the caller (404, masked), and the caller must hold
-// `credentials` on it (403, or 409 users.step_up_required).
+// method. Refusals, in the order they are made: the caller must be an
+// authenticated actor (401); an impersonating session is refused with
+// ErrImpersonationNotAllowed (403 users.impersonation_not_allowed), before the
+// principal lookup; the principal must exist (404); a principal that is the
+// caller's own is refused with apiresp.ErrForbidden (403), for every caller
+// including a service account, before the read check; the principal must be
+// readable by the caller (404, masked); and the caller must hold `credentials`
+// on it (403, or 409 users.step_up_required).
 func (s *UserService) credentialsTarget(ctx context.Context, id uuid.UUID) (PrincipalSummary, error) {
 	ac, err := adminCaller(ctx)
 	if err != nil {
