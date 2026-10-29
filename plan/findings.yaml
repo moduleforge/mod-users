@@ -19,15 +19,6 @@ items:
           gated treats every non-anonymous AuthContext with SessionID == 0 and CredentialID == 0 as a trusted system actor and skips both the assurance gate and the owning-party gate. mod-core opctx.AuthContext (core-api/opctx/opctx.go) carries no explicit system-actor marker, so trust is inferred from absent fields. mod-users itself builds sessionless contexts for real users (withActingProfile in api/internal/service/helpers.go, UnauthenticatedActingContext, CreatedUser.ActingContext, the idp_jit context in api/internal/handlers/auth/oidc_flows.go). Today they appear to feed observations only, but any future Authorize call on such a context, or a sibling module constructing a profile-only context, fails open on both gates.
         recommendation:
           Skip the gates only for an explicit marker, for example a SystemActor flag set by opctx.WithSystemActor (a mod-core change, to be requested from mod-core) or a core_is_operator_profile system_actor check on the profile, and fail closed (ErrStepUpRequired or ErrForbidden) for other sessionless, credential-less contexts. Meanwhile add a unit test that pins which helpers produce sessionless contexts and that none reaches Authorize.
-    - title: Confinement not applied to parent factors
-      id: bFGy
-      date: "2026-10-29"
-      tags:
-        - type:security
-        - plan/phase:remediation-07
-        - priority:medium
-        - effort:medium
-      text: mod_users.profile_gate_for (model/migrations/sql/0100_baseline.sql) skips the 'confined' check when p_impersonated_profile_id is set, so an impersonation session is never locked as 'confined' even though its party-policy factors are now the administrator's parent-session credentials (mod_users.session_policy_factors). This preserves prior behavior (the child session holds no factors), but a parent credential confined to party X can drive an impersonation of a member of party Y. Decide whether confinement of the administrator's factors should bind the impersonated profile's party, and how that interacts with operator credentials confined to the operator party.
     - title: ProvisionManagedUserInTx (reached from Profi…
       id: YqJd
       date: "2026-10-29"
@@ -1806,4 +1797,9 @@ closed:
       title: mod_users.session_policy_factors sets skip_c…
       disposition: fixed
       ref: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
+      date: "2026-10-29"
+    - id: bFGy
+      title: Confinement not applied to parent factors
+      disposition: fixed
+      ref: phase-19-remediation-08/002-confine-impersonator-parent-factors.md
       date: "2026-10-29"
