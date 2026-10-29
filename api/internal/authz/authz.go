@@ -35,7 +35,10 @@
 //     party's content through actor groups or grants, or a personal profile
 //     through the SSH fallback), the session's factors (or the single
 //     credential's) must meet that party's credential_rule and min_acr,
-//     with mod_users.session_meets_party_policy. A profile_policy_confirmations
+//     with mod_users.session_meets_party_policy. An impersonation session
+//     meets it with the administrator's parent-session factors and acr; only
+//     an operator administrator skips the credential rule (decision G as
+//     resolved). A profile_policy_confirmations
 //     row exempts the credential rule only. A failure is ErrForbidden, like a
 //     failed grant arm. Acting profiles inside the owning party, personal
 //     profiles reaching their own records, platform operator profiles

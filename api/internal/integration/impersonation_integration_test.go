@@ -13,6 +13,8 @@ package integration
 //	an Acme party admin reaches Acme profiles only                    TestImpersonation_PartyAdminReach
 //	a personal profile needs operator authority; operators reach
 //	members of restrictive-policy parties (decision D)                TestImpersonation_PersonalProfileNeedsOperatorAuthority
+//	the impersonated member's rules apply across parties on the
+//	administrator's factors; operators skip only the credential rule  TestImpersonation_ImpersonatedActorRulesApplyAcrossParties
 //	the own arm never confers impersonate                             TestImpersonation_OwnArmNeverConfersImpersonate
 //	stale auth_time is 409 users.step_up_required                     TestImpersonation_StaleAuthTimeNeedsStepUp
 //	the TTL and the renewal cap are enforced                          TestImpersonation_TTLAndRenewalCap
@@ -25,6 +27,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -32,6 +35,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/apiresp/ordertest"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/config"
@@ -399,6 +403,86 @@ func TestImpersonation_OperatorReachesMembersOfRestrictiveParties(t *testing.T) 
 	env.exec(t, "suspend", `UPDATE profiles SET status = 'suspended' WHERE entity_id = $1`, other.profileID)
 	env.startImp(t, opTok.access(), other.profUUID, "suspended").
 		wantError(t, http.StatusConflict, "conflict", "users.impersonation_target_unavailable")
+}
+
+// impCtx returns the AuthContext the middleware installs for an impersonation
+// access token, impersonator included.
+func (s *stack) impCtx(t *testing.T, token string) context.Context {
+	t.Helper()
+	status, p := s.probe(t, "/v1/probe", token)
+	if status != http.StatusOK || p.ImpersonatorP == 0 {
+		t.Fatalf("probe for an impersonation context = %d %+v", status, p)
+	}
+	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID: p.PrincipalID, ProfileID: p.ProfileID, SessionID: p.SessionID,
+		ImpersonatorPrincipalID: p.ImpersonatorP, ACR: p.ACR, AuthTime: p.AuthTime,
+	})
+}
+
+// Decision G, as resolved: while impersonating, the impersonated member's
+// authorizations decide what the session may do, and every party's policy
+// applies as for that member, evaluated on the administrator's (parent
+// session's) factors. A party administrator gets no skip of a third party's
+// credential_rule; a platform operator's impersonation is exempt from the
+// credential rule (decision D extended) but not from min_acr.
+func TestImpersonation_ImpersonatedActorRulesApplyAcrossParties(t *testing.T) {
+	acme := env.seedParty(t, "Imp Rules Acme "+uniq("p"))
+	beta := env.seedParty(t, "Imp Rules Beta "+uniq("p"))
+	admin := env.newImpAdmin(t, acme)
+	m := env.newMember(t, acme)
+	// Beta's content, which the Acme member reaches as an outside collaborator.
+	content := env.entityOf(t, env.pool, "organization", &beta)
+	env.exec(t, "member read grant on beta content",
+		`INSERT INTO grants (actor_id, operation_id, target_id, granted_by) VALUES ($1, $2, $3, NULL)`,
+		m.profileID, env.opID(t, "read"), content)
+	env.setPartyPolicy(t, beta, "authorized", 1)
+	betaAdminProfile, _ := env.seedPartyProfile(t, env.principalID(t, env.registerVerified(t).Email), beta, "active")
+
+	t.Run("party administrator: beta's credential rule binds", func(t *testing.T) {
+		child := env.startImp(t, admin.tok.access(), m.profUUID, "rules").wantStatus(t, http.StatusCreated).tok(t)
+		ctx := env.impCtx(t, child.access())
+		if err := env.az.Authorize(ctx, "read", &content); !errors.Is(err, apiresp.ErrForbidden) {
+			t.Fatalf("administrator's credentials not authorized for beta: err = %v, want 403", err)
+		}
+
+		// Authorizing the administrator's own credential for beta satisfies the
+		// rule: the factors are the parent session's.
+		adminCred := env.scanInt64(t, "admin password credential",
+			`SELECT id FROM mod_users.credentials WHERE principal_id = $1 AND kind = 'password' AND revoked_at IS NULL`, admin.userID)
+		env.exec(t, "authorize admin credential for beta",
+			`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
+			adminCred, beta, betaAdminProfile)
+		if err := env.az.Authorize(ctx, "read", &content); err != nil {
+			t.Fatalf("administrator's credential authorized for beta: err = %v, want allowed", err)
+		}
+
+		// The member's own credentials never count: they are not the session's.
+		memberCred := env.scanInt64(t, "member password credential",
+			`SELECT id FROM mod_users.credentials WHERE principal_id = $1 AND kind = 'password' AND revoked_at IS NULL`, m.userID)
+		env.exec(t, "drop admin authorization", `DELETE FROM mod_users.credential_party_authorizations WHERE credential_id = $1`, adminCred)
+		env.exec(t, "authorize member credential for beta",
+			`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id) VALUES ($1, $2, $3)`,
+			memberCred, beta, betaAdminProfile)
+		if err := env.az.Authorize(ctx, "read", &content); !errors.Is(err, apiresp.ErrForbidden) {
+			t.Fatalf("only the member's credential is authorized for beta: err = %v, want 403", err)
+		}
+	})
+
+	t.Run("operator: exempt from the credential rule, not from min_acr", func(t *testing.T) {
+		env.setPartyPolicy(t, beta, "authorized", 1)
+		opAcct := env.registerVerified(t)
+		opTok, _ := env.makeOperator(t, opAcct)
+		child := env.startImp(t, opTok.access(), m.profUUID, "operator rules").wantStatus(t, http.StatusCreated).tok(t)
+		ctx := env.impCtx(t, child.access())
+		if err := env.az.Authorize(ctx, "read", &content); err != nil {
+			t.Fatalf("operator impersonation under beta's credential rule: err = %v, want allowed", err)
+		}
+		env.setPartyPolicy(t, beta, "authorized", 3)
+		if err := env.az.Authorize(ctx, "read", &content); !errors.Is(err, apiresp.ErrForbidden) {
+			t.Fatalf("operator impersonation below beta's min_acr: err = %v, want 403", err)
+		}
+		env.setPartyPolicy(t, beta, "authorized", 1)
+	})
 }
 
 // The own arm confers an owner's operations over what it owns, never
