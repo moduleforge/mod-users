@@ -257,7 +257,8 @@ func TestInteg_Availability_MinACRAndConfirmations(t *testing.T) {
 // TestInteg_Availability_ImpersonationUsesParentFactors proves decision G as
 // resolved: an impersonation session (no factors of its own) meets the
 // impersonated profile's party policy with the parent (administrator)
-// session's factors and acr. Only an operator administrator skips the
+// session's factors and acr. Only an administrator acting through an operator
+// profile (the recorded impersonator_profile_id, decision J) skips the
 // credential rule; min_acr binds every administrator.
 func TestInteg_Availability_ImpersonationUsesParentFactors(t *testing.T) {
 	party := seedOrg(t, "Impersonation party")
@@ -309,10 +310,21 @@ func TestInteg_Availability_ImpersonationUsesParentFactors(t *testing.T) {
 	setMinACR(party, 1)
 
 	// An operator administrator, with no factor authorized for the party: the
-	// credential rule is skipped (decision D extended), min_acr is not.
-	opUser, _ := seedOperatorUser(t)
+	// credential rule is skipped (decision D extended), min_acr is not. The
+	// skip follows the recorded acting profile (decision J): the same principal
+	// impersonating through its personal profile is bound by the rule.
+	opUser, opProfile := seedOperatorUser(t)
 	opParent := sessionWith(t, opUser, 1, fxPassword(t, integPool, opUser, nil))
-	opImp, _ := fxSession(t, integPool, target.User, sessionOpts{ParentID: &opParent, ImpersonateProfile: &target.PartyProfile})
+	var opPersonal int64
+	if err := integPool.QueryRow(context.Background(),
+		`SELECT entity_id FROM profiles WHERE holder_id = $1 AND party_id IS NULL`, opUser).Scan(&opPersonal); err != nil {
+		t.Fatalf("operator's personal profile: %v", err)
+	}
+	viaPersonal, _ := fxSession(t, integPool, target.User, sessionOpts{ParentID: &opParent,
+		ImpersonateProfile: &target.PartyProfile, ImpersonatorProfile: &opPersonal})
+	wantAvail(t, sessionAvail(t, viaPersonal, target.PartyProfile), "credential_not_authorized", "operator's principal acting through its personal profile")
+	opImp, _ := fxSession(t, integPool, target.User, sessionOpts{ParentID: &opParent,
+		ImpersonateProfile: &target.PartyProfile, ImpersonatorProfile: &opProfile})
 	wantAvail(t, sessionAvail(t, opImp, target.PartyProfile), "available", "operator administrator skips the credential rule")
 	setMinACR(party, 3)
 	wantAvail(t, sessionAvail(t, opImp, target.PartyProfile), "acr_too_low", "operator administrator below min_acr")
