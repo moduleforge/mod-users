@@ -449,6 +449,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Plan-notes / docs: the docs/architecture.md statement of Decision K is owned by phase-19 task 005; its text should cover managed-user creation as implemented (refused after 401 and 400, before 404). No plan-notes edit needed.'
+    - title: 'Informational: Decision K in plan/notes/decis'
+      id: AXFG
+      date: "2026-10-29"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-08
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Informational: Decision K in plan/notes/decisions-and-resolutions.md says authorization writes are refused with ErrImpersonationNotAllowed; implemented refusal for party policy, credential authorization/confinement and self-service writes is a plain 403 ErrForbidden. Docs follow the code. Manager may align the note, or code if the unified error code was intended.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
