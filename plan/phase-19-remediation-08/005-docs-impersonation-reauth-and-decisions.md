@@ -34,3 +34,7 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 - Finding `33w3` in this plan's `plan/findings.yaml` (`docs/architecture.md` omits the impersonation-lifecycle rules from Decisions H and I).
 - Finding `MGUW` in this plan's `plan/findings.yaml` (`docs/architecture.md` does not mention the app gate's 409 `users.step_up_required` or the fail-closed operator-admin checker).
 - Finding `MkEx` in this plan's `plan/findings.yaml` (`docs/architecture.md` does not record the sessionless-trust inference or the `sessionless_contexts_test.go` pin).
+
+## Status
+
+Outcome: succeeded (2026-10-29). Validation: `make build` and `make lint` pass (log in `.flow/validation-logs/01-build-lint.log`); grep checks for the corrected `listPrincipalCredentials` order, the own-principal refusal sentence on the other three credential operations, and the `renewImpersonation` re-authorization text pass; `docs/architecture.md` names Decisions G, J, K and L, the Renew re-authorization, the app-gate step-up path and the sessionless-inference limitation, and no principal-wide operator sentence remains. Changed: `api/openapi.yaml`, `AGENTS.md`, `api/internal/service/principal_credentials.go` (comment only), `docs/architecture.md`. Decision K is documented as implemented: managed-user creation answers 403 `users.impersonation_not_allowed`; party authn-policy, credential authorization/confinement and self-service credential writes answer a plain 403.
