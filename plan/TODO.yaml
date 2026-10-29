@@ -1082,7 +1082,7 @@ phases:
           findings:
             - j75L
           git:
-            branch: null
+            branch: plan/identity-model-impl-18-005
             commit: []
             merge: null
         - number: 6
