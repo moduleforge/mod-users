@@ -2177,3 +2177,13 @@ items:
           ImpersonationService.Start only observes a successful start. Refused attempts (403 no impersonate authority, the nesting or own-profile refusal, 409 step-up, an unknown target probed by a wildcard holder) leave no audit trail, so repeated attempts to impersonate profiles outside one's authority are invisible to mod-audit.
         recommendation:
           Log refused impersonation starts at warn level with the caller principal, acting profile, target profile uuid and refusal code, or emit a denied-attempt observation if mod-audit's op vocabulary gains one.
+    - title: Sibling links repointed by make runs
+      id: FZVc
+      date: "2026-10-27"
+      tags:
+        - type:ambiguity
+        - priority:medium
+        - effort:unspecified
+        - plan/phase:remediation-07
+        - plan/slug:identity-model-impl
+      text: Running make build, test, or lint with MODULEFORGE_SIBLINGS_DIR set repoints the worktrees/plan/mod-core, mod-authz, and mod-audit links through /Users/zane/playground/.flow/siblings/mod-users. Task 001 restored them with ln -sfn. Later remediation-07 tasks will hit the same repoint, so the link check must run after every make invocation.
