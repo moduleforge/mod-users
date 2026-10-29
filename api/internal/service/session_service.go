@@ -19,6 +19,7 @@ import (
 	coredb "github.com/moduleforge/core-model/db"
 	localauth "github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/useraction"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 )
 
@@ -516,6 +517,8 @@ func (s *SessionService) gateFor(sc sessionContext) appGate {
 			return true, nil
 		case errors.Is(err, apiresp.ErrForbidden), errors.Is(err, apiresp.ErrUnauthenticated):
 			return false, nil
+		case isStepUpRequired(err):
+			return false, err
 		default:
 			return false, fmt.Errorf("sessions: app gate: %w", err)
 		}
@@ -793,4 +796,11 @@ func withFallbackActor(ctx context.Context, db usersdb.DBTX, principalID, sessio
 func logNoActor(ctx context.Context, sessionID int64, reason string) {
 	slog.WarnContext(ctx, "sessions: revocation not observed: principal has no acting profile",
 		"session_id", sessionID, "reason", reason)
+}
+
+// isStepUpRequired reports whether err is, or wraps, the engine's assurance
+// refusal: an action-required error with code users.step_up_required.
+func isStepUpRequired(err error) bool {
+	var action *apiresp.ActionRequiredError
+	return errors.As(err, &action) && action.Action().Code == useraction.StepUpRequired.Code
 }

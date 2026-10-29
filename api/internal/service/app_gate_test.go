@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/opctx"
+	"github.com/moduleforge/mod-users/api/internal/useraction"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 )
 
@@ -90,5 +92,23 @@ func TestSessionGate_DenialAndFailureModes(t *testing.T) {
 				t.Fatalf("gate = %v, %v; want ok=%v err=%v", ok, err, tc.wantOK, tc.wantErr)
 			}
 		})
+	}
+}
+
+// An engine step-up refusal on `login` is neither a denial nor a fault: the
+// gate hands the action-required error back unchanged (409
+// users.step_up_required), the same as the authenticator's gate.
+func TestSessionGate_StepUpPropagatesUnchanged(t *testing.T) {
+	t.Parallel()
+
+	stepUp := apiresp.ActionRequired(useraction.StepUpRequired, "Confirm your identity to continue.", "/step-up", nil)
+	s := &SessionService{az: &loginAuthorizer{err: fmt.Errorf("authz: login needs stronger authentication: %w", stepUp)}}
+	ok, err := s.gateFor(gateSession(51, true))(context.Background(), 31)
+	if ok || !errors.Is(err, stepUp) {
+		t.Fatalf("gate = %v, %v; want not admitted with the step-up error", ok, err)
+	}
+	var action *apiresp.ActionRequiredError
+	if !errors.As(err, &action) || action.Action().Code != "users.step_up_required" {
+		t.Fatalf("err = %v, want an action-required error with code users.step_up_required", err)
 	}
 }
