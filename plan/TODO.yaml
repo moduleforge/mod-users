@@ -1157,15 +1157,17 @@ phases:
           slug: test-precision-nesting-and-static-audit
           title: Tighten Nesting, Party-Record Gate And Sessionless Audit Tests
           path: phase-19-remediation-08/004-test-precision-nesting-and-static-audit.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: 'Tightened three test suites with no production changes: nesting SQL check isolates no-nesting invariant; party-record gate pins 404 with positive control; static audit ignores literal-zero SessionID/CredentialID. Mutation and literal demonstrations failed as expected and were reverted.'
           findings:
             - gxvu
             - ehkS
             - FvL1
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-19-004
+            commit:
+                - 71d8c39
             merge: null
         - number: 5
           slug: docs-impersonation-reauth-and-decisions
