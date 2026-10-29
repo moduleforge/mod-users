@@ -19,42 +19,6 @@ items:
           gated treats every non-anonymous AuthContext with SessionID == 0 and CredentialID == 0 as a trusted system actor and skips both the assurance gate and the owning-party gate. mod-core opctx.AuthContext (core-api/opctx/opctx.go) carries no explicit system-actor marker, so trust is inferred from absent fields. mod-users itself builds sessionless contexts for real users (withActingProfile in api/internal/service/helpers.go, UnauthenticatedActingContext, CreatedUser.ActingContext, the idp_jit context in api/internal/handlers/auth/oidc_flows.go). Today they appear to feed observations only, but any future Authorize call on such a context, or a sibling module constructing a profile-only context, fails open on both gates.
         recommendation:
           Skip the gates only for an explicit marker, for example a SystemActor flag set by opctx.WithSystemActor (a mod-core change, to be requested from mod-core) or a core_is_operator_profile system_actor check on the profile, and fail closed (ErrStepUpRequired or ErrForbidden) for other sessionless, credential-less contexts. Meanwhile add a unit test that pins which helpers produce sessionless contexts and that none reaches Authorize.
-    - title: Two function header comments still describe…
-      id: u1NG
-      date: "2026-10-29"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-08
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0100_baseline.sql
-        lines: 1548-1552, 1688-1694
-        severity: minor
-        confidence: high
-        concerns: correctness
-        description:
-          Two function header comments still describe the impersonation exemption
-          loosely. The profile_availability header says the credential rule is
-          "skipped only for an operator administrator". The
-          session_meets_party_policy header says it is skipped "only when the
-          administrator is a platform operator". The rule is now keyed on the
-          recorded acting profile (sessions.impersonator_profile_id being an active
-          operator profile), and the same principal impersonating through a
-          non-operator profile is explicitly not exempt. "Administrator is a
-          platform operator" reads as principal-level status, the very rule that
-          was replaced. The profile_availability header also does not mention that
-          parent-session factors are now subject to the confinement check for
-          non-operator impersonators. The session_policy_factors,
-          party_policy_gate_for and profile_gate_for headers state the rule
-          correctly, so these two comments are inconsistent with them.
-        recommendation:
-          Reword both comments to "skipped only for an impersonation started
-          through an active operator profile (the recorded
-          impersonator_profile_id; session_policy_factors)". In the
-          profile_availability header, add that a non-operator impersonation's
-          parent factors are also held to the confinement check (profile_gate_for).
     - title: The four principal-credential operations doc…
       id: lGXo
       date: "2026-10-29"
@@ -1727,4 +1691,9 @@ closed:
       title: 'Decision needed: when an impersonating caller'
       disposition: fixed
       ref: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
+      date: "2026-10-29"
+    - id: u1NG
+      title: Two function header comments still describe…
+      disposition: fixed
+      ref: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
       date: "2026-10-29"
