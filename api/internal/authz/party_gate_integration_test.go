@@ -163,6 +163,44 @@ func TestInteg_PartyGate_ImpersonationUsesParentFactors(t *testing.T) {
 	requireForbidden403(t, integAZ.Authorize(opCtx, "read", &g.content), "operator administrator below the party's min_acr")
 }
 
+// TestInteg_PartyGate_ImpersonationConfinesNonOperatorParentFactors proves
+// decision L on the owning-party gate: a non-operator administrator's parent
+// factor confined to another party fails the gate even when it is authorized
+// for the gate party; an operator impersonation is exempt.
+func TestInteg_PartyGate_ImpersonationConfinesNonOperatorParentFactors(t *testing.T) {
+	g := seedGateParty(t, "authorized", 1)
+	elsewhere := seedOrg(t, "Gate Elsewhere "+fxTag("p"))
+	impCtx := func(adminUser int64, actingProfile *int64, adminCred int64) context.Context {
+		t.Helper()
+		parent, _ := fxSession(t, integPool, adminUser, sessionOpts{ACR: 1})
+		fxFactor(t, integPool, parent, adminCred, nil)
+		child, _ := fxSession(t, integPool, g.collabUser, sessionOpts{ACR: 1, ParentID: &parent,
+			ImpersonateProfile: &g.collabProfile, ImpersonatorProfile: actingProfile})
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: g.collabUser, ProfileID: g.collabProfile, SessionID: child,
+			ImpersonatorPrincipalID: adminUser, ACR: 1, AuthTime: time.Now(),
+		})
+	}
+
+	admin, _ := seedUserEntity(t)
+	adminPw := fxPassword(t, integPool, admin, nil)
+	authorizeCredential(t, adminPw, g.party, g.collabProfile)
+	ctx := impCtx(admin, nil, adminPw)
+	if err := integAZ.Authorize(ctx, "read", &g.content); err != nil {
+		t.Fatalf("unconfined administrator factor authorized for the party: err = %v, want nil", err)
+	}
+	confine(t, adminPw, elsewhere)
+	requireForbidden403(t, integAZ.Authorize(ctx, "read", &g.content),
+		"non-operator administrator's factor confined to another party, though authorized for the gate party")
+
+	opUser, opProfile := seedOperatorUser(t)
+	opPw := fxPassword(t, integPool, opUser, nil)
+	confine(t, opPw, operatorPartyID(t))
+	if err := integAZ.Authorize(impCtx(opUser, &opProfile, opPw), "read", &g.content); err != nil {
+		t.Errorf("operator administrator with a credential confined to the operator party: err = %v, want nil", err)
+	}
+}
+
 func TestInteg_PartyGate_ConfirmationExemptsCredentialRule(t *testing.T) {
 	g := seedGateParty(t, "authorized", 1)
 	pw := fxPassword(t, integPool, g.collabUser, nil)
