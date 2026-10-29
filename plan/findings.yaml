@@ -268,15 +268,6 @@ items:
         - plan/phase:remediation-07
         - effort:unspecified
       text: Running make build, test, or lint with MODULEFORGE_SIBLINGS_DIR set repoints the worktrees/plan/mod-core, mod-authz, and mod-audit links through /Users/zane/playground/.flow/siblings/mod-users. Task 001 restored them with ln -sfn. Later remediation-07 tasks will hit the same repoint, so the link check must run after every make invocation.
-    - title: 'NEEDS USER DECISION (halt): choose option A ('
-      id: l8jM
-      date: "2026-10-27"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-07
-        - priority:unspecified
-        - effort:unspecified
-      text: 'NEEDS USER DECISION (halt): choose option A (extend Decision D into impersonation: operator impersonators exempt from customer-party credential_rules; others use parent session factors), B (keep Decision G strict: parent factors everywhere, no operator exemption; amend Decision D and task 003 premise), or C (remove skip only in session_meets_party_policy; keep own-party skip in profile_gate_for; needs acceptance of wording change to requirement 2 and G). Then amend plan/notes/decisions-and-resolutions.md and, if needed, task 003 test premise, and re-dispatch task 002.'
     - title: 'Option A ordering note: if A is chosen, consi'
       id: 7KQz
       date: "2026-10-27"
@@ -2054,3 +2045,9 @@ closed:
       disposition: promoted
       ref: J55x
       date: "2026-10-27"
+    - id: l8jM
+      title: 'NEEDS USER DECISION (halt): choose option A ('
+      disposition: dismissed
+      reason: Resolved by user decision G (option A) recorded in plan/notes/decisions-and-resolutions.md.
+      ref: plan/notes/decisions-and-resolutions.md
+      date: "2026-10-29"
