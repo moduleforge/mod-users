@@ -1143,7 +1143,7 @@ phases:
           slug: refuse-managed-user-creation-impersonating
           title: Refuse Managed-User Creation And Credential Writes While Impersonating
           path: phase-19-remediation-08/003-refuse-managed-user-creation-impersonating.md
-          done: false
+          done: true
           tier: opus-med
           digest: Managed-user creation refuses impersonating context with 403 users.impersonation_not_allowed in CreateManagedUser and ProvisionManagedUserInTx; integration test shows no rows written; fails without fix. Profile-ending departure cleanup under impersonation raised as a decision.
           findings:
