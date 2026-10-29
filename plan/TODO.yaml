@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 9
-    tasks_added: 49
+    tasks_added: 50
 phases:
     - number: 6
       slug: users-identity-core
@@ -1194,7 +1194,7 @@ phases:
       title: Remediation Round 9
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1206,6 +1206,20 @@ phases:
           findings:
             - uBfI
             - zzo0
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: precision-sql-comments-openapi-order-liveness-test
+          title: Align SQL Exemption Comments, Credential Route Error Order And Decision L Liveness Assertion
+          path: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - u1NG
+            - lGXo
+            - wRQn
           git:
             branch: null
             commit: []
