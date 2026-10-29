@@ -1054,7 +1054,8 @@ phases:
             - Vj21
           git:
             branch: plan/identity-model-impl-18-003
-            commit: []
+            commit:
+                - bfd3919
             merge: null
         - number: 4
           slug: impersonation-renew-recheck
