@@ -19,42 +19,6 @@ items:
           gated treats every non-anonymous AuthContext with SessionID == 0 and CredentialID == 0 as a trusted system actor and skips both the assurance gate and the owning-party gate. mod-core opctx.AuthContext (core-api/opctx/opctx.go) carries no explicit system-actor marker, so trust is inferred from absent fields. mod-users itself builds sessionless contexts for real users (withActingProfile in api/internal/service/helpers.go, UnauthenticatedActingContext, CreatedUser.ActingContext, the idp_jit context in api/internal/handlers/auth/oidc_flows.go). Today they appear to feed observations only, but any future Authorize call on such a context, or a sibling module constructing a profile-only context, fails open on both gates.
         recommendation:
           Skip the gates only for an explicit marker, for example a SystemActor flag set by opctx.WithSystemActor (a mod-core change, to be requested from mod-core) or a core_is_operator_profile system_actor check on the profile, and fail closed (ErrStepUpRequired or ErrForbidden) for other sessionless, credential-less contexts. Meanwhile add a unit test that pins which helpers produce sessionless contexts and that none reaches Authorize.
-    - title: ProvisionManagedUserInTx (reached from Profi…
-      id: YqJd
-      date: "2026-10-29"
-      tags:
-        - type:security
-        - plan/phase:remediation-07
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go
-        lines: 908-999
-        severity: major
-        confidence: medium
-        concerns: security
-        description:
-          ProvisionManagedUserInTx (reached from ProfileService.CreateManagedUser, POST
-          /v1/parties/{party_uuid}/managed-users) accepts an impersonating AuthContext: it uses adminCaller,
-          which does not refuse ImpersonatorPrincipalID != 0. An administrator impersonating a party
-          administrator can therefore create a new managed user with a password the administrator chooses
-          (line 954) and, when the impersonated profile holds update on the party, write a
-          credential_party_authorizations row for it (line 986) attributed to the impersonated profile
-          (AuthorizedByProfileID = ac.ProfileID). This is the persistence vector that the new refusal in
-          principal_credentials.go credentialsTarget documents as the reason for refusing credential
-          administration under impersonation ("install a persistent credential ... for anyone the
-          impersonated profile administers"), and the direct credential-authorization routes already refuse
-          impersonation through party_policy.go writeCaller; this provisioning path bypasses both. The code
-          is outside the diff (pre-existing), but the remediation leaves its stated control incomplete;
-          confidence is medium because whether impersonation should be allowed to create managed users at
-          all is a product decision.
-        recommendation:
-          Refuse an impersonating context in ProvisionManagedUserInTx (and therefore CreateManagedUser) with
-          ErrImpersonationNotAllowed, mirroring credentialsTarget and EnsurePersonalParty, or at minimum skip
-          the AuthorizeCredentialForParty write under impersonation and require the password to be reset on
-          first use. Add an integration test that an impersonation session cannot create a managed user (or
-          cannot leave it with an authorized administrator-chosen password).
     - title: 'Decision needed: when an impersonating caller'
       id: zzo0
       date: "2026-10-29"
@@ -1773,4 +1737,9 @@ closed:
       title: profile_gate_for now evaluates an impersonat…
       disposition: fixed
       ref: phase-19-remediation-08/002-confine-impersonator-parent-factors.md
+      date: "2026-10-29"
+    - id: YqJd
+      title: ProvisionManagedUserInTx (reached from Profi…
+      disposition: fixed
+      ref: phase-19-remediation-08/003-refuse-managed-user-creation-impersonating.md
       date: "2026-10-29"
