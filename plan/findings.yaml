@@ -32,25 +32,6 @@ items:
           *apiresp.ActionRequiredError) explicitly. Either treat it as not admitted
           (app_login_not_granted) or let the step-up action propagate unchanged as a 409. Pick one
           and pin it with a unit test that stubs the authorizer to return ErrStepUpRequired.
-    - title: Renew extends the child session to now plus…
-      id: LAgn
-      date: "2026-10-27"
-      tags:
-        - type:security
-        - plan/phase:users-authorization-engine
-        - priority:medium
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/impersonation.go
-        lines: 252-293
-        severity: minor
-        confidence: high
-        concerns: security
-        description:
-          Renew extends the child session to now plus AUTH_IMPERSONATION_TTL, capped at AUTH_IMPERSONATION_MAX from creation, without re-authorizing impersonate for the administrator, and session_liveness only checks that the parent session is unrevoked and unexpired, not that the administrator's profile is still available or still holds impersonate. A revoked or narrowed impersonate grant, a suspended administrator profile, or a removed party membership therefore leaves an active impersonation usable up to the TTL (30m default) and, through renewals, up to the cap (60m default). Exploitation needs an administrator who was authorized at start and acts after losing authority (offboarding or role change); impact is bounded by the cap and every request is attributed through act.sub. Revoking the administrator's own session ends the child immediately, so incident response has a lever, but ordinary grant revocation does not.
-        recommendation:
-          Options, in rough order of preference. (a) In Renew, load the parent session and re-run the grant arms for impersonate on the impersonated profile in a context built from the parent (administrator principal and acting profile), skipping only the max_auth_age part of the assurance gate, and revoke the child on refusal. (b) Set AUTH_IMPERSONATION_MAX equal to AUTH_IMPERSONATION_TTL so a longer impersonation needs a new Start, which re-authorizes and re-checks freshness. (c) Extend session_liveness to fail a child whose parent's acting profile is no longer available. (d) Have grant revocation (mod-authz observer) revoke live impersonation children of the grant holder. Document the residual window in the impersonation docs.
     - title: gated treats every non-anonymous AuthContext…
       id: j75L
       date: "2026-10-27"
@@ -1907,6 +1888,11 @@ closed:
       date: "2026-10-29"
     - id: 0chQ
       title: Renew skips impersonate re-check
+      disposition: fixed
+      ref: phase-18-remediation-07/004-impersonation-renew-recheck.md
+      date: "2026-10-29"
+    - id: LAgn
+      title: Renew extends the child session to now plus…
       disposition: fixed
       ref: phase-18-remediation-07/004-impersonation-renew-recheck.md
       date: "2026-10-29"
