@@ -241,15 +241,6 @@ items:
           EnsurePersonalParty uses adminCaller, which accepts an impersonating context, so an administrator impersonating a user's personal profile can, through a caller such as mod-billing's personal team plan flow, create the user's person party and an owned-scope manage grant on the user's behalf. Other holder-level writes (selfWriter, writeCaller) refuse impersonation.
         recommendation:
           Refuse ac.ImpersonatorPrincipalID != 0 in EnsurePersonalParty with ErrImpersonationNotAllowed, or document that impersonated personal-party creation is intended.
-    - title: Sibling links repointed by make runs
-      id: FZVc
-      date: "2026-10-27"
-      tags:
-        - type:ambiguity
-        - priority:medium
-        - plan/phase:remediation-07
-        - effort:unspecified
-      text: Running make build, test, or lint with MODULEFORGE_SIBLINGS_DIR set repoints the worktrees/plan/mod-core, mod-authz, and mod-audit links through /Users/zane/playground/.flow/siblings/mod-users. Task 001 restored them with ln -sfn. Later remediation-07 tasks will hit the same repoint, so the link check must run after every make invocation.
     - title: 'Option A ordering note: if A is chosen, consi'
       id: 7KQz
       date: "2026-10-27"
@@ -2044,4 +2035,9 @@ closed:
       disposition: dismissed
       reason: Done by manager amendment of API surface note (2.9, 6.1, 6.2), committed.
       ref: plan/notes/mod-users-api-surface.md
+      date: "2026-10-29"
+    - id: FZVc
+      title: Sibling links repointed by make runs
+      disposition: promoted
+      ref: FZVc
       date: "2026-10-29"
