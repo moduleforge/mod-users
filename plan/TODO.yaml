@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 8
-    tasks_added: 44
+    tasks_added: 45
 phases:
     - number: 6
       slug: users-identity-core
@@ -1104,7 +1104,7 @@ phases:
       title: Remediation Round 8
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1117,6 +1117,19 @@ phases:
             - DChD
             - crQE
             - bKBt
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: confine-impersonator-parent-factors
+          title: Apply Credential Confinement To Non-Operator Impersonators
+          path: phase-19-remediation-08/002-confine-impersonator-parent-factors.md
+          done: false
+          tier: opus-med
+          findings:
+            - KkGF
+            - bFGy
           git:
             branch: null
             commit: []
