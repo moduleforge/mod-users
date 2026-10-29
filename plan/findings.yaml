@@ -287,25 +287,6 @@ items:
           impersonator_profile_id as in security-001; if it should not, record the decision in
           plan/notes/decisions-and-resolutions.md and docs/architecture.md and keep the comment at lines
           1316-1321 pointing to it.
-    - title: session_policy_factors is plpgsql (not inlin…
-      id: 5M3G
-      date: "2026-10-29"
-      tags:
-        - type:optimization
-        - plan/phase:remediation-07
-        - priority:low
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0100_baseline.sql
-        lines: 1172,1541,1568,1601
-        severity: minor
-        confidence: medium
-        concerns: efficiency
-        description:
-          session_policy_factors is plpgsql (not inlinable) and is invoked via CROSS JOIN LATERAL per call. profile_availability is evaluated per profile in the profile list, so the session lookup, factor ARRAY subquery and (for impersonation) operator EXISTS are recomputed per profile instead of once per session. Previously the factor subquery was inline SQL the planner could fold. Constant per call is small (PK lookups); the operator EXISTS runs only for impersonation sessions. Lines detail: session_policy_factors (1172), profile_availability (1541), profile_gate (1568), profile_availability_excluding (1601).
-        recommendation:
-          If profile-list latency matters, compute factors once per session in the list query, or make the helper LANGUAGE sql STABLE so it can inline. No action needed otherwise.
     - title: The credentialsTarget doc comment still desc…
       id: HGTD
       date: "2026-10-29"
@@ -1874,4 +1855,9 @@ closed:
         NULL-pairing check with the impersonation columns, MF101 coverage, and its use by Renew
         to re-check impersonate from the parent session. That is the manager-owned validation 3
         of task 004.
+      date: "2026-10-29"
+    - id: 5M3G
+      title: session_policy_factors is plpgsql (not inlin…
+      disposition: promoted
+      ref: 5M3G
       date: "2026-10-29"
