@@ -186,6 +186,54 @@ items:
           mod_users.profile_availability(child_session_id, mY.profileID) and
           require 'confined'. Optionally assert that the same probe returned 200
           before confineAll ran.
+    - title: The exported primitive EndInTx runs the full…
+      id: x0mv
+      date: "2026-10-29"
+      tags:
+        - type:security
+        - plan/phase:remediation-09
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/service/profile_service.go
+        lines: 729-763
+        severity: minor
+        confidence: low
+        concerns: security
+        description:
+          The exported primitive EndInTx runs the full departure cleanup (deletes credential party
+          authorizations, revokes party-confined credentials) with no authorization and no impersonation
+          check; its doc states the caller authorizes. The new Decision K refusal lives only in
+          UpdateProfileStatus, so any future or out-of-repo caller that passes an impersonated request context
+          to EndInTx (for example a composing host module) would bypass it. No non-test caller exists in this
+          repository, so this is not reachable today; it is a defense-in-depth gap, not an exploit.
+        recommendation:
+          Consider enforcing the refusal at the shared choke point (endLocked/EndInTx, returning ErrForbidden when
+          opctx.Auth(ctx).ImpersonatorPrincipalID != 0) or at least documenting the impersonation precondition in
+          the EndInTx doc comment, so the invariant does not depend on each caller remembering it.
+    - title: Suspend of a profile under impersonation is…
+      id: eIMh
+      date: "2026-10-29"
+      tags:
+        - type:security
+        - plan/phase:remediation-09
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/internal/service/profile_admin.go
+        lines: 514-516
+        severity: suggestion
+        confidence: medium
+        concerns: security
+        description:
+          Suspend of a profile under impersonation is still permitted (documented in openapi). Suspension does not run
+          departure cleanup, so it does not touch credential data, but it does alter a holder's access to a party
+          (and via ErrLastOperatorAdmin interplay). This is consistent with the stated intent; flagging only so the
+          decision is confirmed deliberate rather than an omission.
+        recommendation:
+          No change required if suspend/resume under impersonation is intended; otherwise extend the guard.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
