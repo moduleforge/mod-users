@@ -1226,5 +1226,6 @@ phases:
             - wRQn
           git:
             branch: plan/identity-model-impl-20-002
-            commit: []
+            commit:
+                - bda3e54
             merge: null
