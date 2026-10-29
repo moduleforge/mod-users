@@ -1045,7 +1045,7 @@ phases:
           slug: credentials-refuse-impersonation
           title: Refuse Credential Administration And Personal-Party Creation While Impersonating
           path: phase-18-remediation-07/003-credentials-refuse-impersonation.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Credential administration (list, issue, install, revoke) and EnsurePersonalParty refuse an impersonating context with users.impersonation_not_allowed. Credential routes also refuse the caller's own principal with 403, closing the last-credential and max-auth-age bypass. Child impersonation session inherits the parent's auth_time. Unit and integration tests cover each; all suites pass. Integration tests ran.
           findings:
