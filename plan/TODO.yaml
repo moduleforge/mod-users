@@ -1038,7 +1038,8 @@ phases:
             - Y3B8
           git:
             branch: plan/identity-model-impl-18-002
-            commit: []
+            commit:
+                - d143bca
             merge: null
         - number: 3
           slug: credentials-refuse-impersonation
