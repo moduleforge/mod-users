@@ -617,6 +617,10 @@ func TestImpersonation_ConfinedParentFactorsBindNonOperators(t *testing.T) {
 	// Before the confinement the Y member is reachable.
 	early := env.startImp(t, admin.tok.access(), mY.profUUID, "before confinement").wantStatus(t, http.StatusCreated).tok(t)
 
+	if status, _ := env.probe(t, "/v1/probe", early.access()); status != http.StatusOK {
+		t.Fatalf("impersonation of the Y member before confinement: probe = %d, want 200", status)
+	}
+
 	confineAll(admin.userID, partyX)
 	if status, _ := env.probe(t, "/v1/probe", admin.tok.access()); status != http.StatusOK {
 		t.Fatalf("administrator's own party X session after confinement to X: probe = %d, want 200", status)
@@ -635,6 +639,9 @@ func TestImpersonation_ConfinedParentFactorsBindNonOperators(t *testing.T) {
 	// The impersonation started before the confinement no longer passes liveness.
 	if status, _ := env.probe(t, "/v1/probe", early.access()); status == http.StatusOK {
 		t.Error("an impersonation of the Y member still passes liveness after the parent factors were confined to X")
+	}
+	if got := env.availability(t, early.Session.UUID, mY.profileID); got != "confined" {
+		t.Errorf("profile_availability of the early impersonation for the Y member = %q, want confined", got)
 	}
 
 	// A member of the party the factors are confined to is still reachable.

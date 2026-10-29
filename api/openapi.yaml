@@ -3094,8 +3094,9 @@ paths:
         Authorizes the `credentials` operation on the principal (a stale
         authentication is 409 `users.step_up_required`; the operation's
         `max_auth_age` is 10 minutes). Order: 401, 400, 403 (impersonating,
-        `users.impersonation_not_allowed`), 404 (a principal the caller cannot
-        read), 403 (the caller's own principal, or `credentials` refused), 409.
+        `users.impersonation_not_allowed`), 404 (unknown principal), 403 (the
+        caller's own principal), 404 (a principal the caller cannot read), 403
+        (`credentials` refused) or 409.
         Newest first; never a hash or secret.
 
         All four credential routes under this path are refused with 403
@@ -3140,10 +3141,11 @@ paths:
 
         Refused with 403 `users.impersonation_not_allowed` while the caller is
         impersonating, and with 403 when the principal is the caller's own, in
-        the order 401, 400, 403 (impersonating), 404, 403 (own principal or
-        `credentials`), 409. Own-principal routes are refused for every caller,
-        service accounts included; keys are rotated only by their owner or an
-        operator.
+        the order 401, 400, 403 (impersonating), 404 (unknown principal), 403
+        (own principal), 404 (a principal the caller cannot read), 403
+        (`credentials` refused) or 409. Own-principal routes are refused for
+        every caller, service accounts included; keys are rotated only by their
+        owner or an operator.
       tags: [Principals]
       operationId: issuePrincipalAPIKey
       requestBody:
@@ -3182,10 +3184,11 @@ paths:
 
         Refused with 403 `users.impersonation_not_allowed` while the caller is
         impersonating, and with 403 when the principal is the caller's own, in
-        the order 401, 400, 403 (impersonating), 404, 403 (own principal or
-        `credentials`), 409. Own-principal routes are refused for every caller,
-        service accounts included; keys are rotated only by their owner or an
-        operator.
+        the order 401, 400, 403 (impersonating), 404 (unknown principal), 403
+        (own principal), 404 (a principal the caller cannot read), 403
+        (`credentials` refused) or 409. Own-principal routes are refused for
+        every caller, service accounts included; keys are rotated only by their
+        owner or an operator.
       tags: [Principals]
       operationId: installPrincipalSSHKey
       requestBody:
@@ -3226,10 +3229,11 @@ paths:
 
         Refused with 403 `users.impersonation_not_allowed` while the caller is
         impersonating, and with 403 when the principal is the caller's own, in
-        the order 401, 400, 403 (impersonating), 404, 403 (own principal or
-        `credentials`), 409. Own-principal routes are refused for every caller,
-        service accounts included; keys are rotated only by their owner or an
-        operator.
+        the order 401, 400, 403 (impersonating), 404 (unknown principal), 403
+        (own principal), 404 (a principal the caller cannot read), 403
+        (`credentials` refused) or 409. Own-principal routes are refused for
+        every caller, service accounts included; keys are rotated only by their
+        owner or an operator.
       tags: [Principals]
       operationId: revokePrincipalCredential
       responses:

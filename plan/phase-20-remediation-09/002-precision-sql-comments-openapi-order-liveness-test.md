@@ -27,3 +27,7 @@ Scope is limited to comment wording in the baseline SQL migration, the stated re
 - Finding `u1NG` in this plan's `plan/findings.yaml` (SQL exemption header wording for impersonation).
 - Finding `lGXo` in this plan's `plan/findings.yaml` (refusal order stated for principal-credential operations in `api/openapi.yaml`).
 - Finding `wRQn` in this plan's `plan/findings.yaml` (liveness assertion in `TestImpersonation_ConfinedParentFactorsBindNonOperators`).
+
+## Status
+
+Outcome: succeeded (2026-10-29). Validation: target test, full authz/config/integration suites, `make build` and `make lint` all pass; SQL grep clean. Files: `model/migrations/sql/0100_baseline.sql`, `api/openapi.yaml`, `api/internal/integration/impersonation_integration_test.go`.

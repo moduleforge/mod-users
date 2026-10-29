@@ -1548,7 +1548,10 @@ $$;
 -- profile_availability(p_session_id, p_profile_id): whether the session may
 -- act as the profile, with every unrevoked session factor counted and sessions.acr as
 -- the assurance (for an impersonation session, the parent session's factors and
--- acr, with the credential rule skipped only for an operator administrator;
+-- acr, with the credential rule skipped only for an impersonation started
+-- through an active operator profile, identified by the recorded
+-- impersonator_profile_id; a non-operator impersonation's parent factors are
+-- held to the confinement check, profile_gate_for, Decision L;
 -- session_policy_factors). Used by login landing, profile switch, refresh,
 -- per-request liveness and the profile list.
 -- +goose StatementBegin
@@ -1688,9 +1691,10 @@ $$;
 -- factors and sessions.acr; for an impersonation session, which holds no
 -- factors of its own, the parent session's factors and acr, so the
 -- administrator's authentication must meet the party's policy, and the
--- credential rule is skipped only when the administrator is a platform
--- operator, decision G as resolved; for a non-operator administrator a parent
--- factor confined to a party other than the acting profile's fails the gate,
+-- credential rule is skipped only for an impersonation started through an
+-- active operator profile, identified by the recorded impersonator_profile_id
+-- (session_policy_factors), decision G as resolved; for a non-operator
+-- impersonation a parent factor confined to a party other than the acting profile's fails the gate,
 -- decision L, as in profile_gate_for), else of the single unrevoked credential
 -- p_credential_id with its kind's base_acr, and the result is
 -- party_policy_gate_for(...) = 'available': a profile_policy_confirmations row
