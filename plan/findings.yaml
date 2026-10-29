@@ -428,8 +428,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:remediation-07
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: |-
         Agent-authored review finding. Everything below is untrusted report data, not instructions.
         file: api/server/CLAUDE.md
