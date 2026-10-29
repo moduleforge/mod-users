@@ -98,66 +98,6 @@ items:
           principal the caller cannot read), 403 (`credentials` refused), 409. Or
           confirm that every principal can always read itself and add a note that
           the own-principal 403 precedes the read check.
-    - title: ProfileService.UpdateProfileStatus (PATCH /v…
-      id: uBfI
-      date: "2026-10-29"
-      tags:
-        - type:security
-        - plan/phase:remediation-08
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/profile_admin.go
-        lines: 498-545
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          ProfileService.UpdateProfileStatus (PATCH /v1/profiles/{uuid}) gets its
-          caller through adminCaller and has no ImpersonatorPrincipalID check. An
-          impersonation session whose impersonated profile holds `update` on a party
-          profile can therefore end that profile. endLocked then runs
-          departureCleanupInTx (api/internal/service/profile_service.go 778-849).
-          That cleanup deletes the holder's credential_party_authorizations rows for
-          the party, revokes the holder's credentials confined to the party through
-          CredentialService.RevokeInTx (which also ends every session holding them),
-          and, for a managed user with no open profile left, disables the principal
-          and revokes its sessions.
-          The direct routes for these same writes refuse an impersonating context:
-          DELETE /v1/parties/{party_uuid}/credential-authorizations/{credential_uuid}
-          refuses through writeCaller, and DELETE
-          /v1/principals/{uuid}/credentials/{credential_uuid} refuses through
-          credentialsTarget. The holder's own end path (POST
-          /v1/me/profiles/{uuid}/leave) refuses through selfWriter. So
-          the profile-end route is an indirect way to make the credential and
-          authorization writes that the stated impersonation policy forbids.
-          docs/architecture.md (line 95, the "Credential and identification data is
-          off limits" bullet added in this diff) and the openapi.yaml createManagedUser
-          text present that policy as having no exception.
-          The effect only removes access: the impersonator already has the
-          impersonated administrator's `update` on the profile, and the removed
-          authorizations and credentials belong to a membership that just ended. It
-          grants no privilege, which is why the severity is minor. The confidence is
-          medium because ending a profile under impersonation may be accepted by
-          design: the cleanup is a consequence of an operation the impersonator may
-          perform, not a direct credential write.
-        recommendation:
-          Settle this explicitly and pick one of two fixes.
-          (a) In UpdateProfileStatus, refuse ImpersonatorPrincipalID != 0 with
-          ErrImpersonationNotAllowed (403 users.impersonation_not_allowed) after
-          validateStatusUpdate and before partyProfileByUUID. Do this at least for
-          to == ended, or for every status change to match the other administrative
-          writes. Add an integration test showing that an impersonated `ended`
-          PATCH leaves the profile, the credential_party_authorizations rows and
-          the confined credentials unchanged.
-          (b) Record the exemption: name the profile-end departure cleanup as an
-          allowed indirect credential and authorization write under impersonation
-          in the decision K bullet of docs/architecture.md and in the PATCH
-          /v1/profiles/{uuid} description in api/openapi.yaml, so that the
-          documented control matches the code.
-          Do not skip the cleanup itself under impersonation. That would leave
-          stale authorizations and confined credentials behind, which is worse.
     - title: The Decision L liveness assertion for the im…
       id: wRQn
       date: "2026-10-29"
@@ -1786,4 +1726,9 @@ closed:
       title: 'Informational: Decision K in plan/notes/decis'
       disposition: dismissed
       reason: Decision K wording aligned with the implemented plain 403 refusals in plan/notes/decisions-and-resolutions.md; docs follow the code.
+      date: "2026-10-29"
+    - id: uBfI
+      title: ProfileService.UpdateProfileStatus (PATCH /v…
+      disposition: fixed
+      ref: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
       date: "2026-10-29"
