@@ -1090,7 +1090,7 @@ phases:
           slug: app-gate-step-up-mapping
           title: Map Step-Up Refusals In The Invite-Only App Gates
           path: phase-18-remediation-07/006-app-gate-step-up-mapping.md
-          done: false
+          done: true
           tier: sonnet-high
           findings:
             - QKwM
