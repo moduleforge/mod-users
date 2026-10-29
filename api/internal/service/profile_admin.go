@@ -382,8 +382,15 @@ type ManagedUserView struct {
 // CreateManagedUser creates a managed user of the party (POST
 // /v1/parties/{party_uuid}/managed-users). See ProvisionManagedUserInTx for the
 // rules, credential and errors.
+//
+// Refusal order: 401 (no authenticated actor), 400 (malformed email or
+// password), 403 ErrImpersonationNotAllowed (users.impersonation_not_allowed)
+// for an impersonation session, which may not set a password or authorize a
+// credential on anyone's behalf, then the party's 404 and the authorization
+// and conflict refusals of ProvisionManagedUserInTx.
 func (s *ProfileService) CreateManagedUser(ctx context.Context, partyUUID uuid.UUID, email, password string) (ManagedUserView, error) {
-	if _, err := adminCaller(ctx); err != nil {
+	ac, err := adminCaller(ctx)
+	if err != nil {
 		return ManagedUserView{}, err
 	}
 	if err := validateEmail(CanonicalizeEmail(email)); err != nil {
@@ -391,6 +398,9 @@ func (s *ProfileService) CreateManagedUser(ctx context.Context, partyUUID uuid.U
 	}
 	if err := ValidatePassword(password); err != nil {
 		return ManagedUserView{}, err
+	}
+	if ac.ImpersonatorPrincipalID != 0 {
+		return ManagedUserView{}, ErrImpersonationNotAllowed
 	}
 	partyID, err := s.readableParty(ctx, partyUUID)
 	if err != nil {
