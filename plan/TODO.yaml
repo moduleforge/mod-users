@@ -1150,7 +1150,8 @@ phases:
             - YqJd
           git:
             branch: plan/identity-model-impl-19-003
-            commit: []
+            commit:
+                - 927252d
             merge: null
         - number: 4
           slug: test-precision-nesting-and-static-audit
