@@ -15,6 +15,8 @@ import (
 //	ErrInvalidToken  401 unauthorized
 //	*NotLiveError    401 users.session_revoked, or 401
 //	                 users.profile_unavailable with the lock reason in details
+//	step-up refusal  409 users.step_up_required (the invite-only app gate's
+//	                 `login` operation requires stronger or fresher factors)
 //	anything else    500 internal_error (logged)
 func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 	var notLive *NotLiveError
@@ -39,6 +41,8 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 				Code:    notLive.LockReason(),
 				Message: "profile unavailable: " + notLive.LockReason(),
 			}})
+	case isStepUpRequired(err):
+		apiresp.WriteError(w, r, err)
 	default:
 		slog.ErrorContext(r.Context(), "authentication error", "error", err)
 		server.Error(w, http.StatusInternalServerError, "internal_error", "failed to authenticate request")

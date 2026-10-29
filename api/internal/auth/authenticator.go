@@ -15,6 +15,7 @@ import (
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/useraction"
 )
 
 // Sentinel errors from Authenticator.Authenticate. Callers use errors.Is.
@@ -368,9 +369,19 @@ func (a *Authenticator) SetAppGate(az coreAuthz.Authorizer) {
 	a.appGate = az
 }
 
+// isStepUpRequired reports whether err is, or wraps, the engine's assurance
+// refusal: an action-required error with code users.step_up_required.
+func isStepUpRequired(err error) bool {
+	var action *apiresp.ActionRequiredError
+	return errors.As(err, &action) && action.Action().Code == useraction.StepUpRequired.Code
+}
+
 // checkAppGate applies the invite-only app gate to the authenticated identity.
 // A refusal is the profile-unavailable failure with lock reason
-// app_login_not_granted; any other error (a database fault) propagates.
+// app_login_not_granted. An engine step-up refusal (the operator set min_acr
+// or max_auth_age on `login`) propagates unchanged as the action-required error
+// (409 users.step_up_required, rendered by writeAuthError), exactly as
+// SessionService.gateFor does; any other error (a database fault) is wrapped.
 func (a *Authenticator) checkAppGate(ctx context.Context, id *Identity) error {
 	denied := &NotLiveError{Status: lockAppLoginNotGranted}
 	if a.appGate == nil || id.AppID <= 0 {
@@ -391,6 +402,8 @@ func (a *Authenticator) checkAppGate(ctx context.Context, id *Identity) error {
 		return nil
 	case errors.Is(err, apiresp.ErrForbidden), errors.Is(err, apiresp.ErrUnauthenticated):
 		return denied
+	case isStepUpRequired(err):
+		return err
 	default:
 		return fmt.Errorf("auth: app gate: %w", err)
 	}

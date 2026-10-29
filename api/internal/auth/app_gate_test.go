@@ -3,12 +3,17 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/moduleforge/core-api/apiresp"
 	"github.com/moduleforge/core-api/opctx"
 
 	"github.com/moduleforge/mod-users/api/internal/config"
+	"github.com/moduleforge/mod-users/api/internal/useraction"
 )
 
 // gateAuthorizer records the last Authorize call and answers err.
@@ -93,6 +98,26 @@ func TestAuthenticate_InviteOnlyAppGate(t *testing.T) {
 		_, err := a.Authenticate(bearerRequest(tok))
 		if !errors.Is(err, fault) || errors.Is(err, ErrNotLive) {
 			t.Fatalf("err = %v, want the fault propagated (a 500), not a 401", err)
+		}
+	})
+
+	t.Run("a step-up refusal propagates as the action-required error, not a 500", func(t *testing.T) {
+		stepUp := apiresp.ActionRequired(useraction.StepUpRequired, "Confirm your identity to continue.", "/step-up", nil)
+		a := newTestAuthenticator(v, config.AuthConfig{}, &stubLiveness{res: inviteOnlySession()})
+		a.SetAppGate(&gateAuthorizer{err: fmt.Errorf("authz: login needs stronger authentication: %w", stepUp)})
+		_, err := a.Authenticate(bearerRequest(tok))
+		if !errors.Is(err, stepUp) || errors.Is(err, ErrNotLive) {
+			t.Fatalf("err = %v, want the step-up error propagated, not a denial", err)
+		}
+		var action *apiresp.ActionRequiredError
+		if !errors.As(err, &action) || action.Action().Code != "users.step_up_required" {
+			t.Fatalf("err = %v, want an action-required error with code users.step_up_required", err)
+		}
+
+		rec := httptest.NewRecorder()
+		writeAuthError(rec, bearerRequest(tok), err)
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "users.step_up_required") {
+			t.Errorf("writeAuthError = %d %s, want 409 users.step_up_required", rec.Code, rec.Body.String())
 		}
 	})
 }

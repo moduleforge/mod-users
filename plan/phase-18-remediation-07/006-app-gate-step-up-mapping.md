@@ -31,3 +31,10 @@ Scope is limited to fixing the linked finding. Anything beyond that is out of sc
 
 - Finding QKwM in this plan's `plan/findings.yaml` (bug, medium): checkAppGate and SessionService.gateFor map only ErrForbidden and ErrUnauthenticated, so an engine step-up refusal on the login operation surfaces as a 500.
 - [Decisions and resolutions](../notes/decisions-and-resolutions.md) — the Amendments (2026-10-27, phase 8 gate) section, for the phase 8 gate context in which this finding was recorded.
+
+## Status
+
+- Outcome: blocked on one validation check (2026-10-29). Code, tests, build, test, lint and integration are green; Validation 3 (the section 6.1 amendment line in `plan/notes/mod-users-api-surface.md`) was not written because the dispatch forbids editing anything under `plan/notes/`. The manager must add that amendment line (Requirement 4).
+- Mapping chosen: both gates propagate an engine step-up refusal unchanged (409 `users.step_up_required`). The Authenticate contract carries it: `Authenticator.checkAppGate` returns the action-required error and `writeAuthError` renders it via `apiresp.WriteError`; `SessionService.gateFor` returns it as the gate error. NewOperatorAdminChecker treats it as not-an-admin (false, nil), failing closed.
+- Validation: `make build`, `make test`, `make lint` pass; new step-up cases in `api/internal/auth/app_gate_test.go` and `api/internal/service/app_gate_test.go` pass; integration suites (authz, config, integration) pass against a throwaway postgres:16.
+- Files: `api/internal/auth/authenticator.go`, `api/internal/auth/middleware.go`, `api/internal/service/session_service.go`, `api/internal/handlers/operator_admin.go`, plus the two test files above.
