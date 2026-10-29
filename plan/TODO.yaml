@@ -1069,7 +1069,8 @@ phases:
             - LAgn
           git:
             branch: plan/identity-model-impl-18-004
-            commit: []
+            commit:
+                - 0b4d07e
             merge: null
         - number: 5
           slug: pin-sessionless-contexts
