@@ -398,6 +398,15 @@ func (a *Authorizer) authorizePrelude(ctx context.Context, operation string, sco
 // gated reports whether the prelude's gates apply to ac: an interactive or
 // non-interactive caller always carries a session or a credential; trusted
 // system-actor contexts carry neither, and the anonymous context is exempt.
+//
+// Sessionless trust is inferred from absent fields (SessionID == 0 and
+// CredentialID == 0 on a non-anonymous context), pending an explicit mod-core
+// system-actor marker. mod-users itself builds such contexts for real users
+// (withActingProfile and its callers in internal/service, and the idp_jit
+// context in internal/handlers/auth), so none of them may ever reach
+// Authorize, AuthorizeType or AuthorizeTypeIn. That is pinned by
+// internal/service/sessionless_contexts_test.go; do not weaken the pin
+// without replacing it with the marker.
 func gated(ac opctx.AuthContext) bool {
 	return !ac.Anonymous && (ac.SessionID != 0 || ac.CredentialID != 0)
 }
