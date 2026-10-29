@@ -1052,7 +1052,7 @@ WHERE revoked_at IS NULL
       FROM mod_users.session_factors f
       WHERE f.credential_id = $1
   )
-RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 // Revoke every unrevoked session holding the credential as a factor
@@ -1074,6 +1074,7 @@ func (q *Queries) RevokeSessionsHoldingCredential(ctx context.Context, credentia
 			&i.AppID,
 			&i.ImpersonatedProfileID,
 			&i.ImpersonatorSessionID,
+			&i.ImpersonatorProfileID,
 			&i.Acr,
 			&i.Amr,
 			&i.AuthTime,

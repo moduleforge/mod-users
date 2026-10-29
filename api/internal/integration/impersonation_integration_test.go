@@ -18,6 +18,8 @@ package integration
 //	the own arm never confers impersonate                             TestImpersonation_OwnArmNeverConfersImpersonate
 //	stale auth_time is 409 users.step_up_required                     TestImpersonation_StaleAuthTimeNeedsStepUp
 //	the TTL and the renewal cap are enforced                          TestImpersonation_TTLAndRenewalCap
+//	renewal re-authorizes impersonate as the administrator's recorded
+//	acting profile, without re-applying max_auth_age (decision I)     TestImpersonation_RenewRechecksTheAdministrator
 //	ending the parent ends the child (parent_session_ended)           TestImpersonation_ParentLiveness
 //	switch and fork inside an impersonation are refused               TestImpersonation_SwitchAndForkRefused
 //	no refresh token is returned                                      TestImpersonation_StartCreatesAChildSession
@@ -168,6 +170,9 @@ func TestImpersonation_StartCreatesAChildSession(t *testing.T) {
 		child.ImpersonatorSessionID.Int64 != parent.ID {
 		t.Errorf("child = principal %d profile %d parent %d; want %d, %d, %d",
 			child.PrincipalID, child.ImpersonatedProfileID.Int64, child.ImpersonatorSessionID.Int64, m.userID, m.profileID, parent.ID)
+	}
+	if !child.ImpersonatorProfileID.Valid || child.ImpersonatorProfileID.Int64 != admin.profileID {
+		t.Errorf("child impersonator_profile_id = %+v, want the administrator's acting profile %d", child.ImpersonatorProfileID, admin.profileID)
 	}
 	if child.ImpersonationReason.String != "support ticket 4711" {
 		t.Errorf("reason = %q, want the trimmed reason", child.ImpersonationReason.String)
@@ -621,6 +626,96 @@ func TestImpersonation_TTLAndRenewalCap(t *testing.T) {
 	if status, _ := env.probe(t, "/v1/probe", child.access()); status != http.StatusUnauthorized {
 		t.Errorf("an expired impersonation probes as %d, want 401", status)
 	}
+}
+
+// Renewal re-authorizes impersonate on the impersonated profile from the
+// parent session, as the acting profile recorded at the start (decision I): a
+// revoked grant or an acting profile that is no longer available makes the next
+// renewal fail with 403 and ends the impersonation; an unchanged grant renews
+// up to AUTH_IMPERSONATION_MAX, even when the parent's authentication is older
+// than the operation's max_auth_age.
+func TestImpersonation_RenewRechecksTheAdministrator(t *testing.T) {
+	acme := env.seedParty(t, "Imp Recheck "+uniq("p"))
+	m := env.newMember(t, acme)
+	renew := func(token string) *resp {
+		return env.do(t, http.MethodPost, "/v1/impersonations/current/renew", token, nil)
+	}
+	wantEnded := func(t *testing.T, child tokens) {
+		t.Helper()
+		row := env.sessionRow(t, child.Session.UUID)
+		if row.RevokedAt == nil || row.RevokeReason.String != svc.SessionRevokeImpersonationEnded {
+			t.Errorf("child revoke = %v %q, want impersonation_ended", row.RevokedAt, row.RevokeReason.String)
+		}
+		if status, _ := env.probe(t, "/v1/probe", child.access()); status != http.StatusUnauthorized {
+			t.Errorf("the refused impersonation probes as %d, want 401", status)
+		}
+		renew(child.access()).wantError(t, http.StatusUnauthorized, "users.session_revoked", "")
+	}
+
+	t.Run("a revoked impersonate grant ends the impersonation on renewal", func(t *testing.T) {
+		admin := env.newImpAdmin(t, acme)
+		child := env.startImp(t, admin.tok.access(), m.profUUID, "revoked grant").wantStatus(t, http.StatusCreated).tok(t)
+		renew(child.access()).wantStatus(t, http.StatusOK)
+
+		env.exec(t, "revoke the administrator's grant",
+			`DELETE FROM grants WHERE actor_id = $1 AND target_id = $2 AND scope = 'owned'`, admin.profileID, acme)
+		before := env.sessionRow(t, child.Session.UUID)
+		env.obs.reset()
+		renew(child.access()).wantError(t, http.StatusForbidden, "forbidden", "")
+		env.checkObservations(t, "refused renew", "revoke impersonation")
+		if after := env.sessionRow(t, child.Session.UUID); !after.ExpiresAt.Time.Equal(before.ExpiresAt.Time) {
+			t.Errorf("a refused renewal moved the expiry to %v", after.ExpiresAt.Time)
+		}
+		wantEnded(t, child)
+		// The administrator's own session is not ended.
+		if status, _ := env.probe(t, "/v1/probe", admin.tok.access()); status != http.StatusOK {
+			t.Errorf("the administrator's session probes as %d after the refusal", status)
+		}
+	})
+
+	t.Run("a suspended administrator profile ends the impersonation on renewal", func(t *testing.T) {
+		admin := env.newImpAdmin(t, acme)
+		child := env.startImp(t, admin.tok.access(), m.profUUID, "suspended admin").wantStatus(t, http.StatusCreated).tok(t)
+
+		env.exec(t, "suspend the administrator's profile", `UPDATE profiles SET status = 'suspended' WHERE entity_id = $1`, admin.profileID)
+		// The child itself stays live until the renewal: its liveness follows
+		// the parent session, which does not carry a profile.
+		if status, _ := env.probe(t, "/v1/probe", child.access()); status != http.StatusOK {
+			t.Fatalf("child probe before the renewal = %d", status)
+		}
+		renew(child.access()).wantError(t, http.StatusForbidden, "forbidden", "")
+		wantEnded(t, child)
+	})
+
+	t.Run("an unchanged grant renews up to AUTH_IMPERSONATION_MAX without re-applying max_auth_age", func(t *testing.T) {
+		admin := env.newImpAdmin(t, acme)
+		parentID := env.sessionID(t, admin.acct.tk.Session.UUID)
+		child := env.startImp(t, admin.tok.access(), m.profUUID, "unchanged").wantStatus(t, http.StatusCreated).tok(t)
+
+		// The administrator's authentication is older than impersonate's
+		// max_auth_age (ten minutes): a new start needs a step-up, a renewal
+		// does not.
+		env.exec(t, "age the parent auth_time", `UPDATE mod_users.sessions SET auth_time = now() - interval '11 minutes' WHERE id = $1`, parentID)
+		env.startImp(t, admin.tok.access(), m.profUUID, "stale").wantAction(t, http.StatusConflict, "users.step_up_required")
+		renewed := renew(child.access()).wantStatus(t, http.StatusOK).tok(t)
+		if status, p := env.probe(t, "/v1/probe", renewed.access()); status != http.StatusOK || p.ImpersonatorP != admin.userID {
+			t.Errorf("the renewed token probes as %d %+v", status, p)
+		}
+
+		env.exec(t, "age the session to 59 minutes old",
+			`UPDATE mod_users.sessions SET created_at = now() - interval '59 minutes', expires_at = now() + interval '20 seconds' WHERE uuid = $1::uuid`,
+			child.Session.UUID)
+		renew(child.access()).wantStatus(t, http.StatusOK)
+		row := env.sessionRow(t, child.Session.UUID)
+		limit := row.CreatedAt.Time.Add(config.DefaultImpersonationMax)
+		if d := row.ExpiresAt.Time.Sub(limit); d < -time.Second || d > time.Second {
+			t.Errorf("capped expiry = %v, want created_at + AUTH_IMPERSONATION_MAX = %v", row.ExpiresAt.Time, limit)
+		}
+		renew(child.access()).wantError(t, http.StatusConflict, "conflict", "users.impersonation_limit_reached")
+		if row := env.sessionRow(t, child.Session.UUID); row.RevokedAt != nil {
+			t.Errorf("the capped impersonation was revoked (%q); want it live until it expires", row.RevokeReason.String)
+		}
+	})
 }
 
 func TestImpersonation_RenewAndEndOutsideAnImpersonation(t *testing.T) {

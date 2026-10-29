@@ -501,7 +501,18 @@ type sessionOpts struct {
 	ExpiresIn          string // Postgres interval, default '1 hour'
 	ParentID           *int64
 	ImpersonateProfile *int64
+	// ImpersonatorProfile is the administrator's acting profile of an
+	// impersonation; nil picks a profile held by the parent session's principal.
+	ImpersonatorProfile *int64
 }
+
+// impersonatorProfileSQL is the impersonator_profile_id the fixtures insert:
+// NULL without a parent ($4), else $7 or, when $7 is NULL, a profile held by
+// the parent session's principal.
+const impersonatorProfileSQL = `CASE WHEN $4::bigint IS NULL THEN NULL ELSE COALESCE($7::bigint,
+  (SELECT min(p.entity_id) FROM public.profiles p
+     JOIN mod_users.sessions ps ON ps.principal_id = p.holder_id
+    WHERE ps.id = $4::bigint)) END`
 
 // fxSession inserts a session and returns its id and uuid.
 func fxSession(t *testing.T, q fxQ, principalID int64, o sessionOpts) (id int64, uuid string) {
@@ -519,17 +530,26 @@ func fxSession(t *testing.T, q fxQ, principalID int64, o sessionOpts) (id int64,
 	}
 	if err := q.QueryRow(context.Background(), `
 INSERT INTO mod_users.sessions (principal_id, acr, amr, auth_time, expires_at,
-                                impersonator_session_id, impersonated_profile_id, impersonation_reason)
-VALUES ($1, $2, ARRAY['pwd'], now(), now() + $3::interval, $4, $5, $6)
+                                impersonator_session_id, impersonated_profile_id, impersonation_reason,
+                                impersonator_profile_id)
+VALUES ($1, $2, ARRAY['pwd'], now(), now() + $3::interval, $4, $5, $6, `+impersonatorProfileSQL+`)
 RETURNING id, uuid::text`,
-		principalID, o.ACR, o.ExpiresIn, o.ParentID, o.ImpersonateProfile, reason).Scan(&id, &uuid); err != nil {
+		principalID, o.ACR, o.ExpiresIn, o.ParentID, o.ImpersonateProfile, reason, o.ImpersonatorProfile).Scan(&id, &uuid); err != nil {
 		t.Fatalf("insert session: %v", err)
 	}
 	return id, uuid
 }
 
-// sessionInsert inserts a session and returns the raw error.
+// sessionInsert inserts a session and returns the raw error. An
+// impersonation's impersonator_profile_id is a profile held by the parent
+// session's principal.
 func sessionInsert(q fxQ, principalID int64, parentID, impersonatedProfile *int64) error {
+	return sessionInsertAs(q, principalID, parentID, impersonatedProfile, nil)
+}
+
+// sessionInsertAs is sessionInsert with an explicit impersonator_profile_id
+// (nil: a profile held by the parent session's principal).
+func sessionInsertAs(q fxQ, principalID int64, parentID, impersonatedProfile, impersonatorProfile *int64) error {
 	var reason *string
 	if parentID != nil {
 		r := "support"
@@ -537,9 +557,10 @@ func sessionInsert(q fxQ, principalID int64, parentID, impersonatedProfile *int6
 	}
 	_, err := q.Exec(context.Background(), `
 INSERT INTO mod_users.sessions (principal_id, acr, amr, auth_time, expires_at,
-                                impersonator_session_id, impersonated_profile_id, impersonation_reason)
-VALUES ($1, 1, ARRAY['pwd'], now(), now() + interval '1 hour', $2, $3, $4)`,
-		principalID, parentID, impersonatedProfile, reason)
+                                impersonator_session_id, impersonated_profile_id, impersonation_reason,
+                                impersonator_profile_id)
+VALUES ($1, $2, ARRAY['pwd'], now(), now() + $3::interval, $4, $5, $6, `+impersonatorProfileSQL+`)`,
+		principalID, 1, "1 hour", parentID, impersonatedProfile, reason, impersonatorProfile)
 	return err
 }
 

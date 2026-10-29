@@ -792,13 +792,16 @@ CREATE INDEX credential_party_authorizations_party_id_idx
 -- profile rides on the access token, not on this row, so a profile switch
 -- writes nothing here. An impersonation session is a separate row whose
 -- principal is the target profile's holder, with impersonated_profile_id
--- fixed and impersonator_session_id naming the administrator's own session.
+-- fixed, impersonator_session_id naming the administrator's own session and
+-- impersonator_profile_id the profile the administrator acted as when starting
+-- it (renewal re-authorizes impersonate as that profile, decision I).
 --
 -- Database invariants (SQLSTATE MF101):
 --   1. a session's principal is a user (service accounts authenticate only
 --      through non-interactive credentials; system actors never do);
 --   2. an impersonation session's parent is not itself an impersonation;
---   3. impersonated_profile_id is held by principal_id;
+--   3. impersonated_profile_id is held by principal_id, and
+--      impersonator_profile_id by the parent session's principal;
 --   4. principal_id and the impersonation columns are immutable;
 --   5. a factor's credential belongs to the session's principal
 --      (session_factors_validate).
@@ -809,6 +812,7 @@ CREATE TABLE mod_users.sessions (
   app_id                  BIGINT REFERENCES public.apps(id) ON DELETE RESTRICT,
   impersonated_profile_id BIGINT REFERENCES public.profiles(entity_id) ON DELETE RESTRICT,
   impersonator_session_id BIGINT REFERENCES mod_users.sessions(id) ON DELETE RESTRICT,
+  impersonator_profile_id BIGINT REFERENCES public.profiles(entity_id) ON DELETE RESTRICT,
   acr                     SMALLINT NOT NULL CHECK (acr BETWEEN 1 AND 3),
   amr                     TEXT[] NOT NULL,
   auth_time               TIMESTAMPTZ NOT NULL,
@@ -822,6 +826,7 @@ CREATE TABLE mod_users.sessions (
   last_seen_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT sessions_impersonation_complete
     CHECK ((impersonator_session_id IS NULL) = (impersonated_profile_id IS NULL)
+       AND (impersonator_session_id IS NULL) = (impersonator_profile_id IS NULL)
        AND (impersonator_session_id IS NULL) = (impersonation_reason IS NULL)),
   CONSTRAINT sessions_revocation_complete
     CHECK ((revoked_at IS NULL) = (revoke_reason IS NULL))
@@ -846,6 +851,7 @@ BEGIN
     IF OLD.principal_id IS DISTINCT FROM NEW.principal_id
        OR OLD.impersonator_session_id IS DISTINCT FROM NEW.impersonator_session_id
        OR OLD.impersonated_profile_id IS DISTINCT FROM NEW.impersonated_profile_id
+       OR OLD.impersonator_profile_id IS DISTINCT FROM NEW.impersonator_profile_id
        OR OLD.impersonation_reason IS DISTINCT FROM NEW.impersonation_reason
     THEN
       RAISE EXCEPTION 'sessions: principal_id and the impersonation columns are immutable (session %)', OLD.id
@@ -873,6 +879,14 @@ BEGIN
        WHERE p.entity_id = NEW.impersonated_profile_id AND p.holder_id = NEW.principal_id
     ) THEN
       RAISE EXCEPTION 'sessions: impersonated profile % is not held by principal %', NEW.impersonated_profile_id, NEW.principal_id
+        USING ERRCODE = 'MF101';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM mod_users.sessions parent
+        JOIN public.profiles p ON p.holder_id = parent.principal_id
+       WHERE parent.id = NEW.impersonator_session_id AND p.entity_id = NEW.impersonator_profile_id
+    ) THEN
+      RAISE EXCEPTION 'sessions: impersonator profile % is not held by the principal of session %', NEW.impersonator_profile_id, NEW.impersonator_session_id
         USING ERRCODE = 'MF101';
     END IF;
   END IF;
