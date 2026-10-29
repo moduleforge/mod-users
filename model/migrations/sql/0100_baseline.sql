@@ -1158,14 +1158,16 @@ $$;
 -- it is now. The credential exclusion (p_exclude_credential_id, NULL for none)
 -- applies to whichever session supplies the factors.
 --
--- skip_credential_rule is true only for an impersonation whose administrator
--- is a platform operator: the parent session's principal holds an active
+-- skip_credential_rule is true only for an impersonation started through a
+-- platform operator profile (decision J): the impersonation session's
+-- recorded acting profile (impersonator_profile_id) is active and is an
 -- operator profile (public.core_is_operator_profile). Decision D extended: an
 -- operator's credentials can never be authorized for a customer party, so a
 -- customer party's credential rule never binds an operator impersonation;
--- min_acr still does. A non-operator administrator skips no party's credential
--- rule. The parent session does not record the administrator's acting
--- profile, so the operator test is on the parent principal's profiles.
+-- min_acr still does. Only the recorded acting profile counts: an
+-- administrator who impersonates through a non-operator profile skips no
+-- party's credential rule, even when the same principal also holds an
+-- operator profile.
 --
 -- No row (all NULL) for an unknown session.
 -- +goose StatementBegin
@@ -1182,18 +1184,19 @@ SECURITY INVOKER
 SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
-  v_factor_session_id BIGINT;
-  v_impersonation     BOOLEAN;
-  v_factor_principal  BIGINT;
+  v_factor_session_id     BIGINT;
+  v_impersonation         BOOLEAN;
+  v_impersonator_profile  BIGINT;
 BEGIN
-  SELECT COALESCE(s.impersonator_session_id, s.id), s.impersonator_session_id IS NOT NULL
-    INTO v_factor_session_id, v_impersonation
+  SELECT COALESCE(s.impersonator_session_id, s.id), s.impersonator_session_id IS NOT NULL,
+         s.impersonator_profile_id
+    INTO v_factor_session_id, v_impersonation, v_impersonator_profile
     FROM mod_users.sessions s WHERE s.id = p_session_id;
   IF NOT FOUND THEN
     RETURN;
   END IF;
 
-  SELECT fs.acr, fs.principal_id INTO acr, v_factor_principal
+  SELECT fs.acr INTO acr
     FROM mod_users.sessions fs WHERE fs.id = v_factor_session_id;
 
   credential_ids := ARRAY(
@@ -1206,7 +1209,7 @@ BEGIN
 
   skip_credential_rule := v_impersonation AND EXISTS (
     SELECT 1 FROM public.profiles p
-     WHERE p.holder_id = v_factor_principal
+     WHERE p.entity_id = v_impersonator_profile
        AND p.status = 'active'
        AND public.core_is_operator_profile(p.entity_id));
 END;
@@ -1224,7 +1227,8 @@ $$;
 -- (p_acr is NULL or below min_acr). No policy row means 'any' with min_acr 1.
 --
 -- The credential rule is skipped when p_skip_credential_rule is true (an
--- impersonation by a platform operator; session_policy_factors) and when a
+-- impersonation started through an active operator profile, the session's
+-- recorded impersonator_profile_id; session_policy_factors) and when a
 -- profile_policy_confirmations row exists for (p_profile_id, p_party_id);
 -- min_acr is never skipped.
 -- +goose StatementBegin
@@ -1309,7 +1313,8 @@ $$;
 --
 -- The party gate applies only to party profiles and is party_policy_gate_for.
 -- Its credential rule is skipped when p_skip_credential_rule is true (an
--- impersonation by a platform operator) and for a profile with a
+-- impersonation started through an active operator profile, the session's
+-- recorded impersonator_profile_id) and for a profile with a
 -- profile_policy_confirmations row for the party (an outside collaborator);
 -- min_acr is never skipped for a party profile.
 --

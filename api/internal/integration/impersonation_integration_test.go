@@ -15,6 +15,8 @@ package integration
 //	members of restrictive-policy parties (decision D)                TestImpersonation_PersonalProfileNeedsOperatorAuthority
 //	the impersonated member's rules apply across parties on the
 //	administrator's factors; operators skip only the credential rule  TestImpersonation_ImpersonatedActorRulesApplyAcrossParties
+//	the credential-rule skip follows the recorded acting profile,
+//	not the principal's other profiles (decision J)                   TestImpersonation_ExemptionFollowsTheRecordedActingProfile
 //	the own arm never confers impersonate                             TestImpersonation_OwnArmNeverConfersImpersonate
 //	stale auth_time is 409 users.step_up_required                     TestImpersonation_StaleAuthTimeNeedsStepUp
 //	the TTL and the renewal cap are enforced                          TestImpersonation_TTLAndRenewalCap
@@ -509,6 +511,73 @@ func TestImpersonation_ImpersonatedActorRulesApplyAcrossParties(t *testing.T) {
 			t.Fatalf("operator impersonation below beta's min_acr: err = %v, want 403", err)
 		}
 		env.setPartyPolicy(t, beta, "authorized", 1)
+	})
+}
+
+// Decision J: the credential-rule exemption follows the administrator's
+// recorded acting profile (sessions.impersonator_profile_id), not the profiles
+// the administrator's principal holds. One principal holds both a customer-party
+// administrator profile and an operator profile, on the same parent session:
+// impersonating through the customer profile, a restrictive third party's
+// credential_rule binds; impersonating through the operator profile, it does not.
+func TestImpersonation_ExemptionFollowsTheRecordedActingProfile(t *testing.T) {
+	acme := env.seedParty(t, "Imp DualProfile Acme "+uniq("p"))
+	beta := env.seedParty(t, "Imp DualProfile Beta "+uniq("p"))
+	admin := env.newImpAdmin(t, acme)
+	opTok, opProfile := env.makeOperator(t, admin.acct)
+	m := env.newMember(t, acme)
+	content := env.entityOf(t, env.pool, "organization", &beta)
+	env.exec(t, "member read grant on beta content",
+		`INSERT INTO grants (actor_id, operation_id, target_id, granted_by) VALUES ($1, $2, $3, NULL)`,
+		m.profileID, env.opID(t, "read"), content)
+	env.setPartyPolicy(t, beta, "authorized", 1)
+
+	skip := func(t *testing.T, childID int64) bool {
+		t.Helper()
+		var v bool
+		if err := env.pool.QueryRow(context.Background(),
+			`SELECT skip_credential_rule FROM mod_users.session_policy_factors($1, NULL)`, childID).Scan(&v); err != nil {
+			t.Fatalf("session_policy_factors: %v", err)
+		}
+		return v
+	}
+
+	t.Run("through the customer profile: beta's credential rule binds", func(t *testing.T) {
+		child := env.startImp(t, admin.tok.access(), m.profUUID, "dual customer").wantStatus(t, http.StatusCreated).tok(t)
+		row := env.sessionRow(t, child.Session.UUID)
+		if row.ImpersonatorProfileID.Int64 != admin.profileID {
+			t.Fatalf("impersonator_profile_id = %d, want the customer administrator profile %d", row.ImpersonatorProfileID.Int64, admin.profileID)
+		}
+		if skip(t, row.ID) {
+			t.Error("skip_credential_rule = true for an impersonation through a non-operator profile")
+		}
+		ctx := env.impCtx(t, child.access())
+		if err := env.az.Authorize(ctx, "read", &content); !errors.Is(err, apiresp.ErrForbidden) {
+			t.Fatalf("customer-profile impersonation under beta's credential rule: err = %v, want 403", err)
+		}
+		env.do(t, http.MethodDelete, "/v1/impersonations/current", child.access(), nil).wantStatus(t, http.StatusNoContent)
+	})
+
+	t.Run("through the operator profile: exempt from the credential rule", func(t *testing.T) {
+		child := env.startImp(t, opTok.access(), m.profUUID, "dual operator").wantStatus(t, http.StatusCreated).tok(t)
+		row := env.sessionRow(t, child.Session.UUID)
+		if row.ImpersonatorProfileID.Int64 != opProfile {
+			t.Fatalf("impersonator_profile_id = %d, want the operator profile %d", row.ImpersonatorProfileID.Int64, opProfile)
+		}
+		if !skip(t, row.ID) {
+			t.Error("skip_credential_rule = false for an impersonation through an operator profile")
+		}
+		ctx := env.impCtx(t, child.access())
+		if err := env.az.Authorize(ctx, "read", &content); err != nil {
+			t.Fatalf("operator-profile impersonation under beta's credential rule: err = %v, want allowed", err)
+		}
+
+		// The recorded acting profile must be active: a suspended operator
+		// profile no longer exempts the impersonation it started.
+		env.exec(t, "suspend the operator profile", `UPDATE profiles SET status = 'suspended' WHERE entity_id = $1`, opProfile)
+		if skip(t, row.ID) {
+			t.Error("skip_credential_rule = true for a suspended recorded operator profile")
+		}
 	})
 }
 
