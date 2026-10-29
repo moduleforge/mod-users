@@ -714,3 +714,16 @@ args `context`, `field:cfg.LocalAuth`), `authenticator` (`auth.NewAuthenticator`
   `401 users.session_revoked` / `users.refresh_reuse` it signs out; on `409 users.step_up_required`
   it runs a step-up and retries.
 - OIDC login and link return through `#handoff=<code>`, exchanged once at `POST /v1/auth/handoff`.
+
+## Amendments (2026-10-29, phase 8 remediation)
+
+- **Section 2.9 (sessions).** `sessions.impersonator_profile_id` records the administrator's acting profile on
+  an impersonation child session. A NULL-pairing check ties it to the impersonation columns (set together or
+  null together), and the MF101 invariant covers it. Renew uses it to re-check `impersonate` authority from
+  the parent session.
+- **Section 6.1 (binding constructors).** `NewAuthenticator` keeps its signature. `NewAuthenticatorWithAppGate`
+  and `SetAppGate` are added (additive). A step-up requirement in the app gate propagates as
+  `409 users.step_up_required`. `NewOperatorAdminChecker` treats a step-up requirement as not admitted.
+- **Section 6.2 (ownership).** The owning-party gate resolves ownership one level only: a party record is its
+  own owning party, and a record owned by a party is gated by that party's policy. Nested ownership chains
+  are not followed.

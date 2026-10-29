@@ -1090,11 +1090,12 @@ phases:
           slug: app-gate-step-up-mapping
           title: Map Step-Up Refusals In The Invite-Only App Gates
           path: phase-18-remediation-07/006-app-gate-step-up-mapping.md
-          done: false
+          done: true
           tier: sonnet-high
           findings:
             - QKwM
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-18-006
+            commit:
+                - 5c96e4c
             merge: null
