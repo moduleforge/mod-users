@@ -1209,7 +1209,7 @@ phases:
             - uBfI
             - zzo0
           git:
-            branch: null
+            branch: plan/identity-model-impl-20-001
             commit: []
             merge: null
         - number: 2
