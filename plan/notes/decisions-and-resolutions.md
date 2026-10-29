@@ -270,3 +270,7 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
 - **Decision M (service-account self-rotation; task 003).** Own-principal credential routes are refused for
   every caller including service accounts; keys are rotated by their owner or an operator. No alternate
   self-rotation path. User decision (IDjP: update the OpenAPI error order).
+- **Decision K (wording alignment, 2026-10-29).** The implemented refusals under impersonation (managed-user
+  creation, party policy, credential authorization/confinement, self-service credential writes) return
+  plain `403` (`ErrForbidden`; managed-user creation `403 users.impersonation_not_allowed`), not a distinct
+  `ErrImpersonationNotAllowed` error type. The behavior is as decided; the docs follow the code.
