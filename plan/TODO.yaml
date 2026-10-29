@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 8
-    tasks_added: 45
+    tasks_added: 46
 phases:
     - number: 6
       slug: users-identity-core
@@ -1104,7 +1104,7 @@ phases:
       title: Remediation Round 8
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 8
       tasks:
         - number: 1
@@ -1130,6 +1130,18 @@ phases:
           findings:
             - KkGF
             - bFGy
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: refuse-managed-user-creation-impersonating
+          title: Refuse Managed-User Creation And Credential Writes While Impersonating
+          path: phase-19-remediation-08/003-refuse-managed-user-creation-impersonating.md
+          done: false
+          tier: opus-med
+          findings:
+            - YqJd
           git:
             branch: null
             commit: []
