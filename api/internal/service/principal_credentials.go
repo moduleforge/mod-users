@@ -25,9 +25,21 @@ import (
 // `impersonate` is consulted by these methods, and no method authorizes
 // `assume` or `impersonate` for credential or SSH-key administration.
 //
-// Error order: 401 (no actor), 400 (stateless input), 404 (unknown principal or
-// one the caller may not read), 403 (`credentials` refused) or 409 (step-up,
-// fingerprint in use).
+// Two refusals precede the principal lookup. An impersonating session is
+// refused with ErrImpersonationNotAllowed (users.impersonation_not_allowed,
+// 403): credential administration under another identity would let an
+// administrator install a persistent credential for the impersonated user or
+// for anyone the impersonated profile administers. A caller addressing its own
+// principal is refused with apiresp.ErrForbidden: the /v1/principals routes are
+// the administration surface, and self-service credential changes stay on
+// /v1/me, which enforces the last-credential check and
+// AUTH_SELF_SERVICE_MAX_AUTH_AGE. An owner rotating a self-owned service
+// account addresses the service account's principal, not its own, and is
+// unaffected.
+//
+// Error order: 401 (no actor), 400 (stateless input), 403 (impersonating),
+// 404 (unknown principal or one the caller may not read), 403 (own principal
+// or `credentials` refused) or 409 (step-up, fingerprint in use).
 
 // IssuePrincipalAPIKeyInput is the input of IssuePrincipalAPIKey.
 type IssuePrincipalAPIKeyInput struct {
@@ -59,8 +71,23 @@ type InstallPrincipalSSHKeyInput struct {
 // exist and be readable by the caller (404, masked), and the caller must hold
 // `credentials` on it (403, or 409 users.step_up_required).
 func (s *UserService) credentialsTarget(ctx context.Context, id uuid.UUID) (PrincipalSummary, error) {
-	sum, err := s.readablePrincipal(ctx, id)
+	ac, err := adminCaller(ctx)
 	if err != nil {
+		return PrincipalSummary{}, err
+	}
+	if ac.ImpersonatorPrincipalID != 0 {
+		return PrincipalSummary{}, ErrImpersonationNotAllowed
+	}
+	sum, err := s.lookupPrincipal(ctx, id)
+	if err != nil {
+		return PrincipalSummary{}, err
+	}
+	// Refused before the read check: the caller knows its own uuid, so nothing
+	// leaks, and the refusal must not depend on what the caller may read.
+	if sum.PrincipalID == ac.PrincipalID {
+		return PrincipalSummary{}, apiresp.ErrForbidden
+	}
+	if err := s.authorizeMasked(ctx, opSlugRead, sum.PrincipalID); err != nil {
 		return PrincipalSummary{}, err
 	}
 	if s.creds == nil {

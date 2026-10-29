@@ -472,3 +472,83 @@ func (s *stack) asSessionAged(t *testing.T, a account, profileID int64, age time
 		return opctx.WithAuthContext(ctx, ac)
 	}
 }
+
+// Decision H: credential administration is refused while impersonating, even
+// when the impersonated profile holds the authority (a party administrator
+// here) and the child session is as fresh as its parent. The refusal precedes
+// the principal lookup, so it is the same 403 for a service account the
+// impersonated profile administers, for the impersonated user's own principal
+// and for an unknown principal.
+func TestPrincipalCredentials_RefusedWhileImpersonating(t *testing.T) {
+	acme := env.seedParty(t, "Cred Imp "+uniq("p"))
+	target := env.newImpAdmin(t, acme) // the impersonated administrator
+	_, saUUID := env.seedServiceAccountOwnedBy(t, acme)
+	opAcct := env.registerVerified(t)
+	opTok, _ := env.makeOperator(t, opAcct)
+
+	// Without impersonation the administrator holds the authority.
+	preKey := env.do(t, http.MethodPost, credsPath(saUUID)+"/api-keys", target.tok.access(), map[string]string{"label": "pre"}).
+		wantStatus(t, http.StatusCreated).obj(t)
+
+	imp := env.startImp(t, opTok.access(), env.profileUUID(t, target.profileID), "support").
+		wantStatus(t, http.StatusCreated).tok(t)
+	targetUUID := env.entityUUID(t, target.userID)
+	missing := "11111111-1111-1111-1111-111111111111"
+	pub := newSSHPublicKey(t)
+
+	for _, principal := range []string{saUUID, targetUUID, missing} {
+		p := credsPath(principal)
+		const code = "users.impersonation_not_allowed"
+		env.do(t, http.MethodGet, p, imp.access(), nil).wantError(t, http.StatusForbidden, code, "")
+		env.do(t, http.MethodPost, p+"/api-keys", imp.access(), map[string]string{"label": "x"}).wantError(t, http.StatusForbidden, code, "")
+		env.do(t, http.MethodPost, p+"/ssh-keys", imp.access(), map[string]string{"public_key": pub}).wantError(t, http.StatusForbidden, code, "")
+		env.do(t, http.MethodDelete, p+"/"+preKey["uuid"].(string), imp.access(), nil).wantError(t, http.StatusForbidden, code, "")
+	}
+
+	// Nothing changed: the earlier key is still the service account's only
+	// credential and no SSH key was installed anywhere.
+	if got := env.credentialList(t, target.tok.access(), saUUID); len(got) != 1 || got[0]["uuid"] != preKey["uuid"] {
+		t.Fatalf("after the refused calls the account lists %v, want only the earlier key", got)
+	}
+	if n := env.count(t, "ssh keys", `SELECT count(*) FROM mod_users.credentials WHERE kind = 'ssh_key' AND principal_id IN ($1, $2)`,
+		env.principalID2(t, saUUID), target.userID); n != 0 {
+		t.Errorf("a refused install created %d ssh keys", n)
+	}
+}
+
+// Vj21: the administration routes never serve a caller addressing its own
+// principal; self-service stays on /v1/me with its last-credential check.
+func TestPrincipalCredentials_OwnPrincipalRefused(t *testing.T) {
+	u := env.registerVerified(t)
+	userID := env.principalID(t, u.Email)
+	ownUUID := env.entityUUID(t, userID)
+	pw := env.credentialUUID(t, u.tk.access(), "password")
+	activeCount := func() int64 {
+		return env.count(t, "active credentials", `SELECT count(*) FROM mod_users.credentials WHERE principal_id = $1 AND revoked_at IS NULL`, userID)
+	}
+	before := activeCount()
+
+	// The last interactive credential cannot be removed through the admin route.
+	env.do(t, http.MethodDelete, credsPath(ownUUID)+"/"+pw, u.tk.access(), nil).wantStatus(t, http.StatusForbidden)
+	env.do(t, http.MethodGet, credsPath(ownUUID), u.tk.access(), nil).wantStatus(t, http.StatusForbidden)
+	env.do(t, http.MethodPost, credsPath(ownUUID)+"/ssh-keys", u.tk.access(), map[string]string{"public_key": newSSHPublicKey(t)}).
+		wantStatus(t, http.StatusForbidden)
+	if after := activeCount(); after != before {
+		t.Fatalf("a refused call changed the credentials: %d active, was %d", after, before)
+	}
+	if status, _ := env.probe(t, "/v1/probe", u.tk.access()); status != http.StatusOK {
+		t.Fatalf("session after the refused removal = %d, want 200", status)
+	}
+
+	// An operator's wildcard authority does not reopen the self-service path.
+	opAcct := env.registerVerified(t)
+	opTok, _ := env.makeOperator(t, opAcct)
+	opUUID := env.entityUUID(t, env.principalID(t, opAcct.Email))
+	env.do(t, http.MethodGet, credsPath(opUUID), opTok.access(), nil).wantStatus(t, http.StatusForbidden)
+	// ... but still administers other principals.
+	env.do(t, http.MethodGet, credsPath(ownUUID), opTok.access(), nil).wantStatus(t, http.StatusOK)
+
+	// The supported path keeps its last-credential check.
+	env.do(t, http.MethodDelete, "/v1/me/credentials/"+pw, u.tk.access(), nil).
+		wantError(t, http.StatusConflict, "conflict", "users.last_credential")
+}

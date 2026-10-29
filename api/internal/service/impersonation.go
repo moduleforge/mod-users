@@ -30,6 +30,9 @@ import (
 //     max_auth_age that the authorization engine's assurance gate enforces
 //     (409 users.step_up_required when stale);
 //   - it never nests (checked here before the MF101 trigger, which backs it);
+//   - it inherits the parent session's auth_time rather than starting a fresh
+//     one, so the child never looks more recently authenticated than the
+//     administrator who started it;
 //   - it always records the real administrator: the session's
 //     impersonator_session_id names the administrator's own session, and
 //     session liveness reports that session's principal as the impersonator
@@ -207,7 +210,7 @@ func (s *ImpersonationService) Start(ctx context.Context, in StartImpersonationI
 			PrincipalID:           target.holderID,
 			Acr:                   parent.Acr,
 			Amr:                   amr,
-			AuthTime:              timestamptz(now),
+			AuthTime:              parent.AuthTime,
 			ExpiresAt:             timestamptz(now.Add(s.sessions.cfg.ImpersonationTTL)),
 			ImpersonatorSessionID: pgtype.Int8{Int64: parent.ID, Valid: true},
 			ImpersonatedProfileID: pgtype.Int8{Int64: target.profileID, Valid: true},

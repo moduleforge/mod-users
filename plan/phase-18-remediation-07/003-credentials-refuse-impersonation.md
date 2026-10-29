@@ -35,3 +35,11 @@ Scope is limited to fixing the linked findings. Anything beyond that is out of s
 - Finding Mdgf in this plan's `plan/findings.yaml` (security, medium): EnsurePersonalParty authorizes through adminCaller, which accepts an impersonating context.
 - Finding Vj21 in this plan's `plan/findings.yaml` (security, medium): the `/v1/principals/{own_uuid}/credentials` routes are a self-service path that bypasses the `/v1/me` last-credential check and `AUTH_SELF_SERVICE_MAX_AUTH_AGE`.
 - [Decisions and resolutions](../notes/decisions-and-resolutions.md) — Decision H (credentials admin under impersonation; ejk3) and the Amendments (2026-10-27, phase 8 gate) section.
+
+## Status
+
+- Outcome: succeeded (2026-10-29).
+- Changes: `api/internal/service/principal_credentials.go` (`credentialsTarget` refuses an impersonating context with `ErrImpersonationNotAllowed` before any lookup, and refuses the caller's own principal with 403 before the read check; 401/400/403/404/409 order kept), `api/internal/service/personal_party.go` (`EnsurePersonalParty` refuses an impersonating context), `api/internal/service/impersonation.go` (`Start` copies the parent's `auth_time`), `api/openapi.yaml` (docs).
+- Tests: `api/internal/service/principal_credentials_test.go`, `api/internal/service/personal_party_test.go`, `api/internal/integration/principal_credentials_integration_test.go`, `api/internal/integration/impersonation_integration_test.go`, `api/internal/integration/personal_party_integration_test.go`.
+- Validation: make build, make test, make lint and `make -C model verify` pass; unit and integration suites (authz, config, integration) pass against a throwaway postgres:16 container, including the task 004 owner-rotation and party-admin tests and `TestImpersonation_OperatorReachesMembersOfRestrictiveParties`.
+- Decision: a service account addressing its own principal through the administration routes is also refused (same rule as a user).

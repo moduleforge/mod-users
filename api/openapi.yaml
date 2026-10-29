@@ -2355,7 +2355,8 @@ paths:
         refresh token, with `expires_in` at most `AUTH_IMPERSONATION_TTL`
         (default 30 minutes). The child session records the reason, the real
         administrator (the caller's session), the caller's `acr` and `amr`, and
-        `auth_time` of now. It needs `impersonate` on the profile, which carries a
+        the caller's `auth_time` (an impersonation never looks more recently
+        authenticated than its administrator). It needs `impersonate` on the profile, which carries a
         maximum authentication age of 10 minutes: a stale authentication is the 409
         `users.step_up_required` action. Revoking or expiring the caller's session
         ends the impersonation on its next request.
@@ -3085,6 +3086,11 @@ paths:
         authentication is 409 `users.step_up_required`; the operation's
         `max_auth_age` is 10 minutes). Order: 401, 400, 404 (a principal the
         caller cannot read), 403, 409. Newest first; never a hash or secret.
+
+        All four credential routes under this path are refused with 403
+        `users.impersonation_not_allowed` while the caller is impersonating, and
+        with 403 when the principal is the caller's own (self-service credential
+        changes use `/v1/me/credentials`).
       tags: [Principals]
       operationId: listPrincipalCredentials
       responses:

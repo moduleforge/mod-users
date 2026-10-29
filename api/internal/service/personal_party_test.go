@@ -58,6 +58,9 @@ func TestEnsurePersonalParty_Preconditions(t *testing.T) {
 		want error
 	}{
 		{"no auth context", context.Background(), &personalCoreQ{}, &personalUsersQ{}, apiresp.ErrUnauthenticated},
+		{"impersonating", opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: userID, ProfileID: profileID, SessionID: 3, ImpersonatorPrincipalID: 9}),
+			&personalCoreQ{profile: personalProfile}, &personalUsersQ{}, ErrImpersonationNotAllowed},
 		{"unknown profile", personalCtx(userID, profileID), &personalCoreQ{pErr: pgx.ErrNoRows}, &personalUsersQ{}, ErrPersonalProfileRequired},
 		{"party profile", personalCtx(userID, profileID),
 			&personalCoreQ{profile: coredb.Profile{EntityID: profileID, HolderID: userID, PartyID: pgtype.Int8{Int64: 5, Valid: true}}},
