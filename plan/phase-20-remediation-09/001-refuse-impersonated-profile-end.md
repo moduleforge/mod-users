@@ -23,6 +23,10 @@ Scope is limited to refusing a profile-end status transition when the caller is 
 3. `make build` and `make lint` pass. Task agents set `MODULEFORGE_SIBLINGS_DIR=/Users/zane/playground/.flow/siblings/mod-users`. Never run `scripts/link-siblings.sh` or bare `make preflight`.
 4. `grep` shows the refusal sentence in the `updateProfileStatus` description in `api/openapi.yaml` and in the Decision K bullet in `docs/architecture.md`.
 
+## Status
+
+Outcome: succeeded (2026-10-29). Added the impersonation refusal to `api/internal/service/profile_admin.go`, the integration test `api/internal/integration/profile_end_impersonation_integration_test.go` (passes; fails with the refusal disabled), the `updateProfileStatus` description in `api/openapi.yaml`, and the Decision K bullet in `docs/architecture.md`. Full authz/config/integration suites, `make build` and `make lint` pass.
+
 ## References
 
 - Finding `uBfI` in this plan's `plan/findings.yaml` (refusal of profile end under impersonation).

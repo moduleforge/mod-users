@@ -489,6 +489,9 @@ func (s *ProfileService) partyProfileByUUID(ctx context.Context, id uuid.UUID) (
 // /v1/profiles/{uuid}) and returns the updated profile. Ending runs the
 // departure cleanup of EndInTx.
 //
+// Ending a profile under impersonation is apiresp.ErrForbidden, after the shape
+// check (400) and before the profile lookup.
+//
 // Authority: `read` on the profile (a refusal is apiresp.ErrNotFound), then
 // `update` (403), then the freshness gate (409 users.step_up_required). A
 // status the profile cannot move to from its current one, including accepting
@@ -503,6 +506,13 @@ func (s *ProfileService) UpdateProfileStatus(ctx context.Context, profileUUID uu
 	to, reason, err := validateStatusUpdate(in)
 	if err != nil {
 		return PartyProfileView{}, err
+	}
+	// Ending runs the departure cleanup, which removes the holder's credential
+	// authorizations and revokes party-confined credentials: credential data an
+	// impersonation session may not touch (decision K). A plain 403, before the
+	// profile lookup.
+	if to == ProfileStatusEnded && ac.ImpersonatorPrincipalID != 0 {
+		return PartyProfileView{}, apiresp.ErrForbidden
 	}
 	p, err := s.partyProfileByUUID(ctx, profileUUID)
 	if err != nil {
