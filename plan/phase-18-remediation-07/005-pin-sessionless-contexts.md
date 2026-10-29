@@ -30,3 +30,10 @@ Scope is limited to fixing the linked finding. Anything beyond that is out of sc
 
 - Finding j75L in this plan's `plan/findings.yaml` (security, medium): gated in api/internal/authz/authz.go treats every sessionless, credential-less, non-anonymous AuthContext as a trusted system actor, while mod-users builds such contexts for real users.
 - [Decisions and resolutions](../notes/decisions-and-resolutions.md) — the Amendments (2026-10-27, phase 8 gate) section, for the phase 8 gate context in which this finding was recorded.
+
+## Status
+
+- Outcome: succeeded (2026-10-29).
+- Added `api/internal/service/sessionless_contexts_test.go`: (1) every sessionless helper (`withActingProfile`, `CreatedUser.ActingContext`, `UnauthenticatedActingContext`) is asserted sessionless; (2) the sign-up and guest flows (`CreateBYOUserInTx`, `AddIdentifierInTx`, `LinkOIDCInTx`, `CreateGuestUserInTx`) run against a failing recording authorizer (Authorize, AuthorizeType, AuthorizeTypeIn) and none is called; (3) an AST audit of the api module pins the exact set of functions that build or call a sessionless-context helper (including the idp_jit literal in `createManagedUser`, bootstrap, register, reset) and asserts neither they nor the same-package by-name callees of the functions receiving the context call an Authorize entry point.
+- Added a comment at `gated` in `api/internal/authz/authz.go` stating sessionless trust is inferred from absent fields pending a mod-core system-actor marker, pointing at the pinning test. No gate logic changed.
+- Validation: `make build`, `make test`, `make lint` passed. Failure demonstrated once locally: a temporary `Authorize` call in `UserService.AddIdentifierInTx` made both the behavioral and the audit tests fail; reverted. Integration suites (authz, config, integration) passed against a throwaway postgres:16 container.
