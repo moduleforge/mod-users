@@ -1175,6 +1175,7 @@ phases:
           path: phase-19-remediation-08/005-docs-impersonation-reauth-and-decisions.md
           done: false
           tier: sonnet-high
+          digest: Brought api/openapi.yaml, AGENTS.md, the credentialsTarget comment and docs/architecture.md in line with merged behavior of tasks 001-004 (Decisions G/J/K/L, impersonation lifecycle, app-gate step-up, sessionless limitation). Verified against Go code.
           findings:
             - IDjP
             - 7TSm
