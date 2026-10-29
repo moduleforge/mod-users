@@ -1061,7 +1061,7 @@ phases:
           slug: impersonation-renew-recheck
           title: Re-Check Impersonate Authority From The Parent Session On Renew
           path: phase-18-remediation-07/004-impersonation-renew-recheck.md
-          done: false
+          done: true
           tier: opus-med
           digest: 'Added mod_users.sessions.impersonator_profile_id (baseline edited in place, check and trigger extended, sqlc regenerated), set in Start. Renew re-authorizes impersonate from the parent session as the recorded acting profile, after checking that profile is still available. A refusal revokes the child (impersonation_ended) and returns 403. max_auth_age deliberately not re-applied. Integration tests ran and passed (authz, config, integration). Validation check 3 (API surface 2.9 amendment) not done: plan note is manager-owned.'
           findings:
