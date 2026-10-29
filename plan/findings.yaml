@@ -188,15 +188,6 @@ items:
         - priority:medium
         - effort:small
       text: 'Decision needed: when an impersonating caller ends a profile through PATCH /v1/profiles/{uuid} (ProfileService.UpdateProfileStatus -> endLocked -> departureCleanupInTx), the cleanup deletes the holder''s credential_party_authorizations for the party and revokes credentials confined to it. Strict reading of Decision K would refuse these under impersonation, which changes profile administration beyond finding YqJd. Left unchanged; decide whether to refuse (e.g. selfWriter-style in UpdateProfileStatus when to == ended) as a follow-up task or under H8qi.'
-    - title: 'Plan-notes / docs: the docs/architecture.md s'
-      id: ygAT
-      date: "2026-10-29"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-08
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Plan-notes / docs: the docs/architecture.md statement of Decision K is owned by phase-19 task 005; its text should cover managed-user creation as implemented (refused after 401 and 400, before 404). No plan-notes edit needed.'
     - title: 'Informational: Decision K in plan/notes/decis'
       id: AXFG
       date: "2026-10-29"
@@ -1871,4 +1862,14 @@ closed:
         note from a phase 19 task agent saying that the plan notes need no edit and that the
         phase-18 task-doc Status text is historical. It states that no change is needed, raises
         no open decision, and names no defect, so no change could resolve it.
+      date: "2026-10-29"
+    - id: ygAT
+      title: 'Plan-notes / docs: the docs/architecture.md s'
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. The Decision K bullet in docs/architecture.md:95 now
+        covers managed-user creation (POST /v1/parties/{party_uuid}/managed-users refused with
+        403 users.impersonation_not_allowed). The createManagedUser description in
+        api/openapi.yaml (~3355-3356) states the same refusal. The note itself says no plan-notes
+        edit is needed.
       date: "2026-10-29"
