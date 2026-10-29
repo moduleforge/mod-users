@@ -1083,7 +1083,8 @@ phases:
             - j75L
           git:
             branch: plan/identity-model-impl-18-005
-            commit: []
+            commit:
+                - 56213b5
             merge: null
         - number: 6
           slug: app-gate-step-up-mapping
