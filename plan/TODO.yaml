@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 9
-    tasks_added: 48
+    tasks_added: 49
 phases:
     - number: 6
       slug: users-identity-core
@@ -1193,5 +1193,20 @@ phases:
       slug: remediation-09
       title: Remediation Round 9
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 8
-      tasks: []
+      tasks:
+        - number: 1
+          slug: refuse-impersonated-profile-end
+          title: Refuse Ending A Profile Under Impersonation
+          path: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - uBfI
+            - zzo0
+          git:
+            branch: null
+            commit: []
+            merge: null
