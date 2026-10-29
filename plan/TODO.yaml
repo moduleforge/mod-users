@@ -1096,5 +1096,6 @@ phases:
             - QKwM
           git:
             branch: plan/identity-model-impl-18-006
-            commit: []
+            commit:
+                - 5c96e4c
             merge: null
