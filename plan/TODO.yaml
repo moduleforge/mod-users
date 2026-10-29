@@ -1128,14 +1128,16 @@ phases:
           slug: confine-impersonator-parent-factors
           title: Apply Credential Confinement To Non-Operator Impersonators
           path: phase-19-remediation-08/002-confine-impersonator-parent-factors.md
-          done: false
+          done: true
           tier: opus-med
+          digest: 'Applied Decision L in 0100_baseline.sql: profile_gate_for and session_meets_party_policy confine non-operator impersonations (keyed on impersonator_profile_id); operators stay exempt. New integration and SQL-level tests; mutation-checked; green on throwaway postgres:16.'
           findings:
             - KkGF
             - bFGy
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-19-002
+            commit:
+                - 042f83d
             merge: null
         - number: 3
           slug: refuse-managed-user-creation-impersonating
