@@ -1217,7 +1217,7 @@ phases:
           slug: precision-sql-comments-openapi-order-liveness-test
           title: Align SQL Exemption Comments, Credential Route Error Order And Decision L Liveness Assertion
           path: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Comment-only SQL rewording, corrected refusal-order text on the four OpenAPI credential operations, and a tightened liveness assertion in the test. No behavior change.
           findings:
