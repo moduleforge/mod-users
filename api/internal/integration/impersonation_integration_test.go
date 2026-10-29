@@ -17,6 +17,8 @@ package integration
 //	administrator's factors; operators skip only the credential rule  TestImpersonation_ImpersonatedActorRulesApplyAcrossParties
 //	the credential-rule skip follows the recorded acting profile,
 //	not the principal's other profiles (decision J)                   TestImpersonation_ExemptionFollowsTheRecordedActingProfile
+//	confinement binds a non-operator's parent factors; operators
+//	confined to the operator party stay exempt (decision L)           TestImpersonation_ConfinedParentFactorsBindNonOperators
 //	the own arm never confers impersonate                             TestImpersonation_OwnArmNeverConfersImpersonate
 //	stale auth_time is 409 users.step_up_required                     TestImpersonation_StaleAuthTimeNeedsStepUp
 //	the TTL and the renewal cap are enforced                          TestImpersonation_TTLAndRenewalCap
@@ -579,6 +581,65 @@ func TestImpersonation_ExemptionFollowsTheRecordedActingProfile(t *testing.T) {
 			t.Error("skip_credential_rule = true for a suspended recorded operator profile")
 		}
 	})
+}
+
+// Decision L: confinement binds a non-operator administrator's parent-session
+// factors. An administrator whose credentials are confined to party X, holding
+// manage over parties X and Y, impersonates a member of X but is refused a
+// member of Y (409, lock reason confined, no child left), and an impersonation
+// of the Y member started before the confinement fails liveness. A platform
+// operator whose credentials are confined to the operator party still
+// impersonates a member of a restrictive-policy party (decision G).
+func TestImpersonation_ConfinedParentFactorsBindNonOperators(t *testing.T) {
+	partyX := env.seedParty(t, "Imp Confined X "+uniq("p"))
+	partyY := env.seedParty(t, "Imp Confined Y "+uniq("p"))
+	admin := env.newImpAdmin(t, partyX)
+	env.exec(t, "owned-scope manage grant on party Y",
+		`INSERT INTO grants (actor_id, operation_id, target_id, scope, target_type_id, include_subtypes, granted_by)
+		 VALUES ($1, $2, $3, 'owned', NULL, false, NULL)`,
+		admin.profileID, env.opID(t, "manage"), partyY)
+	mX := env.newMember(t, partyX)
+	mY := env.newMember(t, partyY)
+	parentID := env.sessionID(t, admin.acct.tk.Session.UUID)
+	confineAll := func(userID, partyID int64) {
+		t.Helper()
+		env.exec(t, "confine credentials",
+			`UPDATE mod_users.credentials SET confined_to_party_id = $2 WHERE principal_id = $1 AND revoked_at IS NULL`, userID, partyID)
+	}
+
+	// Before the confinement the Y member is reachable.
+	early := env.startImp(t, admin.tok.access(), mY.profUUID, "before confinement").wantStatus(t, http.StatusCreated).tok(t)
+
+	confineAll(admin.userID, partyX)
+	if status, _ := env.probe(t, "/v1/probe", admin.tok.access()); status != http.StatusOK {
+		t.Fatalf("administrator's own party X session after confinement to X: probe = %d, want 200", status)
+	}
+
+	before := env.childCount(t, parentID)
+	r := env.startImp(t, admin.tok.access(), mY.profUUID, "confined elsewhere")
+	r.wantError(t, http.StatusConflict, "conflict", "users.impersonation_target_unavailable")
+	if !strings.Contains(string(r.raw), "confined") {
+		t.Errorf("refusal does not name the confined lock reason: %s", r.raw)
+	}
+	if n := env.childCount(t, parentID); n != before {
+		t.Errorf("the refused start left %d children, was %d", n, before)
+	}
+
+	// The impersonation started before the confinement no longer passes liveness.
+	if status, _ := env.probe(t, "/v1/probe", early.access()); status == http.StatusOK {
+		t.Error("an impersonation of the Y member still passes liveness after the parent factors were confined to X")
+	}
+
+	// A member of the party the factors are confined to is still reachable.
+	env.startImp(t, admin.tok.access(), mX.profUUID, "confined here").wantStatus(t, http.StatusCreated)
+
+	// Operator: credentials confined to the operator party, target in a party
+	// with a restrictive credential rule.
+	env.setPartyPolicy(t, partyY, "authorized", 1)
+	opAcct := env.registerVerified(t)
+	opTok, _ := env.makeOperator(t, opAcct)
+	confineAll(env.principalID(t, opAcct.Email), env.operatorPartyID(t))
+	env.startImp(t, opTok.access(), mY.profUUID, "operator, confined to the operator party").wantStatus(t, http.StatusCreated)
 }
 
 // The own arm confers an owner's operations over what it owns, never

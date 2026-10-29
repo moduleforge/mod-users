@@ -330,6 +330,59 @@ func TestInteg_Availability_ImpersonationUsesParentFactors(t *testing.T) {
 	wantAvail(t, sessionAvail(t, opImp, target.PartyProfile), "acr_too_low", "operator administrator below min_acr")
 }
 
+// TestInteg_Availability_ImpersonationConfinesNonOperatorParentFactors proves
+// decision L: a non-operator administrator's parent-session factors are held
+// to confinement against the impersonated profile's party, as an ordinary
+// session's factors are; an impersonation started through an operator profile
+// (the recorded impersonator_profile_id, decision J) is exempt, so an operator
+// credential confined to the operator party still impersonates.
+func TestInteg_Availability_ImpersonationConfinesNonOperatorParentFactors(t *testing.T) {
+	partyX := seedOrg(t, "Confined imp X")
+	partyY := seedOrg(t, "Confined imp Y")
+	targetY := seedMember(t, partyY)
+	targetX := seedMember(t, partyX)
+
+	// A party X administrator whose only parent-session factor is confined to X.
+	admin := seedMember(t, partyX)
+	adminCred := fxPassword(t, integPool, admin.User, nil)
+	confine(t, adminCred, partyX)
+	parent := sessionWith(t, admin.User, 1, adminCred)
+	impersonate := func(parentID int64, target member, profile int64, acting *int64) int64 {
+		t.Helper()
+		id, _ := fxSession(t, integPool, target.User, sessionOpts{ParentID: &parentID,
+			ImpersonateProfile: &profile, ImpersonatorProfile: acting})
+		return id
+	}
+
+	wantAvail(t, sessionAvail(t, parent, admin.PartyProfile), "available", "administrator's own party profile")
+	impY := impersonate(parent, targetY, targetY.PartyProfile, &admin.PartyProfile)
+	wantAvail(t, sessionAvail(t, impY, targetY.PartyProfile), "confined", "non-operator, parent factor confined to X, party Y member")
+	impYPersonal := impersonate(parent, targetY, targetY.Personal, &admin.PartyProfile)
+	wantAvail(t, sessionAvail(t, impYPersonal, targetY.Personal), "confined", "non-operator, parent factor confined to X, personal profile")
+	impX := impersonate(parent, targetX, targetX.PartyProfile, &admin.PartyProfile)
+	wantAvail(t, sessionAvail(t, impX, targetX.PartyProfile), "available", "non-operator, parent factor confined to the impersonated profile's party")
+
+	// Lifting the confinement makes the same impersonation available again.
+	fxExec(t, integPool, "lift confinement", `UPDATE mod_users.credentials SET confined_to_party_id = NULL WHERE id = $1`, adminCred)
+	wantAvail(t, sessionAvail(t, impY, targetY.PartyProfile), "available", "non-operator, unconfined parent factor")
+
+	// An operator whose credential is confined to the operator party: exempt
+	// when acting through the operator profile, bound through its personal one.
+	opUser, opProfile := seedOperatorUser(t)
+	opCred := fxPassword(t, integPool, opUser, nil)
+	confine(t, opCred, operatorPartyID(t))
+	opParent := sessionWith(t, opUser, 1, opCred)
+	var opPersonal int64
+	if err := integPool.QueryRow(context.Background(),
+		`SELECT entity_id FROM profiles WHERE holder_id = $1 AND party_id IS NULL`, opUser).Scan(&opPersonal); err != nil {
+		t.Fatalf("operator's personal profile: %v", err)
+	}
+	opImp := impersonate(opParent, targetY, targetY.PartyProfile, &opProfile)
+	wantAvail(t, sessionAvail(t, opImp, targetY.PartyProfile), "available", "operator, credential confined to the operator party")
+	viaPersonal := impersonate(opParent, targetY, targetY.PartyProfile, &opPersonal)
+	wantAvail(t, sessionAvail(t, viaPersonal, targetY.PartyProfile), "confined", "operator's principal acting through its personal profile")
+}
+
 // TestInteg_Availability_ExcludingNullEqualsPlain proves a NULL excluded
 // credential excludes nothing: profile_availability_excluding(s, p, NULL)
 // equals profile_availability(s, p) for every lock outcome.

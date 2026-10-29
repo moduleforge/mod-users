@@ -1320,10 +1320,17 @@ $$;
 --
 -- Under impersonation (p_impersonated_profile_id set) p_credential_ids and
 -- p_acr are the administrator's parent-session factors
--- (session_policy_factors), which apply to the party gate only: the
--- confinement check is not applied to them, since they are not the
--- impersonated holder's credentials (the child session holds none, so it has
--- never been confined).
+-- (session_policy_factors). Decision L: the confinement check applies to them
+-- as to an ordinary session's factors, against the impersonated profile's
+-- party, unless the impersonator is a platform operator: a non-operator
+-- administrator whose parent-session factor is confined to party X cannot act
+-- as a profile of party Y (or as a personal profile) through an
+-- impersonation. Operator status is decision J's test, which
+-- session_policy_factors already carries as p_skip_credential_rule under
+-- impersonation (the recorded impersonator_profile_id is active and
+-- public.core_is_operator_profile); an operator impersonation stays exempt
+-- (decision G), since an operator credential confined to the operator party
+-- would otherwise make operator impersonation impossible.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.profile_gate_for(
   p_principal_id            BIGINT,
@@ -1358,12 +1365,14 @@ BEGIN
     RETURN 'principal_disabled';
   END IF;
 
-  IF p_impersonated_profile_id IS NULL AND EXISTS (
-    SELECT 1 FROM mod_users.credentials c
-     WHERE c.id = ANY (p_credential_ids)
-       AND c.confined_to_party_id IS NOT NULL
-       AND c.confined_to_party_id IS DISTINCT FROM v_party_id
-  ) THEN
+  IF (p_impersonated_profile_id IS NULL OR NOT COALESCE(p_skip_credential_rule, false))
+     AND EXISTS (
+       SELECT 1 FROM mod_users.credentials c
+        WHERE c.id = ANY (p_credential_ids)
+          AND c.confined_to_party_id IS NOT NULL
+          AND c.confined_to_party_id IS DISTINCT FROM v_party_id
+     )
+  THEN
     RETURN 'confined';
   END IF;
 
@@ -1680,7 +1689,9 @@ $$;
 -- factors of its own, the parent session's factors and acr, so the
 -- administrator's authentication must meet the party's policy, and the
 -- credential rule is skipped only when the administrator is a platform
--- operator, decision G as resolved), else of the single unrevoked credential
+-- operator, decision G as resolved; for a non-operator administrator a parent
+-- factor confined to a party other than the acting profile's fails the gate,
+-- decision L, as in profile_gate_for), else of the single unrevoked credential
 -- p_credential_id with its kind's base_acr, and the result is
 -- party_policy_gate_for(...) = 'available': a profile_policy_confirmations row
 -- for (p_profile_id, p_party_id) exempts the credential rule only, never
@@ -1737,6 +1748,24 @@ BEGIN
       FROM mod_users.session_policy_factors(p_session_id, NULL) pf;
     IF v_credential_ids IS NULL THEN
       -- Unknown session: session_policy_factors returns all NULL.
+      RETURN false;
+    END IF;
+    -- Decision L: a non-operator impersonation's parent factors are held to
+    -- confinement against the impersonated (acting) profile's party, as in
+    -- profile_gate_for; an operator impersonation (v_skip_rule) is exempt.
+    IF NOT COALESCE(v_skip_rule, false)
+       AND EXISTS (
+         SELECT 1 FROM mod_users.sessions s
+          WHERE s.id = p_session_id AND s.impersonator_session_id IS NOT NULL
+       )
+       AND EXISTS (
+         SELECT 1 FROM mod_users.credentials c
+          WHERE c.id = ANY (v_credential_ids)
+            AND c.confined_to_party_id IS NOT NULL
+            AND c.confined_to_party_id IS DISTINCT FROM (
+              SELECT p.party_id FROM public.profiles p WHERE p.entity_id = p_profile_id)
+       )
+    THEN
       RETURN false;
     END IF;
   ELSIF p_credential_id IS NOT NULL THEN
