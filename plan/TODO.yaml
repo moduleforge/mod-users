@@ -1112,15 +1112,17 @@ phases:
           slug: impersonator-profile-credential-exemption
           title: Key The Impersonation Credential-Rule Exemption On The Recorded Acting Profile
           path: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
-          done: false
+          done: true
           tier: opus-med
+          digest: 'Fixed DChD, crQE, bKBt: credential-rule exemption depends on the recorded impersonator_profile_id (active, core_is_operator_profile). Baseline edited in place; new HTTP-level dual-profile integration test; green on throwaway postgres:16.'
           findings:
             - DChD
             - crQE
             - bKBt
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-19-001
+            commit:
+                - b721fcc
             merge: null
         - number: 2
           slug: confine-impersonator-parent-factors
