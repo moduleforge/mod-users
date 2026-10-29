@@ -295,6 +295,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Conflict evidence: model/migrations/sql/0100_baseline.sql session_meets_party_policy (~1638/1665) and profile_gate_for (~1279) skip credential_rule on impersonation; api/internal/integration/impersonation_integration_test.go:375-384 premise (member holds no authorized credential; operator not bound) expects Start 201.'
+    - title: Operator impersonation test is principal-wide
+      id: crQE
+      date: "2026-10-29"
+      tags:
+        - type:security
+        - plan/phase:remediation-07
+        - priority:unspecified
+        - effort:unspecified
+      text: mod_users.session_policy_factors (model/migrations/sql/0100_baseline.sql) sets skip_credential_rule for an impersonation session when the parent session's principal holds ANY active operator profile (public.core_is_operator_profile over public.profiles.holder_id), because mod_users.sessions does not record the administrator's acting profile at ImpersonationService.Start (api/internal/service/impersonation.go). A person holding both an operator profile and a customer-party administrator profile who impersonates through the customer profile therefore also skips every customer party's credential_rule (min_acr still applies; authorizations stay the impersonated profile's). Once the child session records the administrator's acting profile, session_policy_factors should test core_is_operator_profile on that recorded profile (and its active status) instead of on the principal's profiles.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
