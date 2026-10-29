@@ -28,44 +28,6 @@ items:
         - priority:medium
         - effort:medium
       text: mod_users.profile_gate_for (model/migrations/sql/0100_baseline.sql) skips the 'confined' check when p_impersonated_profile_id is set, so an impersonation session is never locked as 'confined' even though its party-policy factors are now the administrator's parent-session credentials (mod_users.session_policy_factors). This preserves prior behavior (the child session holds no factors), but a parent credential confined to party X can drive an impersonation of a member of party Y. Decide whether confinement of the administrator's factors should bind the impersonated profile's party, and how that interacts with operator credentials confined to the operator party.
-    - title: mod_users.session_policy_factors sets skip_c…
-      id: DChD
-      date: "2026-10-29"
-      tags:
-        - type:security
-        - plan/phase:remediation-07
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/migrations/sql/0100_baseline.sql
-        lines: 1161-1211
-        severity: major
-        confidence: high
-        concerns: security
-        description:
-          mod_users.session_policy_factors sets skip_credential_rule for an impersonation session whenever
-          the parent session's principal holds any active profile for which public.core_is_operator_profile
-          is true, regardless of which profile the administrator was acting as when starting the
-          impersonation. A person who holds both an operator profile and a customer-party profile, and who
-          impersonates through the customer profile (using a customer-party impersonate grant), therefore
-          skips the credential_rule of the impersonated profile's own party and of every party whose content
-          the impersonated profile reaches (per-request liveness via profile_availability and the
-          owning-party gate via session_meets_party_policy), even though the operator profile was neither
-          acting nor necessarily available in the parent session. The function comment (lines 1167-1168)
-          justifies the principal-wide test by saying the parent session does not record the acting
-          profile, but mod_users.sessions.impersonator_profile_id, added in the same change set and
-          enforced by the MF101 trigger to be held by the parent principal, now records exactly that
-          profile on the child row, so the justification is stale and the narrower test is available.
-          min_acr still applies, and authorizations remain the impersonated profile's.
-        recommendation:
-          In session_policy_factors, read the child row's impersonator_profile_id together with
-          impersonator_session_id and compute skip_credential_rule as v_impersonation AND
-          public.core_is_operator_profile(impersonator_profile_id) AND that profile is status 'active'
-          (optionally also requiring mod_users.profile_availability(parent_session, impersonator_profile_id)
-          = 'available', so the exemption follows an operator profile the parent session can actually act as).
-          Update the comment at lines 1161-1168 and add an integration test where a dual-profile principal
-          impersonating through the customer profile is refused by a restrictive party's credential_rule.
     - title: ProvisionManagedUserInTx (reached from Profi…
       id: YqJd
       date: "2026-10-29"
@@ -1866,6 +1828,11 @@ closed:
       date: "2026-10-29"
     - id: crQE
       title: Operator impersonation test is principal-wide
+      disposition: fixed
+      ref: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
+      date: "2026-10-29"
+    - id: DChD
+      title: mod_users.session_policy_factors sets skip_c…
       disposition: fixed
       ref: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
       date: "2026-10-29"
