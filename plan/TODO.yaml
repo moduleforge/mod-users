@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 8
-    tasks_added: 43
+    tasks_added: 44
 phases:
     - number: 6
       slug: users-identity-core
@@ -1103,5 +1103,21 @@ phases:
       slug: remediation-08
       title: Remediation Round 8
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 8
-      tasks: []
+      tasks:
+        - number: 1
+          slug: impersonator-profile-credential-exemption
+          title: Key The Impersonation Credential-Rule Exemption On The Recorded Acting Profile
+          path: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
+          done: false
+          tier: opus-med
+          findings:
+            - DChD
+            - crQE
+            - bKBt
+          git:
+            branch: null
+            commit: []
+            merge: null
