@@ -1121,7 +1121,8 @@ phases:
             - bKBt
           git:
             branch: plan/identity-model-impl-19-001
-            commit: []
+            commit:
+                - b721fcc
             merge: null
         - number: 2
           slug: confine-impersonator-parent-factors
