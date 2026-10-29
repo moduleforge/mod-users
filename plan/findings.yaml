@@ -422,6 +422,15 @@ items:
           The doc states sessionless contexts are exempt from the prelude but not that this trust is inferred from absent SessionID/CredentialID pending a mod-core system-actor marker, nor that mod-users sessionless helper contexts are pinned never to reach Authorize (sessionless_contexts_test.go). This is recorded only in code comments in api/internal/authz/authz.go.
         recommendation:
           Add one sentence to the doc recording the inference and the pinning test as a known limitation until the mod-core marker lands.
+    - title: Plan notes need no edit; phase-18 task doc St
+      id: SV3I
+      date: "2026-10-29"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-08
+        - priority:unspecified
+        - effort:unspecified
+      text: Plan notes need no edit; phase-18 task doc Status text is historical and left alone.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
