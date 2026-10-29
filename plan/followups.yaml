@@ -2187,3 +2187,11 @@ items:
         - plan/phase:remediation-07
         - plan/slug:identity-model-impl
       text: Running make build, test, or lint with MODULEFORGE_SIBLINGS_DIR set repoints the worktrees/plan/mod-core, mod-authz, and mod-audit links through /Users/zane/playground/.flow/siblings/mod-users. Task 001 restored them with ln -sfn. Later remediation-07 tasks will hit the same repoint, so the link check must run after every make invocation.
+    - title: Impersonation data protection classes
+      id: H8qi
+      date: "2026-10-29"
+      tags:
+        - type:enhancement
+        - priority:high
+        - effort:large
+      text: 'User-directed design (from the phase 8 gate 18 decision on YqJd): support a GENERAL mechanism for protecting data during impersonation instead of ad-hoc refusals. Data/fields are marked with an impersonation access class: "no-write" (operator may read, never write; e.g. a nickname that is public but is an identifier), "no-read" (operator may write but never read the existing value; e.g. personal notes, so a support operator can append "I was here and did this" without reading the user''s notes), and "no-access" (neither read nor write; e.g. security credentials, names, birthdates, account numbers, addresses, contact info, any non-public identifying information). The request/function indicates which marked data it touches, and the credential/impersonation-context check runs ONLY when a function is about to touch marked data (so the cost is not incurred on every request); protected functions always perform the check so the proper context is set. This lets operators impersonating a user for support see everything the user sees except marked data. The immediate fix for YqJd (refuse managed-user creation and credential/authorization writes under impersonation) is a narrow instance of "no-access" and is implemented in remediation phase 19. Open design questions: where the marking lives (mod-core field metadata vs mod-users), how it composes with the AuthContext impersonation fields and mod-authz, and whether list/read helpers need generated support. Likely needs a mod-core change; plan as its own work package.'
