@@ -431,6 +431,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Plan notes need no edit; phase-18 task doc Status text is historical and left alone.
+    - title: 'Decision needed: when an impersonating caller'
+      id: zzo0
+      date: "2026-10-29"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-08
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Decision needed: when an impersonating caller ends a profile through PATCH /v1/profiles/{uuid} (ProfileService.UpdateProfileStatus -> endLocked -> departureCleanupInTx), the cleanup deletes the holder''s credential_party_authorizations for the party and revokes credentials confined to it. Strict reading of Decision K would refuse these under impersonation, which changes profile administration beyond finding YqJd. Left unchanged; decide whether to refuse (e.g. selfWriter-style in UpdateProfileStatus when to == ended) as a follow-up task or under H8qi.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
