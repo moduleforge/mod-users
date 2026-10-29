@@ -1102,6 +1102,7 @@ phases:
     - number: 19
       slug: remediation-08
       title: Remediation Round 8
+      diff_base: b6561b026b06aa38a5e3864c4791c41096d53991
       kind: remediation
       security_review: required
       tasks_added: 5
