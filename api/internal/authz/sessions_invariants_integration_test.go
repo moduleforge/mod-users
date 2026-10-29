@@ -4,13 +4,16 @@ package authz_test
 
 // sessions_invariants_integration_test.go proves the MF101 session invariants
 // of the baseline migration, writing directly through SQL: no impersonation
-// nesting, the impersonated profile held by the session principal, immutable
+// nesting, the impersonated profile held by the session principal, the
+// impersonator profile held by the parent session's principal, immutable
 // principal and impersonation columns, a user as session principal, and a
 // factor's credential belonging to the session principal.
 
 import (
 	"context"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestInteg_MF101_ImpersonationNesting(t *testing.T) {
@@ -37,11 +40,40 @@ func TestInteg_MF101_ImpersonatedProfileHeld(t *testing.T) {
 		"impersonated profile held by the session principal")
 }
 
+func TestInteg_MF101_ImpersonatorProfileHeld(t *testing.T) {
+	admin, adminProfile := seedUserEntity(t)
+	_, otherProfile := seedUserEntity(t)
+	target, targetProfile := seedUserEntity(t)
+	adminSession, _ := fxSession(t, integPool, admin, sessionOpts{})
+
+	expectState(t, sessionInsertAs(integPool, target, &adminSession, &targetProfile, &otherProfile),
+		"MF101", "impersonator profile held by someone other than the parent session's principal")
+	expectOK(t, sessionInsertAs(integPool, target, &adminSession, &targetProfile, &adminProfile),
+		"impersonator profile held by the parent session's principal")
+
+	// The impersonator profile is set exactly when the session is an
+	// impersonation: an impersonation without one fails the invariant trigger
+	// (which runs before sessions_impersonation_complete), a plain session
+	// with one fails the check.
+	_, err := integPool.Exec(context.Background(), `
+INSERT INTO mod_users.sessions (principal_id, acr, amr, auth_time, expires_at,
+                                impersonator_session_id, impersonated_profile_id, impersonation_reason)
+VALUES ($1, 1, ARRAY['pwd'], now(), now() + interval '1 hour', $2, $3, 'support')`, target, adminSession, targetProfile)
+	expectState(t, err, "MF101", "impersonation without an impersonator profile")
+	_, err = integPool.Exec(context.Background(), `
+INSERT INTO mod_users.sessions (principal_id, acr, amr, auth_time, expires_at, impersonator_profile_id)
+VALUES ($1, 1, ARRAY['pwd'], now(), now() + interval '1 hour', $2)`, admin, adminProfile)
+	expectState(t, err, "23514", "impersonator profile on a plain session")
+}
+
 func TestInteg_MF101_ImmutableColumns(t *testing.T) {
 	admin, _ := seedUserEntity(t)
 	other, otherProfile := seedUserEntity(t)
 	target, targetProfile := seedUserEntity(t)
 	adminSession, _ := fxSession(t, integPool, admin, sessionOpts{})
+	party := seedOrg(t, "MF101 immutable impersonator org")
+	var adminSecondProfile int64
+	fxMustTx(t, func(tx pgx.Tx) { adminSecondProfile = fxPartyProfile(t, tx, admin, party, "active") })
 	otherSession, _ := fxSession(t, integPool, admin, sessionOpts{})
 	imp, _ := fxSession(t, integPool, target, sessionOpts{ParentID: &adminSession, ImpersonateProfile: &targetProfile})
 	plain, _ := fxSession(t, integPool, target, sessionOpts{})
@@ -55,6 +87,7 @@ func TestInteg_MF101_ImmutableColumns(t *testing.T) {
 		"impersonator_session_id": {imp, `UPDATE mod_users.sessions SET impersonator_session_id = $2 WHERE id = $1`, otherSession},
 		"impersonated_profile_id": {imp, `UPDATE mod_users.sessions SET impersonated_profile_id = $2 WHERE id = $1`, otherProfile},
 		"impersonation_reason":    {imp, `UPDATE mod_users.sessions SET impersonation_reason = $2 WHERE id = $1`, "changed"},
+		"impersonator_profile_id": {imp, `UPDATE mod_users.sessions SET impersonator_profile_id = $2 WHERE id = $1`, adminSecondProfile},
 	} {
 		expectState(t, rawExec(integPool, c.sql, c.id, c.arg), "MF101", "change "+name)
 	}

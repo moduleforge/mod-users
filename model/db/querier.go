@@ -100,9 +100,9 @@ type Querier interface {
 	// ---------------------------------------------------------------------------
 	// Sessions
 	// ---------------------------------------------------------------------------
-	// impersonator_session_id, impersonated_profile_id and impersonation_reason are
-	// all NULL or all set (sessions_impersonation_complete); MF101 on nesting or an
-	// unheld profile.
+	// impersonator_session_id, impersonated_profile_id, impersonator_profile_id and
+	// impersonation_reason are all NULL or all set (sessions_impersonation_complete);
+	// MF101 on nesting or an unheld profile.
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	// Queries over mod_users.users. Only mod_users relations appear in this
 	// directory's queries: sqlc compiles against the mod_users migrations alone, so

@@ -125,6 +125,7 @@ type Session struct {
 	AppID                 pgtype.Int8        `json:"app_id"`
 	ImpersonatedProfileID pgtype.Int8        `json:"impersonated_profile_id"`
 	ImpersonatorSessionID pgtype.Int8        `json:"impersonator_session_id"`
+	ImpersonatorProfileID pgtype.Int8        `json:"impersonator_profile_id"`
 	Acr                   int16              `json:"acr"`
 	Amr                   []string           `json:"amr"`
 	AuthTime              pgtype.Timestamptz `json:"auth_time"`

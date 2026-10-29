@@ -58,11 +58,12 @@ const createSession = `-- name: CreateSession :one
 
 INSERT INTO mod_users.sessions (
     principal_id, app_id, acr, amr, auth_time, expires_at,
-    impersonator_session_id, impersonated_profile_id, impersonation_reason
+    impersonator_session_id, impersonated_profile_id, impersonation_reason,
+    impersonator_profile_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
-RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 type CreateSessionParams struct {
@@ -75,6 +76,7 @@ type CreateSessionParams struct {
 	ImpersonatorSessionID pgtype.Int8        `json:"impersonator_session_id"`
 	ImpersonatedProfileID pgtype.Int8        `json:"impersonated_profile_id"`
 	ImpersonationReason   pgtype.Text        `json:"impersonation_reason"`
+	ImpersonatorProfileID pgtype.Int8        `json:"impersonator_profile_id"`
 }
 
 // Queries over mod_users.sessions, session_factors and session_refresh_tokens,
@@ -82,9 +84,9 @@ type CreateSessionParams struct {
 // ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
-// impersonator_session_id, impersonated_profile_id and impersonation_reason are
-// all NULL or all set (sessions_impersonation_complete); MF101 on nesting or an
-// unheld profile.
+// impersonator_session_id, impersonated_profile_id, impersonator_profile_id and
+// impersonation_reason are all NULL or all set (sessions_impersonation_complete);
+// MF101 on nesting or an unheld profile.
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
 	row := q.db.QueryRow(ctx, createSession,
 		arg.PrincipalID,
@@ -96,6 +98,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		arg.ImpersonatorSessionID,
 		arg.ImpersonatedProfileID,
 		arg.ImpersonationReason,
+		arg.ImpersonatorProfileID,
 	)
 	var i Session
 	err := row.Scan(
@@ -105,6 +108,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.AppID,
 		&i.ImpersonatedProfileID,
 		&i.ImpersonatorSessionID,
+		&i.ImpersonatorProfileID,
 		&i.Acr,
 		&i.Amr,
 		&i.AuthTime,
@@ -219,7 +223,7 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions WHERE id = $1
+SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions WHERE id = $1
 `
 
 func (q *Queries) GetSessionByID(ctx context.Context, id int64) (Session, error) {
@@ -232,6 +236,7 @@ func (q *Queries) GetSessionByID(ctx context.Context, id int64) (Session, error)
 		&i.AppID,
 		&i.ImpersonatedProfileID,
 		&i.ImpersonatorSessionID,
+		&i.ImpersonatorProfileID,
 		&i.Acr,
 		&i.Amr,
 		&i.AuthTime,
@@ -246,7 +251,7 @@ func (q *Queries) GetSessionByID(ctx context.Context, id int64) (Session, error)
 }
 
 const getSessionByUUID = `-- name: GetSessionByUUID :one
-SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions WHERE uuid = $1
+SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions WHERE uuid = $1
 `
 
 func (q *Queries) GetSessionByUUID(ctx context.Context, argUuid uuid.UUID) (Session, error) {
@@ -259,6 +264,7 @@ func (q *Queries) GetSessionByUUID(ctx context.Context, argUuid uuid.UUID) (Sess
 		&i.AppID,
 		&i.ImpersonatedProfileID,
 		&i.ImpersonatorSessionID,
+		&i.ImpersonatorProfileID,
 		&i.Acr,
 		&i.Amr,
 		&i.AuthTime,
@@ -273,7 +279,7 @@ func (q *Queries) GetSessionByUUID(ctx context.Context, argUuid uuid.UUID) (Sess
 }
 
 const listImpersonationChildren = `-- name: ListImpersonationChildren :many
-SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions
+SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions
 WHERE impersonator_session_id = $1 AND revoked_at IS NULL
 `
 
@@ -293,6 +299,7 @@ func (q *Queries) ListImpersonationChildren(ctx context.Context, impersonatorSes
 			&i.AppID,
 			&i.ImpersonatedProfileID,
 			&i.ImpersonatorSessionID,
+			&i.ImpersonatorProfileID,
 			&i.Acr,
 			&i.Amr,
 			&i.AuthTime,
@@ -314,7 +321,7 @@ func (q *Queries) ListImpersonationChildren(ctx context.Context, impersonatorSes
 }
 
 const listLiveSessionsByPrincipal = `-- name: ListLiveSessionsByPrincipal :many
-SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions
+SELECT id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at FROM mod_users.sessions
 WHERE principal_id = $1
   AND revoked_at IS NULL
   AND expires_at > now()
@@ -337,6 +344,7 @@ func (q *Queries) ListLiveSessionsByPrincipal(ctx context.Context, principalID i
 			&i.AppID,
 			&i.ImpersonatedProfileID,
 			&i.ImpersonatorSessionID,
+			&i.ImpersonatorProfileID,
 			&i.Acr,
 			&i.Amr,
 			&i.AuthTime,
@@ -542,7 +550,7 @@ UPDATE mod_users.sessions
 SET revoked_at = now(),
     revoke_reason = $2
 WHERE impersonator_session_id = $1 AND revoked_at IS NULL
-RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 type RevokeImpersonationChildrenParams struct {
@@ -567,6 +575,7 @@ func (q *Queries) RevokeImpersonationChildren(ctx context.Context, arg RevokeImp
 			&i.AppID,
 			&i.ImpersonatedProfileID,
 			&i.ImpersonatorSessionID,
+			&i.ImpersonatorProfileID,
 			&i.Acr,
 			&i.Amr,
 			&i.AuthTime,
@@ -592,7 +601,7 @@ UPDATE mod_users.sessions
 SET revoked_at = now(),
     revoke_reason = $2
 WHERE id = $1 AND revoked_at IS NULL
-RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 type RevokeSessionParams struct {
@@ -611,6 +620,7 @@ func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) (S
 		&i.AppID,
 		&i.ImpersonatedProfileID,
 		&i.ImpersonatorSessionID,
+		&i.ImpersonatorProfileID,
 		&i.Acr,
 		&i.Amr,
 		&i.AuthTime,
@@ -629,7 +639,7 @@ UPDATE mod_users.sessions
 SET revoked_at = now(),
     revoke_reason = $2
 WHERE principal_id = $1 AND revoked_at IS NULL
-RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 type RevokeSessionsByPrincipalParams struct {
@@ -654,6 +664,7 @@ func (q *Queries) RevokeSessionsByPrincipal(ctx context.Context, arg RevokeSessi
 			&i.AppID,
 			&i.ImpersonatedProfileID,
 			&i.ImpersonatorSessionID,
+			&i.ImpersonatorProfileID,
 			&i.Acr,
 			&i.Amr,
 			&i.AuthTime,
@@ -679,7 +690,7 @@ UPDATE mod_users.sessions
 SET revoked_at = now(),
     revoke_reason = 'profile_ended'
 WHERE impersonated_profile_id = $1 AND revoked_at IS NULL
-RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 // A profile that ended: sessions impersonating it end with 'profile_ended'.
@@ -699,6 +710,7 @@ func (q *Queries) RevokeSessionsImpersonatingProfile(ctx context.Context, impers
 			&i.AppID,
 			&i.ImpersonatedProfileID,
 			&i.ImpersonatorSessionID,
+			&i.ImpersonatorProfileID,
 			&i.Acr,
 			&i.Amr,
 			&i.AuthTime,
@@ -795,7 +807,7 @@ func (q *Queries) SetRefreshTokenReplacedBy(ctx context.Context, arg SetRefreshT
 }
 
 const setSessionExpiry = `-- name: SetSessionExpiry :one
-UPDATE mod_users.sessions SET expires_at = $2 WHERE id = $1 RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+UPDATE mod_users.sessions SET expires_at = $2 WHERE id = $1 RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 type SetSessionExpiryParams struct {
@@ -814,6 +826,7 @@ func (q *Queries) SetSessionExpiry(ctx context.Context, arg SetSessionExpiryPara
 		&i.AppID,
 		&i.ImpersonatedProfileID,
 		&i.ImpersonatorSessionID,
+		&i.ImpersonatorProfileID,
 		&i.Acr,
 		&i.Amr,
 		&i.AuthTime,
@@ -842,7 +855,7 @@ SET acr = $2,
     amr = $3,
     auth_time = $4
 WHERE id = $1
-RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
+RETURNING id, uuid, principal_id, app_id, impersonated_profile_id, impersonator_session_id, impersonator_profile_id, acr, amr, auth_time, impersonation_reason, revoke_reason, revoked_at, created_at, expires_at, last_seen_at
 `
 
 type UpdateSessionAssuranceParams struct {
@@ -868,6 +881,7 @@ func (q *Queries) UpdateSessionAssurance(ctx context.Context, arg UpdateSessionA
 		&i.AppID,
 		&i.ImpersonatedProfileID,
 		&i.ImpersonatorSessionID,
+		&i.ImpersonatorProfileID,
 		&i.Acr,
 		&i.Amr,
 		&i.AuthTime,

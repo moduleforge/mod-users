@@ -6,14 +6,15 @@
 -- ---------------------------------------------------------------------------
 
 -- name: CreateSession :one
--- impersonator_session_id, impersonated_profile_id and impersonation_reason are
--- all NULL or all set (sessions_impersonation_complete); MF101 on nesting or an
--- unheld profile.
+-- impersonator_session_id, impersonated_profile_id, impersonator_profile_id and
+-- impersonation_reason are all NULL or all set (sessions_impersonation_complete);
+-- MF101 on nesting or an unheld profile.
 INSERT INTO mod_users.sessions (
     principal_id, app_id, acr, amr, auth_time, expires_at,
-    impersonator_session_id, impersonated_profile_id, impersonation_reason
+    impersonator_session_id, impersonated_profile_id, impersonation_reason,
+    impersonator_profile_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
 RETURNING *;
 
