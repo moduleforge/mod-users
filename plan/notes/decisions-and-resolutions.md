@@ -254,3 +254,19 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
   Task 003's `TestImpersonation_OperatorReachesMembersOfRestrictiveParties` stays valid. User decision.
 - **Decision F (confirmed, 2026-10-29).** Both gates apply: a party record is gated by its own policy, and a
   record owned by a party remains gated by its owner's policy. User confirmation.
+
+## Amendments (2026-10-29, phase 18 gate)
+
+- **Decision J (operator exemption keyed on the acting profile; DChD, crQE, bKBt).** The credential-rule
+  exemption for impersonation consumes `sessions.impersonator_profile_id`: it applies only when the recorded
+  acting profile is an operator profile, not when the principal merely holds some operator profile. User decision.
+- **Decision K (impersonation may not touch credential or identification data; YqJd).** Managed-user creation
+  and credential/authorization writes are refused under impersonation (`ErrImpersonationNotAllowed`) as the
+  immediate fix. The general mechanism (per-field impersonation access classes `no-write`, `no-read`,
+  `no-access`, with the context check run only when a function touches marked data) is tracked as followup
+  H8qi. User decision.
+- **Decision L (confinement under impersonation; KkGF, bFGy).** The confined check is applied for non-operator
+  impersonators, keyed on `impersonator_profile_id`; operators remain exempt per Decision G. User decision.
+- **Decision M (service-account self-rotation; task 003).** Own-principal credential routes are refused for
+  every caller including service accounts; keys are rotated by their owner or an operator. No alternate
+  self-rotation path. User decision (IDjP: update the OpenAPI error order).
