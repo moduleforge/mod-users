@@ -28,15 +28,6 @@ items:
         - priority:medium
         - effort:small
       text: 'Decision needed: when an impersonating caller ends a profile through PATCH /v1/profiles/{uuid} (ProfileService.UpdateProfileStatus -> endLocked -> departureCleanupInTx), the cleanup deletes the holder''s credential_party_authorizations for the party and revokes credentials confined to it. Strict reading of Decision K would refuse these under impersonation, which changes profile administration beyond finding YqJd. Left unchanged; decide whether to refuse (e.g. selfWriter-style in UpdateProfileStatus when to == ended) as a follow-up task or under H8qi.'
-    - title: 'Informational: Decision K in plan/notes/decis'
-      id: AXFG
-      date: "2026-10-29"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-08
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Informational: Decision K in plan/notes/decisions-and-resolutions.md says authorization writes are refused with ErrImpersonationNotAllowed; implemented refusal for party policy, credential authorization/confinement and self-service writes is a plain 403 ErrForbidden. Docs follow the code. Manager may align the note, or code if the unified error code was intended.'
     - title: Two function header comments still describe…
       id: u1NG
       date: "2026-10-29"
@@ -1742,4 +1733,9 @@ closed:
       title: ProvisionManagedUserInTx (reached from Profi…
       disposition: fixed
       ref: phase-19-remediation-08/003-refuse-managed-user-creation-impersonating.md
+      date: "2026-10-29"
+    - id: AXFG
+      title: 'Informational: Decision K in plan/notes/decis'
+      disposition: dismissed
+      reason: Decision K wording aligned with the implemented plain 403 refusals in plan/notes/decisions-and-resolutions.md; docs follow the code.
       date: "2026-10-29"
