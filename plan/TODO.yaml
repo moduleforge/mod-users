@@ -1219,6 +1219,7 @@ phases:
           path: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
           done: false
           tier: sonnet-low
+          digest: Comment-only SQL rewording, corrected refusal-order text on the four OpenAPI credential operations, and a tightened liveness assertion in the test. No behavior change.
           findings:
             - u1NG
             - lGXo
