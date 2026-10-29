@@ -1040,7 +1040,7 @@ phases:
             branch: plan/identity-model-impl-18-002
             commit:
                 - d143bca
-            merge: null
+            merge: 11e3902c3a82efdb59e66cf59f9fe7c3dc455fe3
         - number: 3
           slug: credentials-refuse-impersonation
           title: Refuse Credential Administration And Personal-Party Creation While Impersonating
