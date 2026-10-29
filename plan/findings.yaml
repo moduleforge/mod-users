@@ -34,8 +34,8 @@ items:
       tags:
         - type:security
         - plan/phase:remediation-07
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:medium
       text: mod_users.profile_gate_for (model/migrations/sql/0100_baseline.sql) skips the 'confined' check when p_impersonated_profile_id is set, so an impersonation session is never locked as 'confined' even though its party-policy factors are now the administrator's parent-session credentials (mod_users.session_policy_factors). This preserves prior behavior (the child session holds no factors), but a parent credential confined to party X can drive an impersonation of a member of party Y. Decide whether confinement of the administrator's factors should bind the impersonated profile's party, and how that interacts with operator credentials confined to the operator party.
     - title: mod_users.session_policy_factors sets skip_c…
       id: DChD
