@@ -1078,6 +1078,7 @@ phases:
           path: phase-18-remediation-07/005-pin-sessionless-contexts.md
           done: false
           tier: sonnet-high
+          digest: 'Added sessionless-context pinning tests: behavioral test that the sessionless write paths never reach Authorize; AST audit pinning the set of 11 functions that build or call sessionless-context helpers and asserting none calls an Authorize entry point. Comment on authz gated documents that sessionless trust is inferred from absent fields pending a mod-core system-actor marker. No gate logic or SQL changed. Integration tests ran and passed (authz, config, integration). The mod-core system-actor marker (j75L real fix) remains to be filed separately.'
           findings:
             - j75L
           git:
