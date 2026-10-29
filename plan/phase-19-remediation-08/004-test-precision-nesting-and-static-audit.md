@@ -30,3 +30,10 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 - Finding `gxvu` in this plan's `plan/findings.yaml` (the nesting SQL check omits `impersonator_profile_id`, so the MF101 invariant can raise the same SQLSTATE and the test does not isolate the nesting invariant).
 - Finding `ehkS` in this plan's `plan/findings.yaml` (the party-record gate HTTP test accepts either 403 or 404 and has no positive control).
 - Finding `FvL1` in this plan's `plan/findings.yaml` (the static audit counts a literal `SessionID: 0` as session-bearing, and its receiver walk covers the same package only, which is not stated).
+
+## Status
+
+- Outcome: succeeded (2026-10-29).
+- Validation: api build, unit tests and lint pass; the integration suite (authz, config, integration) passed against a throwaway postgres:16 container (since removed). Removing the no-nesting branch locally made TestImpersonation_NoNesting fail ("inserting a child of an impersonation session succeeded"); reverted. A temporary `AuthContext{SessionID: 0, ...}` literal made TestSessionlessContexts_SourceAudit fail on the changed root set; removed.
+- Changed: `api/internal/integration/impersonation_integration_test.go`, `api/internal/integration/party_policy_integration_test.go`, `api/internal/service/sessionless_contexts_test.go`.
+- Decision: the party-record gate yields the masked 404 (not 403) for a non-member below the policy.

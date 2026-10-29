@@ -309,16 +309,23 @@ func TestImpersonation_NoNesting(t *testing.T) {
 	}
 
 	// Through SQL: inserting a child of an impersonation session raises MF101.
+	// The row satisfies every other session invariant: the impersonated profile
+	// is held by the child's principal, and impersonator_profile_id is a profile
+	// held by the parent session's principal (m, whom the parent impersonates),
+	// so only the no-nesting invariant can fire.
 	_, err := env.pool.Exec(context.Background(),
 		`INSERT INTO mod_users.sessions (principal_id, acr, amr, auth_time, expires_at,
-		        impersonator_session_id, impersonated_profile_id, impersonation_reason)
-		 VALUES ($1, 1, ARRAY['pwd'], now(), now() + interval '10 minutes', $2, $3, 'nested')`,
-		other.userID, childID, other.profileID)
+		        impersonator_session_id, impersonated_profile_id, impersonator_profile_id, impersonation_reason)
+		 VALUES ($1, 1, ARRAY['pwd'], now(), now() + interval '10 minutes', $2, $3, $4, 'nested')`,
+		other.userID, childID, other.profileID, m.profileID)
 	if err == nil {
 		t.Fatal("inserting a child of an impersonation session succeeded")
 	}
 	if !svc.IsSessionInvariantError(err) {
 		t.Errorf("err = %v, want SQLSTATE MF101", err)
+	}
+	if !strings.Contains(err.Error(), "no nesting") {
+		t.Errorf("err = %v, want the no-nesting invariant message", err)
 	}
 }
 
