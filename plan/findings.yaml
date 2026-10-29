@@ -19,15 +19,6 @@ items:
           gated treats every non-anonymous AuthContext with SessionID == 0 and CredentialID == 0 as a trusted system actor and skips both the assurance gate and the owning-party gate. mod-core opctx.AuthContext (core-api/opctx/opctx.go) carries no explicit system-actor marker, so trust is inferred from absent fields. mod-users itself builds sessionless contexts for real users (withActingProfile in api/internal/service/helpers.go, UnauthenticatedActingContext, CreatedUser.ActingContext, the idp_jit context in api/internal/handlers/auth/oidc_flows.go). Today they appear to feed observations only, but any future Authorize call on such a context, or a sibling module constructing a profile-only context, fails open on both gates.
         recommendation:
           Skip the gates only for an explicit marker, for example a SystemActor flag set by opctx.WithSystemActor (a mod-core change, to be requested from mod-core) or a core_is_operator_profile system_actor check on the profile, and fail closed (ErrStepUpRequired or ErrForbidden) for other sessionless, credential-less contexts. Meanwhile add a unit test that pins which helpers produce sessionless contexts and that none reaches Authorize.
-    - title: Operator impersonation test is principal-wide
-      id: crQE
-      date: "2026-10-29"
-      tags:
-        - type:security
-        - plan/phase:remediation-07
-        - priority:high
-        - effort:small
-      text: mod_users.session_policy_factors (model/migrations/sql/0100_baseline.sql) sets skip_credential_rule for an impersonation session when the parent session's principal holds ANY active operator profile (public.core_is_operator_profile over public.profiles.holder_id), because mod_users.sessions does not record the administrator's acting profile at ImpersonationService.Start (api/internal/service/impersonation.go). A person holding both an operator profile and a customer-party administrator profile who impersonates through the customer profile therefore also skips every customer party's credential_rule (min_acr still applies; authorizations stay the impersonated profile's). Once the child session records the administrator's acting profile, session_policy_factors should test core_is_operator_profile on that recorded profile (and its active status) instead of on the principal's profiles.
     - title: Confinement not applied to parent factors
       id: bFGy
       date: "2026-10-29"
@@ -1872,4 +1863,9 @@ closed:
         403 users.impersonation_not_allowed). The createManagedUser description in
         api/openapi.yaml (~3355-3356) states the same refusal. The note itself says no plan-notes
         edit is needed.
+      date: "2026-10-29"
+    - id: crQE
+      title: Operator impersonation test is principal-wide
+      disposition: fixed
+      ref: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
       date: "2026-10-29"
