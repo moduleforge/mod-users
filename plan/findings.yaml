@@ -19,15 +19,6 @@ items:
           gated treats every non-anonymous AuthContext with SessionID == 0 and CredentialID == 0 as a trusted system actor and skips both the assurance gate and the owning-party gate. mod-core opctx.AuthContext (core-api/opctx/opctx.go) carries no explicit system-actor marker, so trust is inferred from absent fields. mod-users itself builds sessionless contexts for real users (withActingProfile in api/internal/service/helpers.go, UnauthenticatedActingContext, CreatedUser.ActingContext, the idp_jit context in api/internal/handlers/auth/oidc_flows.go). Today they appear to feed observations only, but any future Authorize call on such a context, or a sibling module constructing a profile-only context, fails open on both gates.
         recommendation:
           Skip the gates only for an explicit marker, for example a SystemActor flag set by opctx.WithSystemActor (a mod-core change, to be requested from mod-core) or a core_is_operator_profile system_actor check on the profile, and fail closed (ErrStepUpRequired or ErrForbidden) for other sessionless, credential-less contexts. Meanwhile add a unit test that pins which helpers produce sessionless contexts and that none reaches Authorize.
-    - title: 'Decision needed: when an impersonating caller'
-      id: zzo0
-      date: "2026-10-29"
-      tags:
-        - type:security
-        - plan/phase:remediation-08
-        - priority:medium
-        - effort:small
-      text: 'Decision needed: when an impersonating caller ends a profile through PATCH /v1/profiles/{uuid} (ProfileService.UpdateProfileStatus -> endLocked -> departureCleanupInTx), the cleanup deletes the holder''s credential_party_authorizations for the party and revokes credentials confined to it. Strict reading of Decision K would refuse these under impersonation, which changes profile administration beyond finding YqJd. Left unchanged; decide whether to refuse (e.g. selfWriter-style in UpdateProfileStatus when to == ended) as a follow-up task or under H8qi.'
     - title: Two function header comments still describe…
       id: u1NG
       date: "2026-10-29"
@@ -1729,6 +1720,11 @@ closed:
       date: "2026-10-29"
     - id: uBfI
       title: ProfileService.UpdateProfileStatus (PATCH /v…
+      disposition: fixed
+      ref: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
+      date: "2026-10-29"
+    - id: zzo0
+      title: 'Decision needed: when an impersonating caller'
       disposition: fixed
       ref: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
       date: "2026-10-29"
