@@ -27,6 +27,14 @@ package service
 //     context builders and their callers (so a new one fails the test until it
 //     is reviewed and added here) and asserts that none of them, nor anything
 //     they transitively call by name, calls an Authorize entry point.
+//
+// Scope of the static audit: it recognises only literal-valued fields. A
+// SessionID or CredentialID key whose value is the literal 0 is treated as
+// absent (the field is zero either way), but a variable-valued SessionID (or
+// CredentialID), for example SessionID: sid, is out of scope and is treated as
+// session-bearing whatever it holds at run time. The receiver closure follows
+// calls by bare name within the same package (directory) only; it does not
+// cross package boundaries.
 
 import (
 	"context"
@@ -420,7 +428,8 @@ func TestSessionlessContexts_SourceAudit(t *testing.T) {
 // isSessionlessAuthContextLiteral reports whether lit is a non-empty
 // opctx.AuthContext literal naming neither SessionID, CredentialID nor
 // Anonymous: a context that carries no session, no credential and is not the
-// anonymous actor.
+// anonymous actor. A SessionID or CredentialID key whose value is the literal 0
+// counts as absent.
 func isSessionlessAuthContextLiteral(lit *ast.CompositeLit) bool {
 	sel, ok := lit.Type.(*ast.SelectorExpr)
 	if !ok || sel.Sel.Name != "AuthContext" || len(lit.Elts) == 0 {
@@ -431,11 +440,26 @@ func isSessionlessAuthContextLiteral(lit *ast.CompositeLit) bool {
 		if !ok {
 			return false // positional literal: not one of the audited shapes
 		}
-		if id, ok := kv.Key.(*ast.Ident); ok && (id.Name == "SessionID" || id.Name == "CredentialID" || id.Name == "Anonymous") {
+		id, ok := kv.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		switch id.Name {
+		case "Anonymous":
 			return false
+		case "SessionID", "CredentialID":
+			if !isZeroLiteral(kv.Value) {
+				return false
+			}
 		}
 	}
 	return true
+}
+
+// isZeroLiteral reports whether e is the integer literal 0.
+func isZeroLiteral(e ast.Expr) bool {
+	lit, ok := e.(*ast.BasicLit)
+	return ok && lit.Kind == token.INT && lit.Value == "0"
 }
 
 func calleeName(fun ast.Expr) string {

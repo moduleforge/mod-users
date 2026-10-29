@@ -264,12 +264,25 @@ SELECT $1, o.id, $2, NULL, 'entity' FROM authz_operations o WHERE o.slug = 'upda
 	outsiderID := env.principalID(t, outsider.Email)
 	updateGrant(env.personalProfileID(t, outsiderID))
 	r := env.do(t, http.MethodPut, g.path("/authn-policy"), outsider.tk.access(), weaken)
-	if r.status != http.StatusForbidden && r.status != http.StatusNotFound {
-		t.Fatalf("non-member below the party's policy: status = %d, want 403 or 404; body=%s", r.status, r.raw)
+	// The gate's refusal for a non-member is the masked 404, not a 403: the
+	// non-member cannot see the party record, so the refusal does not reveal it.
+	if r.status != http.StatusNotFound {
+		t.Fatalf("non-member below the party's policy: status = %d, want 404; body=%s", r.status, r.raw)
 	}
 	if got := ruleOf(); got != "authorized" {
 		t.Fatalf("credential_rule after the refused write = %q, want authorized", got)
 	}
+
+	// Positive control: once the party authorizes the outsider's password
+	// (min_acr is already met), the same non-member session passes the gate and
+	// the write succeeds, so the refusal above was the policy and not a missing
+	// grant or a malformed request. A write that keeps the policy is used so the
+	// rest of the test still runs against the restrictive policy.
+	env.exec(t, "authorize the outsider's password",
+		`INSERT INTO mod_users.credential_party_authorizations (credential_id, party_id, authorized_by_profile_id)
+		 SELECT c.id, $2, $3 FROM mod_users.credentials c WHERE c.principal_id = $1 AND c.kind = 'password' AND c.revoked_at IS NULL`,
+		outsiderID, g.id, env.personalProfileID(t, outsiderID))
+	env.do(t, http.MethodPut, g.path("/authn-policy"), outsider.tk.access(), keep).wantStatus(t, http.StatusOK)
 
 	// A compliant member holding the same grant is admitted.
 	m := env.newGateMember(t, g)
