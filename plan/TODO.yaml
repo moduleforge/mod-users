@@ -1243,7 +1243,8 @@ phases:
           digest: 'gated() now skips the engine''s assurance and owning-party gates only for opctx.IsSystemActor and the anonymous context. An unmarked sessionless context is gated and fails closed. Every AuthContext builder in api/ reviewed and commented; no class (b) producer. Findings filed: J86E (mod-authz stepUpStale), c6Dh (stale SQL comment).'
           git:
             branch: plan/identity-model-impl-21-001
-            commit: []
+            commit:
+                - f8cfc04
             merge: null
         - number: 2
           slug: adopt-list-row-filter-hook
