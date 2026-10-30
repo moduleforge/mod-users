@@ -263,8 +263,15 @@ func wireServices(ctx context.Context, pool *pgxpool.Pool) error {
 	// vacuously against an always-empty result set. The slugs are the subset
 	// of authzSlugs in cmd/server/main.go that the symmetry test exercises;
 	// "type" is deliberately absent because production never generates
-	// accessible_type_ids_for_actor.
-	if err := authzsetup.ApplyFuncs(ctx, pool, authzsetup.NewGrantTableGenerator(), []string{"organization", "natural_person", "legal_entity"}); err != nil {
+	// accessible_type_ids_for_actor. The generator is production's
+	// (authz.AccessFuncGenerator, the owning-party row filter around the
+	// grant-table body), so every list assertion runs against what the server
+	// installs.
+	gen, err := authz.AccessFuncGenerator()
+	if err != nil {
+		return fmt.Errorf("access-function generator: %w", err)
+	}
+	if err := authzsetup.ApplyFuncs(ctx, pool, gen, []string{"organization", "natural_person", "legal_entity"}); err != nil {
 		return fmt.Errorf("apply access functions: %w", err)
 	}
 	return nil

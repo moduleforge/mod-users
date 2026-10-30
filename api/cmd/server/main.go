@@ -269,7 +269,8 @@ func main() {
 
 	// Apply access-function bodies for row-level scoping. Each peer module
 	// ships stub functions in its migrations; here we replace those stubs
-	// with the policy bodies from the GrantTableGenerator (Phase 2.2).
+	// with the policy bodies from the GrantTableGenerator (Phase 2.2),
+	// filtered through mod-users' owning-party row filter.
 	// The DDL is idempotent; safe to run on every startup.
 	//
 	// The slug list must match all resources that have a list query JOINing
@@ -289,7 +290,22 @@ func main() {
 		"authz_actor_group",
 		"authz_target_group",
 	}
-	if err := setup.ApplyFuncs(ctx, pool, setup.NewGrantTableGenerator(), authzSlugs); err != nil {
+	// WHY the hooked generator: single-row Authorize applies the owning-party
+	// gate to every target with an owner, so every slug's list function must
+	// drop the same rows. AccessFuncGenerator is setup.NewRowFilterGenerator(
+	// setup.NewGrantTableGenerator(), "mod_users.access_row_permitted"), the
+	// same constructor host composition roots use, so the dev server and the
+	// hosts install one definition. IMPLIES: every list query that joins one
+	// of these functions must run in a transaction bound with
+	// setup.BindAuthInputs, or it silently drops the gated rows; a constructor
+	// error (an invalid predicate name) fails startup rather than installing
+	// unfiltered functions.
+	accessGen, err := localAuthz.AccessFuncGenerator()
+	if err != nil {
+		slog.ErrorContext(ctx, "authz access-function generator failed", "error", err)
+		os.Exit(1)
+	}
+	if err := setup.ApplyFuncs(ctx, pool, accessGen, authzSlugs); err != nil {
 		slog.ErrorContext(ctx, "authz access-function setup failed", "error", err)
 		os.Exit(1)
 	}

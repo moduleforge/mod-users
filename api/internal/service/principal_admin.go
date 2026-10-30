@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/moduleforge/core-api/apiresp"
+	"github.com/moduleforge/core-api/authz/setup"
 	"github.com/moduleforge/core-api/opctx"
 	coreservice "github.com/moduleforge/core-api/service"
 	coredb "github.com/moduleforge/core-model/db"
@@ -78,7 +79,9 @@ type PrincipalPage struct {
 // principalScopeSQL selects the (id, created_at) of the principals the actor
 // ($1, a profile entity id) may list for the operations in $2, restricted to
 // kind $3 (” for both). The access functions are generated per type by
-// mod-core's setup.ApplyFuncs; mod-users ships only the user stub.
+// mod-core's setup.ApplyFuncs through localAuthz.AccessFuncGenerator, which
+// filters every row through the owning-party gate; mod-users ships only the
+// user stub. Run it only in a transaction bound with setup.BindAuthInputs.
 const principalScopeSQL = `
 SELECT e.id AS id, e.created_at AS created_at
   FROM mod_users.users u
@@ -120,7 +123,7 @@ func (s *UserService) ListPrincipals(ctx context.Context, in ListPrincipalsInput
 	default:
 		return PrincipalPage{}, invalidField("kind", "users.principal_kind_invalid", "kind must be user or service_account")
 	}
-	if s.ops == nil || s.db == nil {
+	if s.ops == nil || s.pool == nil {
 		return PrincipalPage{}, errors.New("users: principal listing is not configured")
 	}
 	limit, offset := coreservice.Pagination{Limit: in.Limit, Offset: in.Offset}.Normalize()
@@ -129,12 +132,38 @@ func (s *UserService) ListPrincipals(ctx context.Context, in ListPrincipalsInput
 		return PrincipalPage{}, fmt.Errorf("users: resolve list operation: %w", err)
 	}
 
+	// WHY one read-only transaction per request: the access functions read the
+	// request's session, credential and system-actor marker from
+	// transaction-local settings, so the count, the page and the detail reads
+	// must share the transaction that bound them, and the binding must not
+	// outlive this request (it ends with the rollback). IMPLIES: the
+	// transaction is never reused for another context, and nothing here can
+	// write.
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return PrincipalPage{}, fmt.Errorf("users: begin principal list: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// WHY bind before any list query: accessible_user_ids_for_actor and
+	// accessible_service_account_ids_for_actor pass these inputs to the
+	// owning-party row filter (mod_users.access_row_permitted), which applies
+	// to each row the gate single-row Authorize applies. IMPLIES: a binding
+	// error refuses the request; it never falls back to an unbound list (which
+	// would silently drop every row a restrictive party policy gates) or to a
+	// binding left over from another request. BindAuthInputs writes the
+	// settings transaction-locally (set_config is_local = true), never for the
+	// whole session.
+	if err := setup.BindAuthInputs(ctx, tx); err != nil {
+		return PrincipalPage{}, fmt.Errorf("users: bind authorization inputs: %w", err)
+	}
+
 	var total int64
-	if err := s.db.QueryRow(ctx, principalCountSQL, ac.ProfileID, opIDs, in.Kind).Scan(&total); err != nil {
+	if err := tx.QueryRow(ctx, principalCountSQL, ac.ProfileID, opIDs, in.Kind).Scan(&total); err != nil {
 		return PrincipalPage{}, fmt.Errorf("users: count principals: %w", err)
 	}
 	ids := make([]int64, 0, limit)
-	rows, err := s.db.Query(ctx, principalPageSQL, ac.ProfileID, opIDs, in.Kind, limit, offset)
+	rows, err := tx.Query(ctx, principalPageSQL, ac.ProfileID, opIDs, in.Kind, limit, offset)
 	if err != nil {
 		return PrincipalPage{}, fmt.Errorf("users: list principals: %w", err)
 	}
@@ -151,7 +180,7 @@ func (s *UserService) ListPrincipals(ctx context.Context, in ListPrincipalsInput
 	}
 	rows.Close()
 
-	views, err := principalViews(ctx, s.db, ids)
+	views, err := principalViews(ctx, tx, ids)
 	if err != nil {
 		return PrincipalPage{}, err
 	}

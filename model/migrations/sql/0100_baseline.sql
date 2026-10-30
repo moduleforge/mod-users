@@ -8,7 +8,8 @@
 -- authentication policies, credential authorizations, sessions with factors and
 -- refresh lineages, the persisted signing key, the availability and liveness
 -- functions, and the authorization engine's owning-party gate
--- (session_meets_party_policy). The former 0101 to 0104 migrations are folded in. A
+-- (session_meets_party_policy, owning_party_gate, and the list-side row filter
+-- access_row_permitted). The former 0101 to 0104 migrations are folded in. A
 -- database created from an earlier baseline must be dropped and recreated
 -- (make clean.data); there is no in-place upgrade path.
 --
@@ -1792,6 +1793,138 @@ END;
 $$;
 -- +goose StatementEnd
 
+-- owning_party_gate(p_profile_id, p_session_id, p_credential_id, p_entity_id,
+-- p_owner_id): the one SQL definition of the authorization engine's
+-- owning-party decision, shared by the single-row prelude (the Authorizer's
+-- checkPartyPolicy query) and the list-side row filter (access_row_permitted),
+-- so the two cannot drift. True when the acting profile p_profile_id, with the
+-- session p_session_id or else the credential p_credential_id, passes
+-- session_meets_party_policy for every gate party of one check:
+--
+--   - p_owner_id, the owner of the target (entities.owner_id; for
+--     AuthorizeTypeIn the owner argument); NULL passes;
+--   - p_entity_id itself when it is a legal_entity (decision F). NULL means
+--     the check has no target row (AuthorizeTypeIn), so only the owner gates.
+--
+-- One level only: never the owner's owner. Session and credential ids of 0
+-- mean "none" and are read as NULL. The result is never NULL.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.owning_party_gate(
+  p_profile_id    BIGINT,
+  p_session_id    BIGINT,
+  p_credential_id BIGINT,
+  p_entity_id     BIGINT,
+  p_owner_id      BIGINT
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+  -- WHY: the Go AuthContext and mod-core's BindAuthInputs both encode "no
+  -- session" and "no credential" as 0, while session_meets_party_policy reads
+  -- NULL as absent. IMPLIES: 0 and NULL are the same input here, so a bound
+  -- context without a session or credential and an unbound call (NULL) get the
+  -- same answer: no factors, which fails closed for a restrictive party.
+  v_session_id    BIGINT := NULLIF(p_session_id, 0);
+  v_credential_id BIGINT := NULLIF(p_credential_id, 0);
+BEGIN
+  -- WHY: the target's owner is the gate party of every check that names one.
+  -- IMPLIES: a NULL owner passes inside session_meets_party_policy; IS NOT
+  -- TRUE (not NOT) so an unexpected NULL result refuses instead of falling
+  -- through to true. Decisions D (operator profiles exempt), G and J (the
+  -- impersonation factors and the operator-impersonation credential-rule
+  -- skip, via session_policy_factors' impersonator_profile_id) and L
+  -- (confinement of a non-operator impersonation's parent factors) are all
+  -- applied inside session_meets_party_policy and its helpers; do not add a
+  -- second operator or impersonation exemption here.
+  IF mod_users.session_meets_party_policy(v_session_id, v_credential_id, p_profile_id, p_owner_id) IS NOT TRUE THEN
+    RETURN false;
+  END IF;
+
+  -- WHY (decision F): a party is its own owning party, so a target that is
+  -- itself a legal_entity is also gated by its own policy, even with no owner.
+  -- IMPLIES: both gates apply to a party-owned party (the owner's and its own),
+  -- one level only. A NULL p_entity_id (AuthorizeTypeIn, which names an owner
+  -- but no row) skips this branch: the owner gate above is the whole decision.
+  IF p_entity_id IS NOT NULL
+     AND EXISTS (SELECT 1 FROM public.legal_entities le WHERE le.entity_id = p_entity_id)
+     AND mod_users.session_meets_party_policy(v_session_id, v_credential_id, p_profile_id, p_entity_id) IS NOT TRUE
+  THEN
+    RETURN false;
+  END IF;
+
+  RETURN true;
+END;
+$$;
+-- +goose StatementEnd
+
+-- access_row_permitted(p_actor_entity_id, p_entity_id, p_owner_id,
+-- p_session_id, p_credential_id, p_system_actor): mod-users' list-side row
+-- filter, the predicate mod-core's setup.NewRowFilterGenerator calls for every
+-- row an accessible_<slug>_ids_for_actor function would list (installed at
+-- startup through localAuthz.AccessFuncGenerator). It returns what the
+-- single-row prelude decides for the same acting profile, row, session and
+-- credential: true for a trusted system actor, else owning_party_gate. The
+-- arguments are mod-core's predicate contract, positional: the acting profile,
+-- the candidate row and its owner, and the request's session id, credential
+-- id and system-actor marker as setup.BindAuthInputs bound them (0, 0 and
+-- false for "bound, none"; all NULL when the caller never bound them).
+--
+-- Anonymous context (finding 7Bb9): no anonymous branch (option ii). The
+-- single-row prelude skips the gates for the anonymous context, but the
+-- anonymous profile can hold no grant and join no actor group (mod-authz
+-- MF501 actor_anonymous, MF502 member_anonymous) and has no own subject, so
+-- every arm lists nothing for it and both sides agree without one. Deriving
+-- anonymity from p_actor_entity_id would add a lookup per row for no row.
+--
+-- Not hardened beyond the single-row side (findings erS4, 6nAj): the marker
+-- is honored as bound, exactly as the prelude honors opctx.IsSystemActor, so
+-- list and single-row checks keep parity.
+-- +goose StatementBegin
+CREATE FUNCTION mod_users.access_row_permitted(
+  p_actor_entity_id BIGINT,
+  p_entity_id       BIGINT,
+  p_owner_id        BIGINT,
+  p_session_id      BIGINT,
+  p_credential_id   BIGINT,
+  p_system_actor    BOOLEAN
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+  -- WHY: the single-row prelude skips the owning-party gate for a trusted
+  -- system actor (gated() and opctx.IsSystemActor), and this mirrors it.
+  -- IMPLIES: only IS TRUE exempts. true is bound only for a context built
+  -- with opctx.WithSystemActor (never anonymous, never impersonating); NULL
+  -- (unbound) and false (bound, not a system actor) never exempt and fall
+  -- through to the gate, so they fail closed. Never write IS NOT FALSE or
+  -- COALESCE(p_system_actor, true) here.
+  IF p_system_actor IS TRUE THEN
+    RETURN true;
+  END IF;
+
+  -- WHY, the unbound all-NULL case: p_session_id, p_credential_id and
+  -- p_system_actor are all NULL when the caller skipped setup.BindAuthInputs
+  -- (or listed outside the transaction it bound). There is no separate branch
+  -- for it: the NULL ids reach owning_party_gate as "no session and no
+  -- credential". IMPLIES: an unbound list fails closed, silently, for every
+  -- row a restrictive policy gates (session_meets_party_policy has no factors
+  -- to read), and still lists the rows the gate does not refuse: the acting
+  -- profile inside the owning party, a personal profile's own subject, a
+  -- platform operator profile (decision D), an owner with no restrictive
+  -- policy. Decisions D, G, J and L are applied inside
+  -- session_meets_party_policy, reached through owning_party_gate; none is
+  -- re-implemented here.
+  RETURN mod_users.owning_party_gate(p_actor_entity_id, p_session_id, p_credential_id, p_entity_id, p_owner_id) IS TRUE;
+END;
+$$;
+-- +goose StatementEnd
+
 -- session_liveness: the per-request check for an interactive access token, in
 -- one round trip. Always returns exactly one row (OUT parameters rather than
 -- RETURNS TABLE, so sqlc can type the result). status is 'ok' or the first
@@ -1947,8 +2080,9 @@ $$;
 -- accessible_user_ids_for_actor: the row-level scoping function the principal
 -- list path joins against. Same shape as mod-core's stubs (public, empty set):
 -- at startup the host's setup.ApplyFuncs replaces the body via CREATE OR
--- REPLACE FUNCTION with the generated policy. p_actor_entity_id is the acting
--- profile's entity id.
+-- REPLACE FUNCTION with the generated policy, filtered through
+-- access_row_permitted (localAuthz.AccessFuncGenerator). p_actor_entity_id is
+-- the acting profile's entity id.
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION public.accessible_user_ids_for_actor(p_actor_entity_id BIGINT, p_op_ids INT[])
 RETURNS TABLE(entity_id BIGINT) LANGUAGE sql STABLE AS $$
@@ -1967,6 +2101,8 @@ DROP FUNCTION IF EXISTS public.accessible_user_ids_for_actor(BIGINT, INT[]);
 
 DROP FUNCTION IF EXISTS mod_users.credential_liveness(UUID, UUID, UUID);
 DROP FUNCTION IF EXISTS mod_users.session_liveness(UUID, UUID, UUID);
+DROP FUNCTION IF EXISTS mod_users.access_row_permitted(BIGINT, BIGINT, BIGINT, BIGINT, BIGINT, BOOLEAN);
+DROP FUNCTION IF EXISTS mod_users.owning_party_gate(BIGINT, BIGINT, BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.session_meets_party_policy(BIGINT, BIGINT, BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.credential_profile_availability(BIGINT, BIGINT);
 DROP FUNCTION IF EXISTS mod_users.profile_availability_excluding(BIGINT, BIGINT, BIGINT);

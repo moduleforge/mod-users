@@ -6,9 +6,12 @@ package authz_test
 // single-row answer agrees with mod-core's generated
 // accessible_<slug>_ids_for_actor list functions: the single-row half of the
 // two-sided check (the list half lives in mod-core and mod-authz). The list
-// side is the production SQL installed through setup.ApplyFuncs and the
-// grant-table generator with the slug list of the dev server (user and profile
-// included, per U18); nothing here copies it.
+// side is the production SQL installed through setup.ApplyFuncs and
+// authz.AccessFuncGenerator (the grant-table generator inside the owning-party
+// row filter) with the slug list of the dev server (user and profile included,
+// per U18); nothing here copies it. The fixtures here set no party policy, so
+// the row filter passes every row; the gated parity cases live in
+// row_filter_parity_integration_test.go.
 //
 // The parity contract: for every actor, every operation in the seed, every
 // installed slug S and every fixture entity t whose type is S or descends from
@@ -44,6 +47,7 @@ import (
 	"github.com/moduleforge/core-api/apiresp"
 	authzsetup "github.com/moduleforge/core-api/authz/setup"
 	"github.com/moduleforge/core-api/opctx"
+	"github.com/moduleforge/mod-users/api/internal/authz"
 )
 
 // parityBaseSlugs is the dev server's access-function slug list (U18: user,
@@ -125,7 +129,11 @@ func newParityWorld(t *testing.T) *parityWorld {
 		ops:   parityOps(t),
 		ids:   map[string]int64{},
 	}
-	if err := authzsetup.ApplyFuncs(context.Background(), integPool, authzsetup.NewGrantTableGenerator(), w.slugs); err != nil {
+	gen, err := authz.AccessFuncGenerator()
+	if err != nil {
+		t.Fatalf("access-function generator: %v", err)
+	}
+	if err := authzsetup.ApplyFuncs(context.Background(), integPool, gen, w.slugs); err != nil {
 		t.Fatalf("apply access functions: %v", err)
 	}
 
