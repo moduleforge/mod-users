@@ -274,3 +274,18 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
   creation, party policy, credential authorization/confinement, self-service credential writes) return
   plain `403` (`ErrForbidden`; managed-user creation `403 users.impersonation_not_allowed`), not a distinct
   `ErrImpersonationNotAllowed` error type. The behavior is as decided; the docs follow the code.
+
+## Amendments (2026-10-30, phase 21: adopting the mod-core engine remediation)
+
+- **U5 / U14 (superseded rule).** The inferred sessionless system-actor rule is superseded. The engine's
+  `gated()` skips the assurance and owning-party gates only for `opctx.IsSystemActor` (set solely by
+  `opctx.WithSystemActor`) or an anonymous context. A sessionless context acting for a real user is NOT
+  exempt and fails closed.
+- **Decision E (resolution).** Ddx9 is resolved by mod-core's module-agnostic row-filter hook; mod-users
+  adopts it through `NewRowFilterGenerator`, a six-argument `mod_users.access_row_permitted` predicate
+  (actor entity id, entity id, owner id, session id, credential id, `p_system_actor`; NULL when unbound)
+  and `setup.BindAuthInputs` in each list transaction. qvSR (Authorizer contract text) is resolved in
+  mod-core.
+- **Consequence for composed modules.** A module list query that does not bind its authorization inputs
+  silently drops rows of restrictive-policy parties from cross-party collaborators (fail closed). Such
+  modules are tracked as needs-sibling findings (owkI, QbSc, ZEu4, ck8O, yDll, wyTd).

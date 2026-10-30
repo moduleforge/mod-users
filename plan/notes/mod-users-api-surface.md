@@ -727,3 +727,17 @@ args `context`, `field:cfg.LocalAuth`), `authenticator` (`auth.NewAuthenticator`
 - **Section 6.2 (ownership).** The owning-party gate resolves ownership one level only: a party record is its
   own owning party, and a record owned by a party is gated by that party's policy. Nested ownership chains
   are not followed.
+
+## Amendments (2026-10-30, phase 21)
+
+- **Section 3 (gates).** The owning-party predicate for lists is the six-argument
+  `mod_users.access_row_permitted` (actor entity id, entity id, owner id, session id, credential id,
+  `p_system_actor`); only `p_system_actor IS TRUE` exempts, ids of 0 are NULL, and `/v1/principals` lists
+  through it.
+- **Section 6.2 (marker rule and generators).** `gated()` keys on `opctx.IsSystemActor`; sessionless
+  contexts that act for a real user fail closed. List access functions are installed through the
+  `AccessFuncGenerator` / `AccessRowFilter` (`NewRowFilterGenerator`); every list transaction calls
+  `BindAuthInputs` and checks its error.
+- **Bootstrap.** `NewBootstrapService` takes an organization-service parameter (`OrganizationFromServices`);
+  bootstrap creates the organization through `Organization.CreateInTx(ctx, tx, in, service.WithoutOwner())`
+  and calls `ObserveAfterCommit` after commit (finding 06rd tracks the missing call at some sites).
