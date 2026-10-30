@@ -18,6 +18,51 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'model/migrations/sql/0100_baseline.sql, the comment above mod_users.session_meets_party_policy (around line 1702) ends: "An unknown session, a revoked or unknown credential, or neither id fails closed (false): trusted contexts without a session or credential are the engine''s to skip, not this function''s." The engine (api/internal/authz/authz.go gated) no longer treats a context without a session or credential as trusted: it skips the owning-party gate only for opctx.IsSystemActor contexts (mod-core''s explicit marker) and the anonymous context, and an unmarked sessionless context reaches this function and gets false. The comment should say that system-actor contexts (opctx.IsSystemActor) and the anonymous context are the engine''s to skip, and that an unmarked sessionless context is refused here. Comment-only change; the function body is correct.'
+    - title: mod-repos lists lack BindAuthInputs
+      id: owkI
+      date: "2026-10-30"
+      tags:
+        - type:bug
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: mod-repos. When a host installs access functions through mod-users'' row-filtered generator (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), every list query must run in a transaction bound with mod-core setup.BindAuthInputs(ctx, tx); otherwise the predicate receives NULL session/credential/system-actor inputs and silently drops every row a restrictive party policy gates (credential_rule or min_acr), even for a collaborator whose session meets the policy. mod-repos never calls BindAuthInputs. Unbound list queries: model/queries/namespaces.sql ListNamespaces (accessible_namespace_ids_for_actor; api/service/namespace.go), model/queries/repositories.sql ListRepositoriesByNamespace (accessible_repository_ids_for_actor; api/service/repository.go), model/queries/pull_requests.sql ListPullRequestsByRepository (api/service/pull_request.go), model/queries/releases.sql ListReleasesByRepository (api/service/release.go). Each needs one read-only transaction per request, BindAuthInputs called first with its error refusing the request, and all list queries of the request run in it. Also: mod-repos'' CompositeAccessFuncGenerator (api/authz/generator.go) must be wrapped by the host as setup.NewRowFilterGenerator(composite, localAuthz.AccessRowFilter) so its appended visibility arms are filtered too.'
+    - title: mod-tasks list lacks BindAuthInputs
+      id: QbSc
+      date: "2026-10-30"
+      tags:
+        - type:bug
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: mod-tasks. With mod-users'' row-filtered access functions installed (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), a list query run without mod-core setup.BindAuthInputs on its transaction passes NULL authentication inputs to the predicate and silently drops every row a restrictive party policy gates, even for a caller meeting the policy. model/queries/tasks.sql ListTasksByOwner joins accessible_task_ids_for_actor and is called from api/service/task.go without BindAuthInputs. Run it in one read-only transaction per request, call BindAuthInputs first and refuse the request on its error.'
+    - title: mod-workflows lists lack BindAuthInputs
+      id: ZEu4
+      date: "2026-10-30"
+      tags:
+        - type:bug
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: mod-workflows. With mod-users'' row-filtered access functions installed (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), a list query run without mod-core setup.BindAuthInputs on its transaction passes NULL authentication inputs to the predicate and silently drops every row a restrictive party policy gates, even for a caller meeting the policy. Unbound list queries: model/queries/workflow_definitions.sql ListWorkflowDefinitions (accessible_workflow_definition_ids_for_actor; api/service/definition.go DefinitionService.List) and model/queries/workflow_instances.sql ListWorkflowInstances (accessible_workflow_instance_ids_for_actor; api/service/instance.go ListInstances). Run each in one read-only transaction per request, call BindAuthInputs first and refuse the request on its error.'
+    - title: app-mftodo installs unfiltered access fns
+      id: ck8O
+      date: "2026-10-30"
+      tags:
+        - type:security
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: app-mftodo. app-mftodo/cmd/server/appsetup/access.go composes mod-users but installs access functions with setup.ApplyFuncs(ctx, pool, setup.NewGrantTableGenerator(), authzSlugs). mod-users'' single-row Authorize applies the owning-party gate (party credential_rule and min_acr for outside collaborators), so with the unfiltered generator a cross-party collaborator below a party''s policy lists rows Authorize refuses. Install through mod-users'' facade: gen, err := localAuthz.AccessFuncGenerator() (github.com/moduleforge/mod-users/api/localAuthz), failing startup on error, and bind every list transaction with setup.BindAuthInputs.'
+    - title: app-mfgit installs unfiltered access fns
+      id: yDll
+      date: "2026-10-30"
+      tags:
+        - type:security
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: app-mfgit. app-mfgit/cmd/server/appsetup/access.go composes mod-users but installs access functions with setup.ApplyFuncs using mod-repos'' reposauthz.NewCompositeAccessFuncGeneratorWithPublicVisibility directly, without mod-users'' row filter. mod-users'' single-row Authorize applies the owning-party gate, so a cross-party collaborator below a party''s credential_rule or min_acr lists rows Authorize refuses. Wrap the composite: setup.NewRowFilterGenerator(composite, localAuthz.AccessRowFilter) (github.com/moduleforge/mod-users/api/localAuthz), failing startup on error, so the composite''s appended arms are filtered too; bind every list transaction with setup.BindAuthInputs.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials

@@ -1250,11 +1250,13 @@ phases:
           slug: adopt-list-row-filter-hook
           title: Adopt The List-Side Row Filter Hook For The Owning-Party Gate
           path: phase-21-adopt-core-engine-remediation/002-adopt-list-row-filter-hook.md
-          done: false
+          done: true
           tier: opus-high
+          digest: Added mod_users.owning_party_gate as the one SQL owning-party decision, used by checkPartyPolicy and the new list predicate mod_users.access_row_permitted. ListPrincipals runs in a read-only transaction bound with setup.BindAuthInputs. mod-users installs mod-core's row-filter hook via localAuthz.AccessFuncGenerator in the dev server and test harnesses. Mutation checks confirm the tests catch an always-true predicate and a missing binding. Integration tests ran against a throwaway postgres:16 (removed).
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-21-002
+            commit:
+                - 9cd73dc
             merge: null
         - number: 3
           slug: adopt-profile-lock-and-org-create-in-tx
