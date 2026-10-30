@@ -1252,6 +1252,7 @@ phases:
           path: phase-21-adopt-core-engine-remediation/002-adopt-list-row-filter-hook.md
           done: false
           tier: opus-high
+          digest: Added mod_users.owning_party_gate as the one SQL owning-party decision, used by checkPartyPolicy and the new list predicate mod_users.access_row_permitted. ListPrincipals runs in a read-only transaction bound with setup.BindAuthInputs. mod-users installs mod-core's row-filter hook via localAuthz.AccessFuncGenerator in the dev server and test harnesses. Mutation checks confirm the tests catch an always-true predicate and a missing binding. Integration tests ran against a throwaway postgres:16 (removed).
           git:
             branch: null
             commit: []
