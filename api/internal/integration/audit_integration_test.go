@@ -23,7 +23,9 @@ import (
 // identity core emits. "update service_account" is the enable and disable of a
 // service account (the table has no resource for it; recorded in the task that
 // added it) and "create natural_person" is mod-core's person-record
-// observation that the sign-up flows run through.
+// observation that the sign-up flows run through; "create organization" is
+// mod-core's organization observation that the organization-operator
+// bootstrap runs through (OrganizationService.CreateInTx).
 var section101 = map[string]bool{
 	"create user": true, "update user": true,
 	"create user_identifier": true, "update user_identifier": true, "delete user_identifier": true,
@@ -34,6 +36,7 @@ var section101 = map[string]bool{
 	"create credential_party_authorization": true,
 	"delete credential_party_authorization": true,
 	"create natural_person":                 true,
+	"create organization":                   true,
 	"update service_account":                true,
 	"create bootstrap":                      true,
 	"grant grant":                           true,

@@ -321,7 +321,9 @@ var (
 
 // NewBootstrapService constructs a BootstrapService. users must have been
 // wired with UserService.WithSelfService; profiles supplies the internal
-// profile creation (lifecycle observers fire for the admin profile).
+// profile creation (lifecycle observers fire for the admin profile); orgs is
+// mod-core's organization service, used only for its trusted CreateInTx to
+// create the operator organization (it is never exposed through a handler).
 func NewBootstrapService(
 	pool *pgxpool.Pool,
 	az coreAuthz.Authorizer,
@@ -330,8 +332,17 @@ func NewBootstrapService(
 	creds *CredentialService,
 	sessions *SessionService,
 	profiles *ProfileService,
+	orgs coreservice.OrganizationServicer,
 ) *BootstrapService {
-	return inner.NewBootstrapService(pool, az, obs, users, creds, sessions, profiles)
+	return inner.NewBootstrapService(pool, az, obs, users, creds, sessions, profiles, orgs)
+}
+
+// OrganizationFromServices extracts the OrganizationServicer from mod-core's
+// aggregate. The manifest uses it to feed bootstrapService, because mod-core's
+// manifest provides the aggregate (coreServices) but no organization service
+// of its own.
+func OrganizationFromServices(svcs *coreservice.Services) coreservice.OrganizationServicer {
+	return svcs.Organization
 }
 
 // DirectoryService answers batch display lookups for other modules. It does no

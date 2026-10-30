@@ -426,7 +426,7 @@ func main() {
 	_ = usersservice.NewPersonalPartyService(observerGroup)
 	// bootstrapService: the first-run bootstrap (POST /v1/bootstrap) and the
 	// operator-administrator check behind the OIDC configuration routes.
-	bootstrapSvc := usersservice.NewBootstrapService(pool, az, observerGroup, userSvc, credSvc, sessionSvc, profileSvc)
+	bootstrapSvc := usersservice.NewBootstrapService(pool, az, observerGroup, userSvc, credSvc, sessionSvc, profileSvc, coreSvcs.Organization)
 	adminCheck = handlers.NewOperatorAdminChecker(authenticator, bootstrapSvc)
 
 	// Handlers.

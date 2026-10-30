@@ -545,7 +545,7 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 	// dev server does: public, the OIDC config handler owning the setup token
 	// (active while the bootstrap or the OIDC confirmation is pending) and the
 	// operator-administrator check as its AdminChecker.
-	boot := svc.NewBootstrapService(pool, az, group, users, creds, sessions, profiles)
+	boot := svc.NewBootstrapService(pool, az, group, users, creds, sessions, profiles, coreSvcs.Organization)
 	onboarding := handlers.NewOIDCConfigHandler(handlers.OIDCConfigDeps{
 		Queries:      queries,
 		OAuth:        oauth,

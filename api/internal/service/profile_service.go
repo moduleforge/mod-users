@@ -20,6 +20,7 @@ import (
 	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/observer"
 	coredb "github.com/moduleforge/core-model/db"
+	"github.com/moduleforge/core-model/dblock"
 	usersdb "github.com/moduleforge/mod-users/model/db"
 )
 
@@ -274,13 +275,10 @@ func (s *ProfileService) notify(ctx context.Context, tx pgx.Tx, ch ProfileStatus
 // reading
 // ---------------------------------------------------------------------------
 
-// lockProfileSQL reads a profile row and locks it, serializing the status
-// changes of one profile.
-const lockProfileSQL = `SELECT ` + profileColumns + `
-  FROM public.profiles WHERE entity_id = $1 FOR UPDATE`
-
-// profileColumns is the column list lockProfileSQL and lockOpenProfileSQL
-// select, in the order scanProfile reads them.
+// profileColumns is the column list lockOpenProfileSQL (profile_admit.go)
+// selects, in the order scanProfile reads them. It remains only because that
+// one query (lookup by holder and party, not by entity id) has no mod-core
+// generated counterpart.
 const profileColumns = `entity_id, holder_id, party_id, status, source, invited_by_profile_id,
        started_at, ended_at, end_reason, created_at, updated_at`
 
@@ -300,9 +298,28 @@ func scanProfile(row pgx.Row) (coredb.Profile, error) {
 	return p, nil
 }
 
-// lockProfile loads and locks the profile; a missing one is apiresp.ErrNotFound.
+// lockProfile loads the profile with a row lock (FOR UPDATE), serializing the
+// status changes of one profile; a missing one is apiresp.ErrNotFound. It
+// runs mod-core's generated dblock.GetProfileByEntityIDForUpdate, so the
+// column list is mod-core's, not a copy kept here.
 func lockProfile(ctx context.Context, tx pgx.Tx, id int64) (coredb.Profile, error) {
-	return scanProfile(tx.QueryRow(ctx, lockProfileSQL, id))
+	row, err := dblock.New(tx).GetProfileByEntityIDForUpdate(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// WHY: the generated query surfaces pgx.ErrNoRows for a missing entity.
+		// IMPLIES: callers see the same masked not-found they always did, so a
+		// missing profile never leaks a database error to the HTTP layer.
+		return coredb.Profile{}, apiresp.ErrNotFound
+	}
+	if err != nil {
+		return coredb.Profile{}, fmt.Errorf("users: lock profile: %w", err)
+	}
+	// WHY a struct conversion: dblock.Profile and coredb.Profile are two
+	// sqlc-generated copies of the same table row (dblock is a separate package
+	// so coredb.Querier stays unchanged). IMPLIES: the conversion compiles only
+	// while both structs keep identical field names and types, so a column
+	// added to one but not the other fails the build here instead of silently
+	// dropping a field.
+	return coredb.Profile(row), nil
 }
 
 func toProfile(p coredb.Profile, id uuid.UUID) Profile {

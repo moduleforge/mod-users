@@ -116,13 +116,18 @@ type BootstrapService struct {
 	creds    *CredentialService
 	sessions *SessionService
 	profiles *ProfileService
+	// orgs creates the operator organization (CreateInTx, the trusted
+	// non-authorizing variant). It is held privately and used only by the
+	// bootstrap, never by a handler-facing path.
+	orgs coreservice.OrganizationServicer
 }
 
 // NewBootstrapService constructs a BootstrapService. users, creds, sessions and
 // profiles supply the shared creation primitives (registration, credentials,
 // session start, and ProfileService's internal profile creation so lifecycle
-// observers fire); az serves IsOperatorAdmin only. pool serves Bootstrap's
-// transaction and IsOperatorAdmin's operator-profile lookup.
+// observers fire); orgs supplies mod-core's OrganizationService.CreateInTx for
+// the operator organization; az serves IsOperatorAdmin only. pool serves
+// Bootstrap's transaction and IsOperatorAdmin's operator-profile lookup.
 func NewBootstrapService(
 	pool *pgxpool.Pool,
 	az coreAuthz.Authorizer,
@@ -131,10 +136,11 @@ func NewBootstrapService(
 	creds *CredentialService,
 	sessions *SessionService,
 	profiles *ProfileService,
+	orgs coreservice.OrganizationServicer,
 ) *BootstrapService {
 	return &BootstrapService{
 		pool: pool, az: az, obs: obs,
-		users: users, creds: creds, sessions: sessions, profiles: profiles,
+		users: users, creds: creds, sessions: sessions, profiles: profiles, orgs: orgs,
 	}
 }
 
@@ -385,35 +391,43 @@ func (s *BootstrapService) bootstrapInTx(ctx context.Context, tx pgx.Tx, in Boot
 	}, nil
 }
 
-// createOrganization creates the operator organization (owner NULL) with its
-// legal_entities and organizations rows, created by the acting profile on ctx.
-// mod-core's OrganizationService.Create authorizes and opens its own
-// transaction, so the trusted bootstrap composes mod-core's CreateEntity with
-// the generated legal-entity and organization inserts instead; the bootstrap
-// observation records the organization.
+// createOrganization creates the operator organization (owner NULL) through
+// mod-core's trusted OrganizationService.CreateInTx, in the bootstrap's
+// transaction and acting as the profile on ctx (the first user's personal
+// profile, which mod-audit needs as the actor). CreateInTx runs no
+// authorization (the bootstrap is a trusted flow gated by the setup token and
+// core_claim_operator_party), applies mod-core's input normalization and
+// tax_id encryption path, and emits the in-transaction `create` `organization`
+// observation.
 func (s *BootstrapService) createOrganization(ctx context.Context, tx pgx.Tx, op BootstrapOperator) (int64, uuid.UUID, error) {
-	cq := coredb.New(tx)
-	typ, err := cq.GetTypeBySlug(ctx, BootstrapOperatorOrganization)
+	if s.orgs == nil {
+		// WHY: the dependency is injected, and a nil one would otherwise panic
+		// mid-transaction. IMPLIES: a mis-wired composition root fails the
+		// bootstrap with a clear error (rolled back) instead of crashing.
+		return 0, uuid.Nil, errors.New("users: no organization service configured for bootstrap")
+	}
+	// WHY WithoutOwner: the operator organization is the root of the party
+	// tree and has no owner (decision U10); CreateEntity's default would own it
+	// by the acting profile's ownership subject. IMPLIES: the entity row is
+	// written with owner NULL.
+	// CreateInTx re-validates legal_name and legal_form with the same
+	// predicates ValidateBootstrapInput already applied, so its validation
+	// errors cannot occur here and the bootstrap's own 400s keep precedence.
+	_, entityUUID, entityID, err := s.orgs.CreateInTx(ctx, tx, coreservice.CreateOrganizationInput{
+		LegalName:    op.LegalName,
+		LegalForm:    op.LegalForm,
+		Jurisdiction: op.Jurisdiction,
+	}, coreservice.WithoutOwner())
 	if err != nil {
-		return 0, uuid.Nil, fmt.Errorf("users: bootstrap: resolve organization type: %w", err)
-	}
-	ent, err := coreservice.CreateEntity(ctx, cq, typ.ID, coreservice.WithoutOwner())
-	if err != nil {
-		return 0, uuid.Nil, fmt.Errorf("users: bootstrap: create organization entity: %w", err)
-	}
-	if _, err := cq.CreateLegalEntity(ctx, ent.ID); err != nil {
-		return 0, uuid.Nil, fmt.Errorf("users: bootstrap: create legal entity: %w", err)
-	}
-	jurisdiction := strings.TrimSpace(op.Jurisdiction)
-	if _, err := cq.CreateOrganization(ctx, coredb.CreateOrganizationParams{
-		EntityID:     ent.ID,
-		LegalName:    strings.TrimSpace(op.LegalName),
-		LegalForm:    strings.TrimSpace(op.LegalForm),
-		Jurisdiction: pgtype.Text{String: jurisdiction, Valid: jurisdiction != ""},
-	}); err != nil {
 		return 0, uuid.Nil, fmt.Errorf("users: bootstrap: create organization: %w", err)
 	}
-	return ent.ID, ent.Uuid, nil
+	// NOTE: CreateInTx documents that its caller dispatches ObserveAfterCommit
+	// (create, organization, entityID) after the commit. This module does not
+	// dispatch post-commit observations for any in-transaction creation it
+	// composes (NaturalPersonService.CreateInTx in user_service.go and
+	// user_self_service.go is the same), so the bootstrap follows that
+	// convention; the gap is recorded as a finding.
+	return entityID, entityUUID, nil
 }
 
 // createWildcardManageGrant inserts the admin profile's wildcard `manage`

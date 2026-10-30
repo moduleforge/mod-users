@@ -239,6 +239,18 @@ provides:
         - service:credentialService
         - service:sessionService
         - service:profileService
+        - service:bootstrapOrganizationService
+
+    # bootstrapOrganizationService — mod-core's OrganizationService, extracted
+    # from the coreServices aggregate (mod-core's manifest provides no
+    # organization service of its own). Only bootstrapService consumes it, for
+    # the trusted, non-authorizing CreateInTx that creates the operator
+    # organization; no handler may take it.
+    - name: bootstrapOrganizationService
+      type: "coreservice.OrganizationServicer"
+      constructor: usersservice.OrganizationFromServices
+      args:
+        - service:coreServices
 
     # operatorAdminChecker — the OIDC configuration routes' ambient admin
     # check: a bearer session whose acting profile is an operator profile
@@ -585,6 +597,7 @@ requires:
   services:
     - name: naturalPersonService   # coreservice.NaturalPersonServicer from core-module
     - name: displayRegistry        # *display.Registry from core-module
+    - name: coreServices           # *coreservice.Services from core-module (bootstrapOrganizationService)
   infra:
     - name: pool                   # *pgxpool.Pool
     - name: opReg                  # *authzapi.OperationRegistry — infra singleton
