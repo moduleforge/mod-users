@@ -108,6 +108,51 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Plan-note edit needed (manager-only): mod-users-api-surface.md for the new NewBootstrapService orgs parameter and OrganizationFromServices.'
+    - title: Stale localAuthz package doc on step 1
+      id: wkvN
+      date: "2026-10-30"
+      tags:
+        - type:documentation
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: The package comment in api/localAuthz (prelude item 1) says the operation-level assurance gate applies "for contexts with a session or a credential". The engine (api/internal/authz/authz.go, gated) now gates every context except the anonymous context and one for which opctx.IsSystemActor is true; an unmarked context with no session or credential is gated and fails closed. Item 2 also omits that the gate is skipped for the system actor and anonymous contexts. Reword the facade comment to match the internal package doc.
+    - title: 'Plan-note edits (manager-only, plan/notes/):'
+      id: GNRh
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Plan-note edits (manager-only, plan/notes/): decisions-and-resolutions.md amendment to U5/U14 (marker-based system actor replaces inferred rule; unmarked sessionless context is gated and fails closed; anonymous exemption stays as anonymous) and Decision E resolution of Ddx9 and qvSR; mod-users-api-surface.md section 3 (access_row_permitted six-arg and owning_party_gate signatures), section 6.2 (marker rule, localAuthz.AccessFuncGenerator and AccessRowFilter, BindAuthInputs obligation), /v1/principals row, and NewBootstrapService orgs parameter plus OrganizationFromServices.'
+    - title: Manager to grep plan/overview.md and plan/not
+      id: VZLf
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: Manager to grep plan/overview.md and plan/notes/work-packages.md (not read by agent) for 'inferred', 'sessionless', 'five-argument' and 'raw organization insert' and update stale statements.
+    - title: Coordination note on link-siblings.sh in deci
+      id: j7Ym
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: Coordination note on link-siblings.sh in decisions-and-resolutions.md may be stale; check.
+    - title: Integration tests did not run (docs-only task
+      id: yZTA
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: Integration tests did not run (docs-only task, no database needed).
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
