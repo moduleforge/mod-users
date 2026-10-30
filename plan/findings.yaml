@@ -18,6 +18,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'model/migrations/sql/0100_baseline.sql, the comment above mod_users.session_meets_party_policy (around line 1702) ends: "An unknown session, a revoked or unknown credential, or neither id fails closed (false): trusted contexts without a session or credential are the engine''s to skip, not this function''s." The engine (api/internal/authz/authz.go gated) no longer treats a context without a session or credential as trusted: it skips the owning-party gate only for opctx.IsSystemActor contexts (mod-core''s explicit marker) and the anonymous context, and an unmarked sessionless context reaches this function and gets false. The comment should say that system-actor contexts (opctx.IsSystemActor) and the anonymous context are the engine''s to skip, and that an unmarked sessionless context is refused here. Comment-only change; the function body is correct.'
+    - title: mod-repos lists lack BindAuthInputs
+      id: owkI
+      date: "2026-10-30"
+      tags:
+        - type:bug
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: mod-repos. When a host installs access functions through mod-users'' row-filtered generator (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), every list query must run in a transaction bound with mod-core setup.BindAuthInputs(ctx, tx); otherwise the predicate receives NULL session/credential/system-actor inputs and silently drops every row a restrictive party policy gates (credential_rule or min_acr), even for a collaborator whose session meets the policy. mod-repos never calls BindAuthInputs. Unbound list queries: model/queries/namespaces.sql ListNamespaces (accessible_namespace_ids_for_actor; api/service/namespace.go), model/queries/repositories.sql ListRepositoriesByNamespace (accessible_repository_ids_for_actor; api/service/repository.go), model/queries/pull_requests.sql ListPullRequestsByRepository (api/service/pull_request.go), model/queries/releases.sql ListReleasesByRepository (api/service/release.go). Each needs one read-only transaction per request, BindAuthInputs called first with its error refusing the request, and all list queries of the request run in it. Also: mod-repos'' CompositeAccessFuncGenerator (api/authz/generator.go) must be wrapped by the host as setup.NewRowFilterGenerator(composite, localAuthz.AccessRowFilter) so its appended visibility arms are filtered too.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
