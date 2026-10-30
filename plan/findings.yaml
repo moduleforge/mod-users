@@ -117,6 +117,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: The package comment in api/localAuthz (prelude item 1) says the operation-level assurance gate applies "for contexts with a session or a credential". The engine (api/internal/authz/authz.go, gated) now gates every context except the anonymous context and one for which opctx.IsSystemActor is true; an unmarked context with no session or credential is gated and fails closed. Item 2 also omits that the gate is skipped for the system actor and anonymous contexts. Reword the facade comment to match the internal package doc.
+    - title: 'Plan-note edits (manager-only, plan/notes/):'
+      id: GNRh
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Plan-note edits (manager-only, plan/notes/): decisions-and-resolutions.md amendment to U5/U14 (marker-based system actor replaces inferred rule; unmarked sessionless context is gated and fails closed; anonymous exemption stays as anonymous) and Decision E resolution of Ddx9 and qvSR; mod-users-api-surface.md section 3 (access_row_permitted six-arg and owning_party_gate signatures), section 6.2 (marker rule, localAuthz.AccessFuncGenerator and AccessRowFilter, BindAuthInputs obligation), /v1/principals row, and NewBootstrapService orgs parameter plus OrganizationFromServices.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
