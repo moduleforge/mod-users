@@ -63,6 +63,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'needs-sibling: app-mfgit. app-mfgit/cmd/server/appsetup/access.go composes mod-users but installs access functions with setup.ApplyFuncs using mod-repos'' reposauthz.NewCompositeAccessFuncGeneratorWithPublicVisibility directly, without mod-users'' row filter. mod-users'' single-row Authorize applies the owning-party gate, so a cross-party collaborator below a party''s credential_rule or min_acr lists rows Authorize refuses. Wrap the composite: setup.NewRowFilterGenerator(composite, localAuthz.AccessRowFilter) (github.com/moduleforge/mod-users/api/localAuthz), failing startup on error, so the composite''s appended arms are filtered too; bind every list transaction with setup.BindAuthInputs.'
+    - title: Missing ObserveAfterCommit for CreateInTx
+      id: 06rd
+      date: "2026-10-30"
+      tags:
+        - type:bug
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'mod-core''s NaturalPersonService.CreateInTx and OrganizationService.CreateInTx document that the caller dispatches ObserveAfterCommit (create, <resource>, entity id) after the transaction commits. mod-users never does: api/internal/service/user_service.go (np.CreateInTx near line 187), api/internal/service/user_self_service.go (np.CreateInTx near line 578) and api/internal/service/bootstrap_service.go (createOrganization via OrganizationService.CreateInTx) all rely on the in-transaction observation only, so post-commit observers (anything subscribed via ObserverGroup.ObserveAfterCommit) never see the natural_person or organization creation. Needs a design decision on how the committing public methods (Bootstrap, user registration and self-service flows) carry the entity id out of their InTx bodies and dispatch after commit.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
