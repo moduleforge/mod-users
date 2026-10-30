@@ -74,3 +74,11 @@ The task is independent of tasks 001 and 002 and may run in parallel with them, 
 
 - After `lockProfile` moves to `dblock` and the profile tests pass.
 - After the bootstrap uses `CreateInTx`, with the wiring and the after-commit observation.
+
+## Status
+
+- Outcome: succeeded (2026-10-30).
+- Validation: `make build`, `make test`, `make lint`, `make -C model verify` pass; `authz`, `config` and `integration` suites pass against a throwaway `postgres:16` (removed afterwards); the new bootstrap assertions fail with the raw inserts restored and pass with `CreateInTx`.
+- Changed: `api/internal/service/profile_service.go` (`lockProfile` on `dblock`), `api/internal/service/bootstrap_service.go` (`createOrganization` via `CreateInTx`, new `orgs` dependency), `api/usersservice/service.go` (facade gains `orgs`, plus `OrganizationFromServices`), `api/cmd/server/main.go`, `moduleforge.module.yaml`, and the integration tests.
+- Remaining hand-written `public.profiles` reads on `profileColumns`/`scanProfile`: only `lockOpenProfileSQL` (`profile_admit.go`, lookup by holder and party, no mod-core generated counterpart).
+- After-commit observation: mod-users never dispatches it for `NaturalPersonService.CreateInTx`, so the bootstrap follows the same choice; filed as a finding.

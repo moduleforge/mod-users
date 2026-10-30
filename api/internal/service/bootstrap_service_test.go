@@ -48,7 +48,7 @@ func TestValidateBootstrapInput(t *testing.T) {
 // TestIsOperatorAdmin_RequiresSession: without a non-impersonating session
 // acting as a profile the check answers false before touching the database.
 func TestIsOperatorAdmin_RequiresSession(t *testing.T) {
-	s := NewBootstrapService(nil, nil, nil, nil, nil, nil, nil)
+	s := NewBootstrapService(nil, nil, nil, nil, nil, nil, nil, nil)
 	for name, ctx := range map[string]context.Context{
 		"no auth context":    context.Background(),
 		"anonymous":          opctx.WithAuthContext(context.Background(), opctx.AuthContext{Anonymous: true, ProfileID: 1, PrincipalID: 1}),

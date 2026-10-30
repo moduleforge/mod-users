@@ -307,9 +307,17 @@ func TestBootstrap_Organization(t *testing.T) {
 	// bootstrap event with the new session and targeting the operator party.
 	s.checkObservations(t, "bootstrap",
 		"create user", "create natural_person", "create user_identifier", "create credential",
-		"create profile", "grant grant", "login session", "create bootstrap")
+		"create organization", "create profile", "grant grant", "login session", "create bootstrap")
 	for _, o := range s.obs.all() {
 		switch o.Op + " " + o.Resource {
+		case "create organization":
+			// mod-core's OrganizationService.CreateInTx emits this in the
+			// bootstrap transaction, as the first user's personal profile
+			// (mod-audit needs a real actor), targeting the new organization.
+			if o.Target != rows.partyID || o.Auth.ProfileID != rows.personalProfileID {
+				t.Errorf("create organization observed as profile %d target %d, want the personal profile %d and the operator party %d",
+					o.Auth.ProfileID, o.Target, rows.personalProfileID, rows.partyID)
+			}
 		case "create bootstrap":
 			if o.Target != rows.partyID || o.Auth.ProfileID != rows.adminProfileID || o.Auth.PrincipalID != rows.userID || o.Auth.SessionID == 0 {
 				t.Errorf("bootstrap observed as %+v target %d, want the admin profile, the user, the session and the operator party", o.Auth, o.Target)
@@ -329,6 +337,18 @@ func TestBootstrap_Organization(t *testing.T) {
 		}
 	}
 
+	// The organization row's owner NULL and stored fields are asserted by
+	// assertBootstrapRows; normalization of padded input is
+	// TestBootstrap_OrganizationNormalized. With mod-audit linked, its real audit_log accepted the in-transaction
+	// `create organization` row, written as the first user's personal profile.
+	if s.auditApplied {
+		if n := s.count(t, "organization audit rows", `SELECT count(*) FROM audit_log
+			WHERE op = 'create' AND resource = 'organization' AND target_entity_id = $1 AND actor_entity_id = $2`,
+			rows.partyID, rows.personalProfileID); n != 1 {
+			t.Errorf("audit_log create organization rows for the operator party = %d, want 1", n)
+		}
+	}
+
 	// OIDC is not confirmed yet, so the token stays for it.
 	if b, c := s.bootstrapStatus(t); !b || c {
 		t.Errorf("status after = bootstrapped %v, oidc_confirmed %v; want true, false", b, c)
@@ -343,6 +363,31 @@ func TestBootstrap_Organization(t *testing.T) {
 		wantError(t, http.StatusConflict, "conflict", "users.already_bootstrapped")
 	if got := s.count(t, "users", `SELECT count(*) FROM mod_users.users`); got != users {
 		t.Errorf("second bootstrap left users: %d -> %d", users, got)
+	}
+}
+
+// TestBootstrap_OrganizationNormalized drives the organization operator with
+// padded fields and checks the stored row is the normalized one with owner
+// NULL. It proves the organization comes from mod-core's CreateInTx, which
+// trims legal_name, legal_form and jurisdiction itself.
+func TestBootstrap_OrganizationNormalized(t *testing.T) {
+	s := freshStack(t)
+	token := s.mintSetupToken(t)
+	s.postBootstrap(t, token, bootstrapBody("norm@operator.test", map[string]string{
+		"kind": "organization", "legal_name": "  Padded Inc  ", "legal_form": " llc ", "jurisdiction": "  US-NY ",
+	})).wantStatus(t, http.StatusCreated)
+
+	var name, form string
+	var jurisdiction *string
+	var owner *int64
+	if err := s.pool.QueryRow(context.Background(), `SELECT o.legal_name, o.legal_form, o.jurisdiction, e.owner_id
+		FROM organizations o JOIN entities e ON e.id = o.entity_id
+		WHERE o.entity_id = (SELECT operator_party_id FROM platform_settings WHERE id = 1)`).
+		Scan(&name, &form, &jurisdiction, &owner); err != nil {
+		t.Fatalf("operator organization: %v", err)
+	}
+	if name != "Padded Inc" || form != "llc" || jurisdiction == nil || *jurisdiction != "US-NY" || owner != nil {
+		t.Errorf("organization = %q %q %v owner %v, want Padded Inc llc US-NY with no owner", name, form, jurisdiction, owner)
 	}
 }
 
