@@ -1276,6 +1276,7 @@ phases:
           path: phase-21-adopt-core-engine-remediation/004-align-docs-with-adopted-core-apis.md
           done: false
           tier: sonnet-med
+          digest: Rewrote the superseded sessionless-trust and list-gate statements across AGENTS.md, the architecture doc, the spec, the upgrade notes, model/README.md and the OpenAPI principals description. All claims were checked against the merged code. One stale code comment was filed as a finding (wkvN).
           git:
             branch: null
             commit: []
