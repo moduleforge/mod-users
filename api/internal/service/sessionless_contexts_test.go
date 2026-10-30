@@ -1,32 +1,41 @@
 package service
 
-// This file pins the sessionless AuthContexts mod-users builds for real users.
+// This file pins the AuthContexts mod-users builds without an authenticated
+// request, and the rule that none of them is a trusted system actor.
 //
-// The authorization engine (internal/authz, func gated) treats an AuthContext
-// that is non-anonymous and carries neither a session nor a credential as a
-// trusted system actor: the assurance gate and the owning-party gate are
-// skipped for it. mod-users builds exactly such contexts for real users in its
-// unauthenticated flows (sign-up, password reset, OIDC just-in-time creation,
-// bootstrap), so those contexts must only ever be used for observations and
-// the unauthorized creation writes of those flows and must never reach
-// Authorize, AuthorizeType or AuthorizeTypeIn. Until mod-core grows an
-// explicit system-actor marker, "sessionless means trusted" is inferred from
-// absent fields; these tests are the guard that keeps a real user's sessionless
-// context away from the engine.
+// The authorization engine (internal/authz, func gated) skips its assurance
+// gate and owning-party gate only for the anonymous context and for a context
+// for which opctx.IsSystemActor is true, that is, one built by
+// opctx.WithSystemActor (mod-core's explicit marker). Every other context is
+// gated, including a non-anonymous context with no session and no credential,
+// which then fails closed (ACR 0, no AuthTime, no factors for a restrictive
+// party's policy).
+//
+// mod-users builds sessionless contexts for real users in its unauthenticated
+// flows (sign-up, guest creation, password reset, OIDC just-in-time creation,
+// link and step-up callbacks, bootstrap). Those are class (a): acting for a
+// real user, never marked, used only for observations and the unauthorized
+// creation writes of those flows. A class (b) builder (trusted code acting as
+// a system actor profile, for no user) would use opctx.WithSystemActor; none
+// exists in mod-users, so the marker has no producer here.
 //
 // Three pins:
 //
-//  1. TestSessionlessHelpers_AreSessionless: every service-level helper that
-//     returns a sessionless context does return one (so the other pins are
-//     about the right contexts).
-//  2. TestSessionlessContexts_NeverReachAuthorize: the flows that consume
-//     those contexts, run against a failing recording authorizer, never call
-//     it with a sessionless context.
-//  3. TestSessionlessContexts_SourceAudit: a static audit of every
-//     non-test source file in the api module. It enumerates the sessionless
-//     context builders and their callers (so a new one fails the test until it
-//     is reviewed and added here) and asserts that none of them, nor anything
-//     they transitively call by name, calls an Authorize entry point.
+//  1. TestContextBuilders_AreNotSystemActors: every named builder returns a
+//     context for which opctx.IsSystemActor is false, and the sessionless ones
+//     carry no session and no credential.
+//  2. TestSessionlessContexts_NeverReachAuthorize (defense in depth): the
+//     flows that consume those contexts, run against a failing recording
+//     authorizer, never call it with a sessionless context. The engine would
+//     refuse such a call; this pin keeps the flows from depending on it.
+//  3. TestSessionlessContexts_SourceAudit: a static audit of every non-test
+//     source file in the api module. It enumerates every AuthContext builder
+//     with its class (contextBuilders), so a new builder fails the test until
+//     it is classified here; it flags any opctx.WithSystemActor call outside
+//     systemActorAllowList (empty) and any AuthContext literal or assignment
+//     that sets SystemActor; and it asserts that no sessionless context
+//     builder or caller, nor anything they transitively call by name, calls
+//     an Authorize entry point.
 //
 // Scope of the static audit: it recognises only literal-valued fields. A
 // SessionID or CredentialID key whose value is the literal 0 is treated as
@@ -60,9 +69,9 @@ import (
 	usersdb "github.com/moduleforge/mod-users/model/db"
 )
 
-// isSessionless reports whether ac is the shape internal/authz.gated treats as
-// a trusted system actor: authenticated-looking (a principal and an acting
-// profile, not anonymous) but carrying neither a session nor a credential.
+// isSessionless reports whether ac is a class (a) sessionless context: a real
+// user's principal and acting profile, not anonymous, carrying neither a
+// session nor a credential. The engine gates it (it is not a system actor).
 func isSessionless(ac opctx.AuthContext) bool {
 	return !ac.Anonymous && ac.SessionID == 0 && ac.CredentialID == 0 &&
 		ac.PrincipalID > 0 && ac.ProfileID > 0 && ac.ImpersonatorPrincipalID == 0
@@ -76,6 +85,17 @@ func requireSessionless(t *testing.T, name string, ctx context.Context) {
 	}
 	if !isSessionless(ac) {
 		t.Errorf("%s: AuthContext = %+v, want a non-anonymous context with SessionID == 0 and CredentialID == 0", name, ac)
+	}
+	requireNotSystemActor(t, name, ctx)
+}
+
+// requireNotSystemActor asserts ctx is not a trusted system actor: a context
+// built for a real user must never carry the marker.
+func requireNotSystemActor(t *testing.T, name string, ctx context.Context) {
+	t.Helper()
+	if opctx.IsSystemActor(ctx) {
+		ac, _ := opctx.Auth(ctx)
+		t.Errorf("%s: AuthContext = %+v is a system actor; a real user's context must never carry the marker", name, ac)
 	}
 }
 
@@ -97,7 +117,15 @@ func (r profileRow) Scan(dest ...any) error {
 	return nil
 }
 
-func TestSessionlessHelpers_AreSessionless(t *testing.T) {
+// TestContextBuilders_AreNotSystemActors is pin 1. Each builder of this
+// package that acts without an authenticated request is called by name and
+// must return a context for which opctx.IsSystemActor is false: they are all
+// class (a), acting for a real user. The bootstrap's adminCtx and personalCtx
+// are withActingProfile and CreatedUser.ActingContext. The builders outside
+// this package (the idp_jit context of OIDCHandler.createManagedUser,
+// OIDCHandler.sessionActingContext and the anonymous actor) cannot be called
+// from here; pin 3 classifies them and proves none of them sets the marker.
+func TestContextBuilders_AreNotSystemActors(t *testing.T) {
 	t.Parallel()
 	base := context.Background()
 
@@ -105,7 +133,12 @@ func TestSessionlessHelpers_AreSessionless(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("UnauthenticatedActingContext: ok=%v err=%v", ok, err)
 	}
+	fcx, err := withFallbackActor(base, actingDB{profileID: 9}, 5, 77)
+	if err != nil {
+		t.Fatalf("withFallbackActor: %v", err)
+	}
 
+	// Class (a), sessionless: a real user, no session, no credential.
 	for name, ctx := range map[string]context.Context{
 		"withActingProfile":            withActingProfile(base, 5, 9),
 		"CreatedUser.ActingContext":    CreatedUser{User: usersdb.User{EntityID: 5}, PersonalProfileID: 9}.ActingContext(base),
@@ -114,8 +147,18 @@ func TestSessionlessHelpers_AreSessionless(t *testing.T) {
 		requireSessionless(t, name, ctx)
 	}
 
+	// Class (a), carrying the real principal's session being revoked.
+	if ac, ok := opctx.Auth(fcx); !ok || ac.SessionID != 77 || ac.ProfileID != 9 {
+		t.Errorf("withFallbackActor: AuthContext = %+v (ok=%v), want profile 9 in session 77", ac, ok)
+	}
+	requireNotSystemActor(t, "withFallbackActor", fcx)
+
+	// No class (b) builder exists in this package: nothing here may return a
+	// system actor. Add one only with opctx.WithSystemActor and an entry in
+	// systemActorAllowList.
+
 	// A managed user has no personal profile: ActingContext adds nothing, so
-	// it cannot manufacture a sessionless actor.
+	// it cannot manufacture an actor.
 	managed := CreatedUser{User: usersdb.User{EntityID: 5}}.ActingContext(base)
 	if _, ok := opctx.Auth(managed); ok {
 		t.Error("CreatedUser.ActingContext for a managed user must return ctx unchanged")
@@ -164,6 +207,10 @@ func (f *ctxCapturingPersons) CreateInTx(ctx context.Context, tx pgx.Tx, in core
 	return f.fakeNaturalPersons.CreateInTx(ctx, tx, in)
 }
 
+// TestSessionlessContexts_NeverReachAuthorize is pin 2, kept as defense in
+// depth: the engine now refuses a sessionless class (a) context, so a flow
+// that called it would fail rather than escalate, but the unauthenticated
+// flows must not start calling the authorizer at all.
 func TestSessionlessContexts_NeverReachAuthorize(t *testing.T) {
 	t.Parallel()
 
@@ -284,6 +331,50 @@ var sessionlessReceivers = []string{
 	"internal/service/user_service.go:UserService.createUserAndProfile",
 }
 
+// Builder classes of contextBuilders.
+const (
+	// classSessionless is class (a) without a session or credential: a real
+	// user's context for an unauthenticated flow. Never marked; gated, and
+	// refused, by the engine.
+	classSessionless = "a: real user, no session or credential"
+	// classSessionBearing is class (a) carrying the real caller's own session
+	// or credential. Never marked; gated like that session or credential.
+	classSessionBearing = "a: real user, own session or credential"
+	// classAnonymous is the anonymous context: exempt from the gates as
+	// anonymous (decision U14), never as a system actor.
+	classAnonymous = "anonymous"
+	// classSystemActor is class (b): trusted code acting as a system actor
+	// profile, for no user, built with opctx.WithSystemActor. None exists.
+	classSystemActor = "b: system actor"
+)
+
+// contextBuilders is the exact set of non-test functions that build an
+// opctx.AuthContext (a non-empty literal, or a call of opctx.WithAuthContext or
+// opctx.WithSystemActor), with the class each was reviewed as. A new builder
+// fails TestSessionlessContexts_SourceAudit until it is classified here. A
+// real user's personal or party profile is never class (b).
+var contextBuilders = map[string]string{
+	"internal/auth/anonymous_actor.go:withAnonymousActor":                                classAnonymous,
+	"internal/auth/authenticator.go:Authenticator.checkAppGate":                          classSessionBearing,
+	"internal/auth/identity.go:Identity.AuthContext":                                     classSessionBearing,
+	"internal/auth/identity.go:WithIdentity":                                             classSessionBearing,
+	"internal/handlers/auth/oidc_flows.go:OIDCHandler.createManagedUser":                 classSessionless,
+	"internal/handlers/auth/oidc_flows.go:OIDCHandler.sessionActingContext":              classSessionBearing,
+	"internal/service/bootstrap_service.go:BootstrapService.bootstrapInTx":               classSessionBearing,
+	"internal/service/helpers.go:withActingProfile":                                      classSessionless,
+	"internal/service/impersonation.go:ImpersonationService.administratorMayImpersonate": classSessionBearing,
+	"internal/service/session_service.go:SessionService.gateFor":                         classSessionBearing,
+	"internal/service/session_service.go:SessionService.observeLogin":                    classSessionBearing,
+	"internal/service/session_service.go:withFallbackActor":                              classSessionBearing,
+	"internal/service/ssh_key_resolver.go:SSHKeyResolver.AuthContextForOwner":            classSessionBearing,
+}
+
+// systemActorAllowList is the exact set of non-test functions allowed to call
+// opctx.WithSystemActor: the class (b) builders of contextBuilders. It is
+// empty because mod-users has no genuine system flow that authorizes as a
+// system actor; adding one needs a reviewed reason at the call.
+var systemActorAllowList = map[string]bool{}
+
 var authorizeEntryPoints = map[string]bool{"Authorize": true, "AuthorizeType": true, "AuthorizeTypeIn": true}
 
 type auditedFunc struct {
@@ -291,6 +382,9 @@ type auditedFunc struct {
 	calls     map[string]bool // bare callee names
 	literals  int             // sessionless opctx.AuthContext literals
 	authorize []string        // Authorize entry points called directly
+	builds    bool            // builds an AuthContext (literal or opctx.With* call)
+	withSA    int             // opctx.WithSystemActor calls
+	marks     int             // AuthContext literals or assignments setting SystemActor
 }
 
 func TestSessionlessContexts_SourceAudit(t *testing.T) {
@@ -342,9 +436,30 @@ func TestSessionlessContexts_SourceAudit(t *testing.T) {
 					if authorizeEntryPoints[callee] {
 						af.authorize = append(af.authorize, callee)
 					}
+					switch opctxCall(n.Fun) {
+					case "WithAuthContext":
+						af.builds = true
+					case "WithSystemActor":
+						af.builds = true
+						af.withSA++
+					}
 				case *ast.CompositeLit:
 					if isSessionlessAuthContextLiteral(n) {
 						af.literals++
+					}
+					if isAuthContextLiteral(n) && len(n.Elts) > 0 {
+						af.builds = true
+						if setsSystemActor(n) {
+							af.marks++
+						}
+					}
+				case *ast.AssignStmt:
+					// ac.SystemActor = ... marks a context by hand, as a
+					// literal would.
+					for _, lhs := range n.Lhs {
+						if sel, ok := lhs.(*ast.SelectorExpr); ok && sel.Sel.Name == "SystemActor" {
+							af.marks++
+						}
 					}
 				}
 				return true
@@ -361,6 +476,37 @@ func TestSessionlessContexts_SourceAudit(t *testing.T) {
 	byKey := map[string]*auditedFunc{}
 	for _, f := range funcs {
 		byKey[f.key] = f
+	}
+
+	// Pin 3: every AuthContext builder is classified, only allow-listed class
+	// (b) builders call opctx.WithSystemActor, and no code sets SystemActor by
+	// hand.
+	var builders []string
+	for _, f := range funcs {
+		if f.builds {
+			builders = append(builders, f.key)
+		}
+		if f.withSA > 0 && !systemActorAllowList[f.key] {
+			t.Errorf("%s calls opctx.WithSystemActor but is not in systemActorAllowList: "+
+				"a real user's context must never be a system actor; classify it (class b needs a reviewed reason)", f.key)
+		}
+		if f.marks > 0 {
+			t.Errorf("%s sets AuthContext.SystemActor by hand; only opctx.WithSystemActor may mark a context", f.key)
+		}
+	}
+	sort.Strings(builders)
+	wantBuilders := make([]string, 0, len(contextBuilders))
+	for key, class := range contextBuilders {
+		wantBuilders = append(wantBuilders, key)
+		if (class == classSystemActor) != systemActorAllowList[key] {
+			t.Errorf("%s is classified %q; class (b) builders, and only they, are in systemActorAllowList", key, class)
+		}
+	}
+	sort.Strings(wantBuilders)
+	if strings.Join(builders, "\n") != strings.Join(wantBuilders, "\n") {
+		t.Errorf("the set of AuthContext builders changed. Classify each new builder (class a: acting for a "+
+			"real user, never marked; class b: trusted system flow, opctx.WithSystemActor) in contextBuilders.\n"+
+			" got: %v\nwant: %v", builders, wantBuilders)
 	}
 
 	// Pin the set of roots exactly.
@@ -454,6 +600,39 @@ func isSessionlessAuthContextLiteral(lit *ast.CompositeLit) bool {
 		}
 	}
 	return true
+}
+
+// isAuthContextLiteral reports whether lit is an opctx.AuthContext literal.
+func isAuthContextLiteral(lit *ast.CompositeLit) bool {
+	sel, ok := lit.Type.(*ast.SelectorExpr)
+	return ok && sel.Sel.Name == "AuthContext"
+}
+
+// setsSystemActor reports whether lit names the SystemActor field, whatever
+// its value: no non-test code may set the marker other than through
+// opctx.WithSystemActor.
+func setsSystemActor(lit *ast.CompositeLit) bool {
+	for _, e := range lit.Elts {
+		if kv, ok := e.(*ast.KeyValueExpr); ok {
+			if id, ok := kv.Key.(*ast.Ident); ok && id.Name == "SystemActor" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// opctxCall returns the function name of a call of the form opctx.<Name>, or
+// "" for any other callee.
+func opctxCall(fun ast.Expr) string {
+	sel, ok := fun.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "opctx" {
+		return sel.Sel.Name
+	}
+	return ""
 }
 
 // isZeroLiteral reports whether e is the integer literal 0.

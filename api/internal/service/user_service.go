@@ -110,6 +110,12 @@ func (u CreatedUser) ActingContext(ctx context.Context) context.Context {
 	if u.PersonalProfileID == 0 {
 		return ctx
 	}
+	// WHY no system-actor marker: the new user's personal profile is a real
+	// user's profile, never trusted platform code (withActingProfile).
+	// IMPLIES: sign-up, guest creation, register and the bootstrap use this
+	// context only for observations and their unauthorized creation writes; it
+	// would be refused by the engine's gates if it reached an Authorize entry
+	// point.
 	return withActingProfile(ctx, u.User.EntityID, u.PersonalProfileID)
 }
 

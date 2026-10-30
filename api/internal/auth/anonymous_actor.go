@@ -27,6 +27,13 @@ func IsAnonymousActor(ctx context.Context) bool {
 // AuthContext: its principal and personal profile, Anonymous set, and no
 // session, credential, assurance or Identity.
 func withAnonymousActor(ctx context.Context, anon *AnonymousActor) context.Context {
+	// WHY Anonymous and not the system-actor marker: the anonymous caller is
+	// unauthenticated traffic, not trusted platform code, so it is the
+	// anonymous context (opctx.IsSystemActor is false for it even if marked).
+	// IMPLIES: the engine skips its gates as the anonymous context (decision
+	// U14), which confers nothing because the anonymous profile holds no
+	// grants (checked at boot by NewAnonymousActor); it is never a system
+	// actor.
 	return opctx.WithAuthContext(ctx, opctx.AuthContext{
 		PrincipalID: anon.PrincipalID(),
 		ProfileID:   anon.ProfileID(),

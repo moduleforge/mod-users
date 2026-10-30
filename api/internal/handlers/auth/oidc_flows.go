@@ -291,6 +291,14 @@ func (h *OIDCHandler) createManagedUser(ctx context.Context, tx pgx.Tx, id local
 		return 0, 0, fmt.Errorf("create idp_jit profile: %w", err)
 	}
 
+	// WHY no system-actor marker: the idp_jit profile just created is a real
+	// (managed) user's party profile, and the IdP's assertion is not trusted
+	// platform code acting as a system actor, so the context is built with
+	// opctx.WithAuthContext and carries no session or credential yet.
+	// IMPLIES: it is for this creation's observations and the credential link
+	// only; the engine would gate it and refuse it (ACR 0, and the party's own
+	// policy cannot be met without factors) if it reached an Authorize entry
+	// point.
 	actCtx := opctx.WithAuthContext(ctx, opctx.AuthContext{PrincipalID: userEnt.ID, ProfileID: profileEnt.ID})
 	if h.obs != nil {
 		userID := userEnt.ID
@@ -384,6 +392,13 @@ func (h *OIDCHandler) sessionActingContext(ctx context.Context, tx pgx.Tx, st lo
 	if !ok {
 		return usersdb.Session{}, ctx, refuse(localauth.RedirectErrAuthFailed)
 	}
+	// WHY no system-actor marker: the link and step-up callbacks act for the
+	// session's real principal, so the unauthenticated-flow context
+	// (UnauthenticatedActingContext, never marked) only gains the affected
+	// session id here.
+	// IMPLIES: the engine gates it like any session context; it carries no ACR
+	// or AuthTime, so it would be refused if it reached an Authorize entry
+	// point, and it is used for the callback's observations only.
 	if ac, found := opctx.Auth(actCtx); found {
 		ac.SessionID = sess.ID
 		actCtx = opctx.WithAuthContext(actCtx, ac)

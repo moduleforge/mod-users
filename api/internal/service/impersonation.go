@@ -382,6 +382,10 @@ func (s *ImpersonationService) administratorMayImpersonate(ctx context.Context, 
 		return false, nil
 	}
 
+	// WHY no system-actor marker: the renewal re-checks the administrator's
+	// own parent session. IMPLIES: the impersonate check is gated on that
+	// session (min_acr and the owning-party policy apply; decision D's
+	// operator exemption is the party-policy function's, not a marker's).
 	adminCtx := opctx.WithAuthContext(ctx, opctx.AuthContext{
 		PrincipalID: parent.PrincipalID,
 		ProfileID:   actingProfile,

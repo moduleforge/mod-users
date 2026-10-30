@@ -302,6 +302,14 @@ func (s *BootstrapService) bootstrapInTx(ctx context.Context, tx pgx.Tx, in Boot
 	if err != nil {
 		return BootstrapResult{}, err
 	}
+	// WHY no system-actor marker: the bootstrap is a trusted flow, but adminCtx
+	// acts as the first user's operator-party profile, a real user's party
+	// profile, and the marker is never an operator signal. The trusted grant
+	// write below does not authorize, so it needs no marker.
+	// IMPLIES: adminCtx (like personalCtx above) is for the bootstrap's
+	// observations and unauthorized writes only; it would be gated, and
+	// refused (ACR 0), if it reached an Authorize entry point. The bootstrap's
+	// own session context, sessCtx, is built below once the session exists.
 	adminCtx := withActingProfile(ctx, userID, admin.ID)
 
 	// 5. The wildcard manage grant, in this transaction.
@@ -347,6 +355,9 @@ func (s *BootstrapService) bootstrapInTx(ctx context.Context, tx pgx.Tx, in Boot
 		return BootstrapResult{}, fmt.Errorf("users: bootstrap: load session: %w", err)
 	}
 
+	// WHY no system-actor marker: sessCtx is the first administrator's real
+	// session on the operator profile. IMPLIES: it is gated like that session;
+	// here it attributes the bootstrap observation only.
 	sessCtx := opctx.WithAuthContext(ctx, opctx.AuthContext{
 		PrincipalID: userID, ProfileID: admin.ID, SessionID: sess.ID,
 		ACR: sess.Acr, AuthTime: sess.AuthTime.Time,
