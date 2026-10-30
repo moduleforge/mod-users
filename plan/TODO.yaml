@@ -1279,5 +1279,6 @@ phases:
           digest: Rewrote the superseded sessionless-trust and list-gate statements across AGENTS.md, the architecture doc, the spec, the upgrade notes, model/README.md and the OpenAPI principals description. All claims were checked against the merged code. One stale code comment was filed as a finding (wkvN).
           git:
             branch: plan/identity-model-impl-21-004
-            commit: []
+            commit:
+                - 255e343
             merge: null
