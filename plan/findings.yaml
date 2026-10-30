@@ -126,6 +126,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Plan-note edits (manager-only, plan/notes/): decisions-and-resolutions.md amendment to U5/U14 (marker-based system actor replaces inferred rule; unmarked sessionless context is gated and fails closed; anonymous exemption stays as anonymous) and Decision E resolution of Ddx9 and qvSR; mod-users-api-surface.md section 3 (access_row_permitted six-arg and owning_party_gate signatures), section 6.2 (marker rule, localAuthz.AccessFuncGenerator and AccessRowFilter, BindAuthInputs obligation), /v1/principals row, and NewBootstrapService orgs parameter plus OrganizationFromServices.'
+    - title: Manager to grep plan/overview.md and plan/not
+      id: VZLf
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: Manager to grep plan/overview.md and plan/notes/work-packages.md (not read by agent) for 'inferred', 'sessionless', 'five-argument' and 'raw organization insert' and update stale statements.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
