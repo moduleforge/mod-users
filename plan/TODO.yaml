@@ -1243,3 +1243,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: adopt-list-row-filter-hook
+          title: Adopt The List-Side Row Filter Hook For The Owning-Party Gate
+          path: phase-21-adopt-core-engine-remediation/002-adopt-list-row-filter-hook.md
+          done: false
+          tier: opus-high
+          git:
+            branch: null
+            commit: []
+            merge: null
