@@ -135,6 +135,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Manager to grep plan/overview.md and plan/notes/work-packages.md (not read by agent) for 'inferred', 'sessionless', 'five-argument' and 'raw organization insert' and update stale statements.
+    - title: Coordination note on link-siblings.sh in deci
+      id: j7Ym
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: Coordination note on link-siblings.sh in decisions-and-resolutions.md may be stale; check.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
