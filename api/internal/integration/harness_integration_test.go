@@ -466,7 +466,13 @@ func newStack(ctx context.Context, pool *pgxpool.Pool, auditApplied bool) (*stac
 		"natural_person", "organization", "user", "profile", "service_account",
 		"legal_entity", "tag", "authz_actor_group", "authz_target_group",
 	}
-	if err := setup.ApplyFuncs(ctx, pool, setup.NewGrantTableGenerator(), slugs); err != nil {
+	// The production generator (the owning-party row filter around the
+	// grant-table body), exactly as the dev server installs it.
+	accessGen, err := localAuthz.AccessFuncGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("access-function generator: %w", err)
+	}
+	if err := setup.ApplyFuncs(ctx, pool, accessGen, slugs); err != nil {
 		return nil, fmt.Errorf("apply access functions: %w", err)
 	}
 	az := localAuthz.New(authzdb.New(pool), opReg, pool)

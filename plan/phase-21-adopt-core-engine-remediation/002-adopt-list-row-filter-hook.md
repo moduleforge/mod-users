@@ -152,6 +152,22 @@ architectural_impact: true
 - [Task 001 of this phase](./001-key-gates-on-system-actor-marker.md).
 - [Phase summary](../phases/adopt-core-engine-remediation.md).
 
+## Status
+
+- **Outcome:** succeeded (2026-10-30).
+- **Predicate:** `mod_users.access_row_permitted` returns true when `p_system_actor IS TRUE`; otherwise `mod_users.owning_party_gate(...) IS TRUE`. NULL and false never exempt. An unbound call (all NULL) reaches the gate with no session and no credential, so it fails closed for gated rows. It keeps the rows the gate does not refuse: a member of the owning party, the actor's own subject, an operator (D), and an owner with no restrictive policy.
+- **Anonymous (7Bb9):** option (ii), no anonymous branch. The anonymous profile cannot hold grants (MF501), cannot join actor groups (MF502) and has no own subject, so it lists nothing either way. The parity case passes.
+- **Optional hardening (erS4, 6nAj):** not applied. The single-row side does not check the holder, so adding the check would break parity.
+- **Shared SQL definition:** `mod_users.owning_party_gate(profile, session, credential, entity, owner)`. It maps 0 to NULL, applies `session_meets_party_policy` for the owner, and also applies it for the entity itself when the entity is a `legal_entity` (Decision F). Decisions D, G, J and L stay inside `session_meets_party_policy`. `checkPartyPolicy` now calls it: `AuthorizeTypeIn` passes entity NULL. The Go contract (`partyPolicyQuery`, the stub dispatch) is unchanged.
+- **Facade:** `api/localAuthz` (hosts already import it for `localAuthz.New`) exports `AccessRowFilter` and `AccessFuncGenerator()`. They are defined in `api/internal/authz/row_filter.go`. `api/cmd/server/main.go` installs through `AccessFuncGenerator()` and fails startup if it returns an error.
+- **List paths bound:** `ListPrincipals` (`api/internal/service/principal_admin.go`) is the only non-test caller. It runs in one read-only transaction, calls `setup.BindAuthInputs` first and refuses the request if that errors. Count, page and detail reads all run in that transaction.
+- **Harnesses:** `authz_integration_test.go`, `parity_integration_test.go` and `harness_integration_test.go` install the hooked generator. No test keeps the unfiltered body.
+- **Tests:** the new `api/internal/authz/row_filter_parity_integration_test.go` covers parity via `paritytest.Compare` over the wildcard, entity, type-entity, owned-scope and own arms, for every required context. It also holds predicate conformance (8FYk) and the unbound list. The new `api/internal/authz/row_filter_test.go` is a unit test. The new `api/internal/integration/principal_list_gate_integration_test.go` covers the HTTP case.
+- **Mutation checks:** a predicate that always returns true fails the parity, conformance, unbound-list and HTTP tests. Removing `BindAuthInputs` from `ListPrincipals` fails the HTTP test: a collaborator who meets the policy loses the rows. The code is restored.
+- **Validation:** `make build`, `make test`, `make lint` and `make -C model verify` pass with `MODULEFORGE_SIBLINGS_DIR` set. The `authz`, `config` and `integration` suites pass against a throwaway `postgres:16`, which was then removed. Goose up then down-to 99 is clean.
+- **Dev databases:** `0100_baseline.sql` was edited in place, so existing dev databases must be rebuilt (`make clean.data`).
+- **Findings filed:** owkI (mod-repos), QbSc (mod-tasks), ZEu4 (mod-workflows), ck8O (app-mftodo), yDll (app-mfgit). The app-mfmanager gap was already filed in mod-core followups ("Managed mode cannot apply a row filter").
+
 ## Checkpoint hints
 
 - After the predicate and the shared gate function compile and the SQL-level tests pass.
