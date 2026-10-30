@@ -1262,7 +1262,7 @@ phases:
           slug: adopt-profile-lock-and-org-create-in-tx
           title: Adopt The Profile Row Lock Query And Organization CreateInTx
           path: phase-21-adopt-core-engine-remediation/003-adopt-profile-lock-and-org-create-in-tx.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Moved lockProfile onto mod-core's generated dblock.GetProfileByEntityIDForUpdate row lock and made the bootstrap create the operator organization through OrganizationService.CreateInTx with WithoutOwner(). NewBootstrapService gains a trailing orgs parameter; main.go, the harness and the manifest (new bootstrapOrganizationService entry via usersservice.OrganizationFromServices) are wired. Integration suites passed against a throwaway postgres:16 (removed); mutation check confirmed the new tests fail when the raw inserts are restored.
           git:
