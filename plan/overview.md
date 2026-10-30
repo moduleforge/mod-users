@@ -124,6 +124,7 @@ lists every constraint that touches a mod-users phase, with the participant's ow
 | U-X11 | mod-authz 16, mod-audit 22 and mod-workflows 52 start after mod-users 8. | mod-authz H7, mod-audit E6, mod-workflows H4 |
 | U-X12 | mod-users 9 follows 8. 10 follows the code phases. 11 follows 10 and merges before mod-core 5, which runs last, after every participant's final phase. | this plan, mod-core overview |
 | U-X13 | **The mod-core phase 1 task adding the shared `apiresp` action-required error (followup `Uure`) merges before mod-users 6 task 005 and 007 start.** Phases 6 and 8 return or wrap it for every `users.step_up_required` refusal (U8, U14); it replaces any mod-users-local rendering and lifts the earlier plain 409/500 limitation for step-up refusals raised inside other modules' services. | mod-core 1 (`Uure`) |
+| U-X14 | **mod-core 11 (`identity-engine-proof-remediation`) merges before mod-users 21 starts**, and mod-users 21 runs before mod-users 9, 10 and 11. Every phase-21 task halts if the mod-core surface it adopts is absent. | mod-core 11; this plan |
 
 Recommended global interleaving (it satisfies every constraint above and those in the other
 participants' overviews):
@@ -157,6 +158,7 @@ participants' overviews):
 | 9 | [Users GUI and Frontend Contract](./phases/users-gui-and-frontend-contract.md) | Per-tab tokens, refresh lineages, handoff, profile chrome, self-service panels, bootstrap and OIDC pages. | 8 |
 | 10 | [Documentation Updates](./phases/doc-updates.md) | Architecture and spec documents; repository documents review. | 6 to 9 |
 | 11 | [Users Identity Final](./phases/users-identity-final.md) | mod-users drift-scan slice; superseded-followup reconciliation. | 10; precedes mod-core phase 5 |
+| 21 | [Adopt Mod-Core Identity Engine Remediation](./phases/adopt-core-engine-remediation.md) | Adopt mod-core remediation phase 11: `gated()` keyed on `opctx.IsSystemActor` with the sessionless builders reviewed; the list-side owning-party gate through `setup.NewRowFilterGenerator`, `mod_users.access_row_permitted` (six arguments) and `setup.BindAuthInputs`, with parity tests; `dblock` profile lock and `OrganizationService.CreateInTx` in the bootstrap; docs. | 8 and its remediation rounds; mod-core phase 11 merged; **runs before 9, 10 and 11** |
 
 Within phase 6, the schema task comes first and the queries task second; the token/middleware task
 precedes the credentials, sessions, OIDC and wiring tasks, which can then largely run in parallel;
@@ -166,5 +168,8 @@ mod-authz 14 task 004. The trusted-admission task (007, listed last) depends onl
 runs in parallel with 002 to 005, and merges before the closing integration task 006. Within
 phase 8, the engine task comes first; impersonation, `credentials` and personal-party tasks are
 parallel after it. Phase 9's client task precedes its UI tasks. Phase 10's two tasks are parallel.
-Phase 11's scan precedes the reconciliation. The [work packages](./notes/work-packages.md) note gives
+Phase 11's scan precedes the reconciliation. Phase 21 was added after phase 8's remediation
+rounds and, despite its number, runs before phases 9, 10 and 11 (phase 9 consumes the list
+endpoints it changes; phases 10 and 11 must describe the adopted behavior); within it, task 001
+precedes task 002, task 003 is independent of both, and task 004 runs last. The [work packages](./notes/work-packages.md) note gives
 the suggested task boundaries.
