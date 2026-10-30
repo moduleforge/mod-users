@@ -1267,7 +1267,8 @@ phases:
           digest: Moved lockProfile onto mod-core's generated dblock.GetProfileByEntityIDForUpdate row lock and made the bootstrap create the operator organization through OrganizationService.CreateInTx with WithoutOwner(). NewBootstrapService gains a trailing orgs parameter; main.go, the harness and the manifest (new bootstrapOrganizationService entry via usersservice.OrganizationFromServices) are wired. Integration suites passed against a throwaway postgres:16 (removed); mutation check confirmed the new tests fail when the raw inserts are restored.
           git:
             branch: plan/identity-model-impl-21-003
-            commit: []
+            commit:
+                - e65c520
             merge: null
         - number: 4
           slug: align-docs-with-adopted-core-apis
