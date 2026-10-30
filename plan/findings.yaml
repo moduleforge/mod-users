@@ -36,6 +36,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'needs-sibling: mod-tasks. With mod-users'' row-filtered access functions installed (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), a list query run without mod-core setup.BindAuthInputs on its transaction passes NULL authentication inputs to the predicate and silently drops every row a restrictive party policy gates, even for a caller meeting the policy. model/queries/tasks.sql ListTasksByOwner joins accessible_task_ids_for_actor and is called from api/service/task.go without BindAuthInputs. Run it in one read-only transaction per request, call BindAuthInputs first and refuse the request on its error.'
+    - title: mod-workflows lists lack BindAuthInputs
+      id: ZEu4
+      date: "2026-10-30"
+      tags:
+        - type:bug
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: 'needs-sibling: mod-workflows. With mod-users'' row-filtered access functions installed (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), a list query run without mod-core setup.BindAuthInputs on its transaction passes NULL authentication inputs to the predicate and silently drops every row a restrictive party policy gates, even for a caller meeting the policy. Unbound list queries: model/queries/workflow_definitions.sql ListWorkflowDefinitions (accessible_workflow_definition_ids_for_actor; api/service/definition.go DefinitionService.List) and model/queries/workflow_instances.sql ListWorkflowInstances (accessible_workflow_instance_ids_for_actor; api/service/instance.go ListInstances). Run each in one read-only transaction per request, call BindAuthInputs first and refuse the request on its error.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
