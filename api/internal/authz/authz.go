@@ -20,7 +20,7 @@
 //     rendered by apiresp.WriteError wherever it surfaces), never a plain 403.
 //     A trusted system actor is a context for which opctx.IsSystemActor is
 //     true: it carries mod-core's explicit marker, set only by
-//     opctx.WithSystemActor. Absent session and credential fields confer
+//     opctx's WithSystemActor. Absent session and credential fields confer
 //     nothing: a non-anonymous context with no session, no credential and no
 //     marker is gated, and fails closed (ACR 0, zero AuthTime). An
 //     impersonating context is never a system actor and is always gated.
@@ -411,7 +411,7 @@ func (a *Authorizer) authorizePrelude(ctx context.Context, operation string, sco
 //
 // Only two contexts skip them: a trusted system actor, as mod-core's
 // opctx.IsSystemActor(ctx) defines it (the explicit SystemActor marker set by
-// opctx.WithSystemActor, not anonymous, not impersonating, a positive
+// opctx's WithSystemActor, not anonymous, not impersonating, a positive
 // profile), and the anonymous context (decision U14: the anonymous profile
 // holds no grants, so skipping its gates confers nothing). Every other context
 // is gated, including a non-anonymous context with no session, no credential
@@ -420,7 +420,7 @@ func gated(ctx context.Context, ac opctx.AuthContext) bool {
 	// WHY: skip the gates only for opctx.IsSystemActor (mod-core's explicit
 	// marker) and the anonymous context. IMPLIES: an unmarked context with no
 	// session and no credential is gated and fails closed; only trusted code
-	// uses opctx.WithSystemActor; the marker is never an operator signal
+	// uses opctx's WithSystemActor; the marker is never an operator signal
 	// (decision D's operator exemption lives in
 	// mod_users.session_meets_party_policy); an impersonating context is never
 	// a system actor, so decisions G, J and L still apply to it.
@@ -440,7 +440,7 @@ func gated(ctx context.Context, ac opctx.AuthContext) bool {
 	//     party it is outside of (no session and no credential to read factors
 	//     from).
 	//   - Only trusted code acting as a system actor profile uses
-	//     opctx.WithSystemActor; a real user's personal or party profile never
+	//     opctx's WithSystemActor; a real user's personal or party profile never
 	//     carries the marker.
 	//   - Decision D: the operator exemption from the owning-party gate is
 	//     keyed on the acting profile (core_is_operator_profile inside
