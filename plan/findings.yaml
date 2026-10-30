@@ -81,6 +81,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'needs-sibling: mod-core. mod-core''s moduleforge.module.yaml provides coreServices (*coreservice.Services) and naturalPersonService (coreservice.NaturalPersonFromServices) but no organization service, so mod-users'' moduleforge.module.yaml carries a local bootstrapOrganizationService (usersservice.OrganizationFromServices over service:coreServices) to feed usersservice.NewBootstrapService. A mod-core provider (an OrganizationFromServices constructor and an organizationService manifest entry, mirroring naturalPersonService) would let mod-users drop the local extraction and its extra requires entry for coreServices.'
+    - title: Manifest change in moduleforge.module.yaml (b
+      id: 7sEV
+      date: "2026-10-30"
+      tags:
+        - type:ambiguity
+        - plan/phase:adopt-core-engine-remediation
+        - priority:unspecified
+        - effort:unspecified
+      text: Manifest change in moduleforge.module.yaml (bootstrapOrganizationService, coreServices in requires) is untested because mfgen was not run; manager to verify.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
