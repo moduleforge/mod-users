@@ -982,7 +982,7 @@ func TestAuthorize_PartyGate(t *testing.T) {
 		}
 	})
 
-	t.Run("skipped without an owner or without a session or credential", func(t *testing.T) {
+	t.Run("skipped without an owner, for a system actor and for the anonymous context", func(t *testing.T) {
 		az := authz.NewWithStubOpReg(wildcardAllowFn)
 		calls := 0
 		az.SetPartyPolicyFn(func(context.Context, authz.PartyPolicyQuery) (bool, error) {
@@ -1008,6 +1008,181 @@ func TestAuthorize_PartyGate(t *testing.T) {
 			t.Errorf("party gate consulted %d time(s), want 0", calls)
 		}
 	})
+}
+
+// --- Prelude: the gates key on the system-actor marker ---
+
+// sessionlessUser is a non-anonymous context for a real user with no session,
+// no credential and no system-actor marker: the shape mod-users builds for
+// its unauthenticated flows (withActingProfile). acr and authTime let a test
+// pass the assurance gate on purpose to reach the owning-party gate.
+func sessionlessUser(acr int16, authTime time.Time) context.Context {
+	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID: 1001, ProfileID: 1, ACR: acr, AuthTime: authTime,
+	})
+}
+
+// restrictivePartyStub stands in for mod_users.session_meets_party_policy on a
+// restrictive third party the acting profile is outside of: the policy is met
+// only with a session or a credential whose factors could satisfy it, so a
+// context carrying neither is refused, exactly as the SQL's last branch does.
+// Every query is recorded.
+func restrictivePartyStub(got *[]authz.PartyPolicyQuery) func(context.Context, authz.PartyPolicyQuery) (bool, error) {
+	return func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+		*got = append(*got, q)
+		return q.SessionID != 0 || q.CredentialID != 0, nil
+	}
+}
+
+// gateEntryPoints runs the same check through Authorize (a cross-party target),
+// AuthorizeType and AuthorizeTypeIn (a cross-party owner).
+var gateEntryPoints = []struct {
+	name     string
+	hasOwner bool
+	call     func(az *authz.Authorizer, ctx context.Context, op string) error
+}{
+	{"Authorize", true, func(az *authz.Authorizer, ctx context.Context, op string) error {
+		return az.Authorize(ctx, op, ptr(int64(99)))
+	}},
+	{"AuthorizeType", false, func(az *authz.Authorizer, ctx context.Context, op string) error {
+		return az.AuthorizeType(ctx, op, 7)
+	}},
+	{"AuthorizeTypeIn", true, func(az *authz.Authorizer, ctx context.Context, op string) error {
+		return az.AuthorizeTypeIn(ctx, op, 7, 40)
+	}},
+}
+
+// TestGates_SessionlessUnmarkedContext_IsGated pins the fail-closed rule: a
+// non-anonymous context with no session, no credential and no system-actor
+// marker is gated like any session. It is refused with the step-up error when
+// the operation's min_acr exceeds its ACR (or max_auth_age is set and AuthTime
+// is zero), and with ErrForbidden by the owning-party gate on a restrictive
+// third party's target, before any grant arm runs, even for a wildcard holder.
+func TestGates_SessionlessUnmarkedContext_IsGated(t *testing.T) {
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+
+	for _, ep := range gateEntryPoints {
+		t.Run(ep.name+"/min_acr above the context's ACR", func(t *testing.T) {
+			calls := 0
+			az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+			az.SetNow(func() time.Time { return now })
+			requireStepUp(t, ep.call(az, sessionlessUser(0, time.Time{}), "read"))
+			if calls != 0 {
+				t.Errorf("the assurance gate must refuse before the wildcard arm, got %d wildcard call(s)", calls)
+			}
+		})
+
+		t.Run(ep.name+"/max_auth_age with a zero AuthTime", func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardAllowFn)
+			az.SetNow(func() time.Time { return now })
+			requireStepUp(t, ep.call(az, sessionlessUser(3, time.Time{}), "credentials"))
+		})
+
+		if !ep.hasOwner {
+			continue
+		}
+		t.Run(ep.name+"/restrictive third party", func(t *testing.T) {
+			calls := 0
+			az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+			az.SetNow(func() time.Time { return now })
+			var got []authz.PartyPolicyQuery
+			az.SetPartyPolicyFn(restrictivePartyStub(&got))
+
+			// ACR and AuthTime meet read's policy, so only the owning-party
+			// gate can refuse.
+			err := ep.call(az, sessionlessUser(1, now), "read")
+			requirePlainForbidden(t, err)
+			if len(got) != 1 || got[0].SessionID != 0 || got[0].CredentialID != 0 || got[0].ProfileID != 1 {
+				t.Errorf("party gate queries = %+v, want one for profile 1 with no session and no credential", got)
+			}
+			if calls != 0 {
+				t.Errorf("the owning-party gate must refuse before the wildcard arm, got %d wildcard call(s)", calls)
+			}
+		})
+	}
+}
+
+// requirePlainForbidden asserts err is the plain 403, not a step-up action.
+func requirePlainForbidden(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got: %v", err)
+	}
+	if errors.Is(err, authz.ErrStepUpRequired) {
+		t.Fatalf("an owning-party refusal is not a step-up action, got: %v", err)
+	}
+}
+
+// TestGates_SkippedOnlyForSystemActorAndAnonymous runs the refusing calls of
+// TestGates_SessionlessUnmarkedContext_IsGated with an opctx.WithSystemActor
+// context and with the anonymous context: both skip the assurance gate and
+// the owning-party gate (the party stub is never consulted), so a wildcard
+// holder passes.
+func TestGates_SkippedOnlyForSystemActorAndAnonymous(t *testing.T) {
+	contexts := map[string]context.Context{
+		"system actor": opctx.WithSystemActor(context.Background(), 1001, 1),
+		"anonymous": opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 2, ProfileID: 3, Anonymous: true}),
+	}
+	for name, ctx := range contexts {
+		for _, ep := range gateEntryPoints {
+			for _, op := range []string{"read", "credentials"} {
+				t.Run(name+"/"+ep.name+"/"+op, func(t *testing.T) {
+					az := authz.NewWithStubOpReg(wildcardAllowFn)
+					var got []authz.PartyPolicyQuery
+					az.SetPartyPolicyFn(restrictivePartyStub(&got))
+					if err := ep.call(az, ctx, op); err != nil {
+						t.Errorf("err = %v, want both gates skipped", err)
+					}
+					if len(got) != 0 {
+						t.Errorf("party gate consulted %d time(s), want 0", len(got))
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestGates_ImpersonatingContextWithMarker_IsGated pins fail-closed behavior
+// for an impersonating context that also carries SystemActor: true, set by a
+// struct literal (the field is exported). opctx.IsSystemActor is false
+// whenever ImpersonatorPrincipalID is set, so both gates still apply and the
+// marker never exempts an impersonation (decisions G, J and L stay in force).
+func TestGates_ImpersonatingContextWithMarker_IsGated(t *testing.T) {
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	marked := func(acr int16) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, ImpersonatorPrincipalID: 7, SessionID: 9,
+			ACR: acr, AuthTime: now, SystemActor: true,
+		})
+	}
+	if opctx.IsSystemActor(marked(1)) {
+		t.Fatal("precondition: an impersonating context must never be a system actor")
+	}
+
+	for _, ep := range gateEntryPoints {
+		t.Run(ep.name+"/assurance gate", func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardAllowFn)
+			az.SetNow(func() time.Time { return now })
+			requireStepUp(t, ep.call(az, marked(0), "read"))
+		})
+		if !ep.hasOwner {
+			continue
+		}
+		t.Run(ep.name+"/owning-party gate", func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardAllowFn)
+			az.SetNow(func() time.Time { return now })
+			var got []authz.PartyPolicyQuery
+			az.SetPartyPolicyFn(func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+				got = append(got, q)
+				return false, nil // the impersonation's parent factors do not meet the policy
+			})
+			requirePlainForbidden(t, ep.call(az, marked(1), "read"))
+			if len(got) != 1 || got[0].SessionID != 9 {
+				t.Errorf("party gate queries = %+v, want one with the impersonation session 9", got)
+			}
+		})
+	}
 }
 
 // --- AuthorizeTypeIn ---

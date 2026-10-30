@@ -40,8 +40,9 @@ func (a *Authorizer) SetOwnedScopeFn(fn func(ctx context.Context, actorEntityID,
 type PartyPolicyQuery = partyPolicyQuery
 
 // SetPartyPolicyFn stubs the owning-party gate
-// (mod_users.session_meets_party_policy). It runs only for contexts with a
-// session or a credential, and only when the check names an owner.
+// (mod_users.session_meets_party_policy). It runs for every gated context
+// (anything but a system actor, opctx.IsSystemActor, and the anonymous
+// context), and only when the check names an owner.
 func (a *Authorizer) SetPartyPolicyFn(fn func(ctx context.Context, q PartyPolicyQuery) (bool, error)) {
 	a.partyPolicyFn = fn
 }

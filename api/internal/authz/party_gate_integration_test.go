@@ -353,6 +353,48 @@ func TestInteg_PartyGate_Skips(t *testing.T) {
 	})
 }
 
+// TestInteg_PartyGate_SessionlessUserContextIsRefused proves the engine fails
+// closed for the context mod-users builds for a real user in its
+// unauthenticated flows (internal/service withActingProfile: principal and
+// acting profile only, no session, no credential, no system-actor marker). On
+// a restrictive third party's row it is refused: by the assurance gate as
+// built (ACR 0), and, with an ACR and AuthTime that pass the assurance gate,
+// by the owning-party gate (mod_users.session_meets_party_policy has no factors
+// to read). The same profile in an interactive session meeting the policy is
+// allowed.
+func TestInteg_PartyGate_SessionlessUserContextIsRefused(t *testing.T) {
+	g := seedGateParty(t, "authorized", 1)
+	// The collaborator holds read on the row (targeted) and over the party's
+	// content (owned scope), so only a gate can refuse it.
+	ownedGrant(t, g.collabProfile, g.party, "read")
+
+	asBuilt := opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID: g.collabUser, ProfileID: g.collabProfile,
+	})
+	if opctx.IsSystemActor(asBuilt) {
+		t.Fatal("precondition: a real user's sessionless context must not be a system actor")
+	}
+	requireStepUpAction(t, integAZ.Authorize(asBuilt, "read", &g.content), "sessionless user context as built (ACR 0)")
+
+	assured := opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID: g.collabUser, ProfileID: g.collabProfile, ACR: 3, AuthTime: time.Now(),
+	})
+	requireForbidden403(t, integAZ.Authorize(assured, "read", &g.content),
+		"sessionless user context meeting the assurance gate, on a restrictive third party's row")
+	requireForbidden403(t, integAZ.AuthorizeTypeIn(assured, "read", organizationTypeID(t), g.party),
+		"sessionless user context, AuthorizeTypeIn under a restrictive third party")
+
+	pw := fxPassword(t, integPool, g.collabUser, nil)
+	authorizeCredential(t, pw, g.party, g.collabProfile)
+	session := sessionCtx(t, g.collabUser, g.collabProfile, 1, pw)
+	if err := integAZ.Authorize(session, "read", &g.content); err != nil {
+		t.Errorf("same profile in an interactive session meeting the policy: err = %v, want nil", err)
+	}
+	if err := integAZ.AuthorizeTypeIn(session, "read", organizationTypeID(t), g.party); err != nil {
+		t.Errorf("same profile in an interactive session meeting the policy, AuthorizeTypeIn: err = %v, want nil", err)
+	}
+}
+
 func TestInteg_PartyGate_SSHFallback(t *testing.T) {
 	resolver := service.NewSSHKeyResolver(usersdb.New(integPool), coredb.New(integPool))
 

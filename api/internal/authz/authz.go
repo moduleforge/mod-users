@@ -12,15 +12,18 @@
 //
 // Prelude. Every entry point first runs, in order:
 //
-//  1. The operation-level assurance gate, for contexts that carry a SessionID
-//     or a CredentialID: the context's ACR must reach the operation's MinACR
-//     and, when the operation sets MaxAuthAge, the authentication must be at
-//     most that old. A failure is the shared action-required error
-//     ErrStepUpRequired (409 users.step_up_required, rendered by
-//     apiresp.WriteError wherever it surfaces), never a plain 403. Trusted
-//     system-actor contexts (no session, no credential) and the anonymous
-//     context skip it; an impersonating context always carries a session and
-//     never does.
+//  1. The operation-level assurance gate, for every context except a trusted
+//     system actor and the anonymous context: the context's ACR must reach the
+//     operation's MinACR and, when the operation sets MaxAuthAge, the
+//     authentication must be at most that old. A failure is the shared
+//     action-required error ErrStepUpRequired (409 users.step_up_required,
+//     rendered by apiresp.WriteError wherever it surfaces), never a plain 403.
+//     A trusted system actor is a context for which opctx.IsSystemActor is
+//     true: it carries mod-core's explicit marker, set only by
+//     opctx.WithSystemActor. Absent session and credential fields confer
+//     nothing: a non-anonymous context with no session, no credential and no
+//     marker is gated, and fails closed (ACR 0, zero AuthTime). An
+//     impersonating context is never a system actor and is always gated.
 //  2. The owning-party gate, when the check names an owner: the target's
 //     entities.owner_id for Authorize, ownerID for AuthorizeTypeIn. A party
 //     is its own owning party (decision F): when Authorize's target is itself
@@ -46,8 +49,12 @@
 //     failed grant arm. Acting profiles inside the owning party, personal
 //     profiles reaching their own records, platform operator profiles
 //     (core_is_operator_profile; decision D: a customer party's policy never
-//     binds the operator, while the operation-level gate still applies),
-//     system-actor contexts and the anonymous context skip it. It costs one query per checked target.
+//     binds the operator, while the operation-level gate still applies; the
+//     exemption is keyed on the acting profile, never on the system-actor
+//     marker), system-actor contexts (opctx.IsSystemActor) and the anonymous
+//     context skip it. An unmarked context with no session and no credential
+//     has no factors to meet a restrictive policy with, so it is refused.
+//     It costs one query per checked target.
 //  3. The wildcard arm: the actor chain (the profile and the actor groups it
 //     belongs to, transitively) holds a grant with scope 'entity' and
 //     target_id NULL for an operation in the requested operation's
@@ -364,7 +371,7 @@ func (a *Authorizer) authorizePrelude(ctx context.Context, operation string, sco
 		}
 	}
 
-	if gated(ac) {
+	if gated(ctx, ac) {
 		if err := a.assuranceGate(ac, operation, policySlug); err != nil {
 			return 0, nil, true, err
 		}
@@ -398,20 +405,53 @@ func (a *Authorizer) authorizePrelude(ctx context.Context, operation string, sco
 	return actorEntityID, opIDs, false, nil
 }
 
-// gated reports whether the prelude's gates apply to ac: an interactive or
-// non-interactive caller always carries a session or a credential; trusted
-// system-actor contexts carry neither, and the anonymous context is exempt.
+// gated reports whether the prelude's gates (the assurance gate and the
+// owning-party gate) apply to the context. ac is opctx.Auth(ctx), already
+// read by the prelude.
 //
-// Sessionless trust is inferred from absent fields (SessionID == 0 and
-// CredentialID == 0 on a non-anonymous context), pending an explicit mod-core
-// system-actor marker. mod-users itself builds such contexts for real users
-// (withActingProfile and its callers in internal/service, and the idp_jit
-// context in internal/handlers/auth), so none of them may ever reach
-// Authorize, AuthorizeType or AuthorizeTypeIn. That is pinned by
-// internal/service/sessionless_contexts_test.go; do not weaken the pin
-// without replacing it with the marker.
-func gated(ac opctx.AuthContext) bool {
-	return !ac.Anonymous && (ac.SessionID != 0 || ac.CredentialID != 0)
+// Only two contexts skip them: a trusted system actor, as mod-core's
+// opctx.IsSystemActor(ctx) defines it (the explicit SystemActor marker set by
+// opctx.WithSystemActor, not anonymous, not impersonating, a positive
+// profile), and the anonymous context (decision U14: the anonymous profile
+// holds no grants, so skipping its gates confers nothing). Every other context
+// is gated, including a non-anonymous context with no session, no credential
+// and no marker.
+func gated(ctx context.Context, ac opctx.AuthContext) bool {
+	// WHY: skip the gates only for opctx.IsSystemActor (mod-core's explicit
+	// marker) and the anonymous context. IMPLIES: an unmarked context with no
+	// session and no credential is gated and fails closed; only trusted code
+	// uses opctx.WithSystemActor; the marker is never an operator signal
+	// (decision D's operator exemption lives in
+	// mod_users.session_meets_party_policy); an impersonating context is never
+	// a system actor, so decisions G, J and L still apply to it.
+	//
+	// WHY, in full: trust is read from the marker through opctx.IsSystemActor,
+	// never re-derived from absent SessionID and CredentialID fields, so
+	// mod-users and mod-core cannot disagree on what a system actor is, and a
+	// context mod-users builds for a real user without a session
+	// (withActingProfile and its callers, the idp_jit context) is not mistaken
+	// for trusted code.
+	//
+	// IMPLIES, in full:
+	//   - Fail closed: the assurance gate refuses an unmarked sessionless
+	//     context when the operation's min_acr exceeds its ACR (0) or when
+	//     max_auth_age is set and AuthTime is zero, and
+	//     mod_users.session_meets_party_policy returns false for a restrictive
+	//     party it is outside of (no session and no credential to read factors
+	//     from).
+	//   - Only trusted code acting as a system actor profile uses
+	//     opctx.WithSystemActor; a real user's personal or party profile never
+	//     carries the marker.
+	//   - Decision D: the operator exemption from the owning-party gate is
+	//     keyed on the acting profile (core_is_operator_profile inside
+	//     session_meets_party_policy), runs for a gated operator context, and
+	//     never reads the marker.
+	//   - Decisions G (as resolved), J and L: IsSystemActor is false whenever
+	//     ImpersonatorPrincipalID is set, even with the marker set by a struct
+	//     literal, so an impersonating context stays gated and the exemptions
+	//     keyed on the session's recorded impersonator_profile_id and its
+	//     parent factors still decide it.
+	return !ac.Anonymous && !opctx.IsSystemActor(ctx)
 }
 
 // assuranceGate applies the operation-level assurance policy of policySlug to
