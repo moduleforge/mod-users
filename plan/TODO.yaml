@@ -1253,3 +1253,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: adopt-profile-lock-and-org-create-in-tx
+          title: Adopt The Profile Row Lock Query And Organization CreateInTx
+          path: phase-21-adopt-core-engine-remediation/003-adopt-profile-lock-and-org-create-in-tx.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
