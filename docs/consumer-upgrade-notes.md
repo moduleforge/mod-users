@@ -112,6 +112,16 @@ In-process changes:
 - `SSHKeyService.Register` parses the key and label before authorization, and the ssh-key service requires an authenticated context.
 - **Target-0 authorizer calls.** Consumer authorizers (the mod-users `Authorizer`, test fakes) receive one extra `Authorize(op, &0)` call per masked miss. It must be denied quietly, with no error log or alert, and audit logs show one such call per masked miss.
 
+## Authorization: system-actor marker, list row filter and bootstrap
+
+For host apps and sibling modules that compose mod-users. Details: [architecture.md](./architecture.md#api-layer).
+
+- **Unmarked contexts are gated.** The engine's gates are bypassed only for the anonymous context and for a context built with `opctx.WithSystemActor`. A context with no session, no credential and no marker now fails closed. Code that relied on such a context being exempt must either mark it (trusted system flows only, never a user's profile) or authenticate it.
+- **Install access functions through the exported generator.** Pass `localAuthz.AccessFuncGenerator()` to `setup.ApplyFuncs` in the composition root, in place of `setup.NewGrantTableGenerator()`, and fail startup if it returns an error. A host that decorates the grant-table generator wraps its decorated generator with `setup.NewRowFilterGenerator(decorated, localAuthz.AccessRowFilter)` instead. The generator wraps the access functions with the predicate `mod_users.access_row_permitted(p_actor_entity_id, p_entity_id, p_owner_id, p_session_id, p_credential_id, p_system_actor)`.
+- **Bind every list transaction.** Run each list query that joins an `accessible_<slug>_ids_for_actor` function in one transaction per request context, call `setup.BindAuthInputs(ctx, tx)` first and refuse the request when it returns an error. An unbound list fails closed and silently: it drops every row a restrictive party policy gates, so a list can return fewer rows than single-row reads allow. `GET /v1/principals` now omits rows owned by a party whose authentication policy the caller's session does not meet, consistent with the single-row `403`.
+- **`NewBootstrapService` gained an argument.** `usersservice.NewBootstrapService(pool, az, obs, users, creds, sessions, profiles, orgs)` takes mod-core's `OrganizationServicer` as its last parameter; the bootstrap creates the operator organization through `OrganizationService.CreateInTx`. `usersservice.OrganizationFromServices(svcs)` extracts it from mod-core's `coreServices` aggregate, and the module manifest uses it to feed `bootstrapService`. A host that calls the constructor directly passes `coreSvcs.Organization`.
+- **Rebuild dev databases.** The mod-users and mod-core baselines were edited in place (new predicate and gate functions, hardened `core_is_operator_profile`, new `profile_policy_confirmations_party_id_idx` index): drop and recreate with `make clean.data`.
+
 ## Known limits and open items
 
 - Local-mode CORS pattern reflection: see the caveat under [CORS](#cors). Pattern entries are not rejected in `DEPLOY_MODE=local` and are still reflected with credentials.

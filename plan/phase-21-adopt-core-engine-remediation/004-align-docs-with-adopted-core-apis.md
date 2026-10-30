@@ -54,3 +54,10 @@ Runs last in the phase, after tasks 001 to 003 have merged.
 - Findings `FZSa`, `8hQB`, `T9ZL`, `znLa` (mod-core project followups) and `Ddx9`, `qvSR`, `j75L` (mod-users project followups).
 - [Decisions](../notes/decisions-and-resolutions.md) and [the API surface](../notes/mod-users-api-surface.md) (read only here).
 - [Phase summary](../phases/adopt-core-engine-remediation.md).
+
+## Status
+
+- Outcome: succeeded (2026-10-30). Documentation only.
+- Validation: greps 1 to 4 pass (no old rule, six-argument predicate and `BindAuthInputs` documented, `clean.data` note present, no link into `plan/`); only `AGENTS.md`, `api/openapi.yaml`, `docs/` and `model/README.md` changed. `make lint` covers Go and GUI only, and its root `preflight` is forbidden here, so it was not run (not applicable). No integration tests ran; no database was needed.
+- Changed: `AGENTS.md` (new Authorization section, rebuild note, key-files bootstrap row), `docs/architecture.md` (marker and list-side gate paragraphs replace the known-limitation paragraph; prelude wording; lock-order and bootstrap notes), `docs/mod-users-spec.md` (Security bullet), `docs/consumer-upgrade-notes.md` (new section), `model/README.md` (rebuild note), `api/openapi.yaml` (`GET /v1/principals` description).
+- Code/doc mismatch: the `api/localAuthz` package comment (prelude item 1) is stale; filed as a finding, not edited.

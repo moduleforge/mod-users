@@ -11,7 +11,12 @@ for the rationale behind the Postgres + goose choices.
 - `migrations/sql/` — goose versioned migration files (`.sql`); currently the single
   `0100_baseline.sql`, which creates every mod-users table, trigger and function in the
   `mod_users` schema (see the file's header comment for the schema rule and the `MF101`–`MF103`
-  SQLSTATE contract)
+  SQLSTATE contract). The baseline, like mod-core's `0001_baseline.sql`, was edited in place
+  again, so an existing dev database must be dropped and recreated (`make clean.data`). What
+  changed: mod-users adds the list-side predicate `mod_users.access_row_permitted` (six
+  arguments) and the shared gate function `mod_users.owning_party_gate`; mod-core hardens its
+  `core_is_operator_profile` operator test and adds the index
+  `profile_policy_confirmations_party_id_idx`
 - `migrations/migrate.go` — embeds `migrations/sql/*.sql` and exposes `Migrate`
 - `queries/` — sqlc query files (`.sql`), one per concept; they reference `mod_users` relations only
   (sqlc compiles against `migrations/sql/` alone), and call `mod_users` functions for anything

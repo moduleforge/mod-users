@@ -2974,7 +2974,10 @@ paths:
       summary: List principals
       description: |
         Users and service accounts the caller may list, through the
-        `accessible_*_ids_for_actor` access functions.
+        `accessible_*_ids_for_actor` access functions. A row owned by a party
+        whose authentication policy the caller's session does not meet is
+        omitted from the list, consistent with the refusal the single-row read
+        of that principal gives.
       tags: [Principals]
       operationId: listPrincipals
       parameters:
