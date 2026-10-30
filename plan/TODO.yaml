@@ -1255,7 +1255,8 @@ phases:
           digest: Added mod_users.owning_party_gate as the one SQL owning-party decision, used by checkPartyPolicy and the new list predicate mod_users.access_row_permitted. ListPrincipals runs in a read-only transaction bound with setup.BindAuthInputs. mod-users installs mod-core's row-filter hook via localAuthz.AccessFuncGenerator in the dev server and test harnesses. Mutation checks confirm the tests catch an always-true predicate and a missing binding. Integration tests ran against a throwaway postgres:16 (removed).
           git:
             branch: plan/identity-model-impl-21-002
-            commit: []
+            commit:
+                - 9cd73dc
             merge: null
         - number: 3
           slug: adopt-profile-lock-and-org-create-in-tx
