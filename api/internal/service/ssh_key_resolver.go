@@ -185,6 +185,9 @@ func (r *SSHKeyResolver) AuthContextForOwner(ctx context.Context, cred SSHCreden
 	if err != nil {
 		return opctx.AuthContext{}, fmt.Errorf("ssh_key_resolver.AuthContextForOwner: credential kind: %w", err)
 	}
+	// WHY no system-actor marker: an SSH call is the key holder's own
+	// non-interactive credential. IMPLIES: the engine gates it on the key's
+	// base_acr and, outside the owning party, on the party's policy.
 	return opctx.AuthContext{
 		PrincipalID:  cred.PrincipalID,
 		ProfileID:    profileID,

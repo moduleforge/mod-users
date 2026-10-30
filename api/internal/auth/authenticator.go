@@ -388,6 +388,10 @@ func (a *Authenticator) checkAppGate(ctx context.Context, id *Identity) error {
 		return denied
 	}
 	appID := id.AppID
+	// WHY no system-actor marker: the candidate is the authenticated caller's
+	// own session (and impersonator, if any), not trusted code.
+	// IMPLIES: the engine gates the app login check like the request itself:
+	// assurance and owning-party policy apply.
 	candidate := opctx.WithAuthContext(ctx, opctx.AuthContext{
 		PrincipalID:             id.PrincipalID,
 		ProfileID:               id.ProfileID,

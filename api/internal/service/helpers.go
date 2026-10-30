@@ -69,6 +69,15 @@ func actingProfileParam(ctx context.Context) pgtype.Int8 {
 // section 10.1, "Acting profile for unauthenticated flows"): the acting
 // profile is the profile the flow creates, and the principal is its holder.
 func withActingProfile(ctx context.Context, principalID, profileID int64) context.Context {
+	// WHY no system-actor marker: this context acts for a real user (its
+	// personal or party profile) who has not authenticated in this request,
+	// not for trusted platform code, so it is built with opctx.WithAuthContext
+	// and never with opctx's WithSystemActor.
+	// IMPLIES: the authorization engine gates it like any other context; it
+	// carries no session, no credential, ACR 0 and no AuthTime, so if it ever
+	// reached Authorize, AuthorizeType or AuthorizeTypeIn it would be refused
+	// (step-up, or the owning-party gate of a restrictive party). It is for
+	// observations and the unauthorized creation writes of its flows only.
 	return opctx.WithAuthContext(ctx, opctx.AuthContext{PrincipalID: principalID, ProfileID: profileID})
 }
 

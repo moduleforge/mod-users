@@ -125,3 +125,48 @@ architectural_impact: true
 - After `gated()` and its unit tests are green.
 - After the builder review and the reworked `sessionless_contexts_test.go`.
 - After the integration suites pass.
+
+## Status
+
+**Outcome:** succeeded (2026-10-30).
+
+**Change.** `gated(ctx, ac)` in `api/internal/authz/authz.go` now returns `!ac.Anonymous && !opctx.IsSystemActor(ctx)`. The prelude's assurance and owning-party gates are skipped only for a mod-core system actor and for the anonymous context. Every other context is gated, including a non-anonymous context with no session, no credential and no marker, and that context fails closed. The "inferred from absent fields" comment is deleted. The package doc (prelude steps 1 and 2) and the `SetPartyPolicyFn` doc are rewritten. Decisions D, G, J and L and the SQL are unchanged.
+
+**Builder classification (requirement 4).** No class (b) builder exists, so the marker has no producer in mod-users.
+
+| File | Function | Class | Reason |
+|---|---|---|---|
+| `api/internal/service/helpers.go` | `withActingProfile` | (a), sessionless | Real user's personal or party profile in an unauthenticated flow. Used for observations and creation writes only. |
+| `api/internal/service/user_service.go` | `CreatedUser.ActingContext` (callers: `CreateBYOUserInTx`, `CreateGuestUserInTx`, `register.go` `Register`, OIDC `createBYOUser`, bootstrap `personalCtx`) | (a), sessionless | The new user's personal profile. |
+| `api/internal/service/session_service.go` | `UnauthenticatedActingContext` (callers: `reset.go` `replacePassword`, OIDC `sessionActingContext`) | (a), sessionless | Password reset and OIDC callbacks act for a real principal. |
+| `api/internal/service/session_service.go` | `withFallbackActor` (the builder near line 789; caller: `session_flows.go` `revokeForReuse`) | (a), carries the revoked session | Refresh-reuse revocation acts for the session's real principal. |
+| `api/internal/handlers/auth/oidc_flows.go` | `createManagedUser` `actCtx` (idp_jit) | (a), sessionless | A managed user's real party profile. The IdP is not a system actor. |
+| `api/internal/handlers/auth/oidc_flows.go` | `sessionActingContext` | (a), carries the affected session | Link and step-up callbacks for the session's principal. |
+| `api/internal/service/bootstrap_service.go` | `bootstrapInTx` `adminCtx` (`withActingProfile`) and `personalCtx` | (a), sessionless | The first user's operator-party and personal profiles. The marker is never an operator signal. |
+| `api/internal/service/bootstrap_service.go` | `bootstrapInTx` `sessCtx` | (a), own session | The first administrator's real session. |
+| `api/internal/auth/anonymous_actor.go` | `withAnonymousActor` | anonymous | Exempt from the gates because it is anonymous (U14), not because it is a system actor. |
+| `api/internal/auth/authenticator.go` / `identity.go` / `service/session_service.go` / `impersonation.go` / `ssh_key_resolver.go` | `checkAppGate`, `Identity.AuthContext`, `WithIdentity`, `observeLogin`, `gateFor`, `administratorMayImpersonate`, `AuthContextForOwner` | (a), own session or credential | Other hits of `opctx.WithAuthContext(` and of `AuthContext` literals. All are gated. |
+
+**Requirement 5.** No unauthenticated flow calls `Authorize` with a class (a) context. The full `./internal/integration/...` suite passes unchanged: sign-up, guest, reset, OIDC JIT/link/step-up, bootstrap and refresh-reuse revocation. There is no decision for the manager.
+
+**Tests.**
+- `api/internal/authz/authz_test.go` adds three tests:
+  - `TestGates_SessionlessUnmarkedContext_IsGated`: step-up on `min_acr`, and on `max_auth_age` with a zero `AuthTime`, through all three entry points. `ErrForbidden` through the party stub on a cross-party target or owner.
+  - `TestGates_SkippedOnlyForSystemActorAndAnonymous`.
+  - `TestGates_ImpersonatingContextWithMarker_IsGated`.
+- One `TestAuthorize_PartyGate` subtest was renamed to state its intent. It already used `opctx.WithSystemActor`.
+- `api/internal/authz/party_gate_integration_test.go` adds `TestInteg_PartyGate_SessionlessUserContextIsRefused`. A withActingProfile-style context is refused with step-up as built (ACR 0). With a passing ACR and AuthTime, the real owning-party gate refuses it with 403 on a restrictive third party, for both `Authorize` and `AuthorizeTypeIn`. The same profile in a session meeting the policy is allowed.
+- `api/internal/service/sessionless_contexts_test.go` is reworked:
+  - Pin 1 (`TestContextBuilders_AreNotSystemActors`) names every in-package builder.
+  - Pin 2 is kept as defense in depth.
+  - Pin 3 adds `contextBuilders` (every AuthContext builder with its class; a new one fails until classified) and an empty `systemActorAllowList`. It flags any non-test `opctx.WithSystemActor` call outside the allow-list, and any literal or assignment that sets `SystemActor`.
+- No test relied on the inferred exemption: existing system-actor cases already used `opctx.WithSystemActor`. No assertion was weakened, and no operator fixture needed changing.
+
+**Validation.**
+- `make build`, `make test`, `make lint` and `make -C model verify` pass with `MODULEFORGE_SIBLINGS_DIR` set.
+- `authz`, `config` and `integration` pass against a throwaway `postgres:16`. The container was removed.
+- Mutation check: with the field-inferred rule restored, the unit and integration refusal tests fail. The code was then restored.
+- V4 and V5 greps are empty. Comment mentions were reworded so V5 matches no comment.
+- Sibling links resolve to the siblings' `worktrees/plan/identity-model-impl`, and the sibling plan worktrees are clean.
+
+**Findings filed.** `J86E` (needs-sibling: mod-authz, `stepUpStale`) and `c6Dh` (stale `session_meets_party_policy` SQL comment, comment only). `docs/architecture.md` "Sessionless contexts (known limitation)" is now stale. Task 004 owns it.

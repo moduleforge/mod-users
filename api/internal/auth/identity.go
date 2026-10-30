@@ -43,6 +43,10 @@ type Identity struct {
 // AuthContext returns the opctx.AuthContext equivalent of id. Anonymous is
 // always false: an Identity is an authenticated caller.
 func (id *Identity) AuthContext() opctx.AuthContext {
+	// WHY no system-actor marker: an Identity is an authenticated caller with
+	// a session or a credential, never trusted code.
+	// IMPLIES: every request context the middleware installs is gated by the
+	// engine on its own session or credential.
 	return opctx.AuthContext{
 		PrincipalID:             id.PrincipalID,
 		ProfileID:               id.ProfileID,

@@ -407,6 +407,9 @@ func sessionAudit(sess usersdb.Session) map[string]any {
 // observeLogin writes the `login` `session` observation with the section
 // 10.1 AuthContext for an unauthenticated flow.
 func (s *SessionService) observeLogin(ctx context.Context, tx pgx.Tx, sess usersdb.Session, actingProfileID int64) error {
+	// WHY no system-actor marker: the login is the real principal's own new
+	// session. IMPLIES: the context is gated like that session; it is used for
+	// the login observation only.
 	actCtx := opctx.WithAuthContext(ctx, opctx.AuthContext{
 		PrincipalID: sess.PrincipalID,
 		ProfileID:   actingProfileID,
@@ -504,6 +507,10 @@ func (s *SessionService) gateFor(sc sessionContext) appGate {
 		if s.az == nil {
 			return false, nil
 		}
+		// WHY no system-actor marker: the candidate is the session's real
+		// principal acting as one of its profiles. IMPLIES: the invite-only
+		// app gate is evaluated with the engine's assurance and owning-party
+		// gates applied to that session.
 		candidate := opctx.WithAuthContext(ctx, opctx.AuthContext{
 			PrincipalID: sc.sess.PrincipalID,
 			ProfileID:   profileID,
@@ -773,6 +780,11 @@ func UnauthenticatedActingContext(ctx context.Context, db usersdb.DBTX, principa
 	if err != nil || acting == 0 {
 		return ctx, false, err
 	}
+	// WHY no system-actor marker: password reset and the OIDC link and step-up
+	// callbacks act for a real user who has not authenticated in this
+	// request, not for trusted platform code (withActingProfile).
+	// IMPLIES: the context is for observations only; the engine would gate it
+	// and refuse it if it reached an Authorize entry point.
 	return withActingProfile(ctx, principalID, acting), true, nil
 }
 
@@ -786,6 +798,13 @@ func withFallbackActor(ctx context.Context, db usersdb.DBTX, principalID, sessio
 	if err != nil {
 		return ctx, err
 	}
+	// WHY no system-actor marker: refresh-reuse revocation acts for the
+	// session's own (real) principal, so the context carries that session
+	// and a real user's profile, never the trusted-code marker.
+	// IMPLIES: the engine gates it like any session context; with no ACR or
+	// AuthTime (and a session being revoked) it would be refused if it reached
+	// an Authorize entry point, so it is used for the revocation's
+	// observations only.
 	return opctx.WithAuthContext(ctx, opctx.AuthContext{
 		PrincipalID: principalID, ProfileID: acting, SessionID: sessionID,
 	}), nil
