@@ -1232,6 +1232,7 @@ phases:
     - number: 21
       slug: adopt-core-engine-remediation
       title: Adopt Mod-Core Identity Engine Remediation
+      diff_base: 2b182a710b58b21b47f9bdcf4fe57a9e5395decc
       tasks:
         - number: 1
           slug: key-gates-on-system-actor-marker
