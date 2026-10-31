@@ -1472,6 +1472,7 @@ phases:
           path: phase-24-remediation-12/002-fail-closed-impersonation-detection.md
           done: false
           tier: sonnet-med
+          digest: Impersonation detection checks marker and token's unverified act claim; step-up token-store path keeps marker consistent; two tests added; suite green.
           findings:
             - vAo0
           git:
