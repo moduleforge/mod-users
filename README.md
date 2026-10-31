@@ -94,6 +94,7 @@ Ending a profile (an administrator ending it, or the holder declining or leaving
 - [AGENTS.md](./AGENTS.md) — build, test, and development commands for contributors and AI agents
 - [docs/mod-users-spec.md](./docs/mod-users-spec.md) — feature specification and behavioral contracts
 - [docs/architecture.md](./docs/architecture.md) — system design, sub-project relationships, and key design decisions
+- [docs/architecture/sessions-and-tokens.md](./docs/architecture/sessions-and-tokens.md) — sessions as the revocation unit, the access-token carrier, liveness, refresh lineages, step-up, impersonation and the setup-token bootstrap
 - [docs/jwt-eddsa.md](./docs/jwt-eddsa.md) — EdDSA JWT signing, verify-only deployment, key rotation, and the `JWT_*` configuration
 - [docs/cors.md](./docs/cors.md) — CORS default-deny policy, `CORS_ORIGINS` / `DEPLOY_MODE` behavior, and the upgrade note for deployments that relied on the implicit wildcard
 - [docs/cookie-path.md](./docs/cookie-path.md) — `USERS_COOKIE_PATH`, the `oidc_state` cookie Path, and the strip-prefix proxy example
