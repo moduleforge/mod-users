@@ -1622,7 +1622,7 @@ phases:
             branch: plan/identity-model-impl-26-004
             commit:
                 - 55c2b891
-            merge: null
+            merge: a20465fd4abd3968503cbb5571bbd1d81d8996c8
         - number: 5
           slug: fix-oidc-redirect-error-code
           title: Use Authentication Failed Code In OIDC Troubleshooting
