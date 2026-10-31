@@ -20,9 +20,11 @@
 //     rendered by apiresp.WriteError wherever it surfaces), never a plain 403.
 //     A trusted system actor is a context for which opctx.IsSystemActor is
 //     true: it carries mod-core's explicit marker, set only by
-//     opctx's WithSystemActor. Absent session and credential fields confer
-//     nothing: a non-anonymous context with no session, no credential and no
-//     marker is gated, and fails closed (ACR 0, zero AuthTime). An
+//     opctx's WithSystemActor, and it carries no session and no credential
+//     (SystemActor is an exported field, so a marked context that carries
+//     either is gated, not trusted). Absent session and credential fields
+//     confer nothing: a non-anonymous context with no session, no credential
+//     and no marker is gated, and fails closed (ACR 0, zero AuthTime). An
 //     impersonating context is never a system actor and is always gated.
 //  2. The owning-party gate, when the check names an owner: the target's
 //     entities.owner_id for Authorize, ownerID for AuthorizeTypeIn. A party
@@ -51,8 +53,8 @@
 //     (core_is_operator_profile; decision D: a customer party's policy never
 //     binds the operator, while the operation-level gate still applies; the
 //     exemption is keyed on the acting profile, never on the system-actor
-//     marker), system-actor contexts (opctx.IsSystemActor) and the anonymous
-//     context skip it. An unmarked context with no session and no credential
+//     marker), sessionless, credential-less system-actor contexts
+//     (opctx.IsSystemActor) and the anonymous context skip it. An unmarked context with no session and no credential
 //     has no factors to meet a restrictive policy with, so it is refused.
 //     It costs one query per checked target.
 //  3. The wildcard arm: the actor chain (the profile and the actor groups it
@@ -415,7 +417,7 @@ func (a *Authorizer) authorizePrelude(ctx context.Context, operation string, sco
 // Only two contexts skip them: a trusted system actor, as mod-core's
 // opctx.IsSystemActor(ctx) defines it (the explicit SystemActor marker set by
 // opctx's WithSystemActor, not anonymous, not impersonating, a positive
-// profile), and the anonymous context (decision U14: the anonymous profile
+// profile) that also carries no session and no credential, and the anonymous context (decision U14: the anonymous profile
 // holds no grants, so skipping its gates confers nothing). Every other context
 // is gated, including a non-anonymous context with no session, no credential
 // and no marker.
@@ -454,7 +456,20 @@ func gated(ctx context.Context, ac opctx.AuthContext) bool {
 	//     literal, so an impersonating context stays gated and the exemptions
 	//     keyed on the session's recorded impersonator_profile_id and its
 	//     parent factors still decide it.
-	return !ac.Anonymous && !opctx.IsSystemActor(ctx)
+	//
+	// WHY, the session/credential condition: SystemActor is an exported field of
+	// opctx.AuthContext, so any code can build a context that carries the marker
+	// together with a real SessionID or CredentialID (a mis-built or forged
+	// context). A genuine trusted system actor is sessionless and
+	// credential-less by construction, so the marker alone is not trusted when
+	// it travels with either. IMPLIES: a marked context with SessionID != 0 or
+	// CredentialID != 0 is gated and fails closed through the same assurance and
+	// party-policy checks as a user context; the SQL predicate
+	// mod_users.access_row_permitted applies the identical condition so list and
+	// single-row checks keep parity. opctx.IsSystemActor is still the only
+	// reader of the marker; this adds a conjunct, it does not re-derive trust.
+	trustedSystemActor := opctx.IsSystemActor(ctx) && ac.SessionID == 0 && ac.CredentialID == 0
+	return !ac.Anonymous && !trustedSystemActor
 }
 
 // assuranceGate applies the operation-level assurance policy of policySlug to

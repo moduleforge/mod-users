@@ -397,6 +397,19 @@ func TestInteg_RowFilter_Parity(t *testing.T) {
 		}
 		w.check(t, rfScenario{name: "system actor", ctx: ctx, actor: belowProfile, pass: passes(true, true)})
 	})
+	t.Run("system actor marker carrying a session is gated", func(t *testing.T) {
+		// A struct-literal context with the exported SystemActor marker plus a
+		// session below the policy: the engine and the list filter must agree
+		// that it is gated, not trusted (paritytest.Compare checks the parity).
+		ctx := opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: belowUser, ProfileID: belowProfile, SessionID: sessionWith(t, belowUser, 1, belowPw),
+			CredentialID: belowPw, ACR: 1, AuthTime: time.Now(), SystemActor: true,
+		})
+		if !opctx.IsSystemActor(ctx) {
+			t.Fatal("precondition: opctx.IsSystemActor must be true for the marked context")
+		}
+		w.check(t, rfScenario{name: "marked with session", ctx: ctx, actor: belowProfile, pass: passes(false, true)})
+	})
 	t.Run("anonymous context", func(t *testing.T) {
 		ctx := opctx.WithAuthContext(context.Background(),
 			opctx.AuthContext{PrincipalID: ownerHolder(t, anon), ProfileID: anon, Anonymous: true})
@@ -463,7 +476,14 @@ func TestInteg_RowFilter_PredicateConformance(t *testing.T) {
 		{"marker NULL with a failing session", gated, i64(failing), nil, nil, false},
 		{"marker false with a failing session", gated, i64(failing), i64(0), b(false), false},
 		{"marker false with a meeting session (control)", gated, i64(meeting), i64(0), b(false), true},
-		{"marker true with a failing session", gated, i64(failing), i64(0), b(true), true},
+		// A marked context that carries a session or credential is gated, not
+		// trusted: SystemActor is an exported field, so the predicate mirrors
+		// gated() and exempts only a sessionless, credential-less marker.
+		{"marker true with a failing session", gated, i64(failing), i64(0), b(true), false},
+		{"marker true with a failing session and NULL credential", gated, i64(failing), nil, b(true), false},
+		{"marker true with a meeting session (still gated, then passes)", gated, i64(meeting), i64(0), b(true), true},
+		{"marker true with a credential and no session", gated, i64(0), i64(pw), b(true), false},
+		{"marker true with explicit zero session and credential", gated, i64(0), i64(0), b(true), true},
 		{"marker true with no session and no credential", gated, nil, nil, b(true), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

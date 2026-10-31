@@ -37,3 +37,9 @@ Environment and working rules:
 - Finding `tpls` (plan findings, `plan/findings.yaml`): the engine infers trust for a system-actor-marked context that carries a session or credential.
 - Finding `c6Dh` (plan findings, `plan/findings.yaml`): stale comment in `0100_baseline.sql` about sessionless trusted contexts.
 - [Decisions and resolutions](../notes/decisions-and-resolutions.md): Decisions D through M.
+
+## Status
+
+- Outcome: succeeded (2026-10-30).
+- Changed: `api/internal/authz/authz.go` (`gated()` skips only a marked context with SessionID == 0 and CredentialID == 0, plus WHY/IMPLIES comments and package doc), `model/migrations/sql/0100_baseline.sql` (`access_row_permitted` exemption conditions and comments; stale `session_meets_party_policy` comment corrected), `api/internal/authz/authz_test.go` (new `TestGates_MarkedContextWithSessionOrCredential_IsGated`), `api/internal/authz/row_filter_parity_integration_test.go` (conformance cases updated, new parity scenario with a marked session context), `AGENTS.md` (task-caused drift).
+- Validation: unit gate tests, predicate conformance and `paritytest.Compare` pass; mutation check (SQL revert fails Parity and PredicateConformance, Go revert fails TestGates and Parity) confirmed and code restored; `make build`, `make test`, `make lint`, `make -C model verify` pass; authz, config and integration suites pass against a throwaway postgres:16, container removed.

@@ -1143,6 +1143,68 @@ func TestGates_SkippedOnlyForSystemActorAndAnonymous(t *testing.T) {
 	}
 }
 
+// TestGates_MarkedContextWithSessionOrCredential_IsGated pins the fail-closed
+// rule for a context that carries the SystemActor marker together with a
+// session or a credential. SystemActor is an exported field, so such a context
+// can be built by mistake or on purpose; opctx.IsSystemActor alone would trust
+// it. A genuine system actor is sessionless and credential-less, so the
+// engine gates the marked context like any user context: the assurance gate and
+// the party-policy stub both refuse it. A sessionless marked context (the
+// control, see TestGates_SkippedOnlyForSystemActorAndAnonymous) still skips both.
+func TestGates_MarkedContextWithSessionOrCredential_IsGated(t *testing.T) {
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	marked := func(sessionID, credentialID int64, acr int16) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, SessionID: sessionID, CredentialID: credentialID,
+			ACR: acr, AuthTime: now, SystemActor: true,
+		})
+	}
+	cases := []struct {
+		name         string
+		sessionID    int64
+		credentialID int64
+	}{
+		{"session", 9, 0},
+		{"credential", 0, 11},
+		{"session and credential", 9, 11},
+	}
+	for _, tc := range cases {
+		// Precondition: the marker is honored by opctx, so only the added
+		// session/credential condition can make gated() refuse.
+		if !opctx.IsSystemActor(marked(tc.sessionID, tc.credentialID, 1)) {
+			t.Fatalf("%s: precondition: opctx.IsSystemActor must be true for the marked context", tc.name)
+		}
+		for _, ep := range gateEntryPoints {
+			t.Run(tc.name+"/"+ep.name+"/assurance gate", func(t *testing.T) {
+				az := authz.NewWithStubOpReg(wildcardAllowFn)
+				az.SetNow(func() time.Time { return now })
+				// ACR 0 is below read's min_acr: only the assurance gate can refuse.
+				requireStepUp(t, ep.call(az, marked(tc.sessionID, tc.credentialID, 0), "read"))
+			})
+			if !ep.hasOwner {
+				continue
+			}
+			t.Run(tc.name+"/"+ep.name+"/party policy", func(t *testing.T) {
+				az := authz.NewWithStubOpReg(wildcardAllowFn)
+				az.SetNow(func() time.Time { return now })
+				var got []authz.PartyPolicyQuery
+				// The policy is not met by this session or credential (a restrictive
+				// party whose factors the marked context does not satisfy), so a
+				// context that is actually gated is refused and the query is recorded.
+				az.SetPartyPolicyFn(func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+					got = append(got, q)
+					return false, nil
+				})
+				// ACR and AuthTime meet read's policy, so only the party gate refuses.
+				requirePlainForbidden(t, ep.call(az, marked(tc.sessionID, tc.credentialID, 1), "read"))
+				if len(got) != 1 || got[0].SessionID != tc.sessionID || got[0].CredentialID != tc.credentialID {
+					t.Errorf("party gate queries = %+v, want one carrying session %d and credential %d", got, tc.sessionID, tc.credentialID)
+				}
+			})
+		}
+	}
+}
+
 // TestGates_ImpersonatingContextWithMarker_IsGated pins fail-closed behavior
 // for an impersonating context that also carries SystemActor: true, set by a
 // struct literal (the field is exported). opctx.IsSystemActor is false
