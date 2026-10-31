@@ -27,6 +27,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Scan docs/mf-standards for old identity terms (type:documentation). Submodule uninitialized in the worktree, so not scanned. Check it for old-model terms.
+    - title: PROPOSED REMOVALS for manager to apply after
+      id: 1JCd
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: 'PROPOSED REMOVALS for manager to apply after merge via followups_remove (scope project), each with resolved_by as listed: VJg2 (plan/identity-model-impl, wip 19018394); 1mnX (plan/phase-06-users-identity-core/008-server-wiring-and-surface-removal.md); 4lm1 (plan/phase-06-users-identity-core/009-db-invariant-integration-tests.md); tbmN, o1uH, Rjag, pciu, ZJ5N, fs0H (plan/phase-06-users-identity-core/008-server-wiring-and-surface-removal.md); 433h (plan/phase-06-users-identity-core/004-users-identifiers-credentials-challenges.md); PRvD (plan/identity-model-impl, wip cdf9af64); biJk (plan/phase-18-remediation-07/003-credentials-refuse-impersonation.md); bHKv (plan/phase-06-users-identity-core/007-self-service-and-principals.md). Reasons per item are in the task agent report at the commit 4fc8ace6 Status subsection.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
