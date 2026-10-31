@@ -1408,7 +1408,8 @@ phases:
             - AReg
           git:
             branch: plan/identity-model-impl-23-004
-            commit: []
+            commit:
+                - 9658c06
             merge: null
         - number: 5
           slug: route-first-verify-send-error-to-dialog
