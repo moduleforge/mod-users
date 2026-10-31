@@ -13,6 +13,7 @@ import {
   api,
   ApiActionRequiredError,
   ApiRequestError,
+  readPendingSelectionProfiles,
   setStepUpHandler,
   subscribeSessionEvents,
   USERS_ERROR_CODES,
@@ -364,7 +365,24 @@ export function AuthProvider({
    * (new tab). Shared by the mount effect and `retrySession`.
    */
   const establishSession = useCallback(async (): Promise<void> => {
-    if (getStoredToken() || getStoredRefreshToken()) {
+    const pendingProfiles =
+      !getStoredToken() && getStoredRefreshToken()
+        ? readPendingSelectionProfiles()
+        : null;
+    if (pendingProfiles) {
+      // A reload mid-selection: a refresh token, no access token, and the
+      // profile list the sign-in stored. `session.get` would need a profile
+      // to refresh with and would end the tab session, so restore the
+      // selection state instead. This IMPLIES RequireAuth routes to the picker
+      // and no user record is loaded until a profile is chosen.
+      setSnapshot({
+        session: null,
+        profile: null,
+        profiles: pendingProfiles,
+        selectionRequired: true,
+      });
+      setToken(null);
+    } else if (getStoredToken() || getStoredRefreshToken()) {
       // A reload: the tab's storage survived. `session.get` also repairs an
       // expired access token through the refresh lineage.
       try {

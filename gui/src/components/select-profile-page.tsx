@@ -7,14 +7,26 @@ import { ProfileRemedy } from './profile-remedy';
 import { profileLabel } from './profile-switcher';
 import { useAuth } from '../lib/auth-context';
 import { ApiRequestError, type TokenResponse } from '../lib/api';
+import { getStoredSelectionReturnPath } from '../lib/config';
+import { isSafeReturnPath } from '../lib/return-path';
 import { describeLockReason } from '../lib/profile-lock';
 
 export interface SelectProfilePageProps {
   /**
    * Called after the chosen profile has landed the tab. The host navigates to
-   * its home page here.
+   * its home page here. `resumePath` is the validated return path to resume
+   * at: the `returnPath` prop, else the path stored for this tab, else
+   * `defaultReturnPath`.
    */
-  onSelected?: (response: TokenResponse) => void;
+  onSelected?: (response: TokenResponse, resumePath: string) => void;
+  /**
+   * The return path handed over by `onSelectionRequired`. When omitted, the
+   * path stored for this tab by the sign-in is used (it survives a reload).
+   * Either source is checked with `isSafeReturnPath`.
+   */
+  returnPath?: string | null;
+  /** Where to resume when no safe return path exists. Defaults to `'/'`. */
+  defaultReturnPath?: string;
 }
 
 /**
@@ -22,7 +34,11 @@ export interface SelectProfilePageProps {
  * Shown when a sign-in answered `selection_required`; lists every profile with
  * its availability and lands the tab on the chosen available one.
  */
-export function SelectProfilePage({ onSelected }: SelectProfilePageProps) {
+export function SelectProfilePage({
+  onSelected,
+  returnPath,
+  defaultReturnPath = '/',
+}: SelectProfilePageProps) {
   const { profiles, selectionRequired, selectProfile } = useAuth();
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +49,17 @@ export function SelectProfilePage({ onSelected }: SelectProfilePageProps) {
   async function handleSelect(uuid: string) {
     setPending(uuid);
     setError(null);
+    // Read before the grant: landing the profile clears the stored path.
+    const candidate = returnPath ?? getStoredSelectionReturnPath();
     try {
-      onSelected?.(await selectProfile(uuid));
+      const response = await selectProfile(uuid);
+      // The path came from a URL or from storage, both attacker-influenceable;
+      // an unsafe one falls back to the default so the page never redirects
+      // off-site or to a non-path.
+      onSelected?.(
+        response,
+        isSafeReturnPath(candidate) ? candidate : defaultReturnPath,
+      );
     } catch (err) {
       setError(
         err instanceof ApiRequestError

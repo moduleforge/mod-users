@@ -21,3 +21,7 @@ This task addresses findings b1HZ and AReg. The work targets the plan branch `pl
 
 - Finding `b1HZ` in this plan's `plan/findings.yaml`.
 - Finding `AReg` in this plan's `plan/findings.yaml`.
+
+## Status
+
+Succeeded, 2026-10-31. Pending selection (profile list under `<key>.selection`, return path under `<key>.selection_return`) is persisted per tab by `commitTokenResponse` and `finishSignIn`; `establishSession` restores it on reload; `doRefresh` with a refresh token and no profile uuid publishes selection-required and throws `selection_required` instead of ending the session; `SelectProfilePage` resumes at the validated return path (prop, else stored, else `defaultReturnPath`). Validation: bun test (431 pass), typecheck, make build.gui, make lint.gui all green. Files: `gui/src/lib/config.ts`, `gui/src/lib/api.ts`, `gui/src/lib/auth-context.tsx`, `gui/src/lib/sign-in.ts`, `gui/src/components/select-profile-page.tsx`, tests in `gui/src/lib/auth-context.test.tsx` and `gui/src/components/profile-switcher.test.tsx`.

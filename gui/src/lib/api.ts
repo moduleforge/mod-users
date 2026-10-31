@@ -16,15 +16,18 @@ import type {
 } from '@moduleforge/core-gui';
 import { ApiRequestError } from '@moduleforge/core-gui';
 import {
+  clearStoredPendingSelection,
   clearStoredProfileUuid,
   clearStoredSession,
   clearStoredToken,
   getApiBaseUrl,
+  getStoredPendingSelection,
   getStoredProfileUuid,
   getStoredRefreshToken,
   getStoredToken,
   handleUnauthenticated,
   isSafeReturnPath,
+  setStoredPendingSelection,
   setStoredProfileUuid,
   setStoredRefreshToken,
   setStoredToken,
@@ -575,6 +578,8 @@ export const USERS_ERROR_CODES = {
   sessionRevoked: 'users.session_revoked',
   profileUnavailable: 'users.profile_unavailable',
   refreshReuse: 'users.refresh_reuse',
+  /** Client-synthesized (status 401): a refresh found a lineage with a profile selection still pending. */
+  selectionRequired: 'selection_required',
   /** `409` from `POST /v1/bootstrap`: the deployment already has an operator party. */
   alreadyBootstrapped: 'users.already_bootstrapped',
   /** `401` from `POST /v1/bootstrap`: the `X-Setup-Token` is missing, wrong or no longer active. */
@@ -713,10 +718,19 @@ export function commitTokenResponse(response: TokenResponse): void {
   }
   if (response.access_token) {
     setStoredToken(response.access_token);
+    // A landed profile ends any pending selection; keeping the stored list
+    // would make a later reload show a selection screen for a chosen session.
+    clearStoredPendingSelection();
   } else {
     // `selection_required`: no acting profile, so no usable access token. Keep
     // no stale one around, or requests would silently act as an old profile.
     clearStoredToken();
+    if (response.selection_required) {
+      // Persist the list per tab so a reload restores the selection screen
+      // instead of calling session.get (which needs a profile) and signing out.
+      // This IMPLIES the list is only as fresh as this response.
+      setStoredPendingSelection(JSON.stringify(response.profiles));
+    }
   }
   // An impersonation token acts as the target profile, but the refresh grant
   // must keep naming the administrator's own profile, because the refresh
@@ -775,9 +789,65 @@ function refreshTabToken(
   return pending;
 }
 
+/**
+ * The profile list stored for a pending selection, or null when none is stored
+ * or the stored value is not a profile array (the store is writable by any
+ * script in the page, so shape is checked rather than trusted).
+ */
+export function readPendingSelectionProfiles(): ProfileView[] | null {
+  const raw = getStoredPendingSelection();
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every(
+        (p) =>
+          typeof p === 'object' &&
+          p !== null &&
+          typeof (p as { uuid?: unknown }).uuid === 'string',
+      )
+    ) {
+      return parsed as ProfileView[];
+    }
+  } catch {
+    // Corrupt value: treated as no pending selection.
+  }
+  return null;
+}
+
 async function doRefresh(resolveBaseUrl: () => string): Promise<void> {
   const refreshToken = getStoredRefreshToken();
   const profileUuid = getStoredProfileUuid();
+  if (refreshToken && !profileUuid) {
+    // A lineage with no named profile is a selection still pending (a reload
+    // or a stray request mid-selection), not a dead session. Re-publish the
+    // stored list as selection-required so the UI routes to the picker, and
+    // keep the tokens. This IMPLIES the caller's request fails but the tab
+    // stays recoverable.
+    const profiles = readPendingSelectionProfiles();
+    if (profiles) {
+      emitSessionEvent({
+        type: 'token_response',
+        response: {
+          access_token: null,
+          token_type: 'Bearer',
+          expires_in: 0,
+          refresh_token: null,
+          session: null,
+          profile: null,
+          selection_required: true,
+          profiles,
+        },
+      });
+      throw new ApiRequestError(
+        USERS_ERROR_CODES.selectionRequired,
+        'Choose a profile to continue.',
+        401,
+      );
+    }
+  }
   if (!refreshToken || !profileUuid) {
     // No lineage to refresh (or no profile to name): the session cannot be
     // repaired, so this is a sign-out, not an error to retry.

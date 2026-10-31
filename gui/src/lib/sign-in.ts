@@ -2,6 +2,11 @@
 // sign-in continues to, and the readable copy for the sign-in error codes.
 
 import { ApiRequestError, USERS_ERROR_CODES, type TokenResponse } from './api';
+import {
+  clearStoredSelectionReturnPath,
+  isSafeReturnPath,
+  setStoredSelectionReturnPath,
+} from './config';
 import { USERS_GUI_ROUTES } from './routes';
 
 /** The `users.*` codes a sign-in can answer that have a dedicated message. */
@@ -54,6 +59,16 @@ export function finishSignIn(
 ): void {
   if (response.selection_required) {
     // Selection pending: never continue to the return path yet.
+    if (isSafeReturnPath(returnPath)) {
+      // Persist the path per tab: a reload on the selection page loses the
+      // in-memory argument, and without it the user would land on the default
+      // page after choosing. This IMPLIES the page can resume at it.
+      setStoredSelectionReturnPath(returnPath);
+    } else {
+      // No (or unsafe) path: drop any path left by an earlier attempt so it
+      // cannot be resumed by this unrelated sign-in.
+      clearStoredSelectionReturnPath();
+    }
     if (handlers.onSelectionRequired) {
       handlers.onSelectionRequired(USERS_GUI_ROUTES.selectProfile, returnPath);
     } else {

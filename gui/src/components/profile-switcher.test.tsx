@@ -13,7 +13,7 @@ import {
   setUpHarness,
   tearDownHarness,
 } from '../test-support/chrome-harness';
-import { setStoredRefreshToken } from '../lib/config';
+import { setStoredRefreshToken, setStoredSelectionReturnPath } from '../lib/config';
 
 beforeEach(setUpHarness);
 afterEach(tearDownHarness);
@@ -211,5 +211,48 @@ describe('SelectProfilePage', () => {
       grant_type: 'refresh_token',
       profile_uuid: 'prof-a',
     });
+  });
+
+  async function selectWith(
+    props: { returnPath?: string | null },
+    stored: string | null,
+  ): Promise<string[]> {
+    setStoredRefreshToken('old-refresh');
+    if (stored !== null) setStoredSelectionReturnPath(stored);
+    const calls = mockApi({
+      'POST /v1/auth/login': () =>
+        tokenResponse({
+          access_token: null,
+          selection_required: true,
+          profile: null,
+          profiles: [PROFILE_A],
+        }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'chosen', profile: PROFILE_A }),
+      'GET /v1/me': () => ({}),
+    });
+    const resumed: string[] = [];
+    const m = await mountUnder(
+      <SelectProfilePage onSelected={(_r, path) => resumed.push(path)} {...props} />,
+      calls,
+      () => true,
+    );
+    await m.auth().login('a@b.test', 'pw');
+    // Re-store after login: the sign-in forms write it after the commit.
+    if (stored !== null) setStoredSelectionReturnPath(stored);
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue as Ada' }));
+    await waitFor(() => expect(resumed.length).toBe(1));
+    return resumed;
+  }
+
+  test('resumes at the stored safe return path after a profile is chosen', async () => {
+    expect(await selectWith({}, '/reports?x=1')).toEqual(['/reports?x=1']);
+  });
+
+  test('the returnPath prop takes precedence and is used when safe', async () => {
+    expect(await selectWith({ returnPath: '/from-prop' }, '/stored')).toEqual(['/from-prop']);
+  });
+
+  test('an unsafe return path falls back to the default', async () => {
+    expect(await selectWith({}, '//evil.test/x')).toEqual(['/']);
   });
 });
