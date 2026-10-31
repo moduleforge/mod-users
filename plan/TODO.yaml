@@ -1681,7 +1681,7 @@ phases:
           slug: mark-field-key-seed-dev-only
           title: Mark Committed Field-Encryption Seed As Development Only
           path: phase-27-remediation-15/002-mark-field-key-seed-dev-only.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Added a development-only / generate-fresh comment to the field-encryption seed block in .env.example. The CORE_FIELD_KEY_HEX value is unchanged.
           findings:
