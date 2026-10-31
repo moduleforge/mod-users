@@ -57,25 +57,6 @@ items:
           After a handler-supplied step-up token is stored, the marker is set to the act claim when the token decodes (actClaim ?? wasImpersonating). A decodable token without act therefore clears a previously true marker, the opposite of the marker-OR-act rule in getStoredImpersonating. If a step-up token minted during an impersonation ever lacked act (or a handler returns an administrator token), a later 401 is refreshed and replayed as the administrator. Server-side an impersonation session cannot step up, so reachability is low.
         recommendation:
           Fail closed: setStoredImpersonating(actClaim === true || wasImpersonating) and only unmark on an authoritative signal (session.get or a committed token response with session.impersonating false).
-    - title: On the impersonation_ended path, the session…
-      id: NfAS
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:remediation-12
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/auth-context.tsx
-        lines: 553-596
-        severity: suggestion
-        confidence: low
-        concerns: correctness
-        description:
-          On the impersonation_ended path, the session event handler already fires restoreAdministrator (a session.get) concurrently with logout's own second session.get. Both share the refresh single-flight, but the handler's replayed GET may resolve after logout's clearStoredSession and re-run marker or state updates against a cleared tab. Tests do not exercise this ordering; the new test only asserts final storage and auth token state.
-        recommendation:
-          Optionally await the in-flight restore (restoreRef) before the revoke, or confirm no late state commit can occur after clearStoredSession.
     - title: refreshAfterStepUp silently returns while th…
       id: Wstk
       date: "2026-10-31"
@@ -2093,4 +2074,14 @@ closed:
       title: Routing the step-up rotation through the sha…
       disposition: promoted
       ref: FhDO
+      date: "2026-10-31"
+    - id: NfAS
+      title: On the impersonation_ended path, the session…
+      disposition: dismissed
+      reason: |-
+        Already fixed in phase 25 task 001 (commit 89fe62a). runLogout awaits any
+        in-flight restoreRef before its own restore/revoke (auth-context.tsx:579-580), and
+        logout sets loggingOutRef and bumps logoutGenRef (lines 679-680) so the session
+        event handler ignores non-signed_out events during logout (lines 355-362) and
+        late loadUser/hydration commits are dropped (lines 303-308, 453-458).
       date: "2026-10-31"
