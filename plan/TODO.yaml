@@ -1605,7 +1605,8 @@ phases:
             - fb9H
           git:
             branch: plan/identity-model-impl-26-003
-            commit: []
+            commit:
+                - 179d2ec3
             merge: null
         - number: 4
           slug: fix-api-layer-route-docs
