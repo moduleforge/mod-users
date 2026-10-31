@@ -96,7 +96,7 @@ items:
         - type:documentation
         - priority:low
         - plan/phase:remediation-11
-        - effort:unspecified
+        - effort:small
       text: 'Agent-authored report data (readme-reachability, severity minor, confidence high, concern documentation): api/server/CLAUDE.md is not reachable from README.md via any chain of project-doc links. Not touched by this phase''s diff. Recommendation: link it from a doc reachable from README.md (e.g. AGENTS.md).'
 closed:
     - id: 2yby
