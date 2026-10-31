@@ -61,6 +61,12 @@ export interface ProfileLockState {
   remedy: LockRemedy | null;
 }
 
+/** Optional extras of `register`. */
+export interface RegisterOptions {
+  /** The app (slug) the new session signs in to. */
+  app?: string;
+}
+
 export interface AuthContextValue {
   /** This tab's access token (mirrors sessionStorage); null when signed out or awaiting profile selection. */
   token: string | null;
@@ -102,6 +108,17 @@ export interface AuthContextValue {
     password: string,
     givenName: string,
     familyName: string,
+    options?: RegisterOptions,
+  ) => Promise<TokenResponse>;
+  /**
+   * `POST /v1/auth/email-code/verify`: signs in with an emailed one-time code.
+   * Like `login`, the client commits the token response, so the context's
+   * session state follows.
+   */
+  loginWithEmailCode: (
+    email: string,
+    code: string,
+    options?: LoginOptions,
   ) => Promise<TokenResponse>;
   /** Revokes the server session (best effort), clears this tab, and navigates to the login path. */
   logout: () => Promise<void>;
@@ -369,6 +386,7 @@ export function AuthProvider({
       password: string,
       givenName: string,
       familyName: string,
+      options?: RegisterOptions,
     ) =>
       // Register answers 201 with the new session's token response, so there
       // is no follow-up login.
@@ -377,7 +395,17 @@ export function AuthProvider({
         password,
         given_name: givenName,
         family_name: familyName,
+        // Only send `app` when set: an absent field means "no app", and an
+        // explicit undefined must not reach the wire body.
+        ...(options?.app ? { app: options.app } : {}),
       }),
+    [],
+  );
+
+  const loginWithEmailCode = useCallback(
+    (email: string, code: string, options?: LoginOptions) =>
+      // The client commits the response; the event subscription updates state.
+      api.auth.verifyEmailCode({ email, code, ...options }),
     [],
   );
 
@@ -493,6 +521,7 @@ export function AuthProvider({
       accessTokenExpiresAt,
       login,
       register,
+      loginWithEmailCode,
       logout,
       selectProfile,
       switchProfile,
@@ -509,6 +538,7 @@ export function AuthProvider({
       accessTokenExpiresAt,
       login,
       register,
+      loginWithEmailCode,
       logout,
       selectProfile,
       switchProfile,

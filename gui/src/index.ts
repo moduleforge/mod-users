@@ -90,6 +90,7 @@ export type {
   AuthContextValue,
   AuthProviderProps,
   ProfileLockState,
+  RegisterOptions,
 } from './lib/auth-context';
 
 // ─── Return-path safety ───────────────────────────────────────────────────────
