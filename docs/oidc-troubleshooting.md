@@ -118,7 +118,7 @@ The resolver never links an identity by email. The codes below come from the dec
 | `account_exists_sign_in_and_link` | The provider's verified email matches an existing account, and the provider identity is not yet linked | Sign in with the existing method, then link the provider from the signed-in account |
 | `no_account` | No linked identity and the provider's `jit_mode` is `none` | Create the account first, or set `jit_mode` to `byo` or `managed` |
 | `missing_email` | `jit_mode` is `byo` and the provider returned no email | Request the `email` scope (`openid email profile`) and check the provider returns an email claim |
-| `auth_failed` | The identity is linked to a different provider | Sign in with the provider it is linked to |
+| `authentication_failed` | The identity is linked to a different provider | Sign in with the provider it is linked to |
 
 ### Just-in-time modes
 
