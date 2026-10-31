@@ -64,7 +64,7 @@ export interface ProfileLockState {
 
 /** Optional extras of `register`. */
 export interface RegisterOptions {
-  /** The app (slug) the new session signs in to. */
+  /** The app (uuid) the new session signs in to. */
   app?: string;
 }
 

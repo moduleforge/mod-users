@@ -84,7 +84,7 @@ export interface LoginFormProps {
    */
   returnPath?: string;
   /**
-   * The app (slug) the session signs in to; sent as `app` on login. Omit when
+   * The app (uuid) the session signs in to; sent as `app` on login. Omit when
    * the deployment has a single app or none.
    */
   app?: string;

@@ -31,7 +31,7 @@ export const WithForgotPassword: Story = () => (
   </AuthProvider>
 );
 
-/** Signs in to a specific app (slug) and routes a no-landing-profile result to selection. */
+/** Signs in to a specific app (uuid) and routes a no-landing-profile result to selection. */
 export const WithAppAndSelectionRouting: Story = () => (
   <AuthProvider>
     <div className="w-full max-w-sm p-6">

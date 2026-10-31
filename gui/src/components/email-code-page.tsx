@@ -28,7 +28,7 @@ export interface EmailCodePageProps {
    * no-op.
    */
   onSuccess?: (returnPath: string | null) => void;
-  /** The app (slug) the session signs in to; sent as `app` on verify. */
+  /** The app (uuid) the session signs in to; sent as `app` on verify. */
   app?: string;
   /**
    * Called instead of `onSuccess` when the sign-in found no landing profile
