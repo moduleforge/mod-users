@@ -1545,5 +1545,6 @@ phases:
             - Wstk
           git:
             branch: plan/identity-model-impl-25-003
-            commit: []
+            commit:
+                - 9709ad7
             merge: null
