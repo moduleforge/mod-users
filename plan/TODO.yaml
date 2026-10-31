@@ -1400,14 +1400,16 @@ phases:
           slug: persist-pending-profile-selection
           title: Persist Pending Profile Selection and Return Path Across Reload
           path: phase-23-remediation-11/004-persist-pending-profile-selection.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Persisted pending profile selection list and safe return path per tab (config keys selection and selection_return); doRefresh without profile uuid publishes selection_required and throws 401 instead of signing out when a stored selection exists; establishSession restores selection state on reload; finishSignIn stores the return path; SelectProfilePage reads prop or stored path and passes resumePath to onSelected.
           findings:
             - b1HZ
             - AReg
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-23-004
+            commit:
+                - 9658c06
             merge: null
         - number: 5
           slug: route-first-verify-send-error-to-dialog
