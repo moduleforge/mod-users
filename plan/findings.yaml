@@ -1,24 +1,5 @@
 version: 2
-items:
-    - title: The new sentence links the X-Setup-Token sta…
-      id: 7O8G
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-15
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/cors.md
-        lines: 151
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          The new sentence links the X-Setup-Token statement to architecture/sessions-and-tokens.md#client-contract, but that section covers the Bearer and credentials policy and never mentions the setup token. The setup-token material is under the Setup-token bootstrap section. Separately, the sentence (and the server.go comment) say the oidc-config writes carry the header, but gui/src/lib/oidc-config.ts and its tests send X-Setup-Token on GET reads too. The allowed-header list is method-independent, so behavior is correct and only the wording is narrow.
-        recommendation:
-          Point the link at architecture/sessions-and-tokens.md#setup-token-bootstrap, and say 'the /v1/oidc-config calls' instead of 'writes'.
+items: []
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2179,4 +2160,9 @@ closed:
       title: A concrete 32-byte hex field-encryption seed…
       disposition: fixed
       ref: phase-27-remediation-15/002-mark-field-key-seed-dev-only.md
+      date: "2026-10-31"
+    - id: 7O8G
+      title: The new sentence links the X-Setup-Token sta…
+      disposition: promoted
+      ref: 7O8G
       date: "2026-10-31"
