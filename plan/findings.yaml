@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: 'Note for manager: removals of VJg2 and PRvD c'
-      id: 8yRH
-      date: "2026-10-31"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-final
-        - priority:low
-        - effort:small
-      text: 'Note for manager: removals of VJg2 and PRvD cite unlisted wip checkpoint commits (19018394, cdf9af64) as evidence; confirm before applying.'
+items: []
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2204,4 +2195,9 @@ closed:
       title: PROPOSED PATCHES, manager decision only if re
       disposition: promoted
       ref: A5PF
+      date: "2026-10-31"
+    - id: 8yRH
+      title: 'Note for manager: removals of VJg2 and PRvD c'
+      disposition: promoted
+      ref: 8yRH
       date: "2026-10-31"
