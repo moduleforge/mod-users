@@ -42,8 +42,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:adopt-core-engine-remediation
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: The package comment in api/localAuthz (prelude item 1) says the operation-level assurance gate applies "for contexts with a session or a credential". The engine (api/internal/authz/authz.go, gated) now gates every context except the anonymous context and one for which opctx.IsSystemActor is true; an unmarked context with no session or credential is gated and fails closed. Item 2 also omits that the gate is skipped for the system actor and anonymous contexts. Reword the facade comment to match the internal package doc.
     - title: 'Plan-note edits (manager-only, plan/notes/):'
       id: GNRh
