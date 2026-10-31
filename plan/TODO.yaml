@@ -336,7 +336,7 @@ phases:
             branch: plan/identity-model-impl-09-004
             commit:
                 - e311879
-            merge: null
+            merge: 02349fca64ff8e4f79a9cfd0d471e0c5c0c8ebd8
         - number: 5
           slug: build-bootstrap-and-oidc-config-pages
           title: Build Bootstrap and OIDC Config Pages
