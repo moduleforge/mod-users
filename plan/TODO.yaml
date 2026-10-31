@@ -374,7 +374,7 @@ phases:
           tier: sonnet-high
           digest: Rewrote architecture, spec, ssh-keys and jwt-eddsa docs against merged code; added sessions-and-tokens.md; reflected OIDC credentials:include exception, step-up correction, impersonation rules and planned data-protection-class design. Docs only.
           git:
-            branch: null
+            branch: plan/identity-model-impl-10-001
             commit: []
             merge: null
         - number: 2
