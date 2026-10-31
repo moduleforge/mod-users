@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 13
-    tasks_added: 64
+    tasks_added: 65
 phases:
     - number: 6
       slug: users-identity-core
@@ -1499,7 +1499,7 @@ phases:
       title: Remediation Round 13
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 9
       tasks:
         - number: 1
@@ -1525,6 +1525,19 @@ phases:
           findings:
             - moDM
             - m3Jr
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: signal-step-up-refresh-skip-while-impersonating
+          title: Signal and Test the Impersonating No-Op in refreshAfterStepUp
+          path: phase-25-remediation-13/003-signal-step-up-refresh-skip-while-impersonating.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - LJFE
+            - Wstk
           git:
             branch: null
             commit: []
