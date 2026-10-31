@@ -33,8 +33,8 @@ items:
       tags:
         - type:bug
         - plan/phase:adopt-core-engine-remediation
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:medium
       text: 'mod-core''s NaturalPersonService.CreateInTx and OrganizationService.CreateInTx document that the caller dispatches ObserveAfterCommit (create, <resource>, entity id) after the transaction commits. mod-users never does: api/internal/service/user_service.go (np.CreateInTx near line 187), api/internal/service/user_self_service.go (np.CreateInTx near line 578) and api/internal/service/bootstrap_service.go (createOrganization via OrganizationService.CreateInTx) all rely on the in-transaction observation only, so post-commit observers (anything subscribed via ObserverGroup.ObserveAfterCommit) never see the natural_person or organization creation. Needs a design decision on how the committing public methods (Bootstrap, user registration and self-service flows) carry the entity id out of their InTx bodies and dispatch after commit.'
     - title: 'needs-sibling: mod-core organizationService'
       id: wyTd
