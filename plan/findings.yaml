@@ -9,15 +9,6 @@ items:
         - priority:high
         - effort:small
       text: 'needs-sibling: mod-authz. api/service/stepup.go stepUpStale returns false (no step-up needed) for any AuthContext with SessionID == 0 and CredentialID == 0, inferring trusted system code from absent fields. mod-core now defines trust explicitly through opctx.IsSystemActor (the SystemActor marker set only by opctx.WithSystemActor), and its api/authz/authz.go contract says a context with no session, no credential and no marker is not trusted. mod-users'' engine (api/internal/authz/authz.go gated) now keys on opctx.IsSystemActor and fails closed for unmarked sessionless contexts; mod-users builds such contexts for real users in its unauthenticated flows (withActingProfile, CreatedUser.ActingContext, UnauthenticatedActingContext, the idp_jit context). stepUpStale should skip step-up only when opctx.IsSystemActor(ctx) is true, so a real user''s sessionless context reaching mod-authz''s grant or operation services is refused rather than exempt. Its callers'' tests that use sessionless contexts as trusted system code would move to opctx.WithSystemActor.'
-    - title: mod-workflows lists lack BindAuthInputs
-      id: ZEu4
-      date: "2026-10-30"
-      tags:
-        - type:bug
-        - plan/phase:adopt-core-engine-remediation
-        - priority:medium
-        - effort:small
-      text: 'needs-sibling: mod-workflows. With mod-users'' row-filtered access functions installed (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), a list query run without mod-core setup.BindAuthInputs on its transaction passes NULL authentication inputs to the predicate and silently drops every row a restrictive party policy gates, even for a caller meeting the policy. Unbound list queries: model/queries/workflow_definitions.sql ListWorkflowDefinitions (accessible_workflow_definition_ids_for_actor; api/service/definition.go DefinitionService.List) and model/queries/workflow_instances.sql ListWorkflowInstances (accessible_workflow_instance_ids_for_actor; api/service/instance.go ListInstances). Run each in one read-only transaction per request, call BindAuthInputs first and refuse the request on its error.'
     - title: app-mftodo installs unfiltered access fns
       id: ck8O
       date: "2026-10-30"
@@ -2157,4 +2148,9 @@ closed:
       title: mod-tasks list lacks BindAuthInputs
       disposition: promoted
       ref: QbSc
+      date: "2026-10-31"
+    - id: ZEu4
+      title: mod-workflows lists lack BindAuthInputs
+      disposition: promoted
+      ref: ZEu4
       date: "2026-10-31"
