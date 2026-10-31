@@ -1394,7 +1394,7 @@ phases:
           findings:
             - 4EHb
           git:
-            branch: null
+            branch: plan/identity-model-impl-23-003
             commit: []
             merge: null
         - number: 4
