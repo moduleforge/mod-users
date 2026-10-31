@@ -1,30 +1,5 @@
 version: 2
 items:
-    - title: In hydrate, any failure of session.get other…
-      id: oFfM
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:users-gui-and-frontend-contract
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/auth-context.tsx
-        lines: 347-364
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          In hydrate, any failure of session.get other than action-required or profile_unavailable
-          clears the whole stored session ("Any other failure: the stored session is unusable"). That
-          includes network_error (status 0), 5xx, and a refresh that failed transiently, so a brief API
-          outage during a reload discards the refresh token and signs the user out although the server
-          session is intact. doRefresh itself deliberately keeps tokens on transient failures; hydrate
-          contradicts that.
-        recommendation:
-          Clear the session only for 401-class failures (already handled by the pipeline) and keep the
-          tokens on network and 5xx errors, showing a retryable error state.
     - title: logout() calls api.session.logout(), which i…
       id: A6aq
       date: "2026-10-31"
@@ -2091,4 +2066,13 @@ closed:
         users.impersonation_ended (api.ts:1071-1094). impersonations.end treats that error as
         already ended and restores the administrator without a replayed DELETE
         (api.ts:1575-1608). The fail-open residual of the marker is tracked as vAo0.
+      date: "2026-10-31"
+    - id: oFfM
+      title: In hydrate, any failure of session.get other…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 001. Hydrate keeps the tokens on status 0 and 5xx and
+        sets a retryable sessionError (gui/src/lib/auth-context.tsx:460-470), exposed with
+        retrySession (lines 497-507, 673-675); RequireAuth does not call onUnauthenticated
+        while sessionError is set (gui/src/components/require-auth.tsx:51, 77).
       date: "2026-10-31"
