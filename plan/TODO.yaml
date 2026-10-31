@@ -1302,7 +1302,8 @@ phases:
             - tpls
           git:
             branch: plan/identity-model-impl-22-001
-            commit: []
+            commit:
+                - f6e8dc9
             merge: null
         - number: 2
           slug: apply-assurance-gate-on-principal-list
