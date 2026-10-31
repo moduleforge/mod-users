@@ -1490,6 +1490,6 @@ phases:
           findings:
             - Bq75
           git:
-            branch: null
+            branch: plan/identity-model-impl-24-003
             commit: []
             merge: null
