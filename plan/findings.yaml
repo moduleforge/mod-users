@@ -6,8 +6,8 @@ items:
       tags:
         - type:ambiguity
         - plan/phase:users-identity-final
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'PROPOSED CROSS-PROJECT REMOVALS (no resolved_by; manager decision): UbXY closed in mod-authz by plan/phase-16-authz-identity-final/002-recheck-stand-in-against-merged-engine.md (f2df0cc); OlHx closed in mod-authz (0505_grants.sql:166, TestSchemaInvariants_GrantAnonymousActor).'
     - title: PROPOSED PATCHES, manager decision only if re
       id: A5PF
