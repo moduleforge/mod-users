@@ -354,6 +354,15 @@ items:
           When the retry fails with impersonation_ended, restore the administrator
           (the second session.get refreshes) and then call session.logout once more
           before clearing local state.
+    - title: api/server/CLAUDE.md unreachable from README
+      id: UmzX
+      date: "2026-10-31"
+      tags:
+        - type:documentation
+        - priority:low
+        - plan/phase:remediation-11
+        - effort:unspecified
+      text: 'Agent-authored report data (readme-reachability, severity minor, confidence high, concern documentation): api/server/CLAUDE.md is not reachable from README.md via any chain of project-doc links. Not touched by this phase''s diff. Recommendation: link it from a doc reachable from README.md (e.g. AGENTS.md).'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
