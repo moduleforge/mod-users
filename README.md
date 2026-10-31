@@ -1,6 +1,6 @@
 # @moduleforge/mod-users
 
-Provides complete model, API, and UI components for user identity, account management, and authentication within the [ModuleForge](https://github.com/moduleforge) ecosystem. It supports creating and merging accounts from multiple channels (email, OAuth/OIDC providers), authenticating those accounts, and managing the full user identity and profile lifecycle.
+Provides complete model, API, and UI components for user identity, account management, and authentication within the [ModuleForge](https://github.com/moduleforge) ecosystem. It supports creating accounts through several channels (email, OAuth/OIDC providers), linking more than one sign-in credential to a user (never by matching email address), authenticating those accounts, and managing the full user identity and profile lifecycle.
 
 ## Installation
 

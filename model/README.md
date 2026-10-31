@@ -11,12 +11,15 @@ for the rationale behind the Postgres + goose choices.
 - `migrations/sql/` — goose versioned migration files (`.sql`); currently the single
   `0100_baseline.sql`, which creates every mod-users table, trigger and function in the
   `mod_users` schema (see the file's header comment for the schema rule and the `MF101`–`MF103`
-  SQLSTATE contract). The baseline, like mod-core's `0001_baseline.sql`, was edited in place
-  again, so an existing dev database must be dropped and recreated (`make clean.data`). What
-  changed: mod-users adds the list-side predicate `mod_users.access_row_permitted` (six
-  arguments) and the shared gate function `mod_users.owning_party_gate`; mod-core hardens its
-  `core_is_operator_profile` operator test and adds the index
-  `profile_policy_confirmations_party_id_idx`
+  SQLSTATE contract: `MF101` session, `MF102` credential, `MF103` user invariant violations).
+  Baseline contents, by group: users and user identifiers (the party `profiles` and
+  `profile_policy_confirmations` tables are mod-core's, which the baseline requires); OIDC config and providers (`party_id`, `jit_mode`,
+  `trust_acr`); credentials, the `credential_kinds` lookup and the `cred_*` subtables; party
+  authentication policies and credential authorizations; sessions, session factors and refresh
+  tokens; auth challenges; and the persisted signing keys (`auth_signing_keys`). The predicates
+  `mod_users.access_row_permitted` (list-side row filter) and `mod_users.owning_party_gate` are
+  defined here as well. The baseline is edited in place, so an existing dev database must be
+  dropped and recreated (`make clean.data`).
 - `migrations/migrate.go` — embeds `migrations/sql/*.sql` and exposes `Migrate`
 - `queries/` — sqlc query files (`.sql`), one per concept; they reference `mod_users` relations only
   (sqlc compiles against `migrations/sql/` alone), and call `mod_users` functions for anything
@@ -34,7 +37,7 @@ for the rationale behind the Postgres + goose choices.
     is its status-agnostic core; the leave route uses `profile_gate`)
   - `party_policies.sql` — `party_authn_policies` and `credential_party_authorizations`, and the
     `holder_policy_mismatch` wrapper (whether a holder's credentials can meet a party's policy; the
-    shared by the invitation and outside-collaborator checks, with an invite-time mode: relaxed, the
+    check shared by the invitation and outside-collaborator paths, with an invite-time mode: relaxed, the
     `authorized` rule is met by any usable interactive credential since no credential can be
     authorized before the profile exists; strict, for outside collaborators, it requires a
     `credential_party_authorizations` row or a confinement)

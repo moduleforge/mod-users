@@ -3188,8 +3188,7 @@ paths:
     post:
       summary: Install an SSH key for a principal
       description: |
-        Authorizes `credentials` on the principal (not `assume` or
-        `impersonate`). A fingerprint that is active anywhere is 409
+        Authorizes `credentials` on the principal (not `impersonate`). A fingerprint that is active anywhere is 409
         `users.ssh_key_in_use`; a guest is 409 `users.guest_upgrade_required`.
 
         Refused with 403 `users.impersonation_not_allowed` while the caller is
