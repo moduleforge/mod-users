@@ -27,6 +27,42 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Scan docs/mf-standards for old identity terms (type:documentation). Submodule uninitialized in the worktree, so not scanned. Check it for old-model terms.
+    - title: PROPOSED REMOVALS for manager to apply after
+      id: 1JCd
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: 'PROPOSED REMOVALS for manager to apply after merge via followups_remove (scope project), each with resolved_by as listed: VJg2 (plan/identity-model-impl, wip 19018394); 1mnX (plan/phase-06-users-identity-core/008-server-wiring-and-surface-removal.md); 4lm1 (plan/phase-06-users-identity-core/009-db-invariant-integration-tests.md); tbmN, o1uH, Rjag, pciu, ZJ5N, fs0H (plan/phase-06-users-identity-core/008-server-wiring-and-surface-removal.md); 433h (plan/phase-06-users-identity-core/004-users-identifiers-credentials-challenges.md); PRvD (plan/identity-model-impl, wip cdf9af64); biJk (plan/phase-18-remediation-07/003-credentials-refuse-impersonation.md); bHKv (plan/phase-06-users-identity-core/007-self-service-and-principals.md). Reasons per item are in the task agent report at the commit 4fc8ace6 Status subsection.'
+    - title: PROPOSED CROSS-PROJECT REMOVALS (no resolved_
+      id: usDr
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: 'PROPOSED CROSS-PROJECT REMOVALS (no resolved_by; manager decision): UbXY closed in mod-authz by plan/phase-16-authz-identity-final/002-recheck-stand-in-against-merged-engine.md (f2df0cc); OlHx closed in mod-authz (0505_grants.sql:166, TestSchemaInvariants_GrantAnonymousActor).'
+    - title: PROPOSED PATCHES, manager decision only if re
+      id: A5PF
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: 'PROPOSED PATCHES, manager decision only if retaining: sxjM (text references removed hooks.firstUserGrant); 7kHY (text targets removed PUT /self; route is /v1/me); WZTj (text says mod-users seed to be deleted; already gone, only literal type-check reference remains at model/migrations/sql/0100_baseline.sql:471). Still open with no patch: cJcZ and Jtw6 (genuinely unaddressed); HPJi (default login redirect retained, manager decision).'
+    - title: 'Note for manager: removals of VJg2 and PRvD c'
+      id: 8yRH
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Note for manager: removals of VJg2 and PRvD cite unlisted wip checkpoint commits (19018394, cdf9af64) as evidence; confirm before applying.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
