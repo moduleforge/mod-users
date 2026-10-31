@@ -27,3 +27,7 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 - Finding BNNN in this plan's `plan/findings.yaml`.
 - Finding ndUS in this plan's `plan/findings.yaml`.
 - Finding fb9H in this plan's `plan/findings.yaml`.
+
+## Status
+
+succeeded (2026-10-31). PATCH added, stale step-up header removed from corsOptions in `api/internal/server/server.go`; test in `api/internal/server/cors_test.go`; `docs/cors.md` documents the credentials exception. X-Setup-Token not added (architecture docs do not require it). Validation: go test passed, grep empty, link target exists.

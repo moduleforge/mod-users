@@ -8,7 +8,7 @@ How the mod-users API decides which browser origins may call it cross-origin, th
 
 CORS is default-deny. The API emits CORS headers only for origins you list explicitly.
 
-The API authenticates with a Bearer access token in the `Authorization` header only; no route reads an authentication cookie (the `oidc_state` cookie of the OIDC redirect is not an authentication cookie). Browser clients send that header explicitly and do not need credentialed (cookie-carrying) cross-origin requests; the GUI client sends `credentials: 'omit'`.
+The API authenticates with a Bearer access token in the `Authorization` header only; no route reads an authentication cookie (the `oidc_state` cookie of the OIDC redirect is not an authentication cookie). Browser clients send that header explicitly and do not need credentialed (cookie-carrying) cross-origin requests; the GUI client sends `credentials: 'omit'`. The one exception is the two OIDC start POSTs (the sign-in and link authorize-URL starts), which send `credentials: 'include'` so the browser stores the `oidc_state` cookie; a cross-origin front end must therefore be in the explicit `CORS_ORIGINS` list. See [the client contract](architecture/sessions-and-tokens.md#client-contract).
 
 | `DEPLOY_MODE` | `CORS_ORIGINS` | Result |
 |---|---|---|
