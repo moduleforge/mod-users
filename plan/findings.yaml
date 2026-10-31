@@ -6,8 +6,8 @@ items:
       tags:
         - type:ambiguity
         - plan/phase:users-identity-final
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: 'Note for manager: removals of VJg2 and PRvD cite unlisted wip checkpoint commits (19018394, cdf9af64) as evidence; confirm before applying.'
 closed:
     - id: 2yby
