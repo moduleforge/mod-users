@@ -10,10 +10,12 @@ import {
 import {
   configureUsersApi,
   getStoredHandoffVerifier,
+  getStoredImpersonating,
   getStoredProfileUuid,
   getStoredRefreshToken,
   getStoredToken,
   resetUsersApiConfig,
+  setStoredImpersonating,
   setStoredProfileUuid,
   setStoredRefreshToken,
   setStoredToken,
@@ -695,6 +697,141 @@ describe('refresh lineage', () => {
     stop();
     expect(events).toEqual([{ type: 'profile_unavailable', profileUuid: 'prof-z', reason: 'acr_too_low' }]);
     expect(getStoredRefreshToken()).toBe('old-refresh');
+  });
+});
+
+// ─── Impersonation: no refresh-and-replay as the administrator ───────────────
+
+describe('impersonated requests are never replayed as the administrator', () => {
+  /** A tab that started an impersonation through the client, as the UI does. */
+  async function impersonatingTab(): Promise<void> {
+    seedTab('admin-access', 'admin-refresh', 'prof-admin');
+    scriptFetch(() =>
+      json(
+        tokenResponse({
+          access_token: 'imp-access',
+          refresh_token: null,
+          session: { uuid: 'imp-sess', acr: 1, amr: ['pwd'], auth_time: 'x', impersonating: true },
+          profile: { ...PROFILE_A, uuid: 'prof-target' },
+        }),
+        201,
+      ),
+    );
+    await client.impersonations.start({ profile_uuid: 'prof-target', reason: 'support' });
+    expect(getStoredToken()).toBe('imp-access');
+    expect(getStoredImpersonating()).toBe(true);
+  }
+
+  test('a 401 on a write ends the impersonation without refreshing or replaying', async () => {
+    await impersonatingTab();
+    const { events, stop } = collectEvents();
+    const calls = scriptFetch(() => json(errorBody('unauthenticated'), 401));
+    const err = (await client.me.update({}).catch((e: unknown) => e)) as ApiRequestError;
+    stop();
+    // Exactly the one original request: no refresh grant, no replay.
+    expect(calls.map((c) => `${c.method} ${c.url.replace('http://localhost:8080', '')}`)).toEqual([
+      'PUT /v1/me',
+    ]);
+    expect(bearer(calls[0]!)).toBe('Bearer imp-access');
+    expect(err).toBeInstanceOf(ApiRequestError);
+    expect(err.code).toBe('users.impersonation_ended');
+    expect(err.status).toBe(401);
+    expect(events).toEqual([{ type: 'impersonation_ended' }]);
+    // The dead token and marker are gone; the administrator's lineage stays.
+    expect(getStoredToken()).toBeNull();
+    expect(getStoredImpersonating()).toBe(false);
+    expect(getStoredRefreshToken()).toBe('admin-refresh');
+    expect(getStoredProfileUuid()).toBe('prof-admin');
+  });
+
+  test('the restore after the ended impersonation runs as the administrator', async () => {
+    await impersonatingTab();
+    scriptFetch(() => json(errorBody('unauthenticated'), 401));
+    await client.me.update({}).catch(() => {});
+    const calls = scriptFetch((call) =>
+      call.url.endsWith('/v1/auth/token')
+        ? json(tokenResponse({ access_token: 'admin-access-2', refresh_token: 'admin-refresh-2' }))
+        : bearer(call) === 'Bearer admin-access-2'
+          ? json({ session: null, profile: null, profiles: [] })
+          : json(errorBody('unauthenticated'), 401),
+    );
+    await client.session.get();
+    expect(calls[0]!.headers['Authorization']).toBeUndefined();
+    expect(calls[1]!.body).toEqual({
+      grant_type: 'refresh_token',
+      refresh_token: 'admin-refresh',
+      profile_uuid: 'prof-admin',
+    });
+    expect(getStoredToken()).toBe('admin-access-2');
+    expect(getStoredImpersonating()).toBe(false);
+  });
+
+  test('a request sent before another call restored the administrator is failed, not replayed, and the new token is kept', async () => {
+    await impersonatingTab();
+    const calls = scriptFetch(async () => {
+      // While this request is in flight, another call lands the administrator token.
+      setStoredToken('admin-access-2');
+      setStoredImpersonating(false);
+      return json(errorBody('unauthenticated'), 401);
+    });
+    const { events, stop } = collectEvents();
+    const err = (await client.me.update({}).catch((e: unknown) => e)) as ApiRequestError;
+    stop();
+    expect(calls).toHaveLength(1);
+    expect(err.code).toBe('users.impersonation_ended');
+    expect(events).toEqual([]);
+    expect(getStoredToken()).toBe('admin-access-2');
+  });
+
+  test('a non-impersonating 401 still refreshes and replays', async () => {
+    seedTab('old-access', 'old-refresh', 'prof-a');
+    const calls = scriptFetch((call) => {
+      if (call.url.endsWith('/v1/auth/token')) {
+        return json(tokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }));
+      }
+      return bearer(call) === 'Bearer new-access' ? json({}) : json(errorBody('unauthenticated'), 401);
+    });
+    await client.me.update({});
+    expect(calls.map((c) => c.method)).toEqual(['PUT', 'POST', 'PUT']);
+  });
+
+  test('a reload that finds an impersonation session marks the tab, so its 401 is not replayed', async () => {
+    seedTab('imp-access', 'admin-refresh', 'prof-admin');
+    scriptFetch(() =>
+      json({
+        session: { uuid: 'imp-sess', acr: 1, amr: ['pwd'], auth_time: 'x', impersonating: true },
+        profile: PROFILE_A,
+        profiles: [PROFILE_A],
+      }),
+    );
+    await client.session.get();
+    expect(getStoredImpersonating()).toBe(true);
+  });
+
+  test('ending an expired impersonation does not replay the DELETE, then restores the administrator', async () => {
+    await impersonatingTab();
+    const calls = scriptFetch((call) =>
+      call.method === 'DELETE'
+        ? json(errorBody('unauthenticated'), 401)
+        : json(tokenResponse({ access_token: 'admin-access-2', refresh_token: 'admin-refresh-2' })),
+    );
+    await client.impersonations.end();
+    expect(calls.map((c) => `${c.method} ${c.url.replace('http://localhost:8080', '')}`)).toEqual([
+      'DELETE /v1/impersonations/current',
+      'POST /v1/auth/token',
+    ]);
+    // The DELETE went out once, under the impersonation token only.
+    expect(bearer(calls[0]!)).toBe('Bearer imp-access');
+    expect(getStoredToken()).toBe('admin-access-2');
+    expect(getStoredImpersonating()).toBe(false);
+  });
+
+  test('ending with a non-401 failure still reports it', async () => {
+    await impersonatingTab();
+    scriptFetch(() => json(errorBody('boom'), 500));
+    const err = (await client.impersonations.end().catch((e: unknown) => e)) as ApiRequestError;
+    expect(err.status).toBe(500);
+    expect(getStoredToken()).toBe('imp-access');
   });
 });
 

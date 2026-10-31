@@ -400,6 +400,7 @@ const profileKey = (): string => `${getTokenStorageKey()}.profile`;
 const verifierKey = (): string => `${getTokenStorageKey()}.handoff_verifier`;
 const selectionKey = (): string => `${getTokenStorageKey()}.selection`;
 const selectionReturnKey = (): string => `${getTokenStorageKey()}.selection_return`;
+const impersonatingKey = (): string => `${getTokenStorageKey()}.impersonating`;
 
 /** Returns this tab's access token, or null when none (or unavailable, e.g. SSR). */
 export function getStoredToken(): string | null {
@@ -475,11 +476,33 @@ export function clearStoredSelectionReturnPath(): void {
   removeTab(selectionReturnKey());
 }
 
+/**
+ * True when the access token this tab holds is an impersonation token. The
+ * tab's refresh token and profile stay the administrator's own while it
+ * impersonates, so nothing else in storage tells a request which identity its
+ * token carries. The request pipeline reads this to refuse refresh-and-replay
+ * of an impersonated request (the replay would run as the administrator).
+ * An absent marker reads as "not impersonating", which is the pre-marker
+ * behavior; sessionStorage is writable by any script in the page, but such a
+ * script already holds the token itself.
+ */
+export function getStoredImpersonating(): boolean {
+  return readTab(impersonatingKey()) === '1';
+}
+
+/** Records whether this tab's access token is an impersonation token. */
+export function setStoredImpersonating(impersonating: boolean): void {
+  if (impersonating) writeTab(impersonatingKey(), '1');
+  else removeTab(impersonatingKey());
+}
+
 /** Clears the whole per-tab session: access token, refresh token, profile, pending selection. */
 export function clearStoredSession(): void {
   removeTab(getTokenStorageKey());
   removeTab(refreshKey());
   removeTab(profileKey());
+  // The marker describes the access token just removed.
+  removeTab(impersonatingKey());
   // A pending selection belongs to the lineage being cleared; leaving it
   // would resurrect a selection screen for a session that no longer exists.
   clearStoredPendingSelection();

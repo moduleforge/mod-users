@@ -22,11 +22,13 @@ import {
   clearStoredToken,
   getApiBaseUrl,
   getStoredPendingSelection,
+  getStoredImpersonating,
   getStoredProfileUuid,
   getStoredRefreshToken,
   getStoredToken,
   handleUnauthenticated,
   isSafeReturnPath,
+  setStoredImpersonating,
   setStoredPendingSelection,
   setStoredProfileUuid,
   setStoredRefreshToken,
@@ -584,6 +586,13 @@ export const USERS_ERROR_CODES = {
   alreadyBootstrapped: 'users.already_bootstrapped',
   /** `401` from `POST /v1/bootstrap`: the `X-Setup-Token` is missing, wrong or no longer active. */
   setupTokenInvalid: 'users.setup_token_invalid',
+  /**
+   * Client-synthesized (status 401): a request sent with an impersonation
+   * token was rejected, so the client ended the impersonation locally instead
+   * of refreshing (which would hand back the administrator's token) and
+   * replaying the request as the administrator.
+   */
+  impersonationEnded: 'users.impersonation_ended',
   /** Client-synthesized (status 0): an OIDC handoff was attempted without this tab's verifier. */
   handoffVerifierMissing: 'handoff_verifier_missing',
 } as const;
@@ -671,6 +680,13 @@ export type SessionEvent =
   | { type: 'token_response'; response: TokenResponse }
   /** The tab's tokens were cleared because the session ended. */
   | { type: 'signed_out'; reason: SignOutReason }
+  /**
+   * The tab's impersonation token was dropped locally after a 401. The tab
+   * keeps the administrator's refresh lineage but holds no access token: a
+   * subscriber restores the administrator session (the next authenticated
+   * call does, through the refresh grant).
+   */
+  | { type: 'impersonation_ended' }
   /** A call answered `401 users.profile_unavailable`. */
   | {
       type: 'profile_unavailable';
@@ -737,6 +753,10 @@ export function commitTokenResponse(response: TokenResponse): void {
   // token belongs to the administrator's lineage. So an impersonating
   // response never overwrites the stored profile.
   const impersonating = response.session?.impersonating === true;
+  // Record what the stored access token is, so a later 401 on a request sent
+  // with it can refuse to refresh-and-replay as the administrator. Without an
+  // access token there is nothing to describe, so the marker is cleared too.
+  setStoredImpersonating(impersonating && Boolean(response.access_token));
   if (!impersonating) {
     if (response.profile) {
       setStoredProfileUuid(response.profile.uuid);
@@ -975,6 +995,14 @@ async function execute<T>(
   } = options;
   // An explicit token (the fork call) stands in for the tab's own.
   const sentToken = explicitToken ?? getStoredToken();
+  // Whether THIS request carries an impersonation token, captured at send time
+  // (not when the 401 arrives): another call may swap the tab's token while
+  // this one is in flight, and what matters is whose identity this request was
+  // sent as. An explicit token is the caller's own business, never the tab's.
+  const sentAsImpersonation =
+    explicitToken === undefined &&
+    sentToken !== null &&
+    getStoredImpersonating();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchOptions.headers as Record<string, string> | undefined),
@@ -1038,6 +1066,31 @@ async function execute<T>(
       // pointless and any retained token is a liability. Sign the tab out.
       endTabSession(signOutReasonFor(failure.code));
       throw failure;
+    }
+
+    if (sentAsImpersonation) {
+      // The impersonation token was rejected (expired or otherwise invalid).
+      // The tab's refresh token and profile belong to the ADMINISTRATOR, so the
+      // refresh grant below would answer with the administrator's own access
+      // token and the replay would run this request as the administrator
+      // instead of the impersonated profile: a write issued from the
+      // impersonated context would execute with the administrator's authority.
+      // So neither refresh nor replay. This IMPLIES the request fails, and the
+      // impersonation ends for the whole tab.
+      if (getStoredToken() === sentToken) {
+        // Still the dead impersonation token: drop it and its marker, keeping
+        // the administrator's lineage so the session can be restored. When the
+        // stored token differs, another call already ended the impersonation
+        // and a (possibly valid) administrator token is stored: it must stay.
+        clearStoredToken();
+        setStoredImpersonating(false);
+        emitSessionEvent({ type: 'impersonation_ended' });
+      }
+      throw new ApiRequestError(
+        USERS_ERROR_CODES.impersonationEnded,
+        'The impersonation has ended. Your administrator session is being restored; repeat the action there if you still need it.',
+        401,
+      );
     }
 
     if (!state.refreshed && getStoredRefreshToken()) {
@@ -1326,8 +1379,19 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
 
     session: {
       /** `GET /v1/session` — the session, acting profile and profile list. */
-      get: (options?: Pick<RequestOptions, 'skipAuthRedirect'>) =>
-        request<SessionInfo>('/v1/session', options),
+      get: async (options?: Pick<RequestOptions, 'skipAuthRedirect'>) => {
+        const info = await request<SessionInfo>('/v1/session', options);
+        // A reload (or a tab opened before the marker existed) restores no
+        // token response, so this is where the tab learns its token is an
+        // impersonation token. Only a present, authoritative session is
+        // trusted: a response with no session leaves the marker alone.
+        // This IMPLIES a later 401 on an impersonated request is not replayed
+        // as the administrator.
+        if (info.session && getStoredToken() !== null) {
+          setStoredImpersonating(info.session.impersonating === true);
+        }
+        return info;
+      },
 
       /**
        * `POST /v1/session/switch` — a new access token acting as another
@@ -1509,12 +1573,35 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
        * lineage.
        */
       end: async (): Promise<void> => {
-        await request<void>('/v1/impersonations/current', { method: 'DELETE' });
-        // The impersonation token is now dead; swap back to the
-        // administrator's own token. Force the rotation by passing the
-        // current token as the "sent" one.
+        try {
+          await request<void>('/v1/impersonations/current', { method: 'DELETE' });
+        } catch (err) {
+          // The impersonation token had already expired: the pipeline dropped
+          // it locally and did NOT replay the DELETE (a replay would run under
+          // the administrator's token). There is nothing left to end on the
+          // server, which is the outcome the caller asked for, so continue to
+          // restoring the administrator session. Any other failure is real.
+          if (
+            !(
+              err instanceof ApiRequestError &&
+              err.code === USERS_ERROR_CODES.impersonationEnded
+            )
+          ) {
+            throw err;
+          }
+        }
+        // The impersonation token is dead either way; drop it so the refresh
+        // below is not skipped as "already refreshed", and so the marker
+        // cannot outlive the token it describes.
+        clearStoredToken();
+        setStoredImpersonating(false);
+        // Swap back to the administrator's own token. A non-null stored token
+        // here means a concurrent restore (the auth context's reaction to the
+        // ended-impersonation event) already landed it: rotating again would
+        // only spend the refresh token twice.
+        if (getStoredToken() !== null) return;
         if (getStoredRefreshToken()) {
-          await refreshTabToken(getStoredToken(), resolveBaseUrl);
+          await refreshTabToken(null, resolveBaseUrl);
         } else {
           // Nothing to restore from: the tab can only sign out.
           endTabSession('unauthenticated');
