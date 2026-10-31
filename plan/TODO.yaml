@@ -415,7 +415,7 @@ phases:
           tier: sonnet-low
           digest: Scanned mod-users for old-model terms; docs already clean. Fixed 10 stale code comments, left legitimate history matches, reported 3 followups. All build, test, lint and verify checks pass.
           git:
-            branch: null
+            branch: plan/identity-model-impl-11-001
             commit: []
             merge: null
         - number: 2
