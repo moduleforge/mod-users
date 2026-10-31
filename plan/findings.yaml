@@ -41,46 +41,6 @@ items:
           s.obs.ObserveAfterCommit(ctx, opCreate, "organization", &id, ...) after a
           successful tx.Commit in Bootstrap, or resolve finding 06rd for all three
           CreateInTx call sites together.
-    - title: gated() now exempts any context for which op…
-      id: tpls
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - plan/phase:adopt-core-engine-remediation
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/authz/authz.go
-        lines: 422-457
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          gated() now exempts any context for which opctx.IsSystemActor(ctx) is true, and
-          IsSystemActor (mod-core api/opctx/opctx.go) does not require SessionID == 0 or
-          CredentialID == 0. A context that carries a real request's session or credential
-          and also has the marker set skips both the assurance gate and the owning-party
-          gate. The previous rule gated every session- or credential-bearing context
-          without exception, so this is a narrow weakening. Today mod-users never sets the
-          marker, and sessionless_contexts_test.go pins that inside this repository.
-          However, AuthContext.SystemActor is an exported field (mod-core backlog erS4), so
-          a sibling module that copies a request AuthContext and sets SystemActor = true
-          before calling the mod-users Authorizer bypasses min_acr, max_auth_age and every
-          party credential_rule, while the session's own identity is still attributed. The
-          list side matches this exactly: BindAuthInputs binds p_system_actor from
-          IsSystemActor, and mod_users.access_row_permitted (0100_baseline.sql line 1907)
-          exempts on p_system_actor IS TRUE no matter what p_session_id or
-          p_credential_id hold.
-        recommendation:
-          Treat a marked context that also carries a session or credential as a mis-built
-          context and gate it. In gated(), skip the gates only when
-          opctx.IsSystemActor(ctx) && ac.SessionID == 0 && ac.CredentialID == 0. In
-          mod_users.access_row_permitted, exempt only when p_system_actor IS TRUE AND
-          COALESCE(p_session_id, 0) = 0 AND COALESCE(p_credential_id, 0) = 0, so list and
-          single-row parity holds. Add a unit case to the gated() tests and a row in the
-          row-filter parity test. Alternatively, ask mod-core to fold the zero-session and
-          zero-credential condition into IsSystemActor itself.
     - title: The new package documentation (and api/local…
       id: P0yG
       date: "2026-10-31"
@@ -1908,4 +1868,9 @@ closed:
       title: app-mfgit installs unfiltered access fns
       disposition: promoted
       ref: yDll
+      date: "2026-10-31"
+    - id: tpls
+      title: gated() now exempts any context for which op…
+      disposition: fixed
+      ref: phase-22-remediation-10/001-require-sessionless-system-actor.md
       date: "2026-10-31"
