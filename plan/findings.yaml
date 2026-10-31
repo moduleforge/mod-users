@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: AGENTS.md misplaces RequireAuth mounting
-      id: N2lP
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:doc-updates
-        - priority:medium
-        - effort:small
-      text: AGENTS.md (the "Error precedence follows http-error-precedence" bullet) says registrars of authenticated routes mount auth.NewRequireAuth. In the merged code the manifest (moduleforge.module.yaml) lists requireOIDCConfirmed then requireAuth on /v1/session, /v1/impersonations, /v1/me, /v1/principals, /v1/parties and /v1/profiles; the Register* functions in api/handlers/handlers.go document that "the caller applies auth.NewRequireAuth first", and the handlers answer 500 when no auth.Identity is on the context. docs/architecture.md now states the manifest-mounted rule; AGENTS.md should be reworded to match.
     - title: Stale X-Step-Up-Token in CORS headers
       id: ndUS
       date: "2026-10-31"
@@ -2331,4 +2322,15 @@ closed:
       title: CORS AllowCredentials on Bearer-only API
       disposition: promoted
       ref: x3It
+      date: "2026-10-31"
+    - id: N2lP
+      title: AGENTS.md misplaces RequireAuth mounting
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 004: AGENTS.md:228 now says the manifest
+        (moduleforge.module.yaml) mounts requireOIDCConfirmed then requireAuth on
+        every authenticated prefix, that registrars never mount
+        auth.NewRequireAuth themselves, and that handlers answer 500 when no
+        auth.Identity is present. The old "Registrars of authenticated routes
+        mount" wording is gone.
       date: "2026-10-31"
