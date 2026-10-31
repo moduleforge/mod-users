@@ -1419,7 +1419,7 @@ phases:
           slug: route-first-verify-send-error-to-dialog
           title: Route First Verification-Code Send Failure to the Dialog
           path: phase-23-remediation-11/005-route-first-verify-send-error-to-dialog.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: sendCode now routes its failure by an explicit inDialog flag instead of the render-time verifyTarget; a first-send failure on opening the verify dialog shows in the dialog, not the page banner. One test added in identifiers-panel.test.tsx.
           findings:
