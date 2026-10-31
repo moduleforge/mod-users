@@ -1316,7 +1316,8 @@ phases:
             - P0yG
           git:
             branch: plan/identity-model-impl-22-002
-            commit: []
+            commit:
+                - 260aa65
             merge: null
         - number: 3
           slug: dispatch-after-commit-observations
