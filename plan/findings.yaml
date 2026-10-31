@@ -34,7 +34,7 @@ items:
         - type:security
         - priority:low
         - plan/phase:doc-updates
-        - effort:unspecified
+        - effort:small
       text: api/internal/server/server.go line 88 sets CORS AllowCredentials although the API is Bearer-only (every call sends credentials:'omit' except the two OIDC start POSTs, which need the oidc_state cookie). Decide whether AllowCredentials should be limited to the two OIDC start routes or dropped. Found by phase 10 task 003 (repository docs review); a design decision, not fixed there.
     - title: CORE_FIELD_KEY_HEX read by no code here
       id: RVUM
