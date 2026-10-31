@@ -321,7 +321,7 @@ phases:
           tier: sonnet-med
           digest: 'Ported public sign-in pages to the final session API and the #handoff flow; selection_required routing; users.* error mapping; OIDC start via api.auth.oidcStart; VerifyEmailPage via /v1/me/identifiers; tests, stories, README updated. Finding AReg filed (selection page loses return path on reload).'
           git:
-            branch: null
+            branch: plan/identity-model-impl-09-003
             commit: []
             merge: null
         - number: 4
