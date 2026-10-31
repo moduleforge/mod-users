@@ -2455,3 +2455,23 @@ items:
           ListPrincipals now opens a read-only transaction per request (BeginTx, setup.BindAuthInputs set_config, then rollback), where it previously queried the pool directly. This adds about three round trips and one pooled connection held for the whole request, including the detail reads in principalViews. The extra transaction is required for correctness, and principalViews takes the page ids in one call, so there is no N+1. The cost is a small constant on a warm path. The count and page queries still run as two statements.
         recommendation:
           Acceptable as is. If round trips matter, check whether BindAuthInputs can be folded into the BEGIN round trip (a pgx batch) or whether the count can come from a window function over the page query.
+    - title: Project doc api/server/CLAUDE.md is not reac…
+      id: blvz
+      date: "2026-10-31"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:adopt-core-engine-remediation
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: api/server/CLAUDE.md
+        lines: 1
+        severity: minor
+        confidence: high
+        concerns: documentation
+        description:
+          Project doc api/server/CLAUDE.md is not reachable from README.md by following relative Markdown links; no document in the reachable set links to it.
+        recommendation:
+          Link api/server/CLAUDE.md from a reachable doc (for example AGENTS.md or docs/project-structure.md), or confirm it is intentionally tool-only and exempt from the link-chain rule.
