@@ -144,15 +144,6 @@ items:
           architecture.md states the HTTP API is defined in api/openapi.yaml and lists the OIDC configuration routes (/v1/oidc-config/status, /confirm, /saved, /providers, /providers/{id}, /setup-token) in the API surface table, but api/openapi.yaml contains no /v1/oidc-config path (it does contain /v1/bootstrap and /v1/audit, and the architecture text notes the audit inclusion explicitly). sessions-and-tokens.md and the spec also point to openapi.yaml as the authoritative route reference. The omission is not stated anywhere.
         recommendation:
           Add a sentence to the OIDC configuration row (or the API layer intro) saying these routes are served by the manifest-mounted handlers but are not described in api/openapi.yaml, or add them to the OpenAPI document.
-    - title: api/server/CLAUDE.md unreachable from README
-      id: BpMF
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:doc-updates
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Agent-authored report data (readme-reachability, severity minor/confidence medium): api/server/CLAUDE.md is not reachable from README.md via project doc links; likely an agent-config file exempt from the link chain. Recommendation: link it from the doc map or confirm exemption.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2156,4 +2147,15 @@ closed:
         and JWT_ALG are removed, :24 says WithHS256Secret is removed, :27 says auth.StepUpKey is
         removed, and :38 says the step-up token is removed. The intro pointer at :5 now reads
         "D14 to D31".
+      date: "2026-10-31"
+    - id: BpMF
+      title: api/server/CLAUDE.md unreachable from README
+      disposition: dismissed
+      reason: |-
+        Not actionable. api/server/CLAUDE.md contains only an empty <claude-mem-context> block,
+        which makes it a tool-generated agent-memory stub rather than a project document, so a
+        README link would add nothing. This plan's closed findings already dismissed the same
+        file on these grounds as CTF3 and HzgJ. The durable question of whether to keep, ignore
+        or exempt the file is already in the project backlog as VIcU and 76Ma (both promoted).
+        The phase did not change the file; it predates the plan (17bc64e, per CTF3).
       date: "2026-10-31"
