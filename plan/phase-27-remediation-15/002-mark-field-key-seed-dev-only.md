@@ -21,3 +21,9 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 ## References
 
 - Finding CubF in this plan's `plan/findings.yaml`.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Added a development-only / generate-fresh (`openssl rand -hex 32`) note to the field-encryption seed block in `.env.example`; `CORE_FIELD_KEY_HEX` value unchanged.
+- Validation: block read and confirmed; `git diff` touches only `.env.example` (plus this task doc).
