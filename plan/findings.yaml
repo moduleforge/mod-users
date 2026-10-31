@@ -1,35 +1,5 @@
 version: 2
 items:
-    - title: On "#stepped_up=1" the callback calls api.au…
-      id: 6qD2
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - plan/phase:remediation-11
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/components/oidc-callback-page.tsx
-        lines: 125-141
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          On "#stepped_up=1" the callback calls api.auth.token with the stored
-          refresh token directly, bypassing the single-flight refreshTabToken guard
-          in api.ts. The mounted AuthProvider hydrate (session.get, which refreshes
-          on a 401 for an expired access token) can rotate the same refresh token
-          concurrently; the second rotation trips server refresh-reuse detection and
-          revokes the whole session. The fragment is attacker-suppliable (a crafted
-          link to the return page with "#stepped_up=1"), so a victim with an expired
-          access token can be induced into a self-inflicted session revocation. No
-          privilege gain and no data exposure.
-        recommendation:
-          Route the post-step-up rotation through the shared refresh path (export a
-          single-flight refresh helper from api.ts) or perform it only after
-          hydration settles (isLoading false). Optionally require a locally recorded
-          pending-step-up marker before honouring "stepped_up=1".
     - title: 'The impersonation guard is fail-open: an abs…'
       id: vAo0
       date: "2026-10-31"
@@ -2162,4 +2132,9 @@ closed:
       title: getStoredImpersonating now base64-decodes an…
       disposition: promoted
       ref: cLtT
+      date: "2026-10-31"
+    - id: 6qD2
+      title: On "#stepped_up=1" the callback calls api.au…
+      disposition: fixed
+      ref: phase-24-remediation-12/001-route-step-up-refresh-through-single-flight.md
       date: "2026-10-31"
