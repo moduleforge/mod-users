@@ -2977,3 +2977,13 @@ items:
         - plan/phase:remediation-14
         - plan/slug:identity-model-impl
       text: The main.go comment at api/cmd/server/main.go:232-237 does not mention CORE_FIELD_KEY_HEX or first-boot-only seed semantics. The task did not ask for a code change, so no change was made. If the manager wants that comment to name the env var, file it as a separate task.
+    - title: The "Persisted signing key" section explains…
+      id: e4f6
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - priority:medium
+        - effort:small
+        - plan/phase:doc-updates
+        - plan/slug:identity-model-impl
+      text: 'Evaluator proposed dismissing as fixed by phase 26 task 001 (docs/jwt-eddsa.md:79-83 now states unencrypted storage, forgery via DB or backup access, and that production should set JWT_SIGNING_KEY from a secret store). A type:security dismiss is never auto-applied, and internal escalation is off, so the question surfaces: dismiss (appears resolved) or keep. Recommended: dismiss. Original finding: the Persisted signing key section of docs/jwt-eddsa.md did not state the forgery consequence nor recommend a secret store.'
