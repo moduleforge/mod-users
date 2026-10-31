@@ -2793,3 +2793,23 @@ items:
         - plan/phase:remediation-11
         - plan/slug:identity-model-impl
       text: 'Agent-authored report data (readme-reachability, severity minor, confidence high, concern documentation): api/server/CLAUDE.md is not reachable from README.md via any chain of project-doc links. Not touched by this phase''s diff. Recommendation: link it from a doc reachable from README.md (e.g. AGENTS.md).'
+    - title: getStoredImpersonating now base64-decodes an…
+      id: cLtT
+      date: "2026-10-31"
+      tags:
+        - type:optimization
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-12
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/config.ts
+        lines: 463-467
+        severity: minor
+        confidence: medium
+        concerns: efficiency
+        description:
+          getStoredImpersonating now base64-decodes and JSON-parses the stored JWT payload on every call when the marker is unset. execute() in api.ts (line ~1006) calls it on every authenticated request, so each request pays an atob + JSON.parse of the token payload (a few hundred bytes). Constant is small and no I/O is added; hot path but negligible next to the network round trip.
+        recommendation:
+          Optional: memoize the last decoded token and its act result (single-entry cache keyed by token string) in tokenActClaim or getStoredImpersonating.
