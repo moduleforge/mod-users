@@ -29,10 +29,13 @@ import {
 } from './api';
 import {
   clearStoredSession,
+  clearStoredToken,
   DEFAULT_UNAUTHENTICATED_REDIRECT_URL,
+  getStoredImpersonating,
   getStoredRefreshToken,
   getStoredToken,
   isSafeSitePath,
+  setStoredImpersonating,
 } from './config';
 import { forkFromSibling, startForkResponder } from './fork';
 import { clearHandoffVerifier, readHandoffVerifier } from './handoff';
@@ -273,6 +276,17 @@ export function AuthProvider({
   // so the event reaction and a concurrent hydrate do not each spend the
   // refresh token.
   const restoreRef = useRef<Promise<void> | null>(null);
+  // True from the moment `logout` begins until it has cleared local state.
+  // WHY: logout itself drives refreshes (restore, administrator revoke) whose
+  // token_response events would otherwise repopulate the state it is about to
+  // clear. IMPLIES events are not mirrored into state while this is set.
+  const loggingOutRef = useRef(false);
+  // Bumped when a logout begins. WHY: a `GET /v1/me` or hydration started
+  // before the logout can settle after it. IMPLIES such a late result sees a
+  // different generation and is dropped instead of re-populating user state.
+  const logoutGenRef = useRef(0);
+  // The in-flight logout, so a repeated call shares it rather than racing.
+  const logoutRef = useRef<Promise<void> | null>(null);
 
   /**
    * Loads `GET /v1/me`. An action-required answer navigates (the session
@@ -286,8 +300,12 @@ export function AuthProvider({
     // not loading". This IMPLIES RequireAuth waits instead of redirecting.
     userLoadsRef.current += 1;
     setUserLoading(true);
+    const gen = logoutGenRef.current;
     try {
-      setUser(await api.me.get());
+      const loaded = await api.me.get();
+      // A logout began while this load was in flight: committing the record
+      // would show a signed-out tab as signed in.
+      if (gen === logoutGenRef.current) setUser(loaded);
     } catch (err) {
       if (err instanceof ApiActionRequiredError) {
         // Action-required: navigate, don't alarm. The user just needs to
@@ -334,6 +352,14 @@ export function AuthProvider({
   // Mirror tab-session events (token commits, sign-outs, locks) into state.
   useEffect(() => {
     return subscribeSessionEvents((event: SessionEvent) => {
+      if (loggingOutRef.current && event.type !== 'signed_out') {
+        // WHY: logout is clearing this tab and may itself cause refreshes
+        // (restoring the administrator to revoke it). IMPLIES those commits
+        // and ended-impersonation reactions must not repopulate user,
+        // snapshot or token state, nor start another restore. A sign-out
+        // event still falls through: it only clears.
+        return;
+      }
       if (event.type === 'impersonation_ended') {
         // The impersonation token is gone and no replay happened. The
         // displayed token is stale, so clear it; the snapshot is left until
@@ -424,8 +450,12 @@ export function AuthProvider({
     } else if (getStoredToken() || getStoredRefreshToken()) {
       // A reload: the tab's storage survived. `session.get` also repairs an
       // expired access token through the refresh lineage.
+      const gen = logoutGenRef.current;
       try {
         const info = await api.session.get();
+        // WHY: a logout began during hydration. IMPLIES its result is dropped
+        // so it cannot revive the signed-out tab.
+        if (gen !== logoutGenRef.current) return;
         setSnapshot(snapshotOfInfo(info));
         setToken(getStoredToken());
         const sessionUuid = info.session?.uuid ?? null;
@@ -542,9 +572,21 @@ export function AuthProvider({
     [],
   );
 
-  const logout = useCallback(async () => {
+  const runLogout = useCallback(async (): Promise<void> => {
+    // WHY: a restore in flight (from an ended impersonation) holds the single
+    // shared refresh. IMPLIES logout waits for it so the restore and the
+    // revoke below spend one refresh rather than racing two.
+    const restoreInFlight = restoreRef.current;
+    if (restoreInFlight) await restoreInFlight;
+    // The snapshot is unreliable when a restore just ran (its commit was
+    // ignored above), so then only the stored token's own state decides.
+    const impersonating =
+      getStoredImpersonating() ||
+      (!restoreInFlight && snapshotRef.current.session?.impersonating === true);
+    let firstRevoked = false;
     try {
       await api.session.logout();
+      firstRevoked = true;
     } catch (err) {
       if (
         err instanceof ApiRequestError &&
@@ -596,6 +638,29 @@ export function AuthProvider({
         console.error('[auth] logout request failed', err);
       }
     }
+    if (firstRevoked && impersonating) {
+      // WHY: the first logout revoked only the impersonation session; the
+      // administrator's own session (the tab's retained refresh lineage) is
+      // still alive server-side. IMPLIES that, without this step, a local
+      // sign-out would leave the administrator session open. The token must
+      // never be replayed as the administrator, so the impersonation token
+      // and its marker are dropped first (as `impersonations.end` does) and
+      // the administrator token is re-obtained through the refresh lineage.
+      try {
+        clearStoredToken();
+        setStoredImpersonating(false);
+        await api.session.get();
+        await api.session.logout();
+      } catch (adminErr) {
+        // WHY: the restore or revoke failed (dead lineage, outage).
+        // IMPLIES a local-only logout: the administrator session may outlive
+        // this tab until it expires, but local state is still cleared below.
+        console.error(
+          '[auth] logout is local-only; administrator revoke failed',
+          adminErr,
+        );
+      }
+    }
     // Local state is cleared in every case above.
     clearStoredSession();
     userSessionRef.current = null;
@@ -606,6 +671,21 @@ export function AuthProvider({
     setAccessTokenExpiresAt(null);
     navigateRef.current(resolvedLoginPath);
   }, [resolvedLoginPath]);
+
+  const logout = useCallback((): Promise<void> => {
+    // A repeated call shares the in-flight logout instead of racing a second
+    // restore/revoke against it.
+    if (logoutRef.current) return logoutRef.current;
+    loggingOutRef.current = true;
+    logoutGenRef.current += 1;
+    const pending = runLogout().finally(() => {
+      loggingOutRef.current = false;
+      logoutRef.current = null;
+    });
+    logoutRef.current = pending;
+    return pending;
+  }, [runLogout]);
+
 
   const selectProfile = useCallback((uuid: string) => {
     const refreshToken = getStoredRefreshToken();
@@ -658,8 +738,11 @@ export function AuthProvider({
   }, []);
 
   const refreshUser = useCallback(async () => {
+    const gen = logoutGenRef.current;
     try {
       const info = await api.session.get();
+      // A logout began while this refresh was in flight: drop the result.
+      if (gen !== logoutGenRef.current) return;
       setSnapshot(snapshotOfInfo(info));
       setToken(getStoredToken());
       await loadUser();

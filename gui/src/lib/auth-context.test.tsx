@@ -885,6 +885,153 @@ describe('logout', () => {
     expect(m.auth().token).toBeNull();
   });
 
+  test('an impersonating logout revokes the impersonation session, then the administrator session', async () => {
+    seedTab('admin-access');
+    const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
+    const calls = mockApi({
+      // The tokenless request after the impersonation token is dropped 401s,
+      // which is what drives the refresh through the administrator lineage.
+      'GET /v1/session': (call) =>
+        call.authorization === undefined ? errorReply(401, 'unauthorized') : SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/impersonations': () =>
+        jsonResponse(
+          tokenResponse({ access_token: 'imp-access', refresh_token: null, session: impSession, profile: PROFILE_B }),
+          201,
+        ),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' }),
+      'POST /v1/session/logout': () => undefined,
+    });
+    const m = mount();
+    await settled(m);
+    await act(async () => {
+      await api.impersonations.start({ profile_uuid: 'prof-b', reason: 'support' });
+    });
+    expect(m.auth().impersonating).toBe(true);
+    const before = calls.length;
+    await act(async () => {
+      await m.auth().logout();
+    });
+    const after = calls.slice(before);
+    expect(after.map((c) => `${c.method} ${c.path}`)).toEqual([
+      'POST /v1/session/logout',
+      'GET /v1/session',
+      'POST /v1/auth/token',
+      'GET /v1/session',
+      'POST /v1/session/logout',
+    ]);
+    // The first revoke ran under the impersonation token, the last under the
+    // administrator's: the impersonation token was never replayed as the admin.
+    expect(after[0]!.authorization).toBe('Bearer imp-access');
+    expect(after.at(-1)!.authorization).toBe('Bearer admin-access-2');
+    expect(getStoredToken()).toBeNull();
+    expect(getStoredRefreshToken()).toBeNull();
+    expect(m.auth().token).toBeNull();
+    expect(m.auth().user).toBeNull();
+    expect(m.auth().session).toBeNull();
+  });
+
+  test('an impersonating logout stays local-only when the administrator revoke fails', async () => {
+    seedTab('admin-access');
+    const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
+    mockApi({
+      'GET /v1/session': (call) =>
+        call.authorization === undefined ? errorReply(401, 'unauthorized') : SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/impersonations': () =>
+        jsonResponse(
+          tokenResponse({ access_token: 'imp-access', refresh_token: null, session: impSession, profile: PROFILE_B }),
+          201,
+        ),
+      // The refresh lineage is dead, so the administrator cannot be restored.
+      'POST /v1/auth/token': () => errorReply(500, 'internal'),
+      'POST /v1/session/logout': (call) =>
+        call.authorization === 'Bearer imp-access' ? undefined : errorReply(401, 'unauthorized'),
+    });
+    const m = mount();
+    await settled(m);
+    await act(async () => {
+      await api.impersonations.start({ profile_uuid: 'prof-b', reason: 'support' });
+    });
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      await act(async () => {
+        await m.auth().logout();
+      });
+    } finally {
+      console.error = originalError;
+    }
+    expect(getStoredToken()).toBeNull();
+    expect(getStoredRefreshToken()).toBeNull();
+    expect(m.auth().token).toBeNull();
+    expect(m.navigations).toEqual(['/auth/login']);
+  });
+
+  test('a late restore and user load cannot repopulate state after logout begins', async () => {
+    seedTab('admin-access');
+    const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
+    let impExpired = false;
+    let releaseRestore: () => void = () => {};
+    const restoreGate = new Promise<void>((resolve) => {
+      releaseRestore = resolve;
+    });
+    let releaseMe: () => void = () => {};
+    const meGate = new Promise<void>((resolve) => {
+      releaseMe = resolve;
+    });
+    mockApi({
+      'GET /v1/session': (call) =>
+        (call.authorization === 'Bearer imp-access' && impExpired) || call.authorization === undefined
+          ? errorReply(401, 'unauthorized')
+          : SESSION_INFO,
+      'GET /v1/me': async (call) => {
+        // Only the load under the restored administrator token is delayed.
+        if (call.authorization === 'Bearer admin-access-2') await meGate;
+        return USER_VIEW;
+      },
+      'POST /v1/impersonations': () =>
+        jsonResponse(
+          tokenResponse({ access_token: 'imp-access', refresh_token: null, session: impSession, profile: PROFILE_B }),
+          201,
+        ),
+      'POST /v1/auth/token': async () => {
+        await restoreGate;
+        return tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' });
+      },
+      'POST /v1/session/logout': () => undefined,
+    });
+    const m = mount();
+    await settled(m);
+    await act(async () => {
+      await api.impersonations.start({ profile_uuid: 'prof-b', reason: 'support' });
+    });
+    impExpired = true;
+    // An impersonated request hits the dead token: the pipeline drops it and
+    // the context starts the (delayed) administrator restore.
+    await act(async () => {
+      await api.me.get().catch(() => undefined);
+    });
+    let loggedOut: Promise<void> = Promise.resolve();
+    await act(async () => {
+      loggedOut = m.auth().logout();
+    });
+    await act(async () => {
+      releaseRestore();
+      await loggedOut;
+    });
+    // The delayed user load answers only now, after logout settled.
+    releaseMe();
+    // Let any late commit land before asserting it did not.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(m.auth().user).toBeNull();
+    expect(m.auth().token).toBeNull();
+    expect(m.auth().session).toBeNull();
+    expect(getStoredToken()).toBeNull();
+  });
+
   test('an unsafe loginPath falls back to the default login route', async () => {
     seedTab();
     mockApi({
