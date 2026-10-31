@@ -2987,3 +2987,13 @@ items:
         - plan/phase:doc-updates
         - plan/slug:identity-model-impl
       text: 'Evaluator proposed dismissing as fixed by phase 26 task 001 (docs/jwt-eddsa.md:79-83 now states unencrypted storage, forgery via DB or backup access, and that production should set JWT_SIGNING_KEY from a secret store). A type:security dismiss is never auto-applied, and internal escalation is off, so the question surfaces: dismiss (appears resolved) or keep. Recommended: dismiss. Original finding: the Persisted signing key section of docs/jwt-eddsa.md did not state the forgery consequence nor recommend a secret store.'
+    - title: 'Confirmed: the comment does not name CORE_FI…'
+      id: UuyR
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-14
+        - plan/slug:identity-model-impl
+      text: 'Evaluator proposed dismissing as moot: no code risk; only notes the api/cmd/server/main.go:232-237 comment does not name CORE_FIELD_KEY_HEX (tracked by AMeC; documented at .env.example:207-215). A type:security dismiss is never auto-applied and internal escalation is off, so the question surfaces. Recommended: dismiss. Suggestion-level, optional comment wording.'
