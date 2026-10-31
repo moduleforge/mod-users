@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Update /v1/self paths in oidc_config_test (ty
-      id: 7eEW
-      date: "2026-10-31"
-      tags:
-        - type:style
-        - plan/phase:users-identity-final
-        - priority:low
-        - effort:small
-      text: Update /v1/self paths in oidc_config_test (type:documentation). api/internal/handlers/oidc_config_test.go lines 538, 576 and 743 issue GET /v1/self, a removed route. The test asserts the unconfirmed-OIDC gate answers 503 verbatim. Change the request path to /v1/me. Code change, left unedited by the task agent.
     - title: Fix corporation wording in authz_test comment
       id: VtaW
       date: "2026-10-31"
@@ -2228,4 +2219,9 @@ closed:
       title: The new sentence links the X-Setup-Token sta…
       disposition: promoted
       ref: 7O8G
+      date: "2026-10-31"
+    - id: 7eEW
+      title: Update /v1/self paths in oidc_config_test (ty
+      disposition: promoted
+      ref: 7eEW
       date: "2026-10-31"
