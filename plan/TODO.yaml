@@ -1687,6 +1687,6 @@ phases:
           findings:
             - CubF
           git:
-            branch: null
+            branch: plan/identity-model-impl-27-002
             commit: []
             merge: null
