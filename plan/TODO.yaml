@@ -1479,7 +1479,7 @@ phases:
             branch: plan/identity-model-impl-24-002
             commit:
                 - 1d6c29f
-            merge: null
+            merge: 4caaf219270959cd296e9035214e47f68b06297b
         - number: 3
           slug: revoke-admin-session-on-impersonated-logout
           title: Revoke the Administrator Session When Logging Out While Impersonating
