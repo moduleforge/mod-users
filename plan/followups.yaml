@@ -2997,3 +2997,13 @@ items:
         - plan/phase:remediation-14
         - plan/slug:identity-model-impl
       text: 'Evaluator proposed dismissing as moot: no code risk; only notes the api/cmd/server/main.go:232-237 comment does not name CORE_FIELD_KEY_HEX (tracked by AMeC; documented at .env.example:207-215). A type:security dismiss is never auto-applied and internal escalation is off, so the question surfaces. Recommended: dismiss. Suggestion-level, optional comment wording.'
+    - title: Verified accurate against model/migrations/s…
+      id: NqKT
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-14
+        - plan/slug:identity-model-impl
+      text: 'Evaluator proposed dismissing as moot: verification note, no inaccuracy found in docs/jwt-eddsa.md persisted-key section. Optional enhancement: log a startup warning when the persisted signing key is used outside local mode. A type:security dismiss is never auto-applied and internal escalation is off, so the question surfaces. Recommended: dismiss, or keep only as an enhancement idea.'
