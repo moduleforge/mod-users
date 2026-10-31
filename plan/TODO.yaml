@@ -394,11 +394,13 @@ phases:
           slug: review-repository-docs
           title: Review Repository Docs
           path: phase-10-doc-updates/003-review-repository-docs.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: 'Repository docs reviewed and corrected: removed stale step-up, account-merge and plan-phase references; documented config variables in .env.example; rewrote model/README.md baseline section; removed completed or obsolete next-steps items. Code issues (CORS headers, credentials) recorded as findings. Docs only.'
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-10-003
+            commit:
+                - 23ceca5f
             merge: null
     - number: 11
       slug: users-identity-final
