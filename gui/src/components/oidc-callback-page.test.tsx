@@ -3,6 +3,7 @@ import { cleanup, screen, waitFor } from '@testing-library/react';
 import { OidcCallbackPage } from './oidc-callback-page';
 import { getStoredHandoffVerifier, getStoredToken, setStoredHandoffVerifier } from '../lib/config';
 import {
+  type Call,
   errorReply,
   mockApi,
   mountUnder,
@@ -57,7 +58,7 @@ async function mountCallback(
   return { ...mounted, outcome };
 }
 
-const handoffCalls = (calls: { path: string }[]) =>
+const handoffCalls = (calls: Call[]) =>
   calls.filter((c) => c.path === '/v1/auth/handoff');
 
 describe('OidcCallbackPage handoff', () => {
@@ -123,7 +124,7 @@ describe('OidcCallbackPage handoff', () => {
 
 describe('OidcCallbackPage failures', () => {
   test.each([
-    ['account_exists_sign_in_and_link', /already exists.*link this provider/s],
+    ['account_exists_sign_in_and_link', /already exists[\s\S]*link this provider/],
     ['no_account', /No account exists/],
     ['authentication_failed', /could not confirm your identity/],
     ['missing_email', /did not share an email/],

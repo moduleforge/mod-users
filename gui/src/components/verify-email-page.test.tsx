@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { VerifyEmailPage } from './verify-email-page';
 import { AuthProvider } from '../lib/auth-context';
-import { configureUsersApi, resetUsersApiConfig } from '../lib/config';
+import { configureUsersApi, resetUsersApiConfig, setStoredRefreshToken, setStoredToken } from '../lib/config';
+import { PROFILE_A, tokenResponse, USER_VIEW } from '../test-support/users-fixtures';
 
 const originalFetch = globalThis.fetch;
 
@@ -15,15 +16,14 @@ interface Call {
 let calls: Call[];
 let responder: (call: Call) => Response;
 
-const SELF = {
-  uuid: 'u1',
-  entity_uuid: 'e1',
-  email: 'session@example.com',
-  given_name: 'A',
-  family_name: 'B',
-  is_admin: false,
-  created_at: '',
-  updated_at: '',
+const IDENTIFIER = {
+  uuid: 'ident-1',
+  kind: 'email',
+  value: 'me@example.com',
+  is_primary: true,
+  verified: false,
+  verified_at: null,
+  created_at: '2026-01-01T00:00:00Z',
 };
 
 function json(status: number, body: unknown): Response {
@@ -33,10 +33,26 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/** The default server: one unverified address; verification and resend answer 200 and 204. */
+function defaultResponder(call: Call): Response {
+  if (call.url.endsWith('/v1/me/identifiers') && call.method === 'GET') {
+    return json(200, { identifiers: [IDENTIFIER] });
+  }
+  if (call.url.endsWith('/verify')) return json(200, { ...IDENTIFIER, verified: true });
+  if (call.url.endsWith('/v1/session')) {
+    const base = tokenResponse();
+    return json(200, { session: base.session, profile: PROFILE_A, profiles: [PROFILE_A] });
+  }
+  if (call.url.endsWith('/v1/me')) return json(200, { ...USER_VIEW, email: 'session@example.com' });
+  return new Response(null, { status: 204 });
+}
+
 beforeEach(() => {
   calls = [];
-  responder = (call) =>
-    call.url.endsWith('/v1/self') ? json(200, SELF) : new Response(null, { status: 204 });
+  // A signed-in tab: the identifier routes need a session.
+  setStoredToken('tok');
+  setStoredRefreshToken('refresh');
+  responder = defaultResponder;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     const call: Call = {
       url: String(url),
@@ -49,8 +65,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   globalThis.fetch = originalFetch;
   localStorage.clear();
+  sessionStorage.clear();
   resetUsersApiConfig();
 });
 
@@ -61,30 +79,32 @@ function typeCode(value: string): void {
 const callsTo = (suffix: string) => calls.filter((c) => c.url.endsWith(suffix));
 
 describe('VerifyEmailPage', () => {
-  test('send a new code posts purpose verify_email to the configured base URL and shows a polite status', async () => {
+  test('send a new code resolves the identifier and posts its verification to the configured base URL', async () => {
     configureUsersApi({ baseUrl: 'https://api.example.test' });
     render(<VerifyEmailPage email="me@example.com" resendCooldownSeconds={0} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
 
-    await waitFor(() => expect(callsTo('/v1/auth/email-code/request')).toHaveLength(1));
-    const call = callsTo('/v1/auth/email-code/request')[0]!;
-    expect(call.url).toBe('https://api.example.test/v1/auth/email-code/request');
-    expect(call.body).toEqual({ email: 'me@example.com', purpose: 'verify_email' });
+    await waitFor(() => expect(callsTo('/v1/me/identifiers/ident-1/verification')).toHaveLength(1));
+    const call = callsTo('/v1/me/identifiers/ident-1/verification')[0]!;
+    expect(call.method).toBe('POST');
+    expect(call.url).toBe('https://api.example.test/v1/me/identifiers/ident-1/verification');
 
     const status = await screen.findByText(
       'A new code was sent to me@example.com. It expires in 5 minutes.',
     );
     expect(status.closest('[aria-live="polite"]')).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Code')));
+    // No retired email-code purpose is used for verification any more.
+    expect(callsTo('/v1/auth/email-code/request')).toHaveLength(0);
   });
 
-  test('does not send a code on mount', () => {
+  test('does not call the API on mount', () => {
     render(<VerifyEmailPage email="me@example.com" />);
     expect(calls).toHaveLength(0);
   });
 
-  test('verify posts {email, code, purpose} and a 204 calls onVerified once, with a success state', async () => {
+  test('verify posts {code} to the identifier and a 200 calls onVerified once, with a success state', async () => {
     let verified = 0;
     render(<VerifyEmailPage email="me@example.com" onVerified={() => verified++} />);
 
@@ -92,17 +112,44 @@ describe('VerifyEmailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verify email' }));
 
     await waitFor(() => expect(verified).toBe(1));
-    const call = callsTo('/v1/auth/email-code/verify')[0]!;
-    expect(call.url).toBe('http://localhost:8080/v1/auth/email-code/verify');
-    expect(call.body).toEqual({ email: 'me@example.com', code: '123456', purpose: 'verify_email' });
+    const call = callsTo('/v1/me/identifiers/ident-1/verify')[0]!;
+    expect(call.method).toBe('POST');
+    expect(call.url).toBe('http://localhost:8080/v1/me/identifiers/ident-1/verify');
+    expect(call.body).toEqual({ code: '123456' });
     expect((await screen.findAllByText('Email verified')).length).toBeGreaterThan(0);
     expect(verified).toBe(1);
   });
 
-  test('wrong code (401) shows the fixed message and neither calls onVerified nor clears the token', async () => {
-    localStorage.setItem('auth_token', 'keep-me');
-    responder = () =>
-      json(401, { error: { code: 'unauthenticated', message: 'invalid or expired code' } });
+  test('the identifier is matched to the email case-insensitively and looked up once', async () => {
+    responder = (call) =>
+      call.url.endsWith('/v1/me/identifiers') && call.method === 'GET'
+        ? json(200, {
+            identifiers: [
+              { ...IDENTIFIER, uuid: 'other', value: 'other@example.com' },
+              { ...IDENTIFIER, uuid: 'mine', value: 'Me@Example.com' },
+            ],
+          })
+        : defaultResponder(call);
+    render(<VerifyEmailPage email="me@example.com" resendCooldownSeconds={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
+    await waitFor(() => expect(callsTo('/v1/me/identifiers/mine/verification')).toHaveLength(1));
+    typeCode('123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Verify email' }));
+    await waitFor(() => expect(callsTo('/v1/me/identifiers/mine/verify')).toHaveLength(1));
+    expect(calls.filter((c) => c.url.endsWith('/v1/me/identifiers') && c.method === 'GET')).toHaveLength(1);
+  });
+
+  test('wrong code (400 users.code_invalid) shows the fixed message and neither calls onVerified nor clears the token', async () => {
+    responder = (call) =>
+      call.url.endsWith('/verify')
+        ? json(400, {
+            error: {
+              code: 'invalid_input',
+              message: 'invalid input',
+              details: [{ field: 'code', code: 'users.code_invalid', message: 'the code is invalid or has expired' }],
+            },
+          })
+        : defaultResponder(call);
     let verified = 0;
     render(<VerifyEmailPage email="me@example.com" onVerified={() => verified++} />);
 
@@ -112,11 +159,14 @@ describe('VerifyEmailPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('That code is invalid or has expired. Request a new one.');
     expect(verified).toBe(0);
-    expect(localStorage.getItem('auth_token')).toBe('keep-me');
+    expect(sessionStorage.length).toBeGreaterThan(0);
   });
 
   test('other API errors show their message', async () => {
-    responder = () => json(400, { error: { code: 'invalid_input', message: 'missing fields' } });
+    responder = (call) =>
+      call.url.endsWith('/verify')
+        ? json(400, { error: { code: 'invalid_input', message: 'missing fields' } })
+        : defaultResponder(call);
     render(<VerifyEmailPage email="me@example.com" />);
     typeCode('123456');
     fireEvent.click(screen.getByRole('button', { name: 'Verify email' }));
@@ -124,48 +174,65 @@ describe('VerifyEmailPage', () => {
   });
 
   test('email from the provider user is used and shown', async () => {
-    localStorage.setItem('auth_token', 'tok');
+    responder = (call) =>
+      call.url.endsWith('/v1/me/identifiers') && call.method === 'GET'
+        ? json(200, { identifiers: [{ ...IDENTIFIER, value: 'session@example.com' }] })
+        : defaultResponder(call);
     render(
       <AuthProvider>
         <VerifyEmailPage resendCooldownSeconds={0} />
       </AuthProvider>,
     );
     await screen.findByText('session@example.com');
-    expect(screen.queryByLabelText('Email')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
-    await waitFor(() => expect(callsTo('/v1/auth/email-code/request')).toHaveLength(1));
-    expect(callsTo('/v1/auth/email-code/request')[0]!.body).toEqual({
-      email: 'session@example.com',
-      purpose: 'verify_email',
-    });
+    await waitFor(() => expect(callsTo('/v1/me/identifiers/ident-1/verification')).toHaveLength(1));
   });
 
   test('the email prop wins over the provider user', async () => {
-    localStorage.setItem('auth_token', 'tok');
     render(
       <AuthProvider>
         <VerifyEmailPage email="prop@example.com" resendCooldownSeconds={0} />
       </AuthProvider>,
     );
-    await waitFor(() => expect(callsTo('/v1/self')).toHaveLength(1));
+    await waitFor(() => expect(callsTo('/v1/me')).toHaveLength(1));
     await screen.findByText('prop@example.com');
     expect(screen.queryByText('session@example.com')).toBeNull();
   });
 
-  test('without a known email, an Email field is shown and its value is used', async () => {
+  test('without a known email, the first unverified address is verified and then shown', async () => {
     render(<VerifyEmailPage resendCooldownSeconds={0} />);
-    const send = screen.getByRole('button', { name: 'Send a new code' }) as HTMLButtonElement;
-    expect(send.disabled).toBe(true);
+    expect(screen.queryByLabelText('Email')).toBeNull();
 
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'typed@example.com' } });
-    expect(send.disabled).toBe(false);
-    fireEvent.click(send);
+    fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
 
-    await waitFor(() => expect(callsTo('/v1/auth/email-code/request')).toHaveLength(1));
-    expect(callsTo('/v1/auth/email-code/request')[0]!.body).toEqual({
-      email: 'typed@example.com',
-      purpose: 'verify_email',
-    });
+    await waitFor(() => expect(callsTo('/v1/me/identifiers/ident-1/verification')).toHaveLength(1));
+    await screen.findAllByText('me@example.com', { exact: false });
+  });
+
+  test('an account with no email address reports it and sends nothing', async () => {
+    responder = (call) =>
+      call.url.endsWith('/v1/me/identifiers') && call.method === 'GET'
+        ? json(200, { identifiers: [] })
+        : defaultResponder(call);
+    render(<VerifyEmailPage resendCooldownSeconds={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send a new code' }));
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'No email address on this account needs verification.',
+    );
+    expect(callsTo('/verification')).toHaveLength(0);
+  });
+
+  test('an already verified identifier completes without sending a code', async () => {
+    responder = (call) =>
+      call.url.endsWith('/v1/me/identifiers') && call.method === 'GET'
+        ? json(200, { identifiers: [{ ...IDENTIFIER, verified: true }] })
+        : defaultResponder(call);
+    let verified = 0;
+    render(<VerifyEmailPage email="me@example.com" onVerified={() => verified++} />);
+    typeCode('123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Verify email' }));
+    await waitFor(() => expect(verified).toBe(1));
+    expect(callsTo('/verify')).toHaveLength(0);
   });
 
   test('resend cooldown disables then re-enables the button', async () => {
@@ -186,8 +253,10 @@ describe('VerifyEmailPage', () => {
     render(<VerifyEmailPage email="me@example.com" resendCooldownSeconds={0} />);
     typeCode('123456');
     fireEvent.click(screen.getByRole('button', { name: 'Verify email' }));
-    await waitFor(() => expect(callsTo('/v1/auth/email-code/verify')).toHaveLength(1));
-    expect(callsTo('/v1/auth/email-code/verify')[0]!.url).toBe('/v1/auth/email-code/verify');
+    await waitFor(() => expect(callsTo('/v1/me/identifiers/ident-1/verify')).toHaveLength(1));
+    expect(callsTo('/v1/me/identifiers/ident-1/verify')[0]!.url).toBe(
+      '/v1/me/identifiers/ident-1/verify',
+    );
   });
 
   test('code input strips non-digits and has the right attributes; labels present', () => {
@@ -201,20 +270,22 @@ describe('VerifyEmailPage', () => {
   });
 
   test('refreshes the user inside an AuthProvider before calling onVerified', async () => {
-    localStorage.setItem('auth_token', 'tok');
     const order: string[] = [];
     render(
       <AuthProvider>
-        <VerifyEmailPage onVerified={() => order.push(`verified@${callsTo('/v1/self').length}`)} />
+        <VerifyEmailPage
+          email="me@example.com"
+          onVerified={() => order.push(`verified@${callsTo('/v1/session').length}`)}
+        />
       </AuthProvider>,
     );
-    await screen.findByText('session@example.com');
-    const selfBefore = callsTo('/v1/self').length;
+    await waitFor(() => expect(callsTo('/v1/me')).toHaveLength(1));
+    const sessionBefore = callsTo('/v1/session').length;
     typeCode('123456');
     fireEvent.click(screen.getByRole('button', { name: 'Verify email' }));
     await waitFor(() => expect(order).toHaveLength(1));
-    expect(callsTo('/v1/self').length).toBe(selfBefore + 1);
-    expect(order[0]).toBe(`verified@${selfBefore + 1}`);
+    expect(callsTo('/v1/session').length).toBe(sessionBefore + 1);
+    expect(order[0]).toBe(`verified@${sessionBefore + 1}`);
   });
 
   test('renders without an AuthProvider and offers the sign-in-different-account button', () => {

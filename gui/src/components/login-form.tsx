@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { Button, Input, Label } from '@moduleforge/core-gui';
 import { ErrorMessage } from './error-message';
 import { useAuth } from '../lib/auth-context';
-import { ApiRequestError, fetchProviders, type OIDCProvider } from '../lib/api';
-import { getApiBaseUrl } from '../lib/config';
+import { api, ApiRequestError, fetchProviders, type OIDCProvider } from '../lib/api';
 import { readReturnPath } from '../lib/return-path';
+import { describeSignInError, finishSignIn } from '../lib/sign-in';
 
 // Inline brand glyphs keep the bundle small and avoid pulling in an icon
 // package for two logos. Colors are the brand-correct Google/Microsoft marks.
@@ -80,8 +80,23 @@ export interface LoginFormProps {
    * set; see `readReturnPath`), else `'/'` for the OIDC start URL. The same
    * effective value is handed to `onSuccess` (`null` when none) —
    * navigation after a local (email/password) login is the app's job.
+   * The OIDC round trip carries the path back to `OidcCallbackPage`.
    */
   returnPath?: string;
+  /**
+   * The app (slug) the session signs in to; sent as `app` on login. Omit when
+   * the deployment has a single app or none.
+   */
+  app?: string;
+  /**
+   * Called instead of `onSuccess` when the login succeeded but found no
+   * landing profile (`selection_required`): navigate to `selectProfilePath`
+   * (the profile-selection route) and resume at `returnPath` after the
+   * choice. When omitted, `onSuccess` receives `selectProfilePath` in place
+   * of the return path, so a host that navigates to whatever it is handed
+   * still reaches the selection page.
+   */
+  onSelectionRequired?: (selectProfilePath: string, returnPath: string | null) => void;
   /**
    * Namespaces this form's input `id`/`htmlFor` pairs (e.g. `${idPrefix}-email`)
    * so they stay unique when `LoginForm` and `RegisterForm` are mounted at the
@@ -102,6 +117,8 @@ export function LoginForm({
   onSuccess,
   initialError = null,
   returnPath,
+  app,
+  onSelectionRequired,
   idPrefix = 'login',
   onForgotPassword,
 }: LoginFormProps) {
@@ -125,14 +142,31 @@ export function LoginForm({
     };
   }, []);
 
-  function handleProviderClick(providerId: string) {
+  async function handleProviderClick(providerId: string) {
+    setError(null);
     const effectiveReturnPath = returnPath ?? readReturnPath();
-    // Full page navigation — NOT a fetch. The API responds with a 302 to the
-    // provider's authorization endpoint, and the `return` param is echoed
-    // back through the OAuth round-trip.
-    window.location.assign(
-      `${getApiBaseUrl()}/v1/auth/oidc/${encodeURIComponent(providerId)}/start?return=${encodeURIComponent(effectiveReturnPath ?? '/')}`,
-    );
+    try {
+      // The client generates and stores this tab's handoff verifier and puts
+      // only its challenge on the start URL, so the one-time code the
+      // callback issues can be redeemed only by this tab.
+      const startUrl = await api.auth.oidcStart(providerId, {
+        returnPath: effectiveReturnPath ?? '/',
+      });
+      // Full page navigation — NOT a fetch. The API responds with a 302 to
+      // the provider's authorization endpoint, and the `return` param is
+      // echoed back through the OAuth round-trip.
+      window.location.assign(startUrl);
+    } catch (err) {
+      // Reached when the browser has no Web Crypto (the verifier cannot be
+      // made safely) or the explicit `returnPath` prop is unsafe: in both
+      // cases no navigation happens, so say so instead of failing silently.
+      console.error('[login] could not start OIDC sign-in', err);
+      setError(
+        err instanceof TypeError
+          ? 'Could not start sign-in: the return path is not valid.'
+          : 'Could not start sign-in with this provider in this browser.',
+      );
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -140,10 +174,16 @@ export function LoginForm({
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
-      onSuccess?.(returnPath ?? readReturnPath());
+      const response = await login(email, password, app ? { app } : undefined);
+      finishSignIn(response, returnPath ?? readReturnPath(), { onSuccess, onSelectionRequired });
     } catch (err) {
-      if (err instanceof ApiRequestError && err.status === 401) {
+      const known = describeSignInError(err);
+      if (known) {
+        // A coded refusal (bad credentials, BYO identity off, app access not
+        // granted, profile unavailable) has dedicated copy.
+        setError(known);
+      } else if (err instanceof ApiRequestError && err.status === 401) {
+        // An uncoded 401 on login still means the credentials were refused.
         setError('Invalid email or password.');
       } else if (err instanceof ApiRequestError) {
         setError(err.message);
@@ -213,7 +253,7 @@ export function LoginForm({
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => handleProviderClick(p.id)}
+              onClick={() => void handleProviderClick(p.id)}
             >
               {providerIcon(p.id)}
               <span>Sign in with {p.display_name}</span>
