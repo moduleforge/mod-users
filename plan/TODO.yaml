@@ -1539,6 +1539,7 @@ phases:
           path: phase-25-remediation-13/003-signal-step-up-refresh-skip-while-impersonating.md
           done: false
           tier: sonnet-low
+          digest: Made refreshAfterStepUp return false when skipped while impersonating. OidcCallbackPage now reports an error instead of completing, and both behaviours are covered by tests.
           findings:
             - LJFE
             - Wstk
