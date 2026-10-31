@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Stale X-Step-Up-Token in CORS headers
-      id: ndUS
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:doc-updates
-        - priority:low
-        - effort:small
-      text: api/internal/server/server.go corsOptions still lists "X-Step-Up-Token" in AllowedHeaders, although the step-up token header no longer exists (step-up is a session factor now). Remove the entry and update any test that pins the header list.
     - title: Facade lacks input/summary type aliases
       id: iZ3E
       date: "2026-10-31"
@@ -2333,4 +2324,14 @@ closed:
         auth.NewRequireAuth themselves, and that handlers answer 500 when no
         auth.Identity is present. The old "Registrars of authenticated routes
         mount" wording is gone.
+      date: "2026-10-31"
+    - id: ndUS
+      title: Stale X-Step-Up-Token in CORS headers
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 003: api/internal/server/server.go:90
+        AllowedHeaders is now Accept, Authorization, Content-Type, X-App,
+        X-Request-ID (no X-Step-Up-Token), and
+        api/internal/server/cors_test.go:210-237 (TestCorsOptions_MethodsAndHeaders)
+        asserts the header is absent.
       date: "2026-10-31"
