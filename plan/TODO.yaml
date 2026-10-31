@@ -1425,7 +1425,7 @@ phases:
           findings:
             - Qo20
           git:
-            branch: null
+            branch: plan/identity-model-impl-23-005
             commit: []
             merge: null
         - number: 6
