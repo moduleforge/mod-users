@@ -1,5 +1,32 @@
 version: 2
-items: []
+items:
+    - title: Update /v1/self paths in oidc_config_test (ty
+      id: 7eEW
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: Update /v1/self paths in oidc_config_test (type:documentation). api/internal/handlers/oidc_config_test.go lines 538, 576 and 743 issue GET /v1/self, a removed route. The test asserts the unconfirmed-OIDC gate answers 503 verbatim. Change the request path to /v1/me. Code change, left unedited by the task agent.
+    - title: Fix corporation wording in authz_test comment
+      id: VtaW
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: Fix corporation wording in authz_test comment (type:documentation). api/internal/authz/authz_test.go:308 says NULL owner_id (corporation, authz_actor_group, authz_target_group by design). Confirm which entity types have NULL owner_id and reword with organization if applicable. Not confirmed from code, so unedited.
+    - title: Scan docs/mf-standards for old identity terms
+      id: 4HXk
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: Scan docs/mf-standards for old identity terms (type:documentation). Submodule uninitialized in the worktree, so not scanned. Check it for old-model terms.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
