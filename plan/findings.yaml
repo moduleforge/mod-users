@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: The "Persisted signing key" section explains…
-      id: e4f6
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - plan/phase:doc-updates
-        - priority:medium
-        - effort:small
-      text: 'Evaluator proposed dismissing as fixed by phase 26 task 001 (docs/jwt-eddsa.md:79-83 now states unencrypted storage, forgery via DB or backup access, and that production should set JWT_SIGNING_KEY from a secret store). A type:security dismiss is never auto-applied, and internal escalation is off, so the question surfaces: dismiss (appears resolved) or keep. Recommended: dismiss. Original finding: the Persisted signing key section of docs/jwt-eddsa.md did not state the forgery consequence nor recommend a secret store.'
     - title: The new text says the exception covers "the…
       id: Yo85
       date: "2026-10-31"
@@ -2246,4 +2237,9 @@ closed:
         api/server/CLAUDE.md is a pre-existing 2-line empty claude-mem-context
         stub that is unrelated to the identity-model goals. Promoting it would
         add a third copy to the backlog.
+      date: "2026-10-31"
+    - id: e4f6
+      title: The "Persisted signing key" section explains…
+      disposition: promoted
+      ref: e4f6
       date: "2026-10-31"
