@@ -21,3 +21,10 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 ## References
 
 - Finding RVUM in this plan's `plan/findings.yaml`.
+
+## Status
+
+- Outcome: succeeded
+- Date: 2026-10-31
+- Validation: check 1 (block exists under its own heading, names mod-core as owner, value unchanged versus HEAD) passed; check 2 (description consistent with `api/cmd/server/main.go` lines 232-237 and mod-core's `moduleforge.module.yaml` cipher block) passed. The main.go comment does not name the env var itself; the description is consistent with it, not contradicted by it. Log: `.flow/validation-logs/01-env-block-and-description.log`.
+- Affected file: `.env.example` (repo-relative). Added a `Field-encryption seed (owned by mod-core)` comment block after the `TZ=UTC` line; `CORE_FIELD_KEY_HEX` moved beneath it, value unchanged.
