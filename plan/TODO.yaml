@@ -334,7 +334,8 @@ phases:
           digest: 'Built self-service panels (StepUpDialog, CredentialsPanel, IdentifiersPanel, SessionsPanel, GuestUpgradeForm) on the rebuilt client; SSHKeysPanel removed; step-up, last-credential, sign-out and guest-upgrade paths tested. Known out-of-scope: docs/mod-users-spec.md line 188 still describes old X-Step-Up-Token semantics.'
           git:
             branch: plan/identity-model-impl-09-004
-            commit: []
+            commit:
+                - e311879
             merge: null
         - number: 5
           slug: build-bootstrap-and-oidc-config-pages
