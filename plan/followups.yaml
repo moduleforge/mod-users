@@ -2385,3 +2385,13 @@ items:
         - plan/phase:adopt-core-engine-remediation
         - plan/slug:identity-model-impl
       text: Manifest change in moduleforge.module.yaml (bootstrapOrganizationService, coreServices in requires) is untested because mfgen was not run; manager to verify.
+    - title: Stale localAuthz package doc on step 1
+      id: wkvN
+      date: "2026-10-30"
+      tags:
+        - type:documentation
+        - priority:medium
+        - effort:small
+        - plan/phase:adopt-core-engine-remediation
+        - plan/slug:identity-model-impl
+      text: The package comment in api/localAuthz (prelude item 1) says the operation-level assurance gate applies "for contexts with a session or a credential". The engine (api/internal/authz/authz.go, gated) now gates every context except the anonymous context and one for which opctx.IsSystemActor is true; an unmarked context with no session or credential is gated and fails closed. Item 2 also omits that the gate is skipped for the system actor and anonymous contexts. Reword the facade comment to match the internal package doc.
