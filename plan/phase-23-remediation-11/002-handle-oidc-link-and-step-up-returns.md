@@ -20,3 +20,7 @@ This task addresses finding 4ohc. The work targets the plan branch `plan/identit
 ## References
 
 - Finding `4ohc` in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). `OidcCallbackPage` now handles `#linked=1` and `#stepped_up=1` (with `return`): fragment stripped, return validated with `isSafeReturnPath`, `onComplete` called with it, no `onError`. On `stepped_up=1` it runs the refresh grant first; a failed refresh reports via `onError`. Comments in step-up-dialog.tsx and credentials-panel.tsx updated. Validation: `bun test` (445 pass), typecheck, `make build.gui`, `make lint.gui` all pass. Files: `gui/src/components/oidc-callback-page.tsx`, `gui/src/components/oidc-callback-page.test.tsx`, `gui/src/components/step-up-dialog.tsx`, `gui/src/components/credentials-panel.tsx`.

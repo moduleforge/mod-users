@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth-context';
-import { ApiRequestError, USERS_ERROR_CODES } from '../lib/api';
+import { api, ApiRequestError, USERS_ERROR_CODES } from '../lib/api';
+import { getStoredProfileUuid, getStoredRefreshToken } from '../lib/config';
 import { isSafeReturnPath } from '../lib/return-path';
 import { finishSignIn } from '../lib/sign-in';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@moduleforge/core-gui';
@@ -15,7 +16,8 @@ export interface OidcCallbackPageProps {
    * that value is absent or fails the safety check below. When the sign-in
    * ended with no landing profile and `onSelectionRequired` is not supplied,
    * this receives the profile-selection route (`USERS_GUI_ROUTES.selectProfile`)
-   * instead.
+   * instead. The same path is passed after a provider link (`#linked=1`) or
+   * a provider step-up (`#stepped_up=1`), neither of which signs anyone in.
    */
   onComplete: (returnPath: string) => void;
   /**
@@ -91,6 +93,8 @@ export function OidcCallbackPage({
       const handoff = hashParams.get('handoff');
       const errorCode = hashParams.get('error');
       const returnCandidate = hashParams.get('return');
+      const linked = hashParams.get('linked') === '1';
+      const steppedUp = hashParams.get('stepped_up') === '1';
 
       // Strip the fragment before anything else can run or throw: the
       // one-time code must not linger in history, and must not be re-read by
@@ -105,6 +109,40 @@ export function OidcCallbackPage({
         // A refusal: no code to exchange. Map to copy instead of echoing the
         // untrusted fragment value.
         fail(OIDC_ERROR_COPY[errorCode] ?? GENERIC_ERROR);
+        return;
+      }
+
+      if (!handoff && (linked || steppedUp)) {
+        // A provider link or step-up callback: the user is already signed in
+        // in this tab, so there is no handoff code to exchange and this is a
+        // success, not a failed sign-in. This IMPLIES returning to the
+        // validated path (never the raw fragment value) and never calling
+        // onError.
+        const back = isSafeReturnPath(returnCandidate) ? returnCandidate : defaultReturnPath;
+        const refreshToken = getStoredRefreshToken();
+        const profileUuid = getStoredProfileUuid();
+        if (steppedUp && refreshToken && profileUuid) {
+          // The step-up raised the assurance server-side, but this tab's
+          // access token predates it. Take a fresh one through the refresh
+          // grant so the interrupted action's next call sees the raised
+          // assurance. Without a refresh token or profile (nothing to
+          // rotate) the tab just returns and the request pipeline handles
+          // any 401.
+          try {
+            await api.auth.token({
+              grant_type: 'refresh_token',
+              refresh_token: refreshToken,
+              profile_uuid: profileUuid,
+            });
+          } catch (err) {
+            // The step-up itself succeeded but the new token could not be
+            // obtained: report it rather than returning with stale assurance.
+            console.error('[oidc-callback] token refresh after step-up failed', err);
+            fail('Verification completed, but your session could not be refreshed. Please try again.');
+            return;
+          }
+        }
+        onComplete(back);
         return;
       }
 

@@ -296,7 +296,9 @@ export function CredentialsPanel({
         return;
       }
       // Full page navigation: the provider callback links the identity and
-      // returns here, so the list reloads from scratch on arrival.
+      // redirects to the OIDC return page with `#linked=1&return=<path>`,
+      // which routes back to this page, so the list reloads from scratch on
+      // arrival.
       window.location.assign(authorize_url);
     } catch (err) {
       failWrite(err, setError);
