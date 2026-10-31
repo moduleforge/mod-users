@@ -91,3 +91,11 @@ architectural_impact: false
 - After the setup gate and OIDC config page changes.
 - After the provider modals and `oidc-provider.ts`.
 - After stories, exports and `gui/README.md`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). All validation passed: `make -C gui test` (421 pass), `make -C gui lint`, `make -C gui build`, no `isAdmin` in `gui/src/components/oidc-*.tsx`, `credentials: 'omit'` on every fetch in `oidc-config.ts` and `oidc-provider.ts`.
+
+Affected files: `gui/src/components/bootstrap-page.tsx` (new), `gui/src/components/oidc-provider-policy-fields.tsx` (new), `gui/src/components/oidc-setup-gate.tsx`, `gui/src/components/client-layout.tsx`, `gui/src/components/oidc-config-page.tsx`, `gui/src/components/oidc-provider-add-modal.tsx`, `gui/src/components/oidc-provider-edit-modal.tsx`, `gui/src/lib/oidc-config.ts`, `gui/src/lib/oidc-provider.ts`, `gui/src/lib/api.ts` (two error-code constants), `gui/src/index.ts`, `gui/README.md`, stories (`BootstrapPage`, `OidcConfigPage`) and tests (`bootstrap-page`, `oidc-config-page`, `oidc-setup-gate`).
+
+Notes: the setup token now travels only in `X-Setup-Token` (never echoed into a body); the handlers accept the header on every route. The OIDC routes accept the token only while OIDC is unconfirmed.
