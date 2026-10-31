@@ -236,28 +236,6 @@ items:
           document uuid. A host following the prop docs would send a slug and be refused.
         recommendation:
           Change the prop docs to say uuid (or resolve slug to uuid explicitly if slug is intended).
-    - title: The panel calls api.auth.providers() on ever…
-      id: hcdm
-      date: "2026-10-31"
-      tags:
-        - type:optimization
-        - plan/phase:users-gui-and-frontend-contract
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/components/credentials-panel.tsx
-        lines: 193-203
-        severity: suggestion
-        confidence: medium
-        concerns: efficiency
-        description:
-          The panel calls api.auth.providers() on every mount with no caching, so each
-          visit to the credentials panel (and any login page that also lists providers)
-          re-fetches an essentially static list. Not a regression versus prior code.
-        recommendation:
-          Optionally memoize the providers list at module level in the api client with a
-          short TTL, if the list is fetched from several pages.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2052,4 +2030,9 @@ closed:
         for the term `/v1/self` and name the rewrite "`/v1/self` to `/v1/me`", which is exactly the
         change this item asks for in oidc-setup-gate.tsx and client-layout.tsx; its validation rg
         includes /v1/self over gui/src. Reclassified from bug to documentation (stale comments).
+      date: "2026-10-31"
+    - id: hcdm
+      title: The panel calls api.auth.providers() on ever…
+      disposition: promoted
+      ref: hcdm
       date: "2026-10-31"
