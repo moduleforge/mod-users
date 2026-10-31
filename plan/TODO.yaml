@@ -1647,6 +1647,6 @@ phases:
           findings:
             - RVUM
           git:
-            branch: null
+            branch: plan/identity-model-impl-26-006
             commit: []
             merge: null
