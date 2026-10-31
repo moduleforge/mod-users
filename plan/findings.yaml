@@ -15,8 +15,8 @@ items:
       tags:
         - type:bug
         - plan/phase:doc-updates
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: api/internal/server/server.go corsOptions still lists "X-Step-Up-Token" in AllowedHeaders, although the step-up token header no longer exists (step-up is a session factor now). Remove the entry and update any test that pins the header list.
     - title: Facade lacks input/summary type aliases
       id: iZ3E
