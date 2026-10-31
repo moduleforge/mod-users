@@ -135,6 +135,15 @@ items:
           architecture.md states the HTTP API is defined in api/openapi.yaml and lists the OIDC configuration routes (/v1/oidc-config/status, /confirm, /saved, /providers, /providers/{id}, /setup-token) in the API surface table, but api/openapi.yaml contains no /v1/oidc-config path (it does contain /v1/bootstrap and /v1/audit, and the architecture text notes the audit inclusion explicitly). sessions-and-tokens.md and the spec also point to openapi.yaml as the authoritative route reference. The omission is not stated anywhere.
         recommendation:
           Add a sentence to the OIDC configuration row (or the API layer intro) saying these routes are served by the manifest-mounted handlers but are not described in api/openapi.yaml, or add them to the OpenAPI document.
+    - title: The main.go comment at api/cmd/server/main.go
+      id: AMeC
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-14
+        - priority:unspecified
+        - effort:unspecified
+      text: The main.go comment at api/cmd/server/main.go:232-237 does not mention CORE_FIELD_KEY_HEX or first-boot-only seed semantics. The task did not ask for a code change, so no change was made. If the manager wants that comment to name the env var, file it as a separate task.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
