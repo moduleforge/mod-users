@@ -1,29 +1,5 @@
 version: 2
 items:
-    - title: openVerify calls setVerifyTarget(identifier)…
-      id: Qo20
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:users-gui-and-frontend-contract
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/components/identifiers-panel.tsx
-        lines: 177-203
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          openVerify calls setVerifyTarget(identifier) and then sendCode(identifier) in the same
-          handler. sendCode reads `verifyTarget` from its render-time closure, which is still null on
-          the first open, so a failure to send the code is routed to the page-level banner via setError
-          instead of the open dialog (the code comment says "a failure shows inside the open dialog").
-          The dialog is then shown with no error and the user waits for a code that was never sent.
-        recommendation:
-          Pass an explicit flag/target to sendCode (for example sendCode(identifier, inDialog)) rather
-          than reading verifyTarget state, and add a test for a failing first send.
     - title: The `app` option is documented as an app "sl…
       id: paQk
       date: "2026-10-31"
@@ -2059,4 +2035,12 @@ closed:
         token exists (session.get refreshes through the shared lineage, then logout again),
         and the local-only fallback is documented in comments (gui/src/lib/auth-context.tsx:545-574).
         The remaining impersonation-specific gap in that retry is tracked as Bq75.
+      date: "2026-10-31"
+    - id: Qo20
+      title: openVerify calls setVerifyTarget(identifier)…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 005. sendCode takes an explicit `inDialog` flag
+        (gui/src/components/identifiers-panel.tsx:174, 183-188) and openVerify calls
+        `sendCode(identifier, true)` (line 203), so a first-send failure is shown in the dialog.
       date: "2026-10-31"
