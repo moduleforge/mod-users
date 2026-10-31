@@ -1362,6 +1362,7 @@ phases:
           path: phase-23-remediation-11/001-fix-auth-context-session-lifecycle.md
           done: false
           tier: sonnet-med
+          digest: 'Fixed all three auth-context lifecycle defects: pending user load counts as loading; hydrate keeps tokens and exposes sessionError and retrySession on status 0 and 5xx; logout refreshes once after 401 and retries revoke, with documented local-only fallback. Tests added for each.'
           findings:
             - zwCX
             - oFfM
