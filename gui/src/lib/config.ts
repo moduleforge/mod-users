@@ -398,6 +398,8 @@ function removeTab(key: string): void {
 const refreshKey = (): string => `${getTokenStorageKey()}.refresh`;
 const profileKey = (): string => `${getTokenStorageKey()}.profile`;
 const verifierKey = (): string => `${getTokenStorageKey()}.handoff_verifier`;
+const selectionKey = (): string => `${getTokenStorageKey()}.selection`;
+const selectionReturnKey = (): string => `${getTokenStorageKey()}.selection_return`;
 
 /** Returns this tab's access token, or null when none (or unavailable, e.g. SSR). */
 export function getStoredToken(): string | null {
@@ -436,11 +438,51 @@ export function clearStoredProfileUuid(): void {
   removeTab(profileKey());
 }
 
-/** Clears the whole per-tab session: access token, refresh token, profile. */
+/**
+ * The pending profile-selection state (the serialized profile list a
+ * `selection_required` sign-in answered), or null. Opaque here: config.ts
+ * imports no other lib module, so the owner of the profile type parses it.
+ */
+export function getStoredPendingSelection(): string | null {
+  return readTab(selectionKey());
+}
+
+export function setStoredPendingSelection(serializedProfiles: string): void {
+  writeTab(selectionKey(), serializedProfiles);
+}
+
+/** Removes the pending profile list and its return path together. */
+export function clearStoredPendingSelection(): void {
+  removeTab(selectionKey());
+  removeTab(selectionReturnKey());
+}
+
+/**
+ * The return path to resume at after the pending selection, or null. Stored
+ * raw; readers must still validate it with `isSafeReturnPath` because
+ * sessionStorage is writable by anything running in the page.
+ */
+export function getStoredSelectionReturnPath(): string | null {
+  return readTab(selectionReturnKey());
+}
+
+export function setStoredSelectionReturnPath(path: string): void {
+  writeTab(selectionReturnKey(), path);
+}
+
+/** Removes only the stored selection return path. */
+export function clearStoredSelectionReturnPath(): void {
+  removeTab(selectionReturnKey());
+}
+
+/** Clears the whole per-tab session: access token, refresh token, profile, pending selection. */
 export function clearStoredSession(): void {
   removeTab(getTokenStorageKey());
   removeTab(refreshKey());
   removeTab(profileKey());
+  // A pending selection belongs to the lineage being cleared; leaving it
+  // would resurrect a selection screen for a session that no longer exists.
+  clearStoredPendingSelection();
 }
 
 /** The pending OIDC sign-in attempt's handoff verifier, or null. */

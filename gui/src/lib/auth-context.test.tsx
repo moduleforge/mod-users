@@ -458,6 +458,60 @@ describe('login and profile selection', () => {
     expect(getStoredProfileUuid()).toBe('prof-b');
   });
 
+  test('a reload during selection restores the selection state without calling session.get or signing out', async () => {
+    const first = mount();
+    await settled(first);
+    mockApi({
+      'POST /v1/auth/login': () =>
+        tokenResponse({
+          access_token: null,
+          profile: null,
+          selection_required: true,
+          refresh_token: 'lineage-1',
+          profiles: [PROFILE_A, PROFILE_B],
+        }),
+    });
+    await act(async () => {
+      await first.auth().login('ada@example.test', 'pw');
+    });
+    first.unmount();
+
+    // A fresh provider over the same sessionStorage is a reload of the tab.
+    const calls = mockApi({});
+    const second = mount();
+    await settled(second);
+    expect(second.auth().selectionRequired).toBe(true);
+    expect(second.auth().profiles.map((p) => p.uuid)).toEqual(['prof-a', 'prof-b']);
+    expect(second.auth().token).toBeNull();
+    expect(getStoredRefreshToken()).toBe('lineage-1');
+    expect(calls).toEqual([]);
+  });
+
+  test('doRefresh with a refresh token but no profile uuid surfaces selection-required and keeps the tokens', async () => {
+    const m = mount();
+    await settled(m);
+    mockApi({
+      'POST /v1/auth/login': () =>
+        tokenResponse({
+          access_token: null,
+          profile: null,
+          selection_required: true,
+          refresh_token: 'lineage-1',
+          profiles: [PROFILE_A],
+        }),
+    });
+    await act(async () => {
+      await m.auth().login('ada@example.test', 'pw');
+    });
+    // A stale access token somewhere forces a refresh attempt on a 401.
+    mockApi({ 'GET /v1/session': () => errorReply(401, 'users.unauthenticated') });
+    const err = await api.session.get().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiRequestError);
+    expect((err as ApiRequestError).code).toBe('selection_required');
+    expect(getStoredRefreshToken()).toBe('lineage-1');
+    expect(m.auth().selectionRequired).toBe(true);
+  });
+
   test('selectProfile without a refresh token fails readably and makes no request', async () => {
     const m = mount();
     await settled(m);
