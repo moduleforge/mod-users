@@ -1388,13 +1388,15 @@ phases:
           slug: stop-impersonation-refresh-replay
           title: Stop Refresh-and-Replay of Impersonated Requests as the Administrator
           path: phase-23-remediation-11/003-stop-impersonation-refresh-replay.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: 'Stopped refresh-and-replay of impersonated requests: per-tab impersonation marker; non-revocation 401 on impersonated token clears the dead impersonation token and emits impersonation_ended with no refresh and no replay; End handles impersonation_ended without replaying DELETE and restores the administrator via refresh grant with dedup; reload with expired impersonation token restores the administrator. Tests added in api.test.ts and impersonation-banner.test.tsx.'
           findings:
             - 4EHb
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-23-003
+            commit:
+                - 177f169
             merge: null
         - number: 4
           slug: persist-pending-profile-selection
