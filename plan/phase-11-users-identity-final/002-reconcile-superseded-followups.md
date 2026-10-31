@@ -122,3 +122,11 @@ match outside `plan/`, `docs/consumer-upgrade-notes.md` and tests asserting remo
 3. Map each confirmed item to its resolving task document through `plan/TODO.yaml` and `git log`.
 4. Check `UbXY` and `OlHx` in mod-authz's plan worktree.
 5. Assemble the table, the stated calls and the summary.
+
+## Status
+
+- Outcome: succeeded (read-and-report). No code, docs or followups were changed or mutated; only `followups_list` was called.
+- Date: 2026-10-31.
+- Plan worktree checked: `identity-model-impl` at `605e47b`.
+- Result: 21 of 21 ids present, none already removed. 13 confirmed, 6 not confirmed, 2 manager decision (cross-project). The full table, stated calls and summary are in the dispatch report, not in this document.
+- Affected source files: none.
