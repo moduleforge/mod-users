@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 10
-    tasks_added: 50
+    tasks_added: 51
 phases:
     - number: 6
       slug: users-identity-core
@@ -1286,5 +1286,19 @@ phases:
       slug: remediation-10
       title: Remediation Round 10
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 21
-      tasks: []
+      tasks:
+        - number: 1
+          slug: require-sessionless-system-actor
+          title: Gate System-Actor Contexts That Carry A Session Or Credential
+          path: phase-22-remediation-10/001-require-sessionless-system-actor.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - tpls
+          git:
+            branch: null
+            commit: []
+            merge: null
