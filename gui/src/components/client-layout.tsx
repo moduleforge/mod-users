@@ -54,7 +54,7 @@ export function ClientLayout({
           // On a first-run setup page (OIDC config or bootstrap), render
           // children without an AuthProvider. These pages are intentionally
           // unauthenticated: the operator has no session yet, and the API
-          // would answer `/v1/self` with 503 while OIDC is unconfirmed.
+          // would answer `/v1/me` with 503 while OIDC is unconfirmed.
           <main className="h-screen overflow-y-auto">{children}</main>
         ) : (
           <AuthProvider onNavigate={onNavigate}>

@@ -147,3 +147,9 @@ This task runs before task 002 (`reconcile-superseded-followups`).
 - After rewriting `docs/` and the READMEs.
 - After `AGENTS.md`, `next-steps.md`, `.env.example` and `deploy/`.
 - After the code comments, the manifest comments and the OpenAPI descriptions.
+
+## Status
+
+- Outcome: succeeded (2026-10-31). Matches 158 before, 145 after; all remaining are legitimate (history, removed-symbol lists, tests asserting rejection, stateless request-shape checks, setup-token first user, `oidc_state` HttpOnly cookie, live `corporation` legal_form value) or reported followups.
+- Fixed comments: `api/cmd/server/main.go` (HS256/JWT_ALG, corporation), `api/internal/service/principal_credentials.go` (assume), `api/internal/authz/authz_integration_test.go` (first-user hook), `gui/src/components/{oidc-setup-gate,client-layout}.tsx` (`/v1/self` to `/v1/me`), `gui/src/components/{register-form,reset-password-page}.tsx` (stale `user_accounts.go` path).
+- Validation: `make build`, `make test`, `make lint`, `cd model && make verify` pass. `docs/mf-standards` not scanned (submodule uninitialized).

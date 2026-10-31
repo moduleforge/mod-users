@@ -54,7 +54,7 @@ export function RegisterForm({
     setError(null);
 
     // Mirrors the server-side rule enforced in
-    // api/internal/service/user_accounts.go (len(*in.Password) < 12), which
+    // api/internal/service/credential_service.go (len(in.Password) < passwordMinLength, 12), which
     // counts UTF-8 bytes — not JS UTF-16 code units, which `.length` counts
     // and which can undercount multi-byte characters.
     if (new TextEncoder().encode(password).length < 12) {
