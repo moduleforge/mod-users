@@ -120,6 +120,20 @@ describe('IdentifiersPanel', () => {
     await within(dialog).findByText('That code is wrong or has expired.');
   });
 
+  test('a failing first send on opening the verify dialog shows in the dialog, not the page banner', async () => {
+    await mountPanel({
+      'GET /v1/me/identifiers': () => ({ identifiers: [PRIMARY, SECOND] }),
+      'POST /v1/me/identifiers/id-2/verification': () => errorReply(500, 'internal', 'send failed'),
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Verify ada@work.test' }));
+    const dialog = await screen.findByRole('dialog');
+    // The error renders inside the open dialog...
+    const alert = await within(dialog).findByRole('alert');
+    // ...and nowhere else: the page banner stays empty, so exactly one alert exists.
+    expect(screen.getAllByRole('alert').length).toBe(1);
+    expect(dialog.contains(alert)).toBe(true);
+  });
+
   test('sets the primary address', async () => {
     const verifiedSecond = { ...SECOND, verified: true };
     const m = await mountPanel({

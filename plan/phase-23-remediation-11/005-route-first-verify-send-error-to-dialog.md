@@ -18,3 +18,7 @@ This task addresses finding Qo20. The work targets the plan branch `plan/identit
 ## References
 
 - Finding `Qo20` in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). `sendCode` in `gui/src/components/identifiers-panel.tsx` now takes an explicit `inDialog` flag instead of reading render-time `verifyTarget`; added a test in `gui/src/components/identifiers-panel.test.tsx`. `bun test` (446 pass) and `bun run typecheck` pass.

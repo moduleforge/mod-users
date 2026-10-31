@@ -171,7 +171,7 @@ export function IdentifiersPanel({
     }
   }
 
-  async function sendCode(identifier: IdentifierView): Promise<boolean> {
+  async function sendCode(identifier: IdentifierView, inDialog: boolean): Promise<boolean> {
     setRowBusy(identifier.uuid);
     setError(null);
     try {
@@ -180,8 +180,12 @@ export function IdentifiersPanel({
       return true;
     } catch (err) {
       const message = describeFailure(err, 'identifiers-panel', forward);
-      // The dialog shows its own errors; the page banner covers the row action.
-      if (verifyTarget) setVerifyError(message);
+      // Route by the caller's explicit target, not the render-time verifyTarget
+      // state: openVerify sets verifyTarget and calls this in the same tick, so
+      // this closure still sees null. inDialog=true implies the dialog is (or is
+      // about to be) open and must show the failure; false implies a page-level
+      // row action whose failure belongs in the page banner.
+      if (inDialog) setVerifyError(message);
       else setError(message);
       return false;
     } finally {
@@ -196,7 +200,7 @@ export function IdentifiersPanel({
     setVerifyTarget(identifier);
     // Opening the dialog also emails the code, so the user is never asked for
     // a code that was not sent; a failure shows inside the open dialog.
-    await sendCode(identifier);
+    await sendCode(identifier, true);
   }
 
   async function submitVerify(e: React.FormEvent) {
@@ -430,7 +434,7 @@ export function IdentifiersPanel({
                 type="button"
                 variant="outline"
                 disabled={verifying || cooldown > 0 || rowBusy !== null}
-                onClick={() => verifyTarget && void sendCode(verifyTarget)}
+                onClick={() => verifyTarget && void sendCode(verifyTarget, true)}
               >
                 {cooldown > 0 ? `Resend code (${cooldown}s)` : 'Resend code'}
               </Button>
