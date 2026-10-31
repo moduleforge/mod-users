@@ -44,12 +44,12 @@ beforeEach(() => {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     })) as unknown as typeof fetch;
-  localStorage.setItem('auth_token', 'tok');
+  sessionStorage.setItem('auth_token', 'tok');
 });
 
 afterEach(() => {
   resetUsersApiConfig();
-  localStorage.clear();
+  sessionStorage.clear();
   globalThis.fetch = originalFetch;
   if (realLocationDescriptor) {
     Object.defineProperty(window, 'location', realLocationDescriptor);
@@ -59,7 +59,7 @@ afterEach(() => {
 const client = createUsersClient({ baseUrl: 'http://localhost:8080' });
 
 async function hit(skipAuthRedirect = false): Promise<unknown> {
-  return client.self
+  return client.me
     .get(skipAuthRedirect ? { skipAuthRedirect: true } : undefined)
     .catch((err: unknown) => err);
 }
@@ -69,7 +69,7 @@ describe('default 401 handling', () => {
     const err = await hit();
     expect(err).toBeInstanceOf(ApiRequestError);
     expect((err as ApiRequestError).status).toBe(401);
-    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(sessionStorage.getItem('auth_token')).toBeNull();
     expect(hrefs).toEqual(['/auth/login']);
   });
 
@@ -79,18 +79,18 @@ describe('default 401 handling', () => {
     const err = await hit(true);
     expect(err).toBeInstanceOf(ApiRequestError);
     expect((err as ApiRequestError).status).toBe(401);
-    expect(localStorage.getItem('auth_token')).toBe('tok');
+    expect(sessionStorage.getItem('auth_token')).toBe('tok');
     expect(hrefs).toEqual([]);
     expect(calls).toEqual([]);
   });
 
   test('clears the configured tokenStorageKey', async () => {
     configureUsersApi({ tokenStorageKey: 'custom_key' });
-    localStorage.setItem('custom_key', 'c');
+    sessionStorage.setItem('custom_key', 'c');
     await hit();
     expect(getTokenStorageKey()).toBe('custom_key');
-    expect(localStorage.getItem('custom_key')).toBeNull();
-    expect(localStorage.getItem('auth_token')).toBe('tok');
+    expect(sessionStorage.getItem('custom_key')).toBeNull();
+    expect(sessionStorage.getItem('auth_token')).toBe('tok');
   });
 });
 
@@ -134,7 +134,7 @@ describe('configured redirect', () => {
       unauthenticatedReturnParam: 'return',
     });
     await hit();
-    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(sessionStorage.getItem('auth_token')).toBeNull();
     expect(hrefs).toEqual([]);
   });
 
@@ -169,7 +169,7 @@ describe('onUnauthenticated', () => {
     configureUsersApi({
       unauthenticatedRedirectUrl: '/login',
       onUnauthenticated: (ctx) =>
-        seen.push({ ctx, tokenAtCall: localStorage.getItem('auth_token') }),
+        seen.push({ ctx, tokenAtCall: sessionStorage.getItem('auth_token') }),
     });
     const err = await hit();
     expect(err).toBeInstanceOf(ApiRequestError);
@@ -210,7 +210,7 @@ describe('validation', () => {
         }),
       ).toThrow(TypeError);
       expect(getTokenStorageKey()).toBe('k1');
-      localStorage.setItem('k1', 'x');
+      sessionStorage.setItem('k1', 'x');
       await hit();
       expect(hrefs).toEqual(['/login']);
     });
@@ -268,7 +268,7 @@ describe('throwing onUnauthenticated', () => {
       const err = await hit();
       expect(err instanceof ApiRequestError).toBe(true);
       expect((err as ApiRequestError).status).toBe(401);
-      expect(localStorage.getItem('auth_token')).toBeNull();
+      expect(sessionStorage.getItem('auth_token')).toBeNull();
       expect(errorSpy).toHaveBeenCalled();
       expect(hrefs).toEqual([]);
     } finally {
