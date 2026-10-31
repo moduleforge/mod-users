@@ -22,3 +22,7 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 ## References
 
 - Finding e4f6 in this plan's `plan/findings.yaml`.
+
+## Status
+
+succeeded, 2026-10-31. Edited docs/jwt-eddsa.md "Persisted signing key" section only; all three statements present and consistent with baseline DDL (private_key BYTEA, no encryption). Validation: manual read plus git diff scope check.
