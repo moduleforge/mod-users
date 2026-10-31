@@ -43,7 +43,7 @@ items:
         - type:documentation
         - priority:low
         - plan/phase:doc-updates
-        - effort:unspecified
+        - effort:small
       text: Documentation names the CORE_FIELD_KEY_HEX environment variable but no code in mod-users reads it; it may be consumed by mod-core. Confirm where it is read and either document the owning module or remove the mention. Found by phase 10 task 003 (repository docs review).
     - title: The refusals table lists the redirect error…
       id: cRuN
