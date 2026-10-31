@@ -93,6 +93,13 @@ type LinkOIDCInput = inner.LinkOIDCInput
 // LinkedCredential is the result of CredentialService.LinkOIDCInTx.
 type LinkedCredential = inner.LinkedCredential
 
+// IssueAPIKeyInput is the input of CredentialService's API key issuance.
+type IssueAPIKeyInput = inner.IssueAPIKeyInput
+
+// IssuedAPIKey is the result of issuing an API key: the key record plus the
+// one-time plaintext secret.
+type IssuedAPIKey = inner.IssuedAPIKey
+
 // NewCredentialService constructs a CredentialService. hashPassword is
 // typically auth.HashPassword.
 func NewCredentialService(
@@ -354,6 +361,9 @@ type DirectoryService = inner.DirectoryService
 
 // PrincipalSummary is the display summary of a principal.
 type PrincipalSummary = inner.PrincipalSummary
+
+// ProfileSummary is the display summary of a profile.
+type ProfileSummary = inner.ProfileSummary
 
 // NewDirectoryService constructs a DirectoryService over the pool.
 func NewDirectoryService(pool *pgxpool.Pool) *DirectoryService {
