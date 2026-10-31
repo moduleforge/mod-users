@@ -9,15 +9,6 @@ items:
         - priority:medium
         - effort:small
       text: AGENTS.md (the "Error precedence follows http-error-precedence" bullet) says registrars of authenticated routes mount auth.NewRequireAuth. In the merged code the manifest (moduleforge.module.yaml) lists requireOIDCConfirmed then requireAuth on /v1/session, /v1/impersonations, /v1/me, /v1/principals, /v1/parties and /v1/profiles; the Register* functions in api/handlers/handlers.go document that "the caller applies auth.NewRequireAuth first", and the handlers answer 500 when no auth.Identity is on the context. docs/architecture.md now states the manifest-mounted rule; AGENTS.md should be reworded to match.
-    - title: consumer-upgrade-notes links a removed anchor
-      id: hPqK
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:doc-updates
-        - priority:unspecified
-        - effort:unspecified
-      text: 'docs/consumer-upgrade-notes.md line 34 links docs/jwt-eddsa.md#derived-state-and-step-up-keys, an anchor that no longer exists: that section is now "Derived OAuth state key" (#derived-oauth-state-key) because step-up tokens, JWT_ALG, HS256, auth.StepUpKey and the auth_jwt_secrets table are gone. The whole "EdDSA verify-only key" and "Token hardening" sections of consumer-upgrade-notes.md still describe JWT_ALG, HS256, step-up tokens and WithHS256Secret and need rewriting against docs/jwt-eddsa.md and docs/architecture/sessions-and-tokens.md. The D14 to D19 pointer in its intro should also be re-checked against the rewritten key decisions in docs/architecture.md.'
     - title: Stale X-Step-Up-Token in CORS headers
       id: ndUS
       date: "2026-10-31"
@@ -2153,4 +2144,16 @@ closed:
       title: The impersonation_ended event starts restore…
       disposition: promoted
       ref: D3Q9
+      date: "2026-10-31"
+    - id: hPqK
+      title: consumer-upgrade-notes links a removed anchor
+      disposition: dismissed
+      reason: |-
+        Already fixed (task 002 repaired it). docs/consumer-upgrade-notes.md:31 now links
+        ./jwt-eddsa.md#derived-oauth-state-key, which matches the heading "## Derived OAuth state key"
+        at docs/jwt-eddsa.md:145. No link to #derived-state-and-step-up-keys remains in the file.
+        The "EdDSA verify-only key" and "Token hardening" sections were rewritten. :11 says HS256
+        and JWT_ALG are removed, :24 says WithHS256Secret is removed, :27 says auth.StepUpKey is
+        removed, and :38 says the step-up token is removed. The intro pointer at :5 now reads
+        "D14 to D31".
       date: "2026-10-31"
