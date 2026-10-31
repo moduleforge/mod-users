@@ -477,17 +477,46 @@ export function clearStoredSelectionReturnPath(): void {
 }
 
 /**
+ * Reads the `act` (actor) claim presence from a JWT access token WITHOUT
+ * verifying it. Returns true/false when the payload decodes, and null when the
+ * token is not a decodable JWT (opaque or malformed). Used only for the
+ * routing decision "may this request be refreshed and replayed", never for
+ * authorization: the server verifies every token.
+ */
+export function tokenActClaim(token: string | null): boolean | null {
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1]!.replace(/-/g, '+').replace(/_/g, '/');
+    const payload: unknown = JSON.parse(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)));
+    if (typeof payload !== 'object' || payload === null) return null;
+    const act = (payload as Record<string, unknown>)['act'];
+    return act !== undefined && act !== null;
+  } catch {
+    // WHY: a payload that will not decode says nothing about the identity.
+    // IMPLIES callers fall back to the marker rather than assuming "not impersonating".
+    return null;
+  }
+}
+
+/**
  * True when the access token this tab holds is an impersonation token. The
  * tab's refresh token and profile stay the administrator's own while it
  * impersonates, so nothing else in storage tells a request which identity its
  * token carries. The request pipeline reads this to refuse refresh-and-replay
  * of an impersonated request (the replay would run as the administrator).
- * An absent marker reads as "not impersonating", which is the pre-marker
- * behavior; sessionStorage is writable by any script in the page, but such a
- * script already holds the token itself.
+ *
+ * Fails closed: the answer is true when EITHER the per-tab marker is set OR
+ * the stored token itself carries an `act` claim (decoded, not verified), so a
+ * lost or never-written marker cannot turn an impersonation token into one
+ * that is refreshed and replayed as the administrator. Only an opaque token
+ * with no marker reads as "not impersonating"; sessionStorage is writable by
+ * any script in the page, but such a script already holds the token itself.
  */
 export function getStoredImpersonating(): boolean {
-  return readTab(impersonatingKey()) === '1';
+  if (readTab(impersonatingKey()) === '1') return true;
+  return tokenActClaim(getStoredToken()) === true;
 }
 
 /** Records whether this tab's access token is an impersonation token. */

@@ -33,6 +33,7 @@ import {
   setStoredProfileUuid,
   setStoredRefreshToken,
   setStoredToken,
+  tokenActClaim,
 } from './config';
 import { beginHandoff } from './handoff';
 
@@ -1148,7 +1149,17 @@ async function execute<T>(
         // The step-up calls store their own token; storing again covers a
         // handler that obtained the token another way, and is a no-op
         // otherwise.
-        if (fresh !== getStoredToken()) setStoredToken(fresh);
+        if (fresh !== getStoredToken()) {
+          const wasImpersonating = getStoredImpersonating();
+          setStoredToken(fresh);
+          // WHY: the marker describes the stored token, and a handler-supplied
+          // token can be a different identity than the one it replaces.
+          // IMPLIES a decodable token decides the marker by its `act` claim;
+          // an undecodable one keeps the prior answer (fail closed), so a
+          // step-up during an impersonation never un-marks it.
+          const actClaim = tokenActClaim(fresh);
+          setStoredImpersonating(actClaim ?? wasImpersonating);
+        }
         return execute<T>(
           resolveBaseUrl,
           path,

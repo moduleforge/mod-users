@@ -21,3 +21,7 @@ This task addresses finding `vAo0`. The work targets the plan branch `plan/ident
 ## References
 
 - Finding `vAo0` in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). `getStoredImpersonating` in `gui/src/lib/config.ts` now fails closed (marker OR unverified `act` claim on the stored token, via new `tokenActClaim`). The step-up replay in `gui/src/lib/api.ts` keeps the marker consistent with the stored token. Tests added in `gui/src/lib/api.test.ts`. `bun test` (449 pass), `bun run typecheck`, `make build.gui`, `make lint.gui` pass.

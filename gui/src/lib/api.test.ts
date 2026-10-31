@@ -795,6 +795,33 @@ describe('impersonated requests are never replayed as the administrator', () => 
     expect(calls.map((c) => c.method)).toEqual(['PUT', 'POST', 'PUT']);
   });
 
+  test('an impersonation token with no marker is detected by its act claim: no refresh, no replay', async () => {
+    const payload = btoa(JSON.stringify({ sub: 'prof-target', act: { sub: 'prof-admin' } }))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    const actToken = `h.${payload}.s`;
+    seedTab(actToken, 'admin-refresh', 'prof-admin');
+    setStoredImpersonating(false);
+    const calls = scriptFetch(() => json(errorBody('unauthenticated'), 401));
+    const err = (await client.me.update({}).catch((e: unknown) => e)) as ApiRequestError;
+    expect(calls).toHaveLength(1);
+    expect(err.code).toBe('users.impersonation_ended');
+  });
+
+  test('a step-up token stored during an impersonation keeps the tab marked, so a later 401 is not replayed', async () => {
+    await impersonatingTab();
+    scriptFetch(() => json({ action: { code: 'users.step_up_required', message: 'Step up.', path: '/account' } }, 409));
+    setStepUpHandler(async () => 'fresh-imp-access');
+    await client.me.update({}).catch(() => {});
+    expect(getStoredToken()).toBe('fresh-imp-access');
+    expect(getStoredImpersonating()).toBe(true);
+    const calls = scriptFetch(() => json(errorBody('unauthenticated'), 401));
+    const err = (await client.me.update({}).catch((e: unknown) => e)) as ApiRequestError;
+    expect(calls).toHaveLength(1);
+    expect(err.code).toBe('users.impersonation_ended');
+  });
+
   test('a reload that finds an impersonation session marks the tab, so its 401 is not replayed', async () => {
     seedTab('imp-access', 'admin-refresh', 'prof-admin');
     scriptFetch(() =>
