@@ -269,6 +269,10 @@ export function AuthProvider({
   const handoffsRef = useRef(new Map<string, Promise<TokenResponse>>());
   // In-flight user loads; the loading flag stays up until the last settles.
   const userLoadsRef = useRef(0);
+  // The in-flight administrator restore after an impersonation ended; shared
+  // so the event reaction and a concurrent hydrate do not each spend the
+  // refresh token.
+  const restoreRef = useRef<Promise<void> | null>(null);
 
   /**
    * Loads `GET /v1/me`. An action-required answer navigates (the session
@@ -302,9 +306,44 @@ export function AuthProvider({
     }
   }, []);
 
+  /**
+   * Restores the administrator session after the request layer dropped a dead
+   * impersonation token. The tab holds the administrator's refresh lineage but
+   * no access token, so `session.get` repairs it through the refresh grant;
+   * the committed token response reaches state through the event subscription.
+   * Never rejects: a dead lineage was already signed out by the pipeline, and
+   * a transient failure leaves the tokens for the next call to retry.
+   */
+  const restoreAdministrator = useCallback((): Promise<void> => {
+    if (restoreRef.current) return restoreRef.current;
+    const pending = api.session
+      .get()
+      .then(() => undefined)
+      .catch((err: unknown) => {
+        if (!(err instanceof ApiRequestError && err.status === 401)) {
+          console.error('[auth] could not restore the administrator session', err);
+        }
+      })
+      .finally(() => {
+        restoreRef.current = null;
+      });
+    restoreRef.current = pending;
+    return pending;
+  }, []);
+
   // Mirror tab-session events (token commits, sign-outs, locks) into state.
   useEffect(() => {
     return subscribeSessionEvents((event: SessionEvent) => {
+      if (event.type === 'impersonation_ended') {
+        // The impersonation token is gone and no replay happened. The
+        // displayed token is stale, so clear it; the snapshot is left until
+        // the restored administrator session replaces it, so the UI never
+        // shows the impersonated profile's data under the administrator's
+        // identity. This IMPLIES the banner stays until the restore commits.
+        setToken(null);
+        void restoreAdministrator();
+        return;
+      }
       if (event.type === 'token_response') {
         const next = snapshotOf(event.response);
         setSnapshot(next);
@@ -350,7 +389,7 @@ export function AuthProvider({
         });
       }
     });
-  }, [loadUser]);
+  }, [loadUser, restoreAdministrator]);
 
   // Offer this tab's access token to sibling tabs that start with none. An
   // impersonation is not offered: the server refuses to fork it.
@@ -403,6 +442,16 @@ export function AuthProvider({
           if (!isCurrentPath(err.path)) navigateRef.current(err.path);
         } else if (
           err instanceof ApiRequestError &&
+          err.code === USERS_ERROR_CODES.impersonationEnded
+        ) {
+          // The stored impersonation token had expired across the reload. The
+          // pipeline dropped it without replaying; the administrator's
+          // lineage is intact, so restore it instead of treating the tab as
+          // unusable (the generic branch below would wipe that lineage).
+          await restoreAdministrator();
+          setToken(getStoredToken());
+        } else if (
+          err instanceof ApiRequestError &&
           err.code === USERS_ERROR_CODES.profileUnavailable
         ) {
           // The lock event already populated `profileLock`; the tokens stay
@@ -434,7 +483,7 @@ export function AuthProvider({
       // state through the event subscription above.
       await forkFromSibling();
     }
-  }, [loadUser]);
+  }, [loadUser, restoreAdministrator]);
 
   // Establish the tab's session once on mount.
   useEffect(() => {
