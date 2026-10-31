@@ -118,7 +118,7 @@ type ResolverQuerier interface {
 // table:
 //
 //	known active oidc credential (issuer, subject), same provider -> ActionLogin
-//	known credential recorded for a different provider    -> refuse auth_failed
+//	known credential recorded for a different provider    -> refuse authentication_failed
 //	unknown, email matches an existing identifier         -> refuse account_exists_sign_in_and_link
 //	unknown, jit_mode none                                -> refuse no_account
 //	unknown, jit_mode byo, no email                       -> refuse missing_email

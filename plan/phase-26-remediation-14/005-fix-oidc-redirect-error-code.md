@@ -21,3 +21,11 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 ## References
 
 - Finding cRuN in this plan's `plan/findings.yaml`.
+
+## Status
+
+- Outcome: succeeded
+- Date: 2026-10-31
+- Validation: check 1 (grep for `auth_failed`) passed with zero matches in both files; check 2 (`go vet ./internal/auth/...` in `api/`) passed, log at `.flow/validation-logs/02-go-vet-internal-auth.log`.
+- Affected source files: `docs/oidc-troubleshooting.md`, `api/internal/auth/resolver.go` (comment only).
+- Assumptions applied: none recorded in this task doc.
