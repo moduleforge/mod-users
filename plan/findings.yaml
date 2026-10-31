@@ -36,15 +36,6 @@ items:
         - priority:medium
         - effort:medium
       text: 'mod-core''s NaturalPersonService.CreateInTx and OrganizationService.CreateInTx document that the caller dispatches ObserveAfterCommit (create, <resource>, entity id) after the transaction commits. mod-users never does: api/internal/service/user_service.go (np.CreateInTx near line 187), api/internal/service/user_self_service.go (np.CreateInTx near line 578) and api/internal/service/bootstrap_service.go (createOrganization via OrganizationService.CreateInTx) all rely on the in-transaction observation only, so post-commit observers (anything subscribed via ObserverGroup.ObserveAfterCommit) never see the natural_person or organization creation. Needs a design decision on how the committing public methods (Bootstrap, user registration and self-service flows) carry the entity id out of their InTx bodies and dispatch after commit.'
-    - title: Manifest change in moduleforge.module.yaml (b
-      id: 7sEV
-      date: "2026-10-30"
-      tags:
-        - type:bug
-        - plan/phase:adopt-core-engine-remediation
-        - priority:medium
-        - effort:small
-      text: Manifest change in moduleforge.module.yaml (bootstrapOrganizationService, coreServices in requires) is untested because mfgen was not run; manager to verify.
     - title: Agent used python3 once for a multi-edit patc
       id: QHzM
       date: "2026-10-30"
@@ -2149,4 +2140,9 @@ closed:
       title: 'needs-sibling: mod-core organizationService'
       disposition: promoted
       ref: wyTd
+      date: "2026-10-31"
+    - id: 7sEV
+      title: Manifest change in moduleforge.module.yaml (b
+      disposition: promoted
+      ref: 7sEV
       date: "2026-10-31"
