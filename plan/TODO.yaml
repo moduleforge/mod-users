@@ -1318,7 +1318,7 @@ phases:
             branch: plan/identity-model-impl-22-002
             commit:
                 - 260aa65
-            merge: null
+            merge: 9f70bf3d54751adbdb3d59fc1ab3bcb3ae22b0fd
         - number: 3
           slug: dispatch-after-commit-observations
           title: Dispatch After-Commit Observations For CreateInTx Creations
