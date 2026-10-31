@@ -99,15 +99,6 @@ items:
           A concrete 32-byte hex field-encryption seed is committed. Because it is a first-boot seed, a deployment copying .env.example verbatim would encrypt SSN/EIN fields under a publicly known key. The new comment explains rotation but does not say the value is dev-only.
         recommendation:
           Add "development only; generate a fresh value for any shared or production environment" to the block.
-    - title: Verified accurate against model/migrations/s…
-      id: NqKT
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - plan/phase:remediation-14
-        - priority:low
-        - effort:small
-      text: 'Evaluator proposed dismissing as moot: verification note, no inaccuracy found in docs/jwt-eddsa.md persisted-key section. Optional enhancement: log a startup warning when the persisted signing key is used outside local mode. A type:security dismiss is never auto-applied and internal escalation is off, so the question surfaces. Recommended: dismiss, or keep only as an enhancement idea.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2238,4 +2229,9 @@ closed:
       title: 'Confirmed: the comment does not name CORE_FI…'
       disposition: promoted
       ref: UuyR
+      date: "2026-10-31"
+    - id: NqKT
+      title: Verified accurate against model/migrations/s…
+      disposition: promoted
+      ref: NqKT
       date: "2026-10-31"
