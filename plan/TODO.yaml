@@ -1507,7 +1507,7 @@ phases:
           slug: harden-logout-while-impersonating
           title: Revoke the Administrator Session on Every Impersonated Logout and Guard Late State Commits
           path: phase-25-remediation-13/001-harden-logout-while-impersonating.md
-          done: false
+          done: true
           tier: sonnet-med
           findings:
             - H5Po
