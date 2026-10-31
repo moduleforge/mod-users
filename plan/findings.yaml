@@ -160,15 +160,6 @@ items:
           Verified accurate against model/migrations/sql/0100_baseline.sql:1092 (private_key BYTEA, PKCS#8 DER, no encryption). The text says production "should" set JWT_SIGNING_KEY, which is sound, though the persisted key is still used silently when JWT_SIGNING_KEY is unset in any deploy mode. No inaccuracy found.
         recommendation:
           None required; optionally log a startup warning when the persisted key is used outside local mode.
-    - title: api/server/CLAUDE.md unreachable from README
-      id: AQhb
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-14
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Reachability check (agent-authored data): api/server/CLAUDE.md is not reachable from README.md via the link chain. Severity minor. Recommendation: link it from a reachable doc or confirm it is intentionally an agent-only file.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2277,4 +2268,16 @@ closed:
         api/internal/server/server.go AllowedHeaders, with the same cross-origin
         preflight failure for the bootstrap and oidc-config routes. gz8M is
         dispositioned fix, and its spec adds the header.
+      date: "2026-10-31"
+    - id: AQhb
+      title: api/server/CLAUDE.md unreachable from README
+      disposition: dismissed
+      reason: |-
+        Duplicate of open project-backlog items DPZi ("Orphan:
+        api/server/CLAUDE.md is not reachable", plan users-security-hardening)
+        and oti2 ("Orphan docs: k8s/serverless/CLAUDE stubs"). Both are still
+        open in plan/followups.yaml and report the same unreachable file.
+        api/server/CLAUDE.md is a pre-existing 2-line empty claude-mem-context
+        stub that is unrelated to the identity-model goals. Promoting it would
+        add a third copy to the backlog.
       date: "2026-10-31"
