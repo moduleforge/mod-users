@@ -36,6 +36,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'api/usersservice/service.go exports CredentialService, DirectoryService and PrincipalSummary but no aliases for inner.IssueAPIKeyInput, inner.IssuedAPIKey (arguments and result of CredentialService.IssueAPIKeyInTx) or inner.ProfileSummary (value of DirectoryService.ProfileSummaries). A module outside api/ cannot name these types, so a caller such as app-mfmanager cannot build the IssueAPIKeyInTx input. Add the three aliases to the facade (AGENTS.md convention: re-export every type a public method takes or returns).'
+    - title: CORS AllowCredentials on Bearer-only API
+      id: x3It
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - priority:low
+        - plan/phase:doc-updates
+        - effort:unspecified
+      text: api/internal/server/server.go line 88 sets CORS AllowCredentials although the API is Bearer-only (every call sends credentials:'omit' except the two OIDC start POSTs, which need the oidc_state cookie). Decide whether AllowCredentials should be limited to the two OIDC start routes or dropped. Found by phase 10 task 003 (repository docs review); a design decision, not fixed there.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
