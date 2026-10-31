@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Fix corporation wording in authz_test comment
-      id: VtaW
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:users-identity-final
-        - priority:low
-        - effort:small
-      text: Fix corporation wording in authz_test comment (type:documentation). api/internal/authz/authz_test.go:308 says NULL owner_id (corporation, authz_actor_group, authz_target_group by design). Confirm which entity types have NULL owner_id and reword with organization if applicable. Not confirmed from code, so unedited.
     - title: Scan docs/mf-standards for old identity terms
       id: 4HXk
       date: "2026-10-31"
@@ -2224,4 +2215,9 @@ closed:
       title: Update /v1/self paths in oidc_config_test (ty
       disposition: promoted
       ref: 7eEW
+      date: "2026-10-31"
+    - id: VtaW
+      title: Fix corporation wording in authz_test comment
+      disposition: promoted
+      ref: VtaW
       date: "2026-10-31"
