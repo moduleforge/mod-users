@@ -1491,5 +1491,6 @@ phases:
             - Bq75
           git:
             branch: plan/identity-model-impl-24-003
-            commit: []
+            commit:
+                - d4a2648
             merge: null
