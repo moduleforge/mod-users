@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: PROPOSED CROSS-PROJECT REMOVALS (no resolved_
-      id: usDr
-      date: "2026-10-31"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-final
-        - priority:low
-        - effort:small
-      text: 'PROPOSED CROSS-PROJECT REMOVALS (no resolved_by; manager decision): UbXY closed in mod-authz by plan/phase-16-authz-identity-final/002-recheck-stand-in-against-merged-engine.md (f2df0cc); OlHx closed in mod-authz (0505_grants.sql:166, TestSchemaInvariants_GrantAnonymousActor).'
     - title: PROPOSED PATCHES, manager decision only if re
       id: A5PF
       date: "2026-10-31"
@@ -2212,4 +2203,9 @@ closed:
       title: PROPOSED REMOVALS for manager to apply after
       disposition: promoted
       ref: 1JCd
+      date: "2026-10-31"
+    - id: usDr
+      title: PROPOSED CROSS-PROJECT REMOVALS (no resolved_
+      disposition: promoted
+      ref: usDr
       date: "2026-10-31"
