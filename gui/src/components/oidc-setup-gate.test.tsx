@@ -166,7 +166,9 @@ describe('ClientLayout (composes OidcSetupGate)', () => {
     const { container } = renderLayout('/dashboard');
     const body = await screen.findByText('page body');
     expect(body.closest('main')!.className).toBe('flex-1 overflow-y-auto');
-    expect(container.firstElementChild!.className).toBe('flex h-screen overflow-hidden');
+    // The banner sits above the sidebar/main row, so the outer box is a column.
+    expect(container.firstElementChild!.className).toBe('flex h-screen flex-col overflow-hidden');
+    expect(body.closest('main')!.parentElement!.className).toBe('flex min-h-0 flex-1 overflow-hidden');
     expect(container.querySelector('aside nav')).not.toBeNull();
   });
 });

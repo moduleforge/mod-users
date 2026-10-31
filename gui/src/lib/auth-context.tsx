@@ -84,6 +84,14 @@ export interface AuthContextValue {
   profileLock: ProfileLockState | null;
   /** True while this tab's session is an impersonation. */
   impersonating: boolean;
+  /**
+   * Epoch milliseconds at which this tab's access token expires, taken from
+   * the last committed token response's `expires_in`; null when unknown
+   * (signed out, or the tab was reloaded and no token response has arrived
+   * since). An impersonation ends at its token's expiry unless renewed, so
+   * the impersonation banner counts down to this.
+   */
+  accessTokenExpiresAt: number | null;
   login: (
     email: string,
     password: string,
@@ -202,6 +210,9 @@ export function AuthProvider({
   const [snapshot, setSnapshot] = useState<AuthSnapshot>(SIGNED_OUT);
   const [user, setUser] = useState<UserView | null>(null);
   const [profileLock, setProfileLock] = useState<ProfileLockState | null>(null);
+  const [accessTokenExpiresAt, setAccessTokenExpiresAt] = useState<
+    number | null
+  >(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Refs let the long-lived event subscription read current values without
@@ -244,6 +255,13 @@ export function AuthProvider({
         setToken(getStoredToken());
         // A committed response means the acting profile is usable again.
         setProfileLock(null);
+        // A token response without an access token (selection required) has
+        // no expiry to track; otherwise the deadline is now plus the lifetime.
+        setAccessTokenExpiresAt(
+          event.response.access_token
+            ? Date.now() + event.response.expires_in * 1000
+            : null,
+        );
         const sessionUuid = event.response.session?.uuid ?? null;
         if (sessionUuid !== userSessionRef.current) {
           // A different session (sign-in, impersonation start or end) can
@@ -261,6 +279,8 @@ export function AuthProvider({
         setToken(null);
         setUser(null);
         setProfileLock(null);
+        // No token left, so no deadline.
+        setAccessTokenExpiresAt(null);
       } else {
         // profile_unavailable: the remedy lives on the profile list entry,
         // which the lock response itself does not carry.
@@ -375,6 +395,7 @@ export function AuthProvider({
     setToken(null);
     setUser(null);
     setProfileLock(null);
+    setAccessTokenExpiresAt(null);
     navigateRef.current(resolvedLoginPath);
   }, [resolvedLoginPath]);
 
@@ -469,6 +490,7 @@ export function AuthProvider({
       selectionRequired: snapshot.selectionRequired,
       profileLock,
       impersonating: snapshot.session?.impersonating ?? false,
+      accessTokenExpiresAt,
       login,
       register,
       logout,
@@ -484,6 +506,7 @@ export function AuthProvider({
       user,
       isLoading,
       profileLock,
+      accessTokenExpiresAt,
       login,
       register,
       logout,

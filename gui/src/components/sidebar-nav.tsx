@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   LogIn,
   LogOut,
+  Mail,
   Settings,
   User,
   Users,
@@ -13,39 +14,41 @@ import {
 import { cn } from '../lib/utils';
 import { useAuth } from '../lib/auth-context';
 import { Button } from '@moduleforge/core-gui';
+import { ProfileSwitcher } from './profile-switcher';
+import { USERS_GUI_ROUTES } from '../lib/routes';
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
-  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
   { label: 'Profile', href: '/profile', icon: <User className="size-4" /> },
   {
+    label: 'Invitations',
+    href: USERS_GUI_ROUTES.invitations,
+    icon: <Mail className="size-4" />,
+  },
+  {
     label: 'Users',
     href: '/admin/user-accounts',
     icon: <Users className="size-4" />,
-    adminOnly: true,
   },
   {
     label: 'Audit',
     href: '/admin/audit',
     icon: <ClipboardList className="size-4" />,
-    adminOnly: true,
   },
   {
     label: 'Apps',
     href: '/admin/apps',
     icon: <LayoutGrid className="size-4" />,
-    adminOnly: true,
   },
   {
     label: 'OIDC Settings',
     href: '/oidc-config',
     icon: <Settings className="size-4" />,
-    adminOnly: true,
   },
 ];
 
@@ -69,7 +72,7 @@ export interface SidebarNavProps {
 }
 
 export function SidebarNav({ currentPath, LinkComponent }: SidebarNavProps) {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <aside className="flex h-full w-56 flex-col border-r bg-sidebar">
@@ -98,9 +101,9 @@ export function SidebarNav({ currentPath, LinkComponent }: SidebarNavProps) {
           </LinkComponent>
         )}
 
-        {navItems
-          .filter((item) => !item.adminOnly || isAdmin)
-          .map((item) => (
+        {/* No client-side admin filter: authority is enforced by the server's
+            403 on the admin pages, so every signed-in user sees the links. */}
+        {navItems.map((item) => (
             <LinkComponent
               key={item.href}
               href={item.href}
@@ -116,6 +119,13 @@ export function SidebarNav({ currentPath, LinkComponent }: SidebarNavProps) {
             </LinkComponent>
           ))}
       </nav>
+
+      {/* Profiles only exist for a signed-in session. */}
+      {user && (
+        <div className="border-t p-2">
+          <ProfileSwitcher />
+        </div>
+      )}
 
       {user && (
         <div className="border-t p-2">

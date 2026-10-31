@@ -90,3 +90,11 @@ architectural_impact: false
 - After the selection page and invitations view.
 - After the impersonation banner and the layout/nav/guard updates.
 - After stories, exports and `gui/README.md`.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Validation: `make -C gui test` 316 pass, 40 fail (the same 40 fail on the untouched base, all in `oidc-config-page`, `ssh-keys-panel`, `verify-email-page`, `credential-401` tests owned by tasks 003 to 005); `make -C gui lint` (tsc) and `make -C gui build` report errors only in `credential-401.test.tsx`, `email-code-page.tsx`, `oidc-callback-page.tsx`, `oidc-config-page.tsx`, `ssh-keys-panel(.test).tsx`, `verify-email-page.tsx`, `stories/SSHKeysPanel.stories.tsx`; the `isAdmin` grep returns nothing; `bun run preview:build` (Ladle) succeeds.
+- New: `gui/src/components/{profile-switcher,profile-remedy,profile-lock-notice,select-profile-page,invitations-view,impersonation-banner}.tsx`, `gui/src/lib/profile-lock.ts`, tests, stories, `gui/src/test-support/chrome-harness.tsx`.
+- Changed: `sidebar-nav.tsx`, `require-auth.tsx`, `client-layout.tsx`, `index.ts`, `gui/README.md`, `lib/auth-context.tsx` (additive `accessTokenExpiresAt`, for the banner countdown), `oidc-setup-gate.test.tsx` (ClientLayout class assertion).
+- `RequireAuth` public props changed: `requireAdmin` and `onUnauthorized` removed, `onSelectionRequired` added (recorded in `gui/README.md`).

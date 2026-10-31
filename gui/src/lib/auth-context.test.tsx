@@ -784,3 +784,27 @@ describe('hooks', () => {
     }
   });
 });
+
+describe('accessTokenExpiresAt', () => {
+  test('is unknown after a reload and set from expires_in by the next token response', async () => {
+    seedTab();
+    mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/session/switch': () =>
+        tokenResponse({ access_token: 'switched', refresh_token: null, expires_in: 120, profile: PROFILE_B }),
+    });
+    const m = mount();
+    await settled(m);
+    // Hydration reads no token response, so no deadline is known.
+    expect(m.auth().accessTokenExpiresAt).toBeNull();
+    const before = Date.now();
+    await act(async () => {
+      await m.auth().switchProfile('prof-b');
+    });
+    const expiresAt = m.auth().accessTokenExpiresAt;
+    expect(expiresAt).not.toBeNull();
+    expect(expiresAt!).toBeGreaterThanOrEqual(before + 120_000);
+    expect(expiresAt!).toBeLessThan(Date.now() + 121_000);
+  });
+});
