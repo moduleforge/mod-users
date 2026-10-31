@@ -743,3 +743,7 @@ args `context`, `field:cfg.LocalAuth`), `authenticator` (`auth.NewAuthenticator`
   and calls `ObserveAfterCommit` after commit at every call site (phase 22 task 003, finding 06rd).
   A sessionless context counts as a system actor only when it carries the explicit marker
   (`opctx.WithSystemActor`) and no session or credential (phase 22 task 001, finding tpls).
+
+## Amendment (2026-10-31, phase 9 gate): section 12, OIDC start credentials mode (finding jRXp)
+
+The two OIDC start POSTs, `/v1/me/credentials/oidc/{provider}/start` and `/v1/session/step-up/oidc/{provider}/start`, keep the `oidc_state` cookie and are sent with `credentials: 'include'`. This is a documented exception to the frontend contract's `credentials: 'omit'` rule; every other call stays `omit`. The API does not change. See decisions-and-resolutions.md, Amendments (2026-10-31, phase 9 gate). The exception is stated in `gui/README.md` by the phase 10 documentation tasks.
