@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { jwtFixture } from '../test-support/jwt';
 import { ApiRequestError, createUsersClient } from './api';
 import {
   configureUsersApi,
@@ -44,7 +45,7 @@ beforeEach(() => {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     })) as unknown as typeof fetch;
-  sessionStorage.setItem('auth_token', 'tok');
+  sessionStorage.setItem('auth_token', jwtFixture('tok'));
 });
 
 afterEach(() => {
@@ -79,18 +80,18 @@ describe('default 401 handling', () => {
     const err = await hit(true);
     expect(err).toBeInstanceOf(ApiRequestError);
     expect((err as ApiRequestError).status).toBe(401);
-    expect(sessionStorage.getItem('auth_token')).toBe('tok');
+    expect(sessionStorage.getItem('auth_token')).toBe(jwtFixture('tok'));
     expect(hrefs).toEqual([]);
     expect(calls).toEqual([]);
   });
 
   test('clears the configured tokenStorageKey', async () => {
     configureUsersApi({ tokenStorageKey: 'custom_key' });
-    sessionStorage.setItem('custom_key', 'c');
+    sessionStorage.setItem('custom_key', jwtFixture('c'));
     await hit();
     expect(getTokenStorageKey()).toBe('custom_key');
     expect(sessionStorage.getItem('custom_key')).toBeNull();
-    expect(sessionStorage.getItem('auth_token')).toBe('tok');
+    expect(sessionStorage.getItem('auth_token')).toBe(jwtFixture('tok'));
   });
 });
 
@@ -229,7 +230,7 @@ describe('validation', () => {
         }),
       ).toThrow(TypeError);
       expect(getTokenStorageKey()).toBe('k1');
-      sessionStorage.setItem('k1', 'x');
+      sessionStorage.setItem('k1', jwtFixture('x'));
       await hit();
       expect(hrefs).toEqual(['/login']);
     });

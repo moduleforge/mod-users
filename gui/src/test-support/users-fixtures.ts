@@ -1,6 +1,7 @@
 // Shared fixtures for the lib tests: token responses and profile views shaped
 // like the final API's `TokenResponse` / `ProfileView`.
 
+import { jwtFixture } from './jwt';
 import type { ProfileView, TokenResponse } from '../lib/api';
 
 export const PROFILE_A: ProfileView = {
@@ -25,7 +26,7 @@ export const PROFILE_B: ProfileView = {
 
 export function tokenResponse(overrides: Partial<TokenResponse> = {}): TokenResponse {
   return {
-    access_token: 'access-1',
+    access_token: jwtFixture('access-1'),
     token_type: 'Bearer',
     expires_in: 3600,
     refresh_token: 'refresh-1',

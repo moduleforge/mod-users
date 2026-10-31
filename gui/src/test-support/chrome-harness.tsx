@@ -2,6 +2,7 @@
 // and a signed-in `AuthProvider` mount over the real API client, so the
 // components are exercised end to end (request out, token response in).
 
+import { jwtFixture } from './jwt';
 import { waitFor } from '@testing-library/react';
 import { render } from '@testing-library/react';
 import React from 'react';
@@ -94,7 +95,7 @@ export async function mountSignedIn(
   ui: React.ReactNode,
   options: SignedInOptions,
 ): Promise<Mounted> {
-  setStoredToken('old-access');
+  setStoredToken(jwtFixture('old-access'));
   setStoredRefreshToken('old-refresh');
   setStoredProfileUuid('prof-a');
   const base = tokenResponse();

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { jwtFixture } from '../test-support/jwt';
 import { act, render, waitFor } from '@testing-library/react';
 import React from 'react';
 import {
@@ -142,7 +143,7 @@ async function settled(m: Mounted): Promise<void> {
   await waitFor(() => expect(m.auth().isLoading).toBe(false));
 }
 
-function seedTab(access: string | null = 'old-access'): void {
+function seedTab(access: string | null = jwtFixture('old-access')): void {
   if (access) setStoredToken(access);
   setStoredRefreshToken('old-refresh');
   setStoredProfileUuid('prof-a');
@@ -169,7 +170,7 @@ describe('mount', () => {
     });
     const m = mount();
     await settled(m);
-    expect(m.auth().token).toBe('old-access');
+    expect(m.auth().token).toBe(jwtFixture('old-access'));
     expect(m.auth().profile?.uuid).toBe('prof-a');
     expect(m.auth().profiles.map((p) => p.uuid)).toEqual(['prof-a', 'prof-b']);
     expect(m.auth().session?.uuid).toBe('sess-1');
@@ -177,7 +178,7 @@ describe('mount', () => {
     expect(m.auth().emailVerified).toBe(true);
     expect(m.auth().impersonating).toBe(false);
     for (const call of calls) {
-      expect(call.authorization).toBe('Bearer old-access');
+      expect(call.authorization).toBe(`Bearer ${jwtFixture('old-access')}`);
       expect(call.credentials).toBe('omit');
     }
   });
@@ -186,15 +187,15 @@ describe('mount', () => {
     seedTab('expired');
     const calls = mockApi({
       'GET /v1/session': (call) =>
-        call.authorization === 'Bearer access-2'
+        call.authorization === `Bearer ${jwtFixture('access-2')}`
           ? SESSION_INFO
           : errorReply(401, 'unauthorized'),
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'access-2', refresh_token: 'refresh-2' }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('access-2'), refresh_token: 'refresh-2' }),
       'GET /v1/me': () => USER_VIEW,
     });
     const m = mount();
     await settled(m);
-    expect(m.auth().token).toBe('access-2');
+    expect(m.auth().token).toBe(jwtFixture('access-2'));
     expect(getStoredRefreshToken()).toBe('refresh-2');
     expect(calls.filter((c) => c.path === '/v1/auth/token').length).toBe(1);
     // The user record is loaded once, not once per path that learned of the session.
@@ -214,7 +215,7 @@ describe('mount', () => {
     const m = mount();
     await settled(m);
     expect(m.navigations).toEqual(['/verify-email']);
-    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
   });
 
   test('does not navigate to the page the action points at when already there', async () => {
@@ -258,7 +259,7 @@ describe('mount', () => {
     const m = mount();
     await settled(m);
     expect(getStoredRefreshToken()).toBe('old-refresh');
-    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
     expect(m.auth().sessionError?.status).toBe(0);
     // Back online: the retry establishes the session and clears the error.
     mockApi({
@@ -296,7 +297,7 @@ describe('mount', () => {
   test('a new tab forks a lineage from a sibling tab over the channel', async () => {
     (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = FakeBroadcastChannel;
     const calls = mockApi({
-      'POST /v1/session/fork': () => tokenResponse({ access_token: 'fork-access', refresh_token: 'fork-refresh' }),
+      'POST /v1/session/fork': () => tokenResponse({ access_token: jwtFixture('fork-access'), refresh_token: 'fork-refresh' }),
       'GET /v1/me': () => USER_VIEW,
     });
     // The sibling: another provider with a session answers fork requests.
@@ -306,7 +307,7 @@ describe('mount', () => {
     sibling();
     expect(calls[0]!.path).toBe('/v1/session/fork');
     expect(calls[0]!.authorization).toBe('Bearer sibling-access');
-    expect(m.auth().token).toBe('fork-access');
+    expect(m.auth().token).toBe(jwtFixture('fork-access'));
     expect(getStoredRefreshToken()).toBe('fork-refresh');
     expect(m.auth().profile?.uuid).toBe('prof-a');
     await waitFor(() => expect(m.auth().user).not.toBeNull());
@@ -360,7 +361,7 @@ describe('login and profile selection', () => {
       await m.auth().login('ada@example.test', 'pw');
     });
     await waitFor(() => expect(m.auth().user).not.toBeNull());
-    expect(m.auth().token).toBe('access-1');
+    expect(m.auth().token).toBe(jwtFixture('access-1'));
     expect(m.auth().profile?.uuid).toBe('prof-a');
     expect(m.auth().selectionRequired).toBe(false);
     expect(m.auth().session?.uuid).toBe('sess-1');
@@ -382,7 +383,7 @@ describe('login and profile selection', () => {
       await m.auth().login('ada@example.test', 'pw');
     });
     // Token committed, user not yet loaded: must read as loading.
-    expect(m.auth().token).toBe('access-1');
+    expect(m.auth().token).toBe(jwtFixture('access-1'));
     expect(m.auth().user).toBeNull();
     expect(m.auth().isLoading).toBe(true);
     await act(async () => {
@@ -397,7 +398,7 @@ describe('login and profile selection', () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((r) => (release = r));
     mockApi({
-      'POST /v1/session/fork': () => tokenResponse({ access_token: 'fork-access', refresh_token: 'fork-refresh' }),
+      'POST /v1/session/fork': () => tokenResponse({ access_token: jwtFixture('fork-access'), refresh_token: 'fork-refresh' }),
       'GET /v1/me': async () => {
         await gate;
         return USER_VIEW;
@@ -405,7 +406,7 @@ describe('login and profile selection', () => {
     });
     const sibling = (await import('./fork')).startForkResponder(() => 'sibling-access');
     const m = mount();
-    await waitFor(() => expect(m.auth().token).toBe('fork-access'));
+    await waitFor(() => expect(m.auth().token).toBe(jwtFixture('fork-access')));
     sibling();
     expect(m.auth().user).toBeNull();
     expect(m.auth().isLoading).toBe(true);
@@ -429,7 +430,7 @@ describe('login and profile selection', () => {
           profiles: [PROFILE_A, PROFILE_B],
         }),
       'POST /v1/auth/token': () =>
-        tokenResponse({ access_token: 'chosen-access', refresh_token: 'lineage-2', profile: PROFILE_B }),
+        tokenResponse({ access_token: jwtFixture('chosen-access'), refresh_token: 'lineage-2', profile: PROFILE_B }),
       'GET /v1/me': () => USER_VIEW,
     });
     await act(async () => {
@@ -452,7 +453,7 @@ describe('login and profile selection', () => {
       profile_uuid: 'prof-b',
     });
     expect(m.auth().selectionRequired).toBe(false);
-    expect(m.auth().token).toBe('chosen-access');
+    expect(m.auth().token).toBe(jwtFixture('chosen-access'));
     expect(m.auth().profile?.uuid).toBe('prof-b');
     expect(getStoredRefreshToken()).toBe('lineage-2');
     expect(getStoredProfileUuid()).toBe('prof-b');
@@ -527,7 +528,7 @@ describe('login and profile selection', () => {
       'GET /v1/session': () => SESSION_INFO,
       'GET /v1/me': () => USER_VIEW,
       'POST /v1/session/switch': () =>
-        tokenResponse({ access_token: 'switched', refresh_token: null, profile: PROFILE_B }),
+        tokenResponse({ access_token: jwtFixture('switched'), refresh_token: null, profile: PROFILE_B }),
     });
     const m = mount();
     await settled(m);
@@ -535,7 +536,7 @@ describe('login and profile selection', () => {
       await m.auth().switchProfile('prof-b');
     });
     expect(calls.find((c) => c.path === '/v1/session/switch')!.body).toEqual({ profile_uuid: 'prof-b' });
-    expect(m.auth().token).toBe('switched');
+    expect(m.auth().token).toBe(jwtFixture('switched'));
     expect(m.auth().profile?.uuid).toBe('prof-b');
     expect(getStoredProfileUuid()).toBe('prof-b');
     expect(getStoredRefreshToken()).toBe('old-refresh');
@@ -561,7 +562,7 @@ describe('login and profile selection', () => {
       given_name: 'Ada',
       family_name: 'Lovelace',
     });
-    expect(m.auth().token).toBe('access-1');
+    expect(m.auth().token).toBe(jwtFixture('access-1'));
   });
 });
 
@@ -595,7 +596,7 @@ describe('profile lock and sign-out', () => {
       reason: 'credential_not_authorized',
       remedy: { kind: 'sign_in_with_provider', provider_id: 'google' },
     });
-    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
     expect(getStoredRefreshToken()).toBe('old-refresh');
   });
 
@@ -608,7 +609,7 @@ describe('profile lock and sign-out', () => {
         errorReply(401, 'users.profile_unavailable', [
           { field: 'profile', code: 'profile_suspended', message: 'suspended' },
         ]),
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'other', profile: PROFILE_B }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('other'), profile: PROFILE_B }),
     });
     const m = mount();
     await settled(m);
@@ -639,7 +640,7 @@ describe('profile lock and sign-out', () => {
       });
       const m = mount();
       await settled(m);
-      expect(m.auth().token).toBe('old-access');
+      expect(m.auth().token).toBe(jwtFixture('old-access'));
       await act(async () => {
         await api.me.sessions.list().catch(() => {});
       });
@@ -688,7 +689,7 @@ describe('profile lock and sign-out', () => {
   });
 
   test('impersonating reflects the session and returns to false when the administrator token is restored', async () => {
-    seedTab('admin-access');
+    seedTab(jwtFixture('admin-access'));
     const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
     mockApi({
       'GET /v1/session': () => SESSION_INFO,
@@ -699,7 +700,7 @@ describe('profile lock and sign-out', () => {
           201,
         ),
       'DELETE /v1/impersonations/current': () => undefined,
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('admin-access-2'), refresh_token: 'r2' }),
     });
     const m = mount();
     await settled(m);
@@ -715,7 +716,7 @@ describe('profile lock and sign-out', () => {
       await api.impersonations.end();
     });
     expect(m.auth().impersonating).toBe(false);
-    expect(m.auth().token).toBe('admin-access-2');
+    expect(m.auth().token).toBe(jwtFixture('admin-access-2'));
   });
 });
 
@@ -742,7 +743,7 @@ describe('completeHandoff', () => {
     expect(calls.filter((c) => c.path === '/v1/auth/handoff').length).toBe(1);
     expect(calls.find((c) => c.path === '/v1/auth/handoff')!.body).toEqual({ code: 'code-1', verifier });
     expect(getStoredHandoffVerifier()).toBeNull();
-    expect(m.auth().token).toBe('access-1');
+    expect(m.auth().token).toBe(jwtFixture('access-1'));
     expect(m.auth().profile?.uuid).toBe('prof-a');
   });
 
@@ -785,7 +786,7 @@ describe('logout', () => {
       await m.auth().logout();
     });
     expect(calls.at(-1)!.path).toBe('/v1/session/logout');
-    expect(calls.at(-1)!.authorization).toBe('Bearer old-access');
+    expect(calls.at(-1)!.authorization).toBe(`Bearer ${jwtFixture('old-access')}`);
     expect(m.auth().token).toBeNull();
     expect(m.auth().user).toBeNull();
     expect(getStoredToken()).toBeNull();
@@ -817,13 +818,13 @@ describe('logout', () => {
     let expired = false;
     const calls = mockApi({
       'GET /v1/session': (call) =>
-        expired && call.authorization === 'Bearer old-access'
+        expired && call.authorization === `Bearer ${jwtFixture('old-access')}`
           ? errorReply(401, 'unauthorized')
           : SESSION_INFO,
       'GET /v1/me': () => USER_VIEW,
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'access-2', refresh_token: 'refresh-2' }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('access-2'), refresh_token: 'refresh-2' }),
       'POST /v1/session/logout': (call) =>
-        call.authorization === 'Bearer access-2' ? undefined : errorReply(401, 'unauthorized'),
+        call.authorization === `Bearer ${jwtFixture('access-2')}` ? undefined : errorReply(401, 'unauthorized'),
     });
     const m = mount();
     await settled(m);
@@ -840,13 +841,13 @@ describe('logout', () => {
       'GET /v1/session',
       'POST /v1/session/logout',
     ]);
-    expect(calls.at(-1)!.authorization).toBe('Bearer access-2');
+    expect(calls.at(-1)!.authorization).toBe(`Bearer ${jwtFixture('access-2')}`);
     expect(getStoredRefreshToken()).toBeNull();
     expect(m.auth().token).toBeNull();
   });
 
   test('an expired impersonation token restores the administrator session and revokes it on logout', async () => {
-    seedTab('admin-access');
+    seedTab(jwtFixture('admin-access'));
     const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
     let impExpired = false;
     const calls = mockApi({
@@ -862,9 +863,9 @@ describe('logout', () => {
           tokenResponse({ access_token: 'imp-access', refresh_token: null, session: impSession, profile: PROFILE_B }),
           201,
         ),
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('admin-access-2'), refresh_token: 'r2' }),
       'POST /v1/session/logout': (call) =>
-        call.authorization === 'Bearer admin-access-2' ? undefined : errorReply(401, 'unauthorized'),
+        call.authorization === `Bearer ${jwtFixture('admin-access-2')}` ? undefined : errorReply(401, 'unauthorized'),
     });
     const m = mount();
     await settled(m);
@@ -877,7 +878,7 @@ describe('logout', () => {
     });
     // The last request is the logout, issued under the administrator token.
     expect(calls.at(-1)!.path).toBe('/v1/session/logout');
-    expect(calls.at(-1)!.authorization).toBe('Bearer admin-access-2');
+    expect(calls.at(-1)!.authorization).toBe(`Bearer ${jwtFixture('admin-access-2')}`);
     // The administrator lineage was refreshed exactly once.
     expect(calls.filter((c) => c.path === '/v1/auth/token')).toHaveLength(1);
     expect(getStoredToken()).toBeNull();
@@ -886,7 +887,7 @@ describe('logout', () => {
   });
 
   test('an impersonating logout revokes the impersonation session, then the administrator session', async () => {
-    seedTab('admin-access');
+    seedTab(jwtFixture('admin-access'));
     const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
     const calls = mockApi({
       // The tokenless request after the impersonation token is dropped 401s,
@@ -899,7 +900,7 @@ describe('logout', () => {
           tokenResponse({ access_token: 'imp-access', refresh_token: null, session: impSession, profile: PROFILE_B }),
           201,
         ),
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('admin-access-2'), refresh_token: 'r2' }),
       'POST /v1/session/logout': () => undefined,
     });
     const m = mount();
@@ -923,7 +924,7 @@ describe('logout', () => {
     // The first revoke ran under the impersonation token, the last under the
     // administrator's: the impersonation token was never replayed as the admin.
     expect(after[0]!.authorization).toBe('Bearer imp-access');
-    expect(after.at(-1)!.authorization).toBe('Bearer admin-access-2');
+    expect(after.at(-1)!.authorization).toBe(`Bearer ${jwtFixture('admin-access-2')}`);
     expect(getStoredToken()).toBeNull();
     expect(getStoredRefreshToken()).toBeNull();
     expect(m.auth().token).toBeNull();
@@ -932,7 +933,7 @@ describe('logout', () => {
   });
 
   test('an impersonating logout stays local-only when the administrator revoke fails', async () => {
-    seedTab('admin-access');
+    seedTab(jwtFixture('admin-access'));
     const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
     mockApi({
       'GET /v1/session': (call) =>
@@ -969,7 +970,7 @@ describe('logout', () => {
   });
 
   test('a late restore and user load cannot repopulate state after logout begins', async () => {
-    seedTab('admin-access');
+    seedTab(jwtFixture('admin-access'));
     const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
     let impExpired = false;
     let releaseRestore: () => void = () => {};
@@ -987,7 +988,7 @@ describe('logout', () => {
           : SESSION_INFO,
       'GET /v1/me': async (call) => {
         // Only the load under the restored administrator token is delayed.
-        if (call.authorization === 'Bearer admin-access-2') await meGate;
+        if (call.authorization === `Bearer ${jwtFixture('admin-access-2')}`) await meGate;
         return USER_VIEW;
       },
       'POST /v1/impersonations': () =>
@@ -997,7 +998,7 @@ describe('logout', () => {
         ),
       'POST /v1/auth/token': async () => {
         await restoreGate;
-        return tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' });
+        return tokenResponse({ access_token: jwtFixture('admin-access-2'), refresh_token: 'r2' });
       },
       'POST /v1/session/logout': () => undefined,
     });
@@ -1061,14 +1062,14 @@ describe('step-up registration', () => {
       'GET /v1/session': () => SESSION_INFO,
       'GET /v1/me': () => USER_VIEW,
       'PUT /v1/me': (call) =>
-        call.authorization === 'Bearer fresh' ? USER_VIEW : STEP_UP.clone(),
+        call.authorization === `Bearer ${jwtFixture('fresh')}` ? USER_VIEW : STEP_UP.clone(),
     });
   }
 
   test('the stepUpHandler prop retries the interrupted request once with the fresh token', async () => {
     seedTab();
     const calls = stepUpApi();
-    const handler: StepUpHandler = async () => 'fresh';
+    const handler: StepUpHandler = async () => jwtFixture('fresh');
     const m = mount({ stepUpHandler: handler });
     await settled(m);
     await act(async () => {
@@ -1076,7 +1077,7 @@ describe('step-up registration', () => {
     });
     const puts = calls.filter((c) => c.method === 'PUT');
     expect(puts.length).toBe(2);
-    expect(puts[1]!.authorization).toBe('Bearer fresh');
+    expect(puts[1]!.authorization).toBe(`Bearer ${jwtFixture('fresh')}`);
   });
 
   test('without a handler the original ApiActionRequiredError propagates', async () => {
@@ -1091,7 +1092,7 @@ describe('step-up registration', () => {
   test('unmounting the provider unregisters the handler', async () => {
     seedTab();
     stepUpApi();
-    const m = mount({ stepUpHandler: async () => 'fresh' });
+    const m = mount({ stepUpHandler: async () => jwtFixture('fresh') });
     await settled(m);
     m.unmount();
     const err = await api.me.update({ given_name: 'Zed' }).catch((e: unknown) => e);
@@ -1102,7 +1103,7 @@ describe('step-up registration', () => {
     seedTab();
     const calls = stepUpApi();
     function Prompt() {
-      const handler = React.useCallback<StepUpHandler>(async () => 'fresh', []);
+      const handler = React.useCallback<StepUpHandler>(async () => jwtFixture('fresh'), []);
       useStepUpHandler(handler);
       return null;
     }
@@ -1147,7 +1148,7 @@ describe('accessTokenExpiresAt', () => {
       'GET /v1/session': () => SESSION_INFO,
       'GET /v1/me': () => USER_VIEW,
       'POST /v1/session/switch': () =>
-        tokenResponse({ access_token: 'switched', refresh_token: null, expires_in: 120, profile: PROFILE_B }),
+        tokenResponse({ access_token: jwtFixture('switched'), refresh_token: null, expires_in: 120, profile: PROFILE_B }),
     });
     const m = mount();
     await settled(m);

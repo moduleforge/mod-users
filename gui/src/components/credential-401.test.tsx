@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { jwtFixture } from '../test-support/jwt';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AuthProvider } from '../lib/auth-context';
 import { createUsersClient } from '../lib/api';
@@ -67,7 +68,7 @@ beforeEach(() => {
     writable: true,
   });
   configureUsersApi({ baseUrl: '', onUnauthenticated: () => unauthCalls++ });
-  setStoredToken('keep-me');
+  setStoredToken(jwtFixture('keep-me'));
   setStoredRefreshToken('keep-refresh');
   responder = (url) => baseResponder(url) ?? unauthorized();
   globalThis.fetch = (async (input: RequestInfo | URL) =>
@@ -86,7 +87,7 @@ afterEach(() => {
 });
 
 function expectNoSessionSideEffects(): void {
-  expect(getStoredToken()).toBe('keep-me');
+  expect(getStoredToken()).toBe(jwtFixture('keep-me'));
   expect(hrefs).toEqual([]);
   expect(unauthCalls).toBe(0);
 }

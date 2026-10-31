@@ -1153,12 +1153,14 @@ async function execute<T>(
           const wasImpersonating = getStoredImpersonating();
           setStoredToken(fresh);
           // WHY: the marker describes the stored token, and a handler-supplied
-          // token can be a different identity than the one it replaces.
-          // IMPLIES a decodable token decides the marker by its `act` claim;
-          // an undecodable one keeps the prior answer (fail closed), so a
-          // step-up during an impersonation never un-marks it.
-          const actClaim = tokenActClaim(fresh);
-          setStoredImpersonating(actClaim ?? wasImpersonating);
+          // token can be a different identity than the one it replaces; but a
+          // decodable token lacking `act` is not proof the impersonation
+          // ended (a handler could hand back the administrator's own token).
+          // IMPLIES the marker is set when the fresh token carries `act` OR
+          // the prior answer was impersonating, and is never cleared here:
+          // only an authoritative signal (session.get, a token response,
+          // impersonations.end, sign-out) unmarks.
+          setStoredImpersonating(tokenActClaim(fresh) === true || wasImpersonating);
         }
         return execute<T>(
           resolveBaseUrl,
