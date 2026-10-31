@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: CORE_FIELD_KEY_HEX read by no code here
-      id: RVUM
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - priority:low
-        - plan/phase:doc-updates
-        - effort:small
-      text: Documentation names the CORE_FIELD_KEY_HEX environment variable but no code in mod-users reads it; it may be consumed by mod-core. Confirm where it is read and either document the owning module or remove the mention. Found by phase 10 task 003 (repository docs review).
     - title: The refusals table lists the redirect error…
       id: cRuN
       date: "2026-10-31"
@@ -2334,4 +2325,14 @@ closed:
         (IssueAPIKeyInput), :101 (IssuedAPIKey) and :366 (ProfileSummary) now
         alias the inner types, with a compile-only test in
         api/usersservice/facade_aliases_test.go.
+      date: "2026-10-31"
+    - id: RVUM
+      title: CORE_FIELD_KEY_HEX read by no code here
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 006: .env.example:207-215 now carries a
+        "Field-encryption seed (owned by mod-core)" block stating that mod-core's
+        fieldcrypto.NewFromEnvOrGenerate reads CORE_FIELD_KEY_HEX, that the
+        mod-users dev server calls it from api/cmd/server/main.go, its first-boot
+        seed semantics, and the rotation route.
       date: "2026-10-31"
