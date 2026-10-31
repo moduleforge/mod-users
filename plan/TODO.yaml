@@ -1515,7 +1515,8 @@ phases:
             - D3Q9
           git:
             branch: plan/identity-model-impl-25-001
-            commit: []
+            commit:
+                - 89fe62a
             merge: null
         - number: 2
           slug: tighten-impersonation-marker-fail-closed
