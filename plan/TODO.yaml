@@ -1426,7 +1426,8 @@ phases:
             - Qo20
           git:
             branch: plan/identity-model-impl-23-005
-            commit: []
+            commit:
+                - ad47372
             merge: null
         - number: 6
           slug: document-app-option-as-uuid
