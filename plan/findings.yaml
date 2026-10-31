@@ -35,7 +35,10 @@ items:
         - priority:low
         - plan/phase:doc-updates
         - effort:small
-      text: api/internal/server/server.go line 88 sets CORS AllowCredentials although the API is Bearer-only (every call sends credentials:'omit' except the two OIDC start POSTs, which need the oidc_state cookie). Decide whether AllowCredentials should be limited to the two OIDC start routes or dropped. Found by phase 10 task 003 (repository docs review); a design decision, not fixed there.
+      text: |-
+        api/internal/server/server.go line 88 sets CORS AllowCredentials although the API is Bearer-only (every call sends credentials:'omit' except the two OIDC start POSTs, which need the oidc_state cookie). Decide whether AllowCredentials should be limited to the two OIDC start routes or dropped. Found by phase 10 task 003 (repository docs review); a design decision, not fixed there.
+
+        Open question (quoted evaluator data): Should the API keep Access-Control-Allow-Credentials: true for every explicitly allow-listed origin, restrict it to the two OIDC start POSTs that need the oidc_state cookie, or drop it entirely? Options: (1) keep as is and document why (no code change; exposure limited to the non-authenticating oidc_state cookie); (2) restrict to the two OIDC start routes (needs route-scoped CORS handling, tests, docs; plan overview lists CORS default-deny policy and oidc_state cookie behavior as must-not-change); (3) drop entirely (breaks cross-origin OIDC sign-in). Recommended option: keep as is and document why.
     - title: CORE_FIELD_KEY_HEX read by no code here
       id: RVUM
       date: "2026-10-31"
