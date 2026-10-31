@@ -1376,7 +1376,7 @@ phases:
           slug: handle-oidc-link-and-step-up-returns
           title: Handle OIDC Link and Step-Up Return Fragments
           path: phase-23-remediation-11/002-handle-oidc-link-and-step-up-returns.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'OIDC return page handles linked=1 and stepped_up=1 without a handoff: validates return path with isSafeReturnPath falling back to default; stepped_up runs a refresh grant before returning; refresh failure surfaces via onError. Five tests added in oidc-callback-page.test.tsx.'
           findings:
