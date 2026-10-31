@@ -2345,3 +2345,13 @@ items:
         - plan/phase:adopt-core-engine-remediation
         - plan/slug:identity-model-impl
       text: 'needs-sibling: mod-repos. When a host installs access functions through mod-users'' row-filtered generator (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), every list query must run in a transaction bound with mod-core setup.BindAuthInputs(ctx, tx); otherwise the predicate receives NULL session/credential/system-actor inputs and silently drops every row a restrictive party policy gates (credential_rule or min_acr), even for a collaborator whose session meets the policy. mod-repos never calls BindAuthInputs. Unbound list queries: model/queries/namespaces.sql ListNamespaces (accessible_namespace_ids_for_actor; api/service/namespace.go), model/queries/repositories.sql ListRepositoriesByNamespace (accessible_repository_ids_for_actor; api/service/repository.go), model/queries/pull_requests.sql ListPullRequestsByRepository (api/service/pull_request.go), model/queries/releases.sql ListReleasesByRepository (api/service/release.go). Each needs one read-only transaction per request, BindAuthInputs called first with its error refusing the request, and all list queries of the request run in it. Also: mod-repos'' CompositeAccessFuncGenerator (api/authz/generator.go) must be wrapped by the host as setup.NewRowFilterGenerator(composite, localAuthz.AccessRowFilter) so its appended visibility arms are filtered too.'
+    - title: mod-tasks list lacks BindAuthInputs
+      id: QbSc
+      date: "2026-10-30"
+      tags:
+        - type:bug
+        - priority:medium
+        - effort:small
+        - plan/phase:adopt-core-engine-remediation
+        - plan/slug:identity-model-impl
+      text: 'needs-sibling: mod-tasks. With mod-users'' row-filtered access functions installed (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), a list query run without mod-core setup.BindAuthInputs on its transaction passes NULL authentication inputs to the predicate and silently drops every row a restrictive party policy gates, even for a caller meeting the policy. model/queries/tasks.sql ListTasksByOwner joins accessible_task_ids_for_actor and is called from api/service/task.go without BindAuthInputs. Run it in one read-only transaction per request, call BindAuthInputs first and refuse the request on its error.'
