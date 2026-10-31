@@ -23,15 +23,6 @@ items:
         recommendation:
           Add one sentence that the persisted key is stored unencrypted, that DB read access or backups equal token
           forgery capability, and that production deployments should set JWT_SIGNING_KEY from a secret store.
-    - title: The main.go comment at api/cmd/server/main.go
-      id: AMeC
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-14
-        - priority:low
-        - effort:small
-      text: The main.go comment at api/cmd/server/main.go:232-237 does not mention CORE_FIELD_KEY_HEX or first-boot-only seed semantics. The task did not ask for a code change, so no change was made. If the manager wants that comment to name the env var, file it as a separate task.
     - title: The new text says the exception covers "the…
       id: Yo85
       date: "2026-10-31"
@@ -2294,4 +2285,9 @@ closed:
         Already fixed by phase 26 task 004: in docs/architecture.md:97 the OIDC
         configuration row now states that these routes are served by the
         manifest-mounted handlers but are not described in api/openapi.yaml.
+      date: "2026-10-31"
+    - id: AMeC
+      title: The main.go comment at api/cmd/server/main.go
+      disposition: promoted
+      ref: AMeC
       date: "2026-10-31"
