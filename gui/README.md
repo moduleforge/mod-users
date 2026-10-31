@@ -121,6 +121,7 @@ OIDC sign-in returns through `#handoff=<code>` in the URL fragment (`#error=<cod
 | `user`, `emailVerified` | The `GET /v1/me` record and whether any email is verified |
 | `isLoading` | `true` until the mount-time session check or fork finishes |
 | `selectionRequired`, `profileLock`, `impersonating` | See above |
+| `accessTokenExpiresAt` | Epoch milliseconds at which this tab's access token expires (last token response's `expires_in`); `null` when unknown, for example after a reload. The impersonation banner counts down to it |
 | `login(email, password, options?)`, `register(...)` | Sign in or register; both resolve with the `TokenResponse` |
 | `selectProfile(uuid)`, `switchProfile(uuid)` | See [Profiles](#profiles) |
 | `completeHandoff(code)` | See [OIDC sign-in and handoff](#oidc-sign-in-and-handoff) |
@@ -153,7 +154,13 @@ All components are client components (`'use client'` is not retained in `dist`; 
 | Component | Props | Notes |
 |---|---|---|
 | `AuthProvider` | `children`; `onNavigate?(path)`; `loginPath?`; `stepUpHandler?` | Session context (see [Frontend contract](#frontend-contract)). Navigates through `onNavigate` on logout and on an action-required response (see [Routes](#routes)). Skips a navigation to an action-required path the browser is already on, comparing `window.location.pathname` for exact equality; apps served under a `basePath`, or with trailing-slash URLs, do not match and can still navigate to the page they are on (known limitation). `useAuth()` throws outside it; `useOptionalAuth()` returns `null`. |
-| `RequireAuth` | `children`; `requireAdmin?`; `onUnauthenticated?()`; `onUnauthorized?()` | Renders children only for a signed-in user (and an admin when `requireAdmin`). Build your own `?return=` redirect in `onUnauthenticated`. Needs `AuthProvider`. |
+| `RequireAuth` | `children`; `onUnauthenticated?()`; `onSelectionRequired?()` | Gates on authentication only. Calls `onSelectionRequired` (navigate to `USERS_GUI_ROUTES.selectProfile`) when a sign-in found no landing profile, and shows `ProfileLockNotice` instead of the children while a profile lock is set. There is no admin gate: administrator authority is enforced by the server's `403`. Build your own `?return=` redirect in `onUnauthenticated`. Needs `AuthProvider`. |
+| `ProfileSwitcher` | `onSwitched?(profileUuid)` | Lists the principal's profiles (personal versus party), marks the active one, switches to an available one with `switchProfile`, and shows locked profiles with the lock reason and remedy. Needs `AuthProvider`. |
+| `ProfileLockNotice` | none | The reason and remedy of the current `profileLock`, with the other available profiles (recovers through `selectProfile`) and sign out. Renders nothing when no lock is set. |
+| `ProfileRemedy` | `remedy: LockRemedy \| null` | Describes a lock remedy; for `sign_in_with_provider` it also starts the provider step-up (`session.stepUp.startOidc`) and navigates to the returned `http(s)` authorize URL. |
+| `SelectProfilePage` | `onSelected?(response: TokenResponse)` | Mount at `USERS_GUI_ROUTES.selectProfile`. Shown only while `selectionRequired`; lists profiles with availability and lands the tab on the chosen available one. |
+| `InvitationsView` | `stepUpHandler?`; `onStepUpRequired?(error)` | Mount at `USERS_GUI_ROUTES.invitations`. Lists `invited` profiles (accept, decline) and active party profiles (leave) from `GET /v1/me/profiles`, then refreshes the list and the auth context. `stepUpHandler` is registered through `useStepUpHandler` while mounted; `onStepUpRequired` fires when an action still ends in `users.step_up_required`. |
+| `ImpersonationBanner` | none | Visible while `impersonating`: the impersonated profile, the time remaining, renew and end actions. `ClientLayout` mounts it above the sidebar; apps with their own shell should render it at the top of every page. |
 | `AuthPage` | `initialMode?: 'login' \| 'register'`; `onAuthenticated?(returnPath: string \| null, mode: 'login' \| 'register')`; `initialError?`; `returnPath?`; `allowRegistration?` (default `true`); `onForgotPassword?()` | Login and register in one card. `allowRegistration={false}` removes the register control and panel and forces login mode. Needs `AuthProvider`. |
 | `LoginForm` | `onSuccess?(returnPath: string \| null)`; `initialError?`; `returnPath?`; `idPrefix?`; `onForgotPassword?()` | Email and password plus OIDC provider buttons. `onForgotPassword` renders a "Forgot password?" button. Needs `AuthProvider`. |
 | `RegisterForm` | `onSuccess?()`; `idPrefix?` | Registers, then signs in. Needs `AuthProvider`. |
@@ -164,7 +171,7 @@ All components are client components (`'use client'` is not retained in `dist`; 
 | `VerifyEmailPage` | `onVerified?()`; `onNavigateToLogin?()`; `email?`; `message?`; `resendCooldownSeconds?` (default `30`, `0` disables) | See [Standard pages](#standard-pages). |
 | `OidcConfigPage` | `onComplete?()`; `redirectDelayMs?` (default `2000`) | See [Standard pages](#standard-pages). |
 | `OidcSetupGate` | `currentPath: string`; `onNavigateToConfig?()`; `children: (state: 'ready' \| 'setup') => ReactNode` | Render-prop gate for apps without the admin chrome. |
-| `ClientLayout` | `children`; `currentPath: string`; `onNavigateToConfig?()`; `onNavigate?(path)`; `LinkComponent` | mod-users admin chrome (sidebar shell plus `AuthProvider` plus `OidcSetupGate`). |
+| `ClientLayout` | `children`; `currentPath: string`; `onNavigateToConfig?()`; `onNavigate?(path)`; `LinkComponent` | mod-users admin chrome (`ImpersonationBanner` above a sidebar shell, plus `AuthProvider` plus `OidcSetupGate`). `SidebarNav` takes `currentPath` and `LinkComponent`, shows the `ProfileSwitcher` and an Invitations entry for a signed-in user, and no longer filters links by admin status (the server's `403` is the authority). |
 | `USERS_GUI_ROUTES` | constant | The standard path set; see [Routes](#routes). |
 
 ### Return-path handling
@@ -462,6 +469,7 @@ So integrators do not assume otherwise:
 The client was rebuilt on the final mod-users API; these changes break earlier integrations:
 
 - Tokens moved from `localStorage` to per-tab `sessionStorage` (plus a refresh token and active profile), and requests use `credentials: 'omit'`. Existing signed-in browsers must sign in again.
+- `RequireAuth` lost the `requireAdmin` and `onUnauthorized` props and gained `onSelectionRequired`; `SidebarNav` no longer hides admin links from non-administrators.
 - `useAuth()` lost `isAdmin`, `emailVerifiedAt`, `setTokenAndUser` and `completeExternalLogin`; it gained the members listed under [The auth context](#the-auth-context). `completeHandoff(code)` replaces `completeExternalLogin(token)`: OIDC returns a one-time `#handoff=` code, never a token.
 - The client dropped `self`, `userAccounts` (including `grantAdmin`, `revokeAdmin`, `assume`), `sshKeys`, `stepUp` (the old `X-Step-Up-Token` flow), `apps` and `auth.verifyEmail`, and the types `UserAccount*`, `UserAccountSelf`, `SessionUser`, `LoginResponse`, `StepUpOptions`, `StepUpVerifyResponse`, `SSHKey*`, `RegisterSSHKeyRequest` and the app types. Use `me.*`, `session.*`, `impersonations.*` and `bootstrap.*`.
 - `register` answers a session directly (`201` with a token response), so there is no follow-up login.

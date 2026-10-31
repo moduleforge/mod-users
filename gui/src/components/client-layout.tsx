@@ -3,6 +3,7 @@
 import React from 'react';
 import { AuthProvider } from '../lib/auth-context';
 import { SidebarNav, type SidebarNavProps } from './sidebar-nav';
+import { ImpersonationBanner } from './impersonation-banner';
 import { OidcSetupGate } from './oidc-setup-gate';
 
 export interface ClientLayoutProps {
@@ -46,9 +47,14 @@ export function ClientLayout({
           <main className="h-screen overflow-y-auto">{children}</main>
         ) : (
           <AuthProvider onNavigate={onNavigate}>
-            <div className="flex h-screen overflow-hidden">
-              <SidebarNav currentPath={currentPath} LinkComponent={LinkComponent} />
-              <main className="flex-1 overflow-y-auto">{children}</main>
+            <div className="flex h-screen flex-col overflow-hidden">
+              {/* Above the sidebar so it stays visible on every page; renders
+                  nothing unless the tab's session is an impersonation. */}
+              <ImpersonationBanner />
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <SidebarNav currentPath={currentPath} LinkComponent={LinkComponent} />
+                <main className="flex-1 overflow-y-auto">{children}</main>
+              </div>
             </div>
           </AuthProvider>
         )
