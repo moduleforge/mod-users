@@ -9,6 +9,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'gui/src/lib/api.ts startRedirectFlow (used by client.me.credentials.startOidcLink and client.session.stepUp.startOidc) sends credentials: ''include'', which contradicts the frontend contract of ''credentials: omit on every request''. Both POST routes (api/openapi.yaml /v1/me/credentials/oidc/{provider}/start and /v1/session/step-up/oidc/{provider}/start) answer {authorize_url} AND set the signed oidc_state cookie on that response, and browsers discard Set-Cookie from a credentials: ''omit'' fetch, so the callback would later fail with users.oidc_state_cookie_required. Decide whether to keep the include exception (requires CORS AllowCredentials with a non-wildcard origin, already set in api/internal/server/server.go) or change the API to carry the state outside a cookie (for example return it in the body and have the callback read it from the URL), and update the frontend contract text accordingly.'
+    - title: Selection page loses return path on reload
+      id: AReg
+      date: "2026-10-31"
+      tags:
+        - type:enhancement
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: After a sign-in answers selection_required, LoginForm/RegisterForm/EmailCodePage/OidcCallbackPage hand the host the selection route and the return path (onSelectionRequired), but SelectProfilePage (gui/src/components/select-profile-page.tsx) has no prop or storage to resume at that return path, so each host must carry it itself. Also, selectionRequired lives only in AuthProvider memory (gui/src/lib/auth-context.tsx), so reloading the selection page renders nothing (SelectProfilePage returns null when selectionRequired is false) even though the tab still holds a refresh token. Consider persisting the pending-selection flag per tab and accepting a returnPath on SelectProfilePage.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
