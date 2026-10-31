@@ -1309,7 +1309,7 @@ phases:
           slug: apply-assurance-gate-on-principal-list
           title: Apply The Operation Assurance Gate To The Principal List
           path: phase-22-remediation-10/002-apply-assurance-gate-on-principal-list.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: ListPrincipals now runs the operation assurance gate via new Authorizer.CheckAssurance before the transaction; fails closed when the authorizer lacks the capability; OpenAPI 409 added.
           findings:
