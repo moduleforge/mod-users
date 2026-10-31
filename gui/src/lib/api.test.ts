@@ -6,7 +6,6 @@ import {
   setStepUpHandler,
   subscribeSessionEvents,
   type SessionEvent,
-  type TokenResponse,
 } from './api';
 import {
   configureUsersApi,
@@ -21,6 +20,7 @@ import {
   type UnauthenticatedContext,
 } from './config';
 import { computeHandoffChallenge } from './handoff';
+import { PROFILE_A, tokenResponse } from '../test-support/users-fixtures';
 
 // Exercises `request()`'s non-2xx discrimination logic (the fix this task
 // implements): a body carrying a top-level `action` member must short-circuit
@@ -295,36 +295,6 @@ const noContent = (): Response => new Response(null, { status: 204 });
 const errorBody = (code: string, details?: { field: string; code: string; message: string }[]) => ({
   error: { code, message: `${code} message`, ...(details ? { details } : {}) },
 });
-
-const PROFILE_A = {
-  uuid: 'prof-a',
-  kind: 'personal' as const,
-  party: null,
-  status: 'active',
-  display_name: 'Ada',
-  available: true,
-  lock: null,
-};
-
-function tokenResponse(overrides: Partial<TokenResponse> = {}): TokenResponse {
-  return {
-    access_token: 'access-1',
-    token_type: 'Bearer',
-    expires_in: 3600,
-    refresh_token: 'refresh-1',
-    session: {
-      uuid: 'sess-1',
-      acr: 1,
-      amr: ['pwd'],
-      auth_time: '2026-01-01T00:00:00Z',
-      impersonating: false,
-    },
-    profile: PROFILE_A,
-    selection_required: false,
-    profiles: [PROFILE_A],
-    ...overrides,
-  };
-}
 
 /** A tab holding a session: access, refresh and profile in sessionStorage. */
 function seedTab(access = 'old-access', refresh = 'old-refresh', profile = 'prof-a'): void {

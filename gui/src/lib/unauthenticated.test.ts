@@ -94,6 +94,25 @@ describe('default 401 handling', () => {
   });
 });
 
+describe('whole-session clearing', () => {
+  test('a failed repair clears access, refresh and profile and navigates exactly once', async () => {
+    sessionStorage.setItem('auth_token.refresh', 'r');
+    sessionStorage.setItem('auth_token.profile', 'p');
+    // Every call 401s, including the refresh grant: the lineage cannot repair it.
+    await hit();
+    expect(sessionStorage.getItem('auth_token')).toBeNull();
+    expect(sessionStorage.getItem('auth_token.refresh')).toBeNull();
+    expect(sessionStorage.getItem('auth_token.profile')).toBeNull();
+    expect(hrefs).toEqual(['/auth/login']);
+  });
+
+  test('with a handler configured the fetch path never assigns window.location', async () => {
+    configureUsersApi({ onUnauthenticated: () => {} });
+    await hit();
+    expect(hrefs).toEqual([]);
+  });
+});
+
 describe('configured redirect', () => {
   test('custom redirect URL without a return param', async () => {
     configureUsersApi({ unauthenticatedRedirectUrl: '/login' });

@@ -174,3 +174,13 @@ architectural_impact: true
 - After the client methods and types.
 - After `auth-context.tsx` with fork and handoff and its tests.
 - After `routes.ts`, `index.ts` and `gui/README.md`.
+
+## Status
+
+Outcome: succeeded with documented validation caveats (2026-10-31).
+
+- Validation: `bun test src/lib` passes (223 tests, 0 failures). `make -C gui build` produces the CJS and ESM bundles but its DTS step fails, and `make -C gui lint` (tsc) reports 19 errors, all in component files and tests owned by tasks 002 to 005 (the intended breakage). `make -C gui test` fails only in component tests owned by those tasks. The three grep checks are clean (`localStorage` appears only in test assertions that it is unused; no removed-route strings; the literal `'/auth/login'` is only the route constant plus test expectations).
+- Remaining tsc errors by owner: task 002 (`require-auth.tsx`, `sidebar-nav.tsx`); task 003 (`email-code-page.tsx`, `oidc-callback-page.tsx`, `verify-email-page.tsx`, `credential-401.test.tsx`); task 004 (`ssh-keys-panel.tsx`, `ssh-keys-panel.test.tsx`, `SSHKeysPanel.stories.tsx`); task 005 (`oidc-config-page.tsx`).
+- Affected sources: `gui/src/lib/api.ts`, `config.ts`, `auth-context.tsx`, `routes.ts`, new `fork.ts` and `handoff.ts`, `gui/src/index.ts`, `gui/README.md`, tests under `gui/src/lib/` and `gui/src/test-support/`.
+- Apps client: removed (nothing in the GUI used it), which closes the intent of followup `PRvD`; `HPJi` is addressed because the only navigation on loss of authentication is the configurable handler in `config.ts` whose default target is `USERS_GUI_ROUTES.login`.
+- Decisions: the OIDC authorize-URL start calls use `credentials: 'include'` (state cookie); the handoff API requires a `verifier` in the body and `handoff_challenge` on start (handlers win over the API surface note).

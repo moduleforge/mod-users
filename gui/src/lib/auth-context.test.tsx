@@ -1,591 +1,786 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { useState } from 'react';
-import { AuthProvider, useAuth } from './auth-context';
-import { configureUsersApi, resetUsersApiConfig } from './config';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { act, render, waitFor } from '@testing-library/react';
+import React from 'react';
+import {
+  ApiActionRequiredError,
+  ApiRequestError,
+  api,
+  setStepUpHandler,
+  type StepUpHandler,
+} from './api';
+import {
+  AuthProvider,
+  useAuth,
+  useOptionalAuth,
+  useStepUpHandler,
+  type AuthContextValue,
+} from './auth-context';
+import {
+  configureUsersApi,
+  getStoredHandoffVerifier,
+  getStoredProfileUuid,
+  getStoredRefreshToken,
+  getStoredToken,
+  resetUsersApiConfig,
+  setStoredHandoffVerifier,
+  setStoredProfileUuid,
+  setStoredRefreshToken,
+  setStoredToken,
+} from './config';
+import { FakeBroadcastChannel } from '../test-support/fake-broadcast-channel';
+import {
+  PROFILE_A,
+  PROFILE_B,
+  tokenResponse,
+  USER_VIEW,
+} from '../test-support/users-fixtures';
 
-// Exercises the three `api.self.get()` call sites this task wires: the mount
-// effect, `refreshUser`, and `completeExternalLogin` must each catch
-// `ApiActionRequiredError` before any other error-shaped handling and
-// navigate via the provider's injected `onNavigate`, without clearing the
-// stored token or (for `completeExternalLogin`) rethrowing. Every
-// non-action-required error must keep its pre-existing behavior
-// (regression checks).
-
-const TOKEN_KEY = 'auth_token';
 const originalFetch = globalThis.fetch;
+const realBroadcastChannel = (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel;
+
+beforeEach(() => {
+  // No channel by default: a tab with no tokens then settles immediately
+  // instead of waiting out the fork timeout. Tests that exercise the fork
+  // install the fake bus.
+  (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = undefined;
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  localStorage.clear();
+  (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = realBroadcastChannel;
+  FakeBroadcastChannel.reset();
   resetUsersApiConfig();
+  setStepUpHandler(null);
+  sessionStorage.clear();
 });
 
-function stubFetch(body: unknown, status: number): void {
-  globalThis.fetch = (async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    })) as unknown as typeof fetch;
+// ─── Harness ─────────────────────────────────────────────────────────────────
+
+interface Call {
+  method: string;
+  path: string;
+  body: unknown;
+  authorization: string | undefined;
+  credentials: RequestCredentials | undefined;
 }
 
-function stubFetchNetworkError(): void {
-  globalThis.fetch = (async () => {
-    throw new Error('network down');
+type RouteReply = Response | object | undefined;
+type Route = (call: Call, index: number) => RouteReply | Promise<RouteReply>;
+
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+const errorReply = (status: number, code: string, details?: unknown): Response =>
+  jsonResponse({ error: { code, message: `${code} message`, ...(details ? { details } : {}) } }, status);
+
+/** Scripts fetch by "METHOD /path"; unscripted routes answer 404. */
+function mockApi(routes: Record<string, Route>): Call[] {
+  const calls: Call[] = [];
+  globalThis.fetch = (async (url: string, init: RequestInit = {}) => {
+    const path = String(url).replace('http://localhost:8080', '');
+    const headers = (init.headers ?? {}) as Record<string, string>;
+    const call: Call = {
+      method: init.method ?? 'GET',
+      path,
+      body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined,
+      authorization: headers['Authorization'],
+      credentials: init.credentials,
+    };
+    calls.push(call);
+    const route = routes[`${call.method} ${path}`];
+    if (!route) return errorReply(404, 'not_found');
+    const reply = await route(call, calls.length - 1);
+    if (reply instanceof Response) return reply;
+    if (reply === undefined) return new Response(null, { status: 204 });
+    return jsonResponse(reply);
   }) as unknown as typeof fetch;
+  return calls;
 }
 
-const ACTION_REQUIRED_BODY = {
-  action: {
-    code: 'users.email_unverified',
-    message: 'Verify your email address before continuing.',
-    path: '/verify-email',
-  },
+const SESSION_INFO = {
+  session: tokenResponse().session,
+  profile: PROFILE_A,
+  profiles: [PROFILE_A, PROFILE_B],
 };
 
-/** Renders the context's live values/actions so tests can assert on them. */
-function Probe({
-  trigger,
-}: {
-  trigger?: 'refresh' | 'completeExternalLogin';
-}) {
-  const auth = useAuth();
-  const [completeError, setCompleteError] = useState<string | null>(null);
-  const [completeSettled, setCompleteSettled] = useState(false);
-
-  return (
-    <div>
-      <div data-testid="loading">{String(auth.isLoading)}</div>
-      <div data-testid="token">{auth.token ?? 'null'}</div>
-      <div data-testid="email-verified-at">{auth.emailVerifiedAt ?? 'null'}</div>
-      <div data-testid="complete-settled">{String(completeSettled)}</div>
-      <div data-testid="complete-error">{completeError ?? 'none'}</div>
-      {trigger === 'refresh' && (
-        <button onClick={() => void auth.refreshUser()}>refresh</button>
-      )}
-      {trigger === 'completeExternalLogin' && (
-        <button
-          onClick={() =>
-            auth
-              .completeExternalLogin('new-token')
-              .then(() => setCompleteSettled(true))
-              .catch((err: unknown) => {
-                setCompleteSettled(true);
-                setCompleteError(err instanceof Error ? err.message : String(err));
-              })
-          }
-        >
-          complete
-        </button>
-      )}
-    </div>
-  );
+interface Mounted {
+  auth: () => AuthContextValue;
+  navigations: string[];
+  unmount: () => void;
 }
 
-describe('mount effect: token validation on mount', () => {
-  test('ApiActionRequiredError navigates and keeps the stored token intact', async () => {
-    localStorage.setItem(TOKEN_KEY, 'stored-token');
-    stubFetch(ACTION_REQUIRED_BODY, 403);
-    const navigate = (path: string) => navigateCalls.push(path);
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={navigate}>
-        <Probe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    expect(navigateCalls).toEqual(['/verify-email']);
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('stored-token');
-    expect(screen.getByTestId('token').textContent).toBe('stored-token');
-  });
-
-  test('a non-action-required error still clears the stored token (regression)', async () => {
-    localStorage.setItem(TOKEN_KEY, 'stored-token');
-    stubFetch({ error: { code: 'internal_error', message: 'boom' } }, 500);
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    expect(navigateCalls).toEqual([]);
-    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
-    expect(screen.getByTestId('token').textContent).toBe('null');
-  });
-
-  test('a network failure still clears the stored token (regression)', async () => {
-    localStorage.setItem(TOKEN_KEY, 'stored-token');
-    stubFetchNetworkError();
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    expect(navigateCalls).toEqual([]);
-    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
-  });
-});
-
-describe('refreshUser', () => {
-  test('ApiActionRequiredError navigates without logging out', async () => {
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe trigger="refresh" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetch(ACTION_REQUIRED_BODY, 403);
-    fireEvent.click(screen.getByText('refresh'));
-
-    await waitFor(() => expect(navigateCalls.length).toBe(1));
-
-    expect(navigateCalls).toEqual(['/verify-email']);
-    // logout() would navigate to '/auth/login' in addition to clearing the
-    // token; neither happened.
-    expect(screen.getByTestId('token').textContent).toBe('null');
-  });
-
-  test('a 401 still logs out (regression)', async () => {
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe trigger="refresh" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetch({ error: { code: 'unauthenticated', message: 'nope' } }, 401);
-    fireEvent.click(screen.getByText('refresh'));
-
-    await waitFor(() => expect(navigateCalls).toEqual(['/auth/login']));
-  });
-
-  test('a non-401, non-action-required error is silently swallowed (regression)', async () => {
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe trigger="refresh" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetchNetworkError();
-    fireEvent.click(screen.getByText('refresh'));
-
-    // Give the rejected promise a tick to resolve, then confirm nothing fired.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(navigateCalls).toEqual([]);
-  });
-});
-
-describe('loginPath', () => {
-  function LogoutProbe() {
-    const auth = useAuth();
-    return (
-      <div>
-        <div data-testid="loading">{String(auth.isLoading)}</div>
-        <button onClick={() => auth.logout()}>logout</button>
-        <button onClick={() => void auth.refreshUser()}>refresh</button>
-      </div>
-    );
+function mount(
+  props: Partial<React.ComponentProps<typeof AuthProvider>> = {},
+  extra: React.ReactNode = null,
+): Mounted {
+  let latest: AuthContextValue | null = null;
+  const navigations: string[] = [];
+  function Capture() {
+    latest = useAuth();
+    return null;
   }
+  const view = render(
+    <AuthProvider onNavigate={(p) => navigations.push(p)} {...props}>
+      <Capture />
+      {extra}
+    </AuthProvider>,
+  );
+  return {
+    auth: () => {
+      if (!latest) throw new Error('provider has not rendered');
+      return latest;
+    },
+    navigations,
+    unmount: view.unmount,
+  };
+}
 
-  async function renderWith(loginPath?: string, calls: string[] = []) {
-    render(
-      <AuthProvider onNavigate={(p) => calls.push(p)} loginPath={loginPath}>
-        <LogoutProbe />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-  }
+async function settled(m: Mounted): Promise<void> {
+  await waitFor(() => expect(m.auth().isLoading).toBe(false));
+}
 
-  test('logout navigates to /auth/login by default', async () => {
-    const calls: string[] = [];
-    await renderWith(undefined, calls);
-    fireEvent.click(screen.getByText('logout'));
-    expect(calls).toEqual(['/auth/login']);
+function seedTab(access: string | null = 'old-access'): void {
+  if (access) setStoredToken(access);
+  setStoredRefreshToken('old-refresh');
+  setStoredProfileUuid('prof-a');
+}
+
+// ─── Mount: reload and new tab ───────────────────────────────────────────────
+
+describe('mount', () => {
+  test('a tab with no tokens and no sibling channel settles signed out without any request', async () => {
+    const calls = mockApi({});
+    const m = mount();
+    await settled(m);
+    expect(m.auth().token).toBeNull();
+    expect(m.auth().user).toBeNull();
+    expect(m.auth().session).toBeNull();
+    expect(calls).toEqual([]);
   });
 
-  test('logout navigates to the configured loginPath', async () => {
-    const calls: string[] = [];
-    await renderWith('/signin', calls);
-    fireEvent.click(screen.getByText('logout'));
-    expect(calls).toEqual(['/signin']);
-  });
-
-  test('the refreshUser 401 path navigates to the configured loginPath', async () => {
-    const calls: string[] = [];
-    await renderWith('/signin', calls);
-    stubFetch({ error: { code: 'unauthenticated', message: 'nope' } }, 401);
-    fireEvent.click(screen.getByText('refresh'));
-    await waitFor(() => expect(calls).toEqual(['/signin']));
-  });
-
-  test('an invalid loginPath falls back to the default with a console.error', async () => {
-    const originalError = console.error;
-    const errors: unknown[][] = [];
-    console.error = (...a: unknown[]) => {
-      errors.push(a);
-    };
-    try {
-      const calls: string[] = [];
-      await renderWith('//evil.test', calls);
-      fireEvent.click(screen.getByText('logout'));
-      expect(calls).toEqual(['/auth/login']);
-      expect(errors.length).toBeGreaterThan(0);
-    } finally {
-      console.error = originalError;
+  test('a reload hydrates session, profile, profiles and user with Bearer and credentials omit', async () => {
+    seedTab();
+    const calls = mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+    });
+    const m = mount();
+    await settled(m);
+    expect(m.auth().token).toBe('old-access');
+    expect(m.auth().profile?.uuid).toBe('prof-a');
+    expect(m.auth().profiles.map((p) => p.uuid)).toEqual(['prof-a', 'prof-b']);
+    expect(m.auth().session?.uuid).toBe('sess-1');
+    expect(m.auth().user?.email).toBe('ada@example.test');
+    expect(m.auth().emailVerified).toBe(true);
+    expect(m.auth().impersonating).toBe(false);
+    for (const call of calls) {
+      expect(call.authorization).toBe('Bearer old-access');
+      expect(call.credentials).toBe('omit');
     }
   });
-});
 
-describe('completeExternalLogin', () => {
-  test('ApiActionRequiredError keeps the token, navigates, and does not rethrow', async () => {
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe trigger="completeExternalLogin" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetch(ACTION_REQUIRED_BODY, 403);
-    fireEvent.click(screen.getByText('complete'));
-
-    await waitFor(() => expect(screen.getByTestId('complete-settled').textContent).toBe('true'));
-
-    expect(navigateCalls).toEqual(['/verify-email']);
-    expect(screen.getByTestId('complete-error').textContent).toBe('none');
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token');
-    expect(screen.getByTestId('token').textContent).toBe('new-token');
+  test('an expired access token refreshes through the lineage during hydration', async () => {
+    seedTab('expired');
+    const calls = mockApi({
+      'GET /v1/session': (call) =>
+        call.authorization === 'Bearer access-2'
+          ? SESSION_INFO
+          : errorReply(401, 'unauthorized'),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'access-2', refresh_token: 'refresh-2' }),
+      'GET /v1/me': () => USER_VIEW,
+    });
+    const m = mount();
+    await settled(m);
+    expect(m.auth().token).toBe('access-2');
+    expect(getStoredRefreshToken()).toBe('refresh-2');
+    expect(calls.filter((c) => c.path === '/v1/auth/token').length).toBe(1);
+    // The user record is loaded once, not once per path that learned of the session.
+    await waitFor(() => expect(m.auth().user).not.toBeNull());
+    expect(calls.filter((c) => c.path === '/v1/me').length).toBe(1);
   });
 
-  test('a non-action-required error clears the token and rethrows (regression)', async () => {
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe trigger="completeExternalLogin" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetch({ error: { code: 'unauthenticated', message: 'bad token' } }, 401);
-    fireEvent.click(screen.getByText('complete'));
-
-    await waitFor(() => expect(screen.getByTestId('complete-settled').textContent).toBe('true'));
-
-    expect(navigateCalls).toEqual([]);
-    expect(screen.getByTestId('complete-error').textContent).toBe('Authentication required');
-    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
-    expect(screen.getByTestId('token').textContent).toBe('null');
-  });
-});
-
-describe('custom tokenStorageKey', () => {
-  const CUSTOM = 'custom_key';
-
-  function ActionProbe() {
-    const auth = useAuth();
-    return (
-      <div>
-        <div data-testid="loading">{String(auth.isLoading)}</div>
-        <div data-testid="token">{auth.token ?? 'null'}</div>
-        <button onClick={() => void auth.login('a@b.test', 'pw')}>login</button>
-        <button onClick={() => auth.logout()}>logout</button>
-      </div>
-    );
-  }
-
-  test('mount reads only the custom key', async () => {
-    configureUsersApi({ tokenStorageKey: CUSTOM });
-    localStorage.setItem(TOKEN_KEY, 'default-token');
-    render(
-      <AuthProvider>
-        <ActionProbe />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-    expect(screen.getByTestId('token').textContent).toBe('null');
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('default-token');
+  test('an action-required answer navigates and keeps the tokens', async () => {
+    seedTab();
+    mockApi({
+      'GET /v1/session': () =>
+        jsonResponse(
+          { action: { code: 'users.email_unverified', message: 'Verify.', path: '/verify-email' } },
+          403,
+        ),
+    });
+    const m = mount();
+    await settled(m);
+    expect(m.navigations).toEqual(['/verify-email']);
+    expect(getStoredToken()).toBe('old-access');
   });
 
-  test('mount failure clears only the custom key', async () => {
-    configureUsersApi({ tokenStorageKey: CUSTOM });
-    localStorage.setItem(CUSTOM, 'stored');
-    localStorage.setItem(TOKEN_KEY, 'default-token');
-    stubFetch({ error: { code: 'internal_error', message: 'boom' } }, 500);
-    render(
-      <AuthProvider>
-        <ActionProbe />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-    expect(localStorage.getItem(CUSTOM)).toBeNull();
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('default-token');
+  test('does not navigate to the page the action points at when already there', async () => {
+    seedTab();
+    const real = Object.getOwnPropertyDescriptor(window, 'location');
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/verify-email', search: '', origin: 'http://app.test', href: 'http://app.test/verify-email' },
+    });
+    try {
+      mockApi({
+        'GET /v1/session': () =>
+          jsonResponse(
+            { action: { code: 'users.email_unverified', message: 'Verify.', path: '/verify-email' } },
+            403,
+          ),
+      });
+      const m = mount();
+      await settled(m);
+      expect(m.navigations).toEqual([]);
+    } finally {
+      if (real) Object.defineProperty(window, 'location', real);
+    }
   });
 
-  test('login writes and logout clears only the custom key', async () => {
-    configureUsersApi({ tokenStorageKey: CUSTOM });
-    render(
-      <AuthProvider>
-        <ActionProbe />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-    stubFetch({ token: 'tok', user: { id: 'u' } }, 200);
-    fireEvent.click(screen.getByText('login'));
-    await waitFor(() => expect(localStorage.getItem(CUSTOM)).toBe('tok'));
-    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
-
-    localStorage.setItem(TOKEN_KEY, 'default-token');
-    fireEvent.click(screen.getByText('logout'));
-    expect(localStorage.getItem(CUSTOM)).toBeNull();
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('default-token');
+  test('any other failure drops the unusable stored session', async () => {
+    seedTab();
+    mockApi({ 'GET /v1/session': () => errorReply(500, 'internal_error') });
+    const m = mount();
+    await settled(m);
+    expect(m.auth().token).toBeNull();
+    expect(getStoredToken()).toBeNull();
+    expect(getStoredRefreshToken()).toBeNull();
   });
 
-  test('completeExternalLogin writes the custom key; failure clears only it', async () => {
-    configureUsersApi({ tokenStorageKey: CUSTOM });
-    localStorage.setItem(TOKEN_KEY, 'default-token');
-    render(
-      <AuthProvider>
-        <Probe trigger="completeExternalLogin" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetch(ACTION_REQUIRED_BODY, 403);
-    fireEvent.click(screen.getByText('complete'));
-    await waitFor(() => expect(screen.getByTestId('complete-settled').textContent).toBe('true'));
-    expect(localStorage.getItem(CUSTOM)).toBe('new-token');
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('default-token');
+  test('a revoked session on reload signs the tab out and runs the unauthenticated handler once', async () => {
+    seedTab();
+    const unauth: unknown[] = [];
+    configureUsersApi({ onUnauthenticated: (c) => unauth.push(c) });
+    mockApi({ 'GET /v1/session': () => errorReply(401, 'users.session_revoked') });
+    const m = mount();
+    await settled(m);
+    expect(m.auth().token).toBeNull();
+    expect(getStoredRefreshToken()).toBeNull();
+    expect(unauth.length).toBe(1);
   });
 
-  test('completeExternalLogin failure removes the custom key only', async () => {
-    configureUsersApi({ tokenStorageKey: CUSTOM });
-    localStorage.setItem(TOKEN_KEY, 'default-token');
-    render(
-      <AuthProvider>
-        <Probe trigger="completeExternalLogin" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-    stubFetch({ error: { code: 'unauthenticated', message: 'bad' } }, 401);
-    fireEvent.click(screen.getByText('complete'));
-    await waitFor(() => expect(screen.getByTestId('complete-settled').textContent).toBe('true'));
-    expect(localStorage.getItem(CUSTOM)).toBeNull();
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('default-token');
+  test('a new tab forks a lineage from a sibling tab over the channel', async () => {
+    (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = FakeBroadcastChannel;
+    const calls = mockApi({
+      'POST /v1/session/fork': () => tokenResponse({ access_token: 'fork-access', refresh_token: 'fork-refresh' }),
+      'GET /v1/me': () => USER_VIEW,
+    });
+    // The sibling: another provider with a session answers fork requests.
+    const sibling = (await import('./fork')).startForkResponder(() => 'sibling-access');
+    const m = mount();
+    await settled(m);
+    sibling();
+    expect(calls[0]!.path).toBe('/v1/session/fork');
+    expect(calls[0]!.authorization).toBe('Bearer sibling-access');
+    expect(m.auth().token).toBe('fork-access');
+    expect(getStoredRefreshToken()).toBe('fork-refresh');
+    expect(m.auth().profile?.uuid).toBe('prof-a');
+    await waitFor(() => expect(m.auth().user).not.toBeNull());
+  });
+
+  test('a new tab nobody answers is signed out after the fork timeout', async () => {
+    (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = FakeBroadcastChannel;
+    configureUsersApi({ forkTimeoutMs: 40 });
+    const calls = mockApi({});
+    const m = mount();
+    await settled(m);
+    expect(m.auth().token).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  test('a signed-in tab answers siblings with its access token but never offers an impersonation', async () => {
+    (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = FakeBroadcastChannel;
+    seedTab();
+    mockApi({
+      'GET /v1/session': () => ({
+        ...SESSION_INFO,
+        session: { ...tokenResponse().session!, impersonating: true },
+      }),
+      'GET /v1/me': () => USER_VIEW,
+    });
+    const m = mount();
+    await settled(m);
+    expect(m.auth().impersonating).toBe(true);
+
+    const asker = new FakeBroadcastChannel('moduleforge-users-gui:fork:auth_token');
+    const heard: unknown[] = [];
+    asker.onmessage = (e) => heard.push(e.data);
+    asker.postMessage({ kind: 'fork_request', id: 'r1' });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(heard).toEqual([]);
+    asker.close();
   });
 });
 
-describe('action-required navigation is skipped when already on the target path', () => {
-  const OIDC_BODY = {
-    action: {
-      code: 'users.oidc_not_confirmed',
-      message: 'OIDC configuration must be confirmed.',
-      path: '/oidc-config',
-    },
-  };
+// ─── Sign-in, selection, switch ──────────────────────────────────────────────
 
-  // happy-dom starts at about:blank, where history.replaceState cannot set a
-  // path; point it at a real origin for these tests and restore afterwards.
-  const happyDOM = (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM;
-  function goTo(path: string): void {
-    happyDOM.setURL(`http://localhost${path}`);
-  }
-
-  afterEach(() => {
-    happyDOM.setURL('about:blank');
+describe('login and profile selection', () => {
+  test('login lands on the profile and loads the user', async () => {
+    const m = mount();
+    await settled(m);
+    mockApi({
+      'POST /v1/auth/login': () => tokenResponse(),
+      'GET /v1/me': () => USER_VIEW,
+    });
+    await act(async () => {
+      await m.auth().login('ada@example.test', 'pw');
+    });
+    await waitFor(() => expect(m.auth().user).not.toBeNull());
+    expect(m.auth().token).toBe('access-1');
+    expect(m.auth().profile?.uuid).toBe('prof-a');
+    expect(m.auth().selectionRequired).toBe(false);
+    expect(m.auth().session?.uuid).toBe('sess-1');
   });
 
-  test('mount effect does not navigate to the page it is already on', async () => {
-    goTo('/oidc-config');
-    localStorage.setItem(TOKEN_KEY, 'stored-token');
-    stubFetch(OIDC_BODY, 503);
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    expect(navigateCalls).toEqual([]);
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('stored-token');
-  });
-
-  test('mount effect still navigates from any other path', async () => {
-    goTo('/dashboard');
-    localStorage.setItem(TOKEN_KEY, 'stored-token');
-    stubFetch(OIDC_BODY, 503);
-    const navigateCalls: string[] = [];
-
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    expect(navigateCalls).toEqual(['/oidc-config']);
-  });
-
-  test('refreshUser does not navigate to the page it is already on', async () => {
-    goTo('/oidc-config');
-    const navigateCalls: string[] = [];
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe trigger="refresh" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetch(OIDC_BODY, 503);
-    fireEvent.click(screen.getByText('refresh'));
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    expect(navigateCalls).toEqual([]);
-  });
-
-  test('completeExternalLogin does not navigate to the page it is already on', async () => {
-    goTo('/oidc-config');
-    const navigateCalls: string[] = [];
-    render(
-      <AuthProvider onNavigate={(path) => navigateCalls.push(path)}>
-        <Probe trigger="completeExternalLogin" />
-      </AuthProvider>,
-    );
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-
-    stubFetch(OIDC_BODY, 503);
-    fireEvent.click(screen.getByText('complete'));
-    await waitFor(() => expect(screen.getByTestId('complete-settled').textContent).toBe('true'));
-
-    expect(navigateCalls).toEqual([]);
-    expect(screen.getByTestId('complete-error').textContent).toBe('none');
-    expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token');
-  });
-});
-
-describe('emailVerifiedAt exposure', () => {
-  const SELF_BASE = {
-    uuid: 'u1',
-    entity_uuid: 'e1',
-    email: 'a@example.com',
-    given_name: 'A',
-    family_name: 'B',
-    is_admin: false,
-    created_at: '',
-    updated_at: '',
-  };
-
-  test('exposes the verified timestamp from /v1/self', async () => {
-    localStorage.setItem(TOKEN_KEY, 'stored-token');
-    stubFetch({ ...SELF_BASE, email_verified_at: '2026-01-02T03:04:05Z' }, 200);
-
-    render(
-      <AuthProvider onNavigate={() => {}}>
-        <Probe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-    expect(screen.getByTestId('email-verified-at').textContent).toBe('2026-01-02T03:04:05Z');
-  });
-
-  test('is null for an unverified account', async () => {
-    localStorage.setItem(TOKEN_KEY, 'stored-token');
-    stubFetch({ ...SELF_BASE, email_verified_at: null }, 200);
-
-    render(
-      <AuthProvider onNavigate={() => {}}>
-        <Probe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'));
-    expect(screen.getByTestId('email-verified-at').textContent).toBe('null');
-  });
-});
-
-describe('emailVerifiedAt after sign-in', () => {
-  // The login payload carries `email_verified_at` (same semantics as
-  // /v1/self); `emailVerifiedAt` must be correct immediately after sign-in,
-  // with no `/v1/self` round trip.
-  function SignInProbe() {
-    const auth = useAuth();
-    return (
-      <div>
-        <div data-testid="token">{auth.token ?? 'null'}</div>
-        <div data-testid="email-verified-at">{auth.emailVerifiedAt ?? 'null'}</div>
-        <button onClick={() => void auth.login('a@example.com', 'pw')}>login</button>
-        <button
-          onClick={() => void auth.register('a@example.com', 'pw', 'A', 'B')}
-        >
-          register
-        </button>
-      </div>
-    );
-  }
-
-  async function signIn(
-    action: 'login' | 'register',
-    emailVerifiedAt: string | null,
-  ): Promise<string[]> {
-    const urls: string[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      urls.push(String(input));
-      return new Response(
-        JSON.stringify({
-          token: 'new-token',
-          user: { uuid: 'u1', email: 'a@example.com', email_verified_at: emailVerifiedAt },
+  test('selection_required flow: no access token until selectProfile makes the refresh grant', async () => {
+    const m = mount();
+    await settled(m);
+    const calls = mockApi({
+      'POST /v1/auth/login': () =>
+        tokenResponse({
+          access_token: null,
+          profile: null,
+          selection_required: true,
+          refresh_token: 'lineage-1',
+          profiles: [PROFILE_A, PROFILE_B],
         }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }) as unknown as typeof fetch;
+      'POST /v1/auth/token': () =>
+        tokenResponse({ access_token: 'chosen-access', refresh_token: 'lineage-2', profile: PROFILE_B }),
+      'GET /v1/me': () => USER_VIEW,
+    });
+    await act(async () => {
+      await m.auth().login('ada@example.test', 'pw');
+    });
+    expect(m.auth().selectionRequired).toBe(true);
+    expect(m.auth().token).toBeNull();
+    expect(m.auth().profile).toBeNull();
+    expect(m.auth().profiles.length).toBe(2);
+    // No user fetch without an access token.
+    expect(calls.some((c) => c.path === '/v1/me')).toBe(false);
 
-    render(
-      <AuthProvider onNavigate={() => {}}>
-        <SignInProbe />
-      </AuthProvider>,
-    );
-    fireEvent.click(screen.getByText(action));
-    await waitFor(() => expect(screen.getByTestId('token').textContent).toBe('new-token'));
-    return urls;
+    await act(async () => {
+      await m.auth().selectProfile('prof-b');
+    });
+    const grant = calls.find((c) => c.path === '/v1/auth/token')!;
+    expect(grant.body).toEqual({
+      grant_type: 'refresh_token',
+      refresh_token: 'lineage-1',
+      profile_uuid: 'prof-b',
+    });
+    expect(m.auth().selectionRequired).toBe(false);
+    expect(m.auth().token).toBe('chosen-access');
+    expect(m.auth().profile?.uuid).toBe('prof-b');
+    expect(getStoredRefreshToken()).toBe('lineage-2');
+    expect(getStoredProfileUuid()).toBe('prof-b');
+  });
+
+  test('selectProfile without a refresh token fails readably and makes no request', async () => {
+    const m = mount();
+    await settled(m);
+    const calls = mockApi({});
+    const err = await m.auth().selectProfile('prof-b').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiRequestError);
+    expect(calls).toEqual([]);
+  });
+
+  test('switchProfile replaces only this tab access token and active profile', async () => {
+    seedTab();
+    const calls = mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/session/switch': () =>
+        tokenResponse({ access_token: 'switched', refresh_token: null, profile: PROFILE_B }),
+    });
+    const m = mount();
+    await settled(m);
+    await act(async () => {
+      await m.auth().switchProfile('prof-b');
+    });
+    expect(calls.find((c) => c.path === '/v1/session/switch')!.body).toEqual({ profile_uuid: 'prof-b' });
+    expect(m.auth().token).toBe('switched');
+    expect(m.auth().profile?.uuid).toBe('prof-b');
+    expect(getStoredProfileUuid()).toBe('prof-b');
+    expect(getStoredRefreshToken()).toBe('old-refresh');
+    // Same session: the user record is not refetched for a mere switch.
+    expect(calls.filter((c) => c.path === '/v1/me').length).toBe(1);
+  });
+
+  test('register establishes the session from the 201 response without a second login call', async () => {
+    const m = mount();
+    await settled(m);
+    const calls = mockApi({
+      'POST /v1/auth/register': () => jsonResponse(tokenResponse(), 201),
+      'GET /v1/me': () => USER_VIEW,
+    });
+    await act(async () => {
+      await m.auth().register('ada@example.test', 'pw-pw-pw-pw-12', 'Ada', 'Lovelace');
+    });
+    expect(calls.map((c) => c.path)).toContain('/v1/auth/register');
+    expect(calls.some((c) => c.path === '/v1/auth/login')).toBe(false);
+    expect(calls[0]!.body).toEqual({
+      email: 'ada@example.test',
+      password: 'pw-pw-pw-pw-12',
+      given_name: 'Ada',
+      family_name: 'Lovelace',
+    });
+    expect(m.auth().token).toBe('access-1');
+  });
+});
+
+// ─── Locks, revocation, impersonation ────────────────────────────────────────
+
+describe('profile lock and sign-out', () => {
+  test('401 users.profile_unavailable populates profileLock with the reason and the cached remedy, keeping the tokens', async () => {
+    const locked = {
+      ...PROFILE_B,
+      available: false,
+      lock: { reason: 'credential_not_authorized', remedy: { kind: 'sign_in_with_provider', provider_id: 'google' } },
+    };
+    seedTab();
+    mockApi({
+      'GET /v1/session': () => ({ ...SESSION_INFO, profile: PROFILE_B, profiles: [PROFILE_A, locked] }),
+      'GET /v1/me': () => USER_VIEW,
+      'GET /v1/me/identifiers': () =>
+        errorReply(401, 'users.profile_unavailable', [
+          { field: 'profile', code: 'credential_not_authorized', message: 'locked' },
+        ]),
+    });
+    setStoredProfileUuid('prof-b');
+    const m = mount();
+    await settled(m);
+    // The tab's active profile is now the locked one.
+    await act(async () => {
+      await api.me.identifiers.list().catch(() => {});
+    });
+    expect(m.auth().profileLock).toEqual({
+      profileUuid: 'prof-b',
+      reason: 'credential_not_authorized',
+      remedy: { kind: 'sign_in_with_provider', provider_id: 'google' },
+    });
+    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredRefreshToken()).toBe('old-refresh');
+  });
+
+  test('a lock on a profile not in the cached list carries the reason with no remedy, and selecting another profile clears it', async () => {
+    seedTab();
+    mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'GET /v1/me/credentials': () =>
+        errorReply(401, 'users.profile_unavailable', [
+          { field: 'profile', code: 'profile_suspended', message: 'suspended' },
+        ]),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'other', profile: PROFILE_B }),
+    });
+    const m = mount();
+    await settled(m);
+    await act(async () => {
+      await api.me.credentials.list().catch(() => {});
+    });
+    expect(m.auth().profileLock).toEqual({
+      profileUuid: 'prof-a',
+      reason: 'profile_suspended',
+      remedy: null,
+    });
+    await act(async () => {
+      await m.auth().selectProfile('prof-b');
+    });
+    expect(m.auth().profileLock).toBeNull();
+    expect(m.auth().profile?.uuid).toBe('prof-b');
+  });
+
+  for (const code of ['users.session_revoked', 'users.refresh_reuse']) {
+    test(`${code} on a later request signs the context out`, async () => {
+      seedTab();
+      const unauth: unknown[] = [];
+      configureUsersApi({ onUnauthenticated: (c) => unauth.push(c) });
+      mockApi({
+        'GET /v1/session': () => SESSION_INFO,
+        'GET /v1/me': () => USER_VIEW,
+        'GET /v1/me/sessions': () => errorReply(401, code),
+      });
+      const m = mount();
+      await settled(m);
+      expect(m.auth().token).toBe('old-access');
+      await act(async () => {
+        await api.me.sessions.list().catch(() => {});
+      });
+      expect(m.auth().token).toBeNull();
+      expect(m.auth().session).toBeNull();
+      expect(m.auth().user).toBeNull();
+      expect(getStoredRefreshToken()).toBeNull();
+      expect(unauth.length).toBe(1);
+    });
   }
 
-  test('login() exposes the verified timestamp', async () => {
-    const urls = await signIn('login', '2026-01-02T03:04:05Z');
-    expect(screen.getByTestId('email-verified-at').textContent).toBe('2026-01-02T03:04:05Z');
-    expect(urls.some((u) => u.endsWith('/v1/self'))).toBe(false);
+  test('401 handling never hard-navigates when a handler is configured', async () => {
+    seedTab();
+    const assigned: string[] = [];
+    const real = Object.getOwnPropertyDescriptor(window, 'location');
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        pathname: '/app',
+        search: '',
+        origin: 'http://app.test',
+        set href(v: string) {
+          assigned.push(v);
+        },
+        get href() {
+          return 'http://app.test/app';
+        },
+      },
+    });
+    try {
+      configureUsersApi({ onUnauthenticated: () => {} });
+      mockApi({
+        'GET /v1/session': () => SESSION_INFO,
+        'GET /v1/me': () => USER_VIEW,
+        'GET /v1/me/sessions': () => errorReply(401, 'users.session_revoked'),
+      });
+      const m = mount();
+      await settled(m);
+      await act(async () => {
+        await api.me.sessions.list().catch(() => {});
+      });
+      expect(assigned).toEqual([]);
+    } finally {
+      if (real) Object.defineProperty(window, 'location', real);
+    }
   });
 
-  test('login() exposes null for an unverified account', async () => {
-    await signIn('login', null);
-    expect(screen.getByTestId('email-verified-at').textContent).toBe('null');
+  test('impersonating reflects the session and returns to false when the administrator token is restored', async () => {
+    seedTab('admin-access');
+    const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
+    mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/impersonations': () =>
+        jsonResponse(
+          tokenResponse({ access_token: 'imp-access', refresh_token: null, session: impSession, profile: PROFILE_B }),
+          201,
+        ),
+      'DELETE /v1/impersonations/current': () => undefined,
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' }),
+    });
+    const m = mount();
+    await settled(m);
+    await act(async () => {
+      await api.impersonations.start({ profile_uuid: 'prof-b', reason: 'support' });
+    });
+    expect(m.auth().impersonating).toBe(true);
+    expect(m.auth().token).toBe('imp-access');
+    // The stored profile stays the administrator's own for the refresh grant.
+    expect(getStoredProfileUuid()).toBe('prof-a');
+
+    await act(async () => {
+      await api.impersonations.end();
+    });
+    expect(m.auth().impersonating).toBe(false);
+    expect(m.auth().token).toBe('admin-access-2');
+  });
+});
+
+// ─── Handoff ─────────────────────────────────────────────────────────────────
+
+describe('completeHandoff', () => {
+  test('makes a single exchange with the stored verifier, stores the session, and clears the verifier', async () => {
+    const m = mount();
+    await settled(m);
+    const verifier = 'v'.repeat(43);
+    setStoredHandoffVerifier(verifier);
+    const calls = mockApi({
+      'POST /v1/auth/handoff': () => tokenResponse(),
+      'GET /v1/me': () => USER_VIEW,
+    });
+    let first!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    await act(async () => {
+      // A double-invoked effect calls twice with the same code.
+      first = m.auth().completeHandoff('code-1');
+      second = m.auth().completeHandoff('code-1');
+      await Promise.all([first, second]);
+    });
+    expect(calls.filter((c) => c.path === '/v1/auth/handoff').length).toBe(1);
+    expect(calls.find((c) => c.path === '/v1/auth/handoff')!.body).toEqual({ code: 'code-1', verifier });
+    expect(getStoredHandoffVerifier()).toBeNull();
+    expect(m.auth().token).toBe('access-1');
+    expect(m.auth().profile?.uuid).toBe('prof-a');
   });
 
-  test('register() (chained login) exposes the verified timestamp', async () => {
-    await signIn('register', '2026-01-02T03:04:05Z');
-    expect(screen.getByTestId('email-verified-at').textContent).toBe('2026-01-02T03:04:05Z');
+  test('without a verifier the exchange fails readably and sends nothing', async () => {
+    const m = mount();
+    await settled(m);
+    const calls = mockApi({});
+    const err = (await m.auth().completeHandoff('code-2').catch((e: unknown) => e)) as ApiRequestError;
+    expect(err).toBeInstanceOf(ApiRequestError);
+    expect(err.code).toBe('handoff_verifier_missing');
+    expect(err.message.length).toBeGreaterThan(20);
+    expect(calls).toEqual([]);
+  });
+
+  test('a refused exchange still clears the verifier and leaves the tab signed out', async () => {
+    const m = mount();
+    await settled(m);
+    setStoredHandoffVerifier('w'.repeat(43));
+    mockApi({ 'POST /v1/auth/handoff': () => errorReply(401, 'users.invalid_credentials') });
+    const err = (await m.auth().completeHandoff('code-3').catch((e: unknown) => e)) as ApiRequestError;
+    expect(err.code).toBe('users.invalid_credentials');
+    expect(getStoredHandoffVerifier()).toBeNull();
+    expect(m.auth().token).toBeNull();
+  });
+});
+
+// ─── Logout ──────────────────────────────────────────────────────────────────
+
+describe('logout', () => {
+  test('revokes the session, clears the tab, and navigates to the login path', async () => {
+    seedTab();
+    const calls = mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/session/logout': () => undefined,
+    });
+    const m = mount({ loginPath: '/signin' });
+    await settled(m);
+    await act(async () => {
+      await m.auth().logout();
+    });
+    expect(calls.at(-1)!.path).toBe('/v1/session/logout');
+    expect(calls.at(-1)!.authorization).toBe('Bearer old-access');
+    expect(m.auth().token).toBeNull();
+    expect(m.auth().user).toBeNull();
+    expect(getStoredToken()).toBeNull();
+    expect(getStoredRefreshToken()).toBeNull();
+    expect(m.navigations).toEqual(['/signin']);
+  });
+
+  test('still signs out locally when the server is unreachable', async () => {
+    seedTab();
+    mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+    });
+    const m = mount();
+    await settled(m);
+    globalThis.fetch = (async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch;
+    await act(async () => {
+      await m.auth().logout();
+    });
+    expect(m.auth().token).toBeNull();
+    expect(getStoredToken()).toBeNull();
+    expect(m.navigations).toEqual(['/auth/login']);
+  });
+
+  test('an unsafe loginPath falls back to the default login route', async () => {
+    seedTab();
+    mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/session/logout': () => undefined,
+    });
+    const m = mount({ loginPath: '//evil.test' });
+    await settled(m);
+    await act(async () => {
+      await m.auth().logout();
+    });
+    expect(m.navigations).toEqual(['/auth/login']);
+  });
+});
+
+// ─── Step-up ─────────────────────────────────────────────────────────────────
+
+describe('step-up registration', () => {
+  const STEP_UP = jsonResponse(
+    { action: { code: 'users.step_up_required', message: 'Step up.', path: '/account' } },
+    409,
+  );
+
+  function stepUpApi(): Call[] {
+    return mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'PUT /v1/me': (call) =>
+        call.authorization === 'Bearer fresh' ? USER_VIEW : STEP_UP.clone(),
+    });
+  }
+
+  test('the stepUpHandler prop retries the interrupted request once with the fresh token', async () => {
+    seedTab();
+    const calls = stepUpApi();
+    const handler: StepUpHandler = async () => 'fresh';
+    const m = mount({ stepUpHandler: handler });
+    await settled(m);
+    await act(async () => {
+      await api.me.update({ given_name: 'Zed' });
+    });
+    const puts = calls.filter((c) => c.method === 'PUT');
+    expect(puts.length).toBe(2);
+    expect(puts[1]!.authorization).toBe('Bearer fresh');
+  });
+
+  test('without a handler the original ApiActionRequiredError propagates', async () => {
+    seedTab();
+    stepUpApi();
+    const m = mount();
+    await settled(m);
+    const err = await api.me.update({ given_name: 'Zed' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiActionRequiredError);
+  });
+
+  test('unmounting the provider unregisters the handler', async () => {
+    seedTab();
+    stepUpApi();
+    const m = mount({ stepUpHandler: async () => 'fresh' });
+    await settled(m);
+    m.unmount();
+    const err = await api.me.update({ given_name: 'Zed' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiActionRequiredError);
+  });
+
+  test('useStepUpHandler registers while the component is mounted', async () => {
+    seedTab();
+    const calls = stepUpApi();
+    function Prompt() {
+      const handler = React.useCallback<StepUpHandler>(async () => 'fresh', []);
+      useStepUpHandler(handler);
+      return null;
+    }
+    const m = mount({}, <Prompt />);
+    await settled(m);
+    await act(async () => {
+      await api.me.update({ given_name: 'Zed' });
+    });
+    expect(calls.filter((c) => c.method === 'PUT').length).toBe(2);
+  });
+});
+
+// ─── Hooks ───────────────────────────────────────────────────────────────────
+
+describe('hooks', () => {
+  test('useAuth throws outside a provider; useOptionalAuth returns null', () => {
+    let optional: AuthContextValue | null | undefined;
+    function Optional() {
+      optional = useOptionalAuth();
+      return null;
+    }
+    render(<Optional />);
+    expect(optional).toBeNull();
+    function Required() {
+      useAuth();
+      return null;
+    }
+    const spy = console.error;
+    console.error = () => {};
+    try {
+      expect(() => render(<Required />)).toThrow('useAuth must be used within an AuthProvider');
+    } finally {
+      console.error = spy;
+    }
   });
 });

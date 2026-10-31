@@ -168,7 +168,7 @@ export interface AuthProviderProps {
   onNavigate?: (path: string) => void;
   /**
    * Site-relative path `logout()` navigates to. Defaults to the login route
-   * (`'/auth/login'`); an invalid value logs an error and falls back to the
+   * (`USERS_GUI_ROUTES.login`); an invalid value logs an error and falls back to the
    * default. Note the provider navigates through `onNavigate`, while the
    * request layer's unauthenticated handling goes through
    * `configureUsersApi({ onUnauthenticated | unauthenticatedRedirectUrl })`;

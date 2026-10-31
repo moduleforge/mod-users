@@ -35,8 +35,9 @@ Configure the API client once, before anything renders, with `configureUsersApi`
 | Field | Type | Default | Validation |
 |---|---|---|---|
 | `baseUrl` | `string` | see [precedence](#base-url-precedence) | `''` (same-origin), an absolute `http(s)` URL, or a path starting with a single `/`; no control characters or backslashes; trailing slashes stripped |
-| `tokenStorageKey` | `string` | `'auth_token'` (`USERS_TOKEN_KEY`) | non-empty string |
-| `unauthenticatedRedirectUrl` | `string` | `'/auth/login'` | a path starting with exactly one `/` (no `//`, backslash or control characters), or an absolute `http(s)` URL |
+| `tokenStorageKey` | `string` | `'auth_token'` (`USERS_TOKEN_KEY`) | non-empty string; the `sessionStorage` key of the tab's access token (see [Frontend contract](#frontend-contract)) |
+| `forkTimeoutMs` | `number` | `1500` | positive integer no larger than `30000`; how long a tab with no tokens waits for a sibling tab to answer its fork request |
+| `unauthenticatedRedirectUrl` | `string` | `'/auth/login'` (`USERS_GUI_ROUTES.login`) | a path starting with exactly one `/` (no `//`, backslash or control characters), or an absolute `http(s)` URL |
 | `unauthenticatedReturnParam` | `string \| null` | `null` (append nothing) | `null` or matching `/^[A-Za-z0-9_-]+$/` |
 | `onUnauthenticated` | `((ctx: UnauthenticatedContext) => void) \| null` | `null` (default redirect) | function or `null`; `null` restores the default handler |
 
@@ -44,10 +45,10 @@ Related helpers:
 
 - `resetUsersApiConfig()` restores every default. It exists mainly for tests.
 - `getApiBaseUrl()` returns the resolved base URL (evaluated on every call).
-- `getTokenStorageKey()`, `getStoredToken()` and `clearStoredToken()` read the key in effect, read the stored token (`null` during SSR), and remove it. `USERS_TOKEN_KEY` is the default key.
+- `getTokenStorageKey()`, `getStoredToken()` and `clearStoredToken()` read the key in effect, read the tab's stored access token (`null` during SSR), and remove it. `USERS_TOKEN_KEY` is the default key.
 - `UsersApiConfig` and `UnauthenticatedContext` are the exported types.
 
-**Token key semantics.** Configure `tokenStorageKey` before the `AuthProvider` mounts, and do not change it mid-session: the token already stored under the old key is not migrated.
+**Token key semantics.** Configure `tokenStorageKey` before the `AuthProvider` mounts, and do not change it mid-session: the tokens already stored under the old key are not migrated. The refresh token, active profile and handoff verifier are stored under `<key>.refresh`, `<key>.profile` and `<key>.handoff_verifier`, and the fork channel name includes the key, so two embedded apps with different keys never share tokens.
 
 ### Base URL precedence
 
@@ -62,21 +63,88 @@ Related helpers:
 
 **Trust note.** Only the value passed to `configureUsersApi` is validated. The `NEXT_PUBLIC_API_BASE_URL` and `window.__USERS_API_URL__` fallbacks are trusted deploy-time inputs, used as-is **without** that validation, and the bearer token is sent to whatever URL resolves. They must come only from your deployment configuration, never from user-controlled input (query strings, storage, or anything an attacker can influence). Prefer calling `configureUsersApi({ baseUrl })` explicitly so the value is validated.
 
+## Frontend contract
+
+The library implements the mod-users frontend contract: every tab is its own session client, and the only credential on the wire is a Bearer access token.
+
+### Storage and requests
+
+- **Per-tab storage.** The access token, the refresh token and the active profile uuid live in `sessionStorage` (one set per tab), never in `localStorage` and never in cookies. Where `sessionStorage` is unavailable or full, an in-memory map stands in for the page lifetime; with no `window` (SSR) nothing is stored. The access token sits under `tokenStorageKey` (default `auth_token`), which is the key `@moduleforge/core-gui`'s api-client reads, so the other module clients in your app send the same tab's token.
+- **Bearer only.** Every request sends `Authorization: Bearer <this tab's access token>` and `credentials: 'omit'`. The one deliberate exception is the pair of OIDC authorize-URL start calls (`me.credentials.startOidcLink` and `session.stepUp.startOidc`): they use `credentials: 'include'` because the browser would otherwise discard the signed `oidc_state` cookie that the redirect callback needs. That cookie is an anti-forgery state, not an authentication cookie, and both calls still carry the Bearer token.
+
+### Refresh lineage
+
+Each tab owns exactly one refresh lineage. On access-token expiry (a `401` that is not a revocation) the client calls `POST /v1/auth/token` with the tab's refresh token and active profile, stores the rotated refresh token, and replays the request once. Concurrent requests in a tab share one in-flight refresh, because a second rotation of the same token would trip the server's reuse detection. A `401` that still fails after the replay signs the tab out. `401 users.session_revoked` and `401 users.refresh_reuse` clear the tab's tokens and sign it out immediately, without a refresh attempt: the access, refresh and profile entries are removed, `useAuth()` returns to signed-out, and the unauthenticated handler runs once.
+
+### New tabs: fork
+
+A tab that starts with no tokens asks its same-origin sibling tabs for an access token over a `BroadcastChannel` and calls `POST /v1/session/fork` with the first one the server accepts, which gives the new tab its own lineage. Only access tokens cross the channel, never refresh tokens. If nobody answers within `forkTimeoutMs`, the tab stays signed out. Where `BroadcastChannel` is undefined (tests, SSR) the tab simply stays signed out, and a signed-in tab with an impersonation session does not offer its token (the server refuses to fork an impersonation).
+
+### Profiles
+
+The active profile is the profile named by the tab's access token.
+
+- **Landing.** A sign-in lands on the credential's default profile, then the user's default profile, then the personal profile, then the only available profile. If none applies, the sign-in answers `selection_required: true` with no access token; `useAuth().selectionRequired` is then `true` and `selectProfile(uuid)` (the refresh grant with the chosen profile) completes the sign-in. Mount a page at `USERS_GUI_ROUTES.selectProfile` that lists `useAuth().profiles`.
+- **Switching.** `switchProfile(uuid)` calls `POST /v1/session/switch` and replaces only this tab's access token and active profile; the refresh token and every other tab are untouched.
+- **Locks.** A `401 users.profile_unavailable` keeps the tokens and sets `useAuth().profileLock` to `{ profileUuid, reason, remedy }`. The `reason` is the server's lock reason (for example `profile_suspended`, `acr_too_low`, `credential_not_authorized`); the `remedy` (`sign_in_with_provider`, `step_up`, `sign_in_with_authorized_credential`, `accept_invitation`) comes from that profile's entry in `profiles` and is `null` when the lock appeared after the list was fetched (for example after a reload). A locked access token cannot call the API, so recover by choosing another profile with `selectProfile` (the lock clears on the next successful token response), by following the remedy, or by signing in again.
+- **Impersonation.** `useAuth().impersonating` is `true` while the tab's session is an impersonation. `api.impersonations.start` swaps in the impersonation access token but keeps the administrator's refresh token and stored profile; `end()` deletes the impersonation and restores the administrator's token through the refresh grant.
+
+### Step-up
+
+A `409 users.step_up_required` response runs the registered step-up handler and replays the original request once with the fresh access token the handler resolves with. Register the handler with the `AuthProvider` prop `stepUpHandler`, the `useStepUpHandler(handler)` hook, or `useAuth().registerStepUpHandler(handler)` (memoize the function). Its interface:
+
+```ts
+interface StepUpHandler {
+  (request: { error: ApiActionRequiredError }): Promise<string>; // resolves with the fresh access token
+}
+```
+
+The prompt UI calls `api.session.stepUp.password(...)`, `requestEmailCode` / `verifyEmailCode(...)`, or `startOidc(provider)`; the password and email-code calls return a token response, which the client has already stored for the tab, so the handler only returns `response.access_token`. Concurrent requests that hit the 409 share one handler call. Without a registered handler, or when the handler rejects (for example the user cancels), the original `ApiActionRequiredError` propagates. The step-up routes never invoke the handler themselves.
+
+### OIDC sign-in and handoff
+
+OIDC sign-in returns through `#handoff=<code>` in the URL fragment (`#error=<code>` on a refusal), exchanged once at `POST /v1/auth/handoff`. The code is bound to the browser tab that started the sign-in, PKCE style:
+
+1. `api.auth.oidcStart(provider, { returnPath? })` generates a random verifier (32 random bytes, 43 base64url characters), keeps it in `sessionStorage`, and resolves with the start URL carrying only the verifier's SHA-256 challenge as `handoff_challenge`. Navigate the browser to that URL (`window.location.assign(url)`).
+2. On the return page, `useAuth().completeHandoff(code)` sends the code and the stored verifier in a single `POST /v1/auth/handoff`, stores the token response like a login, and clears the verifier whether or not the exchange succeeded. Repeated calls with the same code share that one exchange, so a double-invoked effect is harmless.
+3. A tab that started no sign-in (no stored verifier) fails with `ApiRequestError` code `handoff_verifier_missing` and a readable message, and sends nothing.
+
+### The auth context
+
+`useAuth()` (inside an `AuthProvider`) returns:
+
+| Member | Meaning |
+|---|---|
+| `token` | This tab's access token; `null` when signed out or awaiting profile selection |
+| `session` | The current `SessionView` (`uuid`, `acr`, `amr`, `auth_time`, `impersonating`) |
+| `profile`, `profiles` | The active `ProfileView` and all of the principal's profiles (with `available` and `lock`) |
+| `user`, `emailVerified` | The `GET /v1/me` record and whether any email is verified |
+| `isLoading` | `true` until the mount-time session check or fork finishes |
+| `selectionRequired`, `profileLock`, `impersonating` | See above |
+| `login(email, password, options?)`, `register(...)` | Sign in or register; both resolve with the `TokenResponse` |
+| `selectProfile(uuid)`, `switchProfile(uuid)` | See [Profiles](#profiles) |
+| `completeHandoff(code)` | See [OIDC sign-in and handoff](#oidc-sign-in-and-handoff) |
+| `logout()` | Revokes the server session (best effort), clears this tab, and navigates to `loginPath` through `onNavigate` |
+| `refreshUser()` | Re-reads the session and user record |
+| `registerStepUpHandler(handler)` | See [Step-up](#step-up) |
+
+There is no `isAdmin`: platform-administrator authority is an operator-party profile plus grants and cannot be derived on the client, so the server's `403` is the authority. Every client method that returns a token response (`api.auth.login`, `register`, `verifyEmailCode`, `handoff`, `token`, `session.switch`, `session.fork`, `session.stepUp.*`, `impersonations.*`, `bootstrap.bootstrap`) stores it in the tab itself; `useAuth()` follows through `subscribeSessionEvents`, so calling the client directly (for example `EmailCodePage` calling `api.auth.verifyEmailCode`) signs the context in without any extra call.
+
 ## Unauthenticated handling
 
-By default, any authenticated request that returns `401` clears the stored token and hard-redirects the browser (`window.location.href`) to `/auth/login`, and the request rejects with an `ApiRequestError` (`status: 401`). That behavior is unchanged unless you configure one of the settings below.
+A `401` first tries one token refresh (see [Refresh lineage](#refresh-lineage)). When the session cannot be repaired (no refresh token, a revoked or reused lineage, or a replay that still fails), the client clears the tab's access token, refresh token and profile and runs the unauthenticated handler, and the request rejects with an `ApiRequestError` (`status: 401`, carrying the response's own error code). The handler is the **only** place the library navigates on loss of authentication: by default it sets `window.location.href` to the configured login route (`unauthenticatedRedirectUrl`, default `USERS_GUI_ROUTES.login`), and `onUnauthenticated` replaces it entirely. No other code path navigates to a hard-coded login path.
 
 - **`unauthenticatedRedirectUrl`** changes the redirect target (a path or an absolute `http(s)` URL).
 - **`unauthenticatedReturnParam`** appends the current page to the redirect target as a query parameter, for example `/login?return=%2Fteams%3Fpage%3D2`. The value is the current `pathname + search` (never the hash). It is always a value `isSafeReturnPath` accepts; a current page that predicate would reject (for example `/team:alpha/x`) is replaced by `/`. If the redirect target is the page you are already on (exact pathname match), the redirect is skipped to avoid a loop; the token is still cleared and the request still rejects.
-- **`onUnauthenticated(ctx)`** replaces the redirect entirely. It is called after the stored token is cleared, with `ctx.returnPath`: `pathname + search` when that is a safe site path, otherwise `'/'`. Because `ctx.returnPath` is only checked as a site path, run it through `isSafeReturnPath` if you will use it as a navigation target. A handler that throws is caught and logged with `console.error`, and the request still rejects with the `401` `ApiRequestError`, so callers never see the handler's error in place of the 401. Passing `null` restores the default.
-- **`useAuth().emailVerifiedAt`** is the account's email-verification timestamp (ISO string) or `null` while unverified or signed out. It is correct immediately after `login()`, `register()` and email-code sign-in, because the server's sign-in `user` payload carries `email_verified_at` with the same semantics as `/v1/self`; no follow-up `refreshUser()` is needed.
-- **`AuthProvider loginPath`** is the path the provider navigates to (through `onNavigate`) on `logout()` and when `refreshUser()` receives a `401` (which calls `logout()`). The mount-time `/v1/self` check on a `401` only clears the stored token and sets the token to `null`; the fetch-layer redirect handles the navigation. Default `'/auth/login'`; an invalid value logs an error and falls back to the default.
+- **`onUnauthenticated(ctx)`** replaces the redirect entirely. It is called after the tab's tokens are cleared, with `ctx.returnPath`: `pathname + search` when that is a safe site path, otherwise `'/'`. Because `ctx.returnPath` is only checked as a site path, run it through `isSafeReturnPath` if you will use it as a navigation target. A handler that throws is caught and logged with `console.error`, and the request still rejects with the `401` `ApiRequestError`, so callers never see the handler's error in place of the 401. Passing `null` restores the default.
+- **`useAuth().emailVerified`** is `true` when the signed-in user holds at least one verified email (from `GET /v1/me`), and `false` while unverified or signed out. The context loads the user record after every sign-in, so it is correct without a follow-up `refreshUser()`.
+- **`AuthProvider loginPath`** is the path the provider navigates to (through `onNavigate`) on `logout()`. The fetch-layer handler above handles sign-outs the server forced (revocation, expiry), so the provider does not navigate for those. Default `'/auth/login'`; an invalid value logs an error and falls back to the default.
 
 Why both a fetch-layer setting and a provider setting? The fetch layer has no router, so it navigates through `window.location` (a full page load). The provider navigates through the `onNavigate` callback you inject (a soft client-side navigation). An app with a client-side router should set both to its login route.
 
 Security note: an **absolute** `unauthenticatedRedirectUrl` combined with `unauthenticatedReturnParam` sends the current `pathname + search` to that origin as a query parameter. Point it only at an origin you trust with those values.
 
-Credential failures are not session expiry. A `401` from a wrong password, a wrong email code, or a bad or expired reset token shows an inline error in the form and never triggers the redirect or `onUnauthenticated`.
+Credential failures are not session expiry. A `401` from a wrong password, a wrong email code, a bad or expired reset token, or a refused handoff shows an inline error and never triggers a refresh, the redirect or `onUnauthenticated`.
 
 ## Components and props
 
@@ -84,7 +152,7 @@ All components are client components (`'use client'` is not retained in `dist`; 
 
 | Component | Props | Notes |
 |---|---|---|
-| `AuthProvider` | `children`; `onNavigate?(path)`; `loginPath?` | Session context. Navigates through `onNavigate` on logout, on a `401` from `refreshUser()`, and on an action-required response (see [Routes](#routes)). Skips a navigation to an action-required path the browser is already on, comparing `window.location.pathname` for exact equality; apps served under a `basePath`, or with trailing-slash URLs, do not match and can still navigate to the page they are on (known limitation). `useAuth()` throws outside it; `useOptionalAuth()` returns `null`. |
+| `AuthProvider` | `children`; `onNavigate?(path)`; `loginPath?`; `stepUpHandler?` | Session context (see [Frontend contract](#frontend-contract)). Navigates through `onNavigate` on logout and on an action-required response (see [Routes](#routes)). Skips a navigation to an action-required path the browser is already on, comparing `window.location.pathname` for exact equality; apps served under a `basePath`, or with trailing-slash URLs, do not match and can still navigate to the page they are on (known limitation). `useAuth()` throws outside it; `useOptionalAuth()` returns `null`. |
 | `RequireAuth` | `children`; `requireAdmin?`; `onUnauthenticated?()`; `onUnauthorized?()` | Renders children only for a signed-in user (and an admin when `requireAdmin`). Build your own `?return=` redirect in `onUnauthenticated`. Needs `AuthProvider`. |
 | `AuthPage` | `initialMode?: 'login' \| 'register'`; `onAuthenticated?(returnPath: string \| null, mode: 'login' \| 'register')`; `initialError?`; `returnPath?`; `allowRegistration?` (default `true`); `onForgotPassword?()` | Login and register in one card. `allowRegistration={false}` removes the register control and panel and forces login mode. Needs `AuthProvider`. |
 | `LoginForm` | `onSuccess?(returnPath: string \| null)`; `initialError?`; `returnPath?`; `idPrefix?`; `onForgotPassword?()` | Email and password plus OIDC provider buttons. `onForgotPassword` renders a "Forgot password?" button. Needs `AuthProvider`. |
@@ -120,6 +188,13 @@ The library exports the standard path set as `USERS_GUI_ROUTES`:
   emailCode: '/auth/email-code',
   verifyEmail: '/verify-email',
   oidcConfig: '/oidc-config',
+  selectProfile: '/auth/select-profile',
+  invitations: '/invitations',
+  account: '/account',
+  accountCredentials: '/account/credentials',
+  accountIdentifiers: '/account/identifiers',
+  accountSessions: '/account/sessions',
+  bootstrap: '/bootstrap',
 }
 ```
 
@@ -129,13 +204,14 @@ Apps use the standard paths. A deviation needs a stated reason (for example an a
 |---|---|---|
 | `/auth/login` (standard) | App | `AuthPage` or `LoginForm`; navigate onward in `onAuthenticated` / `onSuccess`. Only the default `401` and logout target; configurable. |
 | `/reset-password?token=<hex>` | Backend (the password-reset email links here) | `ResetPasswordPage token={...}`. The component never reads the URL; the page passes the token. |
-| `/auth/oidc/return` | Deployment env `AUTH_FRONTEND_RETURN_URL` | `OidcCallbackPage`. The token and `return` arrive in the URL **fragment** (`#token=...&return=...`); a provider error arrives as `?error=` in the query. The page strips the hash. Forward `onError(message)` to the login route as `?error=<encodeURIComponent(message)>`, which feeds `initialError`. |
+| `/auth/oidc/return` | Deployment env `AUTH_FRONTEND_RETURN_URL` | `OidcCallbackPage`. The one-time code arrives in the URL **fragment** as `#handoff=<code>` (a refusal as `#error=<code>`), exchanged once with `completeHandoff`; see [OIDC sign-in and handoff](#oidc-sign-in-and-handoff). The page strips the hash. Forward `onError(message)` to the login route as `?error=<encodeURIComponent(message)>`, which feeds `initialError`. |
 | `/forgot-password` | App | `ForgotPasswordPage`. Reachable from the login form only if you pass `onForgotPassword` or render your own link. |
 | `/auth/email-code` | App | `EmailCodePage`. |
 | `/verify-email` | Backend (`403` action-required `users.email_unverified`) | `VerifyEmailPage`. |
+| `/auth/select-profile`, `/invitations`, `/account`, `/account/credentials`, `/account/identifiers`, `/account/sessions`, `/bootstrap` (standard) | App | Recommended defaults for landing profile selection, party invitations, account settings, and first-run bootstrap. |
 | `/oidc-config` | Backend (`503` action-required `users.oidc_not_confirmed`; the setup-token banner in the server log prints this path) | `OidcConfigPage`, normally wrapped by `OidcSetupGate`. |
 
-**Action-required contract.** When an API response is an action-required envelope, the client throws `ApiActionRequiredError` carrying the envelope's `path`. `AuthProvider` handles it on its own calls (the mount-time `/v1/self` check, `refreshUser`, `completeExternalLogin`): it keeps the session intact and calls `onNavigate(err.path)`, unless the browser is already on exactly that path (exact `pathname` equality; see the limitation noted under `AuthProvider`). So `/verify-email` and `/oidc-config` must exist and `onNavigate` must perform a real navigation. Unsafe envelope paths are rejected and replaced with a safe fallback.
+**Action-required contract.** When an API response is an action-required envelope, the client throws `ApiActionRequiredError` carrying the envelope's `path`. `AuthProvider` handles it on its own calls (the mount-time session and `GET /v1/me` check and `refreshUser`): it keeps the session intact and calls `onNavigate(err.path)`, unless the browser is already on exactly that path (exact `pathname` equality; see the limitation noted under `AuthProvider`). So `/verify-email` and `/oidc-config` must exist and `onNavigate` must perform a real navigation. Unsafe envelope paths are rejected and replaced with a safe fallback.
 
 ## Standard pages
 
@@ -157,7 +233,7 @@ A code-entry flow for the `/verify-email` route: the user requests a six-digit e
 
 `onComplete` should perform a **full-page navigation** to the login route (for example `window.location.assign(USERS_GUI_ROUTES.login)`). `OidcSetupGate` and `ClientLayout` probe OIDC status only on mount, so a soft client-side navigation would leave them in the stale needs-setup state.
 
-`OidcSetupGate` is for apps that do not use `ClientLayout`. While OIDC is unconfirmed even the login page's provider call fails, so the gate probes first: it renders `children('ready')` once OIDC is confirmed (any probe failure, including a network error, is treated as needs-setup so an operator can still reach the config page), calls `onNavigateToConfig` when the user is on any other route while OIDC is unconfirmed, and renders `children('setup')` when `currentPath` is the config page. Render the `'ready'` branch inside your `AuthProvider`; render the `'setup'` branch **without** one (`/v1/self` would answer `503`). `OidcConfigPage` itself works inside or outside an `AuthProvider`, and an `AuthProvider` above it will not loop because of the same-path guard.
+`OidcSetupGate` is for apps that do not use `ClientLayout`. While OIDC is unconfirmed even the login page's provider call fails, so the gate probes first: it renders `children('ready')` once OIDC is confirmed (any probe failure, including a network error, is treated as needs-setup so an operator can still reach the config page), calls `onNavigateToConfig` when the user is on any other route while OIDC is unconfirmed, and renders `children('setup')` when `currentPath` is the config page. Render the `'ready'` branch inside your `AuthProvider`; render the `'setup'` branch **without** one (`/v1/me` would answer `503`). `OidcConfigPage` itself works inside or outside an `AuthProvider`, and an `AuthProvider` above it will not loop because of the same-path guard.
 
 `ClientLayout` already composes `OidcSetupGate` and `AuthProvider`; use one or the other, not both.
 
@@ -375,7 +451,7 @@ So integrators do not assume otherwise:
 
 - Local-login return handling is opt-in via `unauthenticatedReturnParam`. The callback receives the validated return path or `null`; without that setting the app reads its own `?return=` as before.
 - `AuthPage` has no link to the email-code flow; render your own link to `EmailCodePage`'s route if you want one.
-- There is no `/step-up` page. The backend's `/step-up` action-required path is not mounted by this library, and `AuthProvider` has no step-up navigation; do not link to it.
+- There is no built-in step-up prompt in the lib layer: register a `StepUpHandler` (see [Step-up](#step-up)) whose UI calls `api.session.stepUp.*`.
 - `VerifyEmailPage` does not detect an already-verified email.
 - `ClientLayout` and `SidebarNav` are mod-users admin chrome. `ClientLayout` has no `loginPath` prop and `SidebarNav` hard-codes `/auth/login`; apps with their own shell should use `AuthProvider` and `OidcSetupGate` directly.
 - `allowRegistration={false}` is UI-only: the API's register endpoint stays open.
@@ -383,7 +459,11 @@ So integrators do not assume otherwise:
 
 ## Migration notes
 
-Everything in this guide is additive: existing apps keep working with no changes. Two behaviors changed:
+The client was rebuilt on the final mod-users API; these changes break earlier integrations:
 
-- `NEXT_PUBLIC_API_BASE_URL=""` now means same-origin instead of falling through to the localhost default.
-- Wrong credentials (login, email code, reset token) now show an inline error instead of redirecting to the login page.
+- Tokens moved from `localStorage` to per-tab `sessionStorage` (plus a refresh token and active profile), and requests use `credentials: 'omit'`. Existing signed-in browsers must sign in again.
+- `useAuth()` lost `isAdmin`, `emailVerifiedAt`, `setTokenAndUser` and `completeExternalLogin`; it gained the members listed under [The auth context](#the-auth-context). `completeHandoff(code)` replaces `completeExternalLogin(token)`: OIDC returns a one-time `#handoff=` code, never a token.
+- The client dropped `self`, `userAccounts` (including `grantAdmin`, `revokeAdmin`, `assume`), `sshKeys`, `stepUp` (the old `X-Step-Up-Token` flow), `apps` and `auth.verifyEmail`, and the types `UserAccount*`, `UserAccountSelf`, `SessionUser`, `LoginResponse`, `StepUpOptions`, `StepUpVerifyResponse`, `SSHKey*`, `RegisterSSHKeyRequest` and the app types. Use `me.*`, `session.*`, `impersonations.*` and `bootstrap.*`.
+- `register` answers a session directly (`201` with a token response), so there is no follow-up login.
+- `NEXT_PUBLIC_API_BASE_URL=""` means same-origin instead of falling through to the localhost default.
+- Wrong credentials (login, email code, reset token, handoff) show an inline error instead of redirecting to the login page.
