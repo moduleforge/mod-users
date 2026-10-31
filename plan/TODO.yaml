@@ -309,7 +309,7 @@ phases:
           tier: sonnet-med
           digest: Built profile chrome (switcher, lock notice, selection page, invitations view, impersonation banner); updated SidebarNav, RequireAuth, ClientLayout with no isAdmin; 28 new tests, stories, README. Remaining failures belong to tasks 003-005.
           git:
-            branch: null
+            branch: plan/identity-model-impl-09-002
             commit: []
             merge: null
         - number: 3
