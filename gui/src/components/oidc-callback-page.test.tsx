@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { jwtFixture } from '../test-support/jwt';
 import { cleanup, screen, waitFor } from '@testing-library/react';
 import { OidcCallbackPage } from './oidc-callback-page';
 import {
@@ -78,7 +79,7 @@ describe('OidcCallbackPage handoff', () => {
     await waitFor(() => expect(outcome.completed).toEqual(['/open/3']));
     expect(handoffCalls(calls)).toHaveLength(1);
     expect(handoffCalls(calls)[0]!.body).toEqual({ code: 'code-1', verifier: VERIFIER });
-    expect(getStoredToken()).toBe('access-1');
+    expect(getStoredToken()).toBe(jwtFixture('access-1'));
     // The verifier is single-use.
     expect(getStoredHandoffVerifier()).toBeNull();
     expect(outcome.errors).toEqual([]);
@@ -131,7 +132,7 @@ describe('OidcCallbackPage handoff', () => {
 
 /** A tab that is already signed in, as at a link or step-up return. */
 function signInTab(): Parameters<typeof mockApi>[0] {
-  setStoredToken('old-access');
+  setStoredToken(jwtFixture('old-access'));
   setStoredRefreshToken('old-refresh');
   setStoredProfileUuid('prof-a');
   const base = tokenResponse();
@@ -172,7 +173,7 @@ describe('OidcCallbackPage link and step-up returns', () => {
     setHash('#stepped_up=1&return=%2Fadmin%2Fusers');
     const { calls, outcome } = await mountCallback({
       ...session,
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'fresh-access' }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('fresh-access') }),
     });
     await waitFor(() => expect(outcome.completed).toEqual(['/admin/users']));
     expect(outcome.errors).toEqual([]);
@@ -182,7 +183,7 @@ describe('OidcCallbackPage link and step-up returns', () => {
       refresh_token: 'old-refresh',
       profile_uuid: 'prof-a',
     });
-    expect(getStoredToken()).toBe('fresh-access');
+    expect(getStoredToken()).toBe(jwtFixture('fresh-access'));
     expect(handoffCalls(calls)).toHaveLength(0);
   });
 
@@ -201,7 +202,7 @@ describe('OidcCallbackPage link and step-up returns', () => {
         // Hold the rotation open long enough that both the hydrate refresh and
         // the step-up callback ask for it while it is in flight.
         await new Promise((resolve) => setTimeout(resolve, 50));
-        return tokenResponse({ access_token: 'fresh-access' });
+        return tokenResponse({ access_token: jwtFixture('fresh-access') });
       },
     });
     await waitFor(() => expect(outcome.completed).toEqual(['/admin']));
@@ -209,7 +210,7 @@ describe('OidcCallbackPage link and step-up returns', () => {
     // detection and sign the tab out; exactly one POST proves the join.
     expect(tokenCalls(calls)).toHaveLength(1);
     expect(outcome.errors).toEqual([]);
-    expect(getStoredToken()).toBe('fresh-access');
+    expect(getStoredToken()).toBe(jwtFixture('fresh-access'));
   });
 
   test('#stepped_up=1 with an unsafe return path falls back to the default', async () => {
@@ -217,7 +218,7 @@ describe('OidcCallbackPage link and step-up returns', () => {
     setHash('#stepped_up=1&return=https%3A%2F%2Fevil.test');
     const { outcome } = await mountCallback({
       ...session,
-      'POST /v1/auth/token': () => tokenResponse({ access_token: 'fresh-access' }),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('fresh-access') }),
     });
     await waitFor(() => expect(outcome.completed).toEqual(['/']));
     expect(outcome.errors).toEqual([]);

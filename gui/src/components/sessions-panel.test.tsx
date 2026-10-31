@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { jwtFixture } from '../test-support/jwt';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { SessionsPanel } from './sessions-panel';
 import { PROFILE_A } from '../test-support/users-fixtures';
@@ -53,7 +54,7 @@ describe('SessionsPanel', () => {
     expect(screen.queryByRole('button', { name: 'Revoke session 2' })).toBeNull();
     expect(m.calls.some((c) => c.method === 'DELETE' && c.path === '/v1/me/sessions/sess-2')).toBe(true);
     // Another session's revocation leaves this tab signed in.
-    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
   });
 
   test('revoking the current session signs the tab out', async () => {
@@ -76,7 +77,7 @@ describe('SessionsPanel', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(m.calls.some((c) => c.method === 'DELETE')).toBe(false);
-    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
   });
 
   test('a failed revoke is reported and the row stays', async () => {

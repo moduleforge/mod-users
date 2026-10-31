@@ -23,3 +23,7 @@ This task addresses findings `moDM` and `m3Jr`. The work targets the plan branch
 
 - Finding `moDM` in this plan's `plan/findings.yaml`.
 - Finding `m3Jr` in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). `getStoredImpersonating` now fails closed for a present token whose payload does not decode to a JSON object; the step-up replay path in `gui/src/lib/api.ts` sets the marker to `tokenActClaim(fresh) === true || wasImpersonating` and never clears it. Doc comments in `gui/src/lib/config.ts` updated. Test fixtures migrated to JWT-shaped tokens via `gui/src/test-support/jwt.ts`. Validation: `bun test` (456 pass), `bun run typecheck`, `make build.gui`, `make lint.gui` all pass; new api tests cover both validation scenarios.

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { jwtFixture } from '../test-support/jwt';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BootstrapPage } from './bootstrap-page';
 import { AuthProvider, useAuth } from '../lib/auth-context';
@@ -249,6 +250,6 @@ describe('BootstrapPage', () => {
     fillAdmin();
     fireEvent.click(screen.getByRole('button', { name: 'Create administrator' }));
     await screen.findByText('Setup complete');
-    await waitFor(() => expect(token).toBe('access-1'));
+    await waitFor(() => expect(token).toBe(jwtFixture('access-1')));
   });
 });

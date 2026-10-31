@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { jwtFixture } from '../test-support/jwt';
 import {
   ApiActionRequiredError,
   ApiRequestError,
@@ -299,7 +300,7 @@ const errorBody = (code: string, details?: { field: string; code: string; messag
 });
 
 /** A tab holding a session: access, refresh and profile in sessionStorage. */
-function seedTab(access = 'old-access', refresh = 'old-refresh', profile = 'prof-a'): void {
+function seedTab(access = jwtFixture('old-access'), refresh = 'old-refresh', profile = 'prof-a'): void {
   setStoredToken(access);
   setStoredRefreshToken(refresh);
   setStoredProfileUuid(profile);
@@ -318,7 +319,7 @@ const bearer = (call: RecordedCall): string | undefined => call.headers['Authori
 
 describe('Bearer-only requests', () => {
   test('every request sends the tab token as Bearer with credentials omit', async () => {
-    seedTab('tab-token');
+    seedTab(jwtFixture('tab-token'));
     const calls = scriptFetch(() => json({}));
     await client.me.get();
     await client.session.get();
@@ -327,7 +328,7 @@ describe('Bearer-only requests', () => {
     await client.auth.forgotPassword({ email: 'a@b.co' });
     expect(calls.length).toBe(5);
     for (const call of calls) {
-      expect(bearer(call)).toBe('Bearer tab-token');
+      expect(bearer(call)).toBe(`Bearer ${jwtFixture('tab-token')}`);
       expect(call.credentials).toBe('omit');
     }
   });
@@ -352,7 +353,7 @@ describe('Bearer-only requests', () => {
     expect(calls[1]!.url).toBe('http://localhost:8080/v1/session/step-up/oidc/google/start');
     expect(calls.map((c) => c.credentials)).toEqual(['include', 'include']);
     // Still Bearer-authenticated: the cookie is only the OIDC state.
-    expect(bearer(calls[0]!)).toBe('Bearer old-access');
+    expect(bearer(calls[0]!)).toBe(`Bearer ${jwtFixture('old-access')}`);
   });
 
   test('an unsafe returnPath is refused before any request', async () => {
@@ -366,7 +367,7 @@ describe('Bearer-only requests', () => {
   test('tokens go to sessionStorage only: localStorage is never used', async () => {
     scriptFetch(() => json(tokenResponse()));
     await client.auth.login('a@b.co', 'pw');
-    expect(sessionStorage.getItem('auth_token')).toBe('access-1');
+    expect(sessionStorage.getItem('auth_token')).toBe(jwtFixture('access-1'));
     expect(localStorage.length).toBe(0);
     expect(document.cookie).toBe('');
   });
@@ -380,7 +381,7 @@ describe('token responses are committed to the tab', () => {
     const calls = scriptFetch(() => json(tokenResponse()));
     const resp = await client.auth.login('a@b.co', 'pw', { app: 'app-1', profile_uuid: 'prof-a' });
     stop();
-    expect(resp.access_token).toBe('access-1');
+    expect(resp.access_token).toBe(jwtFixture('access-1'));
     expect(calls[0]!.url).toBe('http://localhost:8080/v1/auth/login');
     expect(calls[0]!.body).toEqual({
       email: 'a@b.co',
@@ -388,14 +389,14 @@ describe('token responses are committed to the tab', () => {
       app: 'app-1',
       profile_uuid: 'prof-a',
     });
-    expect(getStoredToken()).toBe('access-1');
+    expect(getStoredToken()).toBe(jwtFixture('access-1'));
     expect(getStoredRefreshToken()).toBe('refresh-1');
     expect(getStoredProfileUuid()).toBe('prof-a');
     expect(events.map((e) => e.type)).toEqual(['token_response']);
   });
 
   test('selection_required keeps the refresh token but stores no access token', async () => {
-    seedTab('stale-access', 'stale-refresh', 'stale-prof');
+    seedTab(jwtFixture('stale-access'), 'stale-refresh', 'stale-prof');
     scriptFetch(() =>
       json(
         tokenResponse({
@@ -423,7 +424,7 @@ describe('token responses are committed to the tab', () => {
     expect(err).toBeInstanceOf(ApiRequestError);
     expect(err.code).toBe('users.invalid_credentials');
     expect(err.status).toBe(401);
-    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
     expect(unauth).toEqual([]);
   });
 
@@ -431,15 +432,15 @@ describe('token responses are committed to the tab', () => {
     const calls = scriptFetch(() => json(tokenResponse(), 201));
     await client.auth.register({ email: 'a@b.co', password: 'pw-pw-pw-pw-12', given_name: 'A', family_name: 'B' });
     expect(calls.length).toBe(1);
-    expect(getStoredToken()).toBe('access-1');
+    expect(getStoredToken()).toBe(jwtFixture('access-1'));
   });
 
   test('switch replaces only the access token and active profile', async () => {
-    seedTab('old-access', 'old-refresh', 'prof-a');
+    seedTab(jwtFixture('old-access'), 'old-refresh', 'prof-a');
     const calls = scriptFetch(() =>
       json(
         tokenResponse({
-          access_token: 'switched-access',
+          access_token: jwtFixture('switched-access'),
           refresh_token: null,
           profile: { ...PROFILE_A, uuid: 'prof-b' },
         }),
@@ -448,14 +449,14 @@ describe('token responses are committed to the tab', () => {
     await client.session.switch('prof-b');
     expect(calls[0]!.url).toBe('http://localhost:8080/v1/session/switch');
     expect(calls[0]!.body).toEqual({ profile_uuid: 'prof-b' });
-    expect(getStoredToken()).toBe('switched-access');
+    expect(getStoredToken()).toBe(jwtFixture('switched-access'));
     expect(getStoredProfileUuid()).toBe('prof-b');
     // The lineage is untouched: switch never rotates or clears the refresh token.
     expect(getStoredRefreshToken()).toBe('old-refresh');
   });
 
   test('impersonation start keeps the administrator profile and lineage', async () => {
-    seedTab('admin-access', 'admin-refresh', 'prof-admin');
+    seedTab(jwtFixture('admin-access'), 'admin-refresh', 'prof-admin');
     scriptFetch(() =>
       json(
         tokenResponse({
@@ -478,7 +479,7 @@ describe('token responses are committed to the tab', () => {
     const calls = scriptFetch((call) =>
       call.method === 'DELETE'
         ? noContent()
-        : json(tokenResponse({ access_token: 'admin-access', refresh_token: 'admin-refresh-2' })),
+        : json(tokenResponse({ access_token: jwtFixture('admin-access'), refresh_token: 'admin-refresh-2' })),
     );
     await client.impersonations.end();
     expect(calls.map((c) => `${c.method} ${c.url.replace('http://localhost:8080', '')}`)).toEqual([
@@ -490,7 +491,7 @@ describe('token responses are committed to the tab', () => {
       refresh_token: 'admin-refresh',
       profile_uuid: 'prof-admin',
     });
-    expect(getStoredToken()).toBe('admin-access');
+    expect(getStoredToken()).toBe(jwtFixture('admin-access'));
     expect(getStoredRefreshToken()).toBe('admin-refresh-2');
   });
 });
@@ -502,9 +503,9 @@ describe('refresh lineage', () => {
   function expiredThenRefreshed(extra?: Responder): RecordedCall[] {
     return scriptFetch((call, index) => {
       if (call.url.endsWith('/v1/auth/token')) {
-        return json(tokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }));
+        return json(tokenResponse({ access_token: jwtFixture('new-access'), refresh_token: 'new-refresh' }));
       }
-      if (bearer(call) === 'Bearer new-access') return json({ uuid: 'u1' });
+      if (bearer(call) === `Bearer ${jwtFixture('new-access')}`) return json({ uuid: 'u1' });
       return extra ? extra(call, index) : json(errorBody('unauthorized'), 401);
     });
   }
@@ -525,8 +526,8 @@ describe('refresh lineage', () => {
       profile_uuid: 'prof-a',
     });
     expect(getStoredRefreshToken()).toBe('new-refresh');
-    expect(getStoredToken()).toBe('new-access');
-    expect(bearer(calls[2]!)).toBe('Bearer new-access');
+    expect(getStoredToken()).toBe(jwtFixture('new-access'));
+    expect(bearer(calls[2]!)).toBe(`Bearer ${jwtFixture('new-access')}`);
   });
 
   test('concurrent expired requests share a single in-flight refresh', async () => {
@@ -536,9 +537,9 @@ describe('refresh lineage', () => {
     const calls = scriptFetch(async (call) => {
       if (call.url.endsWith('/v1/auth/token')) {
         await gate; // hold the rotation open while the other request fails too
-        return json(tokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }));
+        return json(tokenResponse({ access_token: jwtFixture('new-access'), refresh_token: 'new-refresh' }));
       }
-      if (bearer(call) === 'Bearer new-access') return json({ ok: true });
+      if (bearer(call) === `Bearer ${jwtFixture('new-access')}`) return json({ ok: true });
       return json(errorBody('unauthorized'), 401);
     });
     const pending = Promise.all([client.me.get(), client.me.sessions.list(), client.session.get()]);
@@ -548,11 +549,11 @@ describe('refresh lineage', () => {
     await pending;
     const tokenCalls = calls.filter((c) => c.url.endsWith('/v1/auth/token'));
     expect(tokenCalls.length).toBe(1);
-    expect(calls.filter((c) => bearer(c) === 'Bearer new-access').length).toBe(3);
+    expect(calls.filter((c) => bearer(c) === `Bearer ${jwtFixture('new-access')}`).length).toBe(3);
   });
 
   test('a 401 for a request sent before another request rotated the token replays without a second rotation', async () => {
-    seedTab('old-access');
+    seedTab(jwtFixture('old-access'));
     let releaseFirst!: () => void;
     const firstGate = new Promise<void>((r) => (releaseFirst = r));
     const calls = scriptFetch(async (call, index) => {
@@ -565,11 +566,11 @@ describe('refresh lineage', () => {
     const pending = client.me.get(); // goes out carrying old-access
     await new Promise((r) => setTimeout(r, 5));
     // Another request already rotated the token while the first was in flight.
-    setStoredToken('rotated-access');
+    setStoredToken(jwtFixture('rotated-access'));
     releaseFirst();
     await pending;
     expect(calls.some((c) => c.url.endsWith('/v1/auth/token'))).toBe(false);
-    expect(bearer(calls[1]!)).toBe('Bearer rotated-access');
+    expect(bearer(calls[1]!)).toBe(`Bearer ${jwtFixture('rotated-access')}`);
   });
 
   test('a replay that still 401s signs the tab out after exactly one refresh', async () => {
@@ -579,7 +580,7 @@ describe('refresh lineage', () => {
     const { events, stop } = collectEvents();
     const calls = scriptFetch((call) =>
       call.url.endsWith('/v1/auth/token')
-        ? json(tokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }))
+        ? json(tokenResponse({ access_token: jwtFixture('new-access'), refresh_token: 'new-refresh' }))
         : json(errorBody('unauthorized'), 401),
     );
     const err = (await client.me.get().catch((e: unknown) => e)) as ApiRequestError;
@@ -594,7 +595,7 @@ describe('refresh lineage', () => {
   });
 
   test('a 401 with no refresh token signs out without any refresh call', async () => {
-    setStoredToken('only-access');
+    setStoredToken(jwtFixture('only-access'));
     const unauth: UnauthenticatedContext[] = [];
     configureUsersApi({ onUnauthenticated: (c) => unauth.push(c) });
     const calls = scriptFetch(() => json(errorBody('unauthorized'), 401));
@@ -673,7 +674,7 @@ describe('refresh lineage', () => {
     stop();
     expect(err.code).toBe('users.profile_unavailable');
     expect(calls.length).toBe(1);
-    expect(getStoredToken()).toBe('old-access');
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
     expect(getStoredRefreshToken()).toBe('old-refresh');
     expect(events).toEqual([
       { type: 'profile_unavailable', profileUuid: 'prof-a', reason: 'profile_suspended' },
@@ -705,7 +706,7 @@ describe('refresh lineage', () => {
 describe('impersonated requests are never replayed as the administrator', () => {
   /** A tab that started an impersonation through the client, as the UI does. */
   async function impersonatingTab(): Promise<void> {
-    seedTab('admin-access', 'admin-refresh', 'prof-admin');
+    seedTab(jwtFixture('admin-access'), 'admin-refresh', 'prof-admin');
     scriptFetch(() =>
       json(
         tokenResponse({
@@ -750,8 +751,8 @@ describe('impersonated requests are never replayed as the administrator', () => 
     await client.me.update({}).catch(() => {});
     const calls = scriptFetch((call) =>
       call.url.endsWith('/v1/auth/token')
-        ? json(tokenResponse({ access_token: 'admin-access-2', refresh_token: 'admin-refresh-2' }))
-        : bearer(call) === 'Bearer admin-access-2'
+        ? json(tokenResponse({ access_token: jwtFixture('admin-access-2'), refresh_token: 'admin-refresh-2' }))
+        : bearer(call) === `Bearer ${jwtFixture('admin-access-2')}`
           ? json({ session: null, profile: null, profiles: [] })
           : json(errorBody('unauthenticated'), 401),
     );
@@ -762,7 +763,7 @@ describe('impersonated requests are never replayed as the administrator', () => 
       refresh_token: 'admin-refresh',
       profile_uuid: 'prof-admin',
     });
-    expect(getStoredToken()).toBe('admin-access-2');
+    expect(getStoredToken()).toBe(jwtFixture('admin-access-2'));
     expect(getStoredImpersonating()).toBe(false);
   });
 
@@ -770,7 +771,7 @@ describe('impersonated requests are never replayed as the administrator', () => 
     await impersonatingTab();
     const calls = scriptFetch(async () => {
       // While this request is in flight, another call lands the administrator token.
-      setStoredToken('admin-access-2');
+      setStoredToken(jwtFixture('admin-access-2'));
       setStoredImpersonating(false);
       return json(errorBody('unauthenticated'), 401);
     });
@@ -780,16 +781,16 @@ describe('impersonated requests are never replayed as the administrator', () => 
     expect(calls).toHaveLength(1);
     expect(err.code).toBe('users.impersonation_ended');
     expect(events).toEqual([]);
-    expect(getStoredToken()).toBe('admin-access-2');
+    expect(getStoredToken()).toBe(jwtFixture('admin-access-2'));
   });
 
   test('a non-impersonating 401 still refreshes and replays', async () => {
-    seedTab('old-access', 'old-refresh', 'prof-a');
+    seedTab(jwtFixture('old-access'), 'old-refresh', 'prof-a');
     const calls = scriptFetch((call) => {
       if (call.url.endsWith('/v1/auth/token')) {
-        return json(tokenResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }));
+        return json(tokenResponse({ access_token: jwtFixture('new-access'), refresh_token: 'new-refresh' }));
       }
-      return bearer(call) === 'Bearer new-access' ? json({}) : json(errorBody('unauthenticated'), 401);
+      return bearer(call) === `Bearer ${jwtFixture('new-access')}` ? json({}) : json(errorBody('unauthenticated'), 401);
     });
     await client.me.update({});
     expect(calls.map((c) => c.method)).toEqual(['PUT', 'POST', 'PUT']);
@@ -822,6 +823,42 @@ describe('impersonated requests are never replayed as the administrator', () => 
     expect(err.code).toBe('users.impersonation_ended');
   });
 
+  test('a stored undecodable token with no marker fails closed: no refresh grant, no replay', async () => {
+    // WHY: an opaque or malformed token cannot be shown to be the administrator's own.
+    // IMPLIES a lost marker must not let it be refreshed and replayed as the administrator.
+    seedTab('opaque-token', 'admin-refresh', 'prof-admin');
+    setStoredImpersonating(false);
+    expect(getStoredImpersonating()).toBe(true);
+    const calls = scriptFetch(() => json(errorBody('unauthenticated'), 401));
+    const err = (await client.me.update({}).catch((e: unknown) => e)) as ApiRequestError;
+    expect(calls).toHaveLength(1);
+    expect(calls.some((c) => c.url.endsWith('/v1/auth/token'))).toBe(false);
+    expect(err.code).toBe('users.impersonation_ended');
+  });
+
+  test('a stored payload that decodes to a non-object fails closed, while an absent token does not', async () => {
+    const b64 = (v: unknown): string => btoa(JSON.stringify(v)).replace(/=+$/, '');
+    setStoredToken(`h.${b64('just-a-string')}.s`);
+    setStoredImpersonating(false);
+    expect(getStoredImpersonating()).toBe(true);
+    sessionStorage.clear();
+    expect(getStoredImpersonating()).toBe(false);
+  });
+
+  test('a step-up handler returning a decodable token without act leaves the marker set and a later 401 unreplayed', async () => {
+    await impersonatingTab();
+    scriptFetch(() => json({ action: { code: 'users.step_up_required', message: 'Step up.', path: '/account' } }, 409));
+    setStepUpHandler(async () => jwtFixture('handler-token'));
+    await client.me.update({}).catch(() => {});
+    expect(getStoredToken()).toBe(jwtFixture('handler-token'));
+    // Only an authoritative signal unmarks; a token lacking act is not one.
+    expect(getStoredImpersonating()).toBe(true);
+    const calls = scriptFetch(() => json(errorBody('unauthenticated'), 401));
+    const err = (await client.me.update({}).catch((e: unknown) => e)) as ApiRequestError;
+    expect(calls).toHaveLength(1);
+    expect(err.code).toBe('users.impersonation_ended');
+  });
+
   test('a reload that finds an impersonation session marks the tab, so its 401 is not replayed', async () => {
     seedTab('imp-access', 'admin-refresh', 'prof-admin');
     scriptFetch(() =>
@@ -840,7 +877,7 @@ describe('impersonated requests are never replayed as the administrator', () => 
     const calls = scriptFetch((call) =>
       call.method === 'DELETE'
         ? json(errorBody('unauthenticated'), 401)
-        : json(tokenResponse({ access_token: 'admin-access-2', refresh_token: 'admin-refresh-2' })),
+        : json(tokenResponse({ access_token: jwtFixture('admin-access-2'), refresh_token: 'admin-refresh-2' })),
     );
     await client.impersonations.end();
     expect(calls.map((c) => `${c.method} ${c.url.replace('http://localhost:8080', '')}`)).toEqual([
@@ -849,7 +886,7 @@ describe('impersonated requests are never replayed as the administrator', () => 
     ]);
     // The DELETE went out once, under the impersonation token only.
     expect(bearer(calls[0]!)).toBe('Bearer imp-access');
-    expect(getStoredToken()).toBe('admin-access-2');
+    expect(getStoredToken()).toBe(jwtFixture('admin-access-2'));
     expect(getStoredImpersonating()).toBe(false);
   });
 
@@ -872,7 +909,7 @@ describe('step-up retry', () => {
   /** 409 until the request carries `fresh-access`. */
   function needsStepUp(): RecordedCall[] {
     return scriptFetch((call) =>
-      bearer(call) === 'Bearer fresh-access' ? json({ uuid: 'u1' }) : json(STEP_UP_BODY, 409),
+      bearer(call) === `Bearer ${jwtFixture('fresh-access')}` ? json({ uuid: 'u1' }) : json(STEP_UP_BODY, 409),
     );
   }
 
@@ -882,7 +919,7 @@ describe('step-up retry', () => {
     const seen: ApiActionRequiredError[] = [];
     setStepUpHandler(async ({ error }) => {
       seen.push(error);
-      return 'fresh-access';
+      return jwtFixture('fresh-access');
     });
     const result = await client.me.update({ given_name: 'Zed' });
     expect(result).toEqual({ uuid: 'u1' } as never);
@@ -892,8 +929,8 @@ describe('step-up retry', () => {
     expect(calls.length).toBe(2);
     expect(calls[1]!.method).toBe('PUT');
     expect(calls[1]!.body).toEqual({ given_name: 'Zed' });
-    expect(bearer(calls[1]!)).toBe('Bearer fresh-access');
-    expect(getStoredToken()).toBe('fresh-access');
+    expect(bearer(calls[1]!)).toBe(`Bearer ${jwtFixture('fresh-access')}`);
+    expect(getStoredToken()).toBe(jwtFixture('fresh-access'));
   });
 
   test('without a handler the original ApiActionRequiredError propagates', async () => {
@@ -922,7 +959,7 @@ describe('step-up retry', () => {
     let prompts = 0;
     setStepUpHandler(async () => {
       prompts += 1;
-      return 'fresh-access';
+      return jwtFixture('fresh-access');
     });
     const err = await client.me.update({ given_name: 'Zed' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiActionRequiredError);
@@ -937,7 +974,7 @@ describe('step-up retry', () => {
     setStepUpHandler(async () => {
       prompts += 1;
       await new Promise((r) => setTimeout(r, 10));
-      return 'fresh-access';
+      return jwtFixture('fresh-access');
     });
     await Promise.all([
       client.me.update({ given_name: 'A' }),
@@ -978,11 +1015,11 @@ describe('step-up retry', () => {
     let used = '';
     const unregisterA = setStepUpHandler(async () => {
       used = 'a';
-      return 'fresh-access';
+      return jwtFixture('fresh-access');
     });
     setStepUpHandler(async () => {
       used = 'b';
-      return 'fresh-access';
+      return jwtFixture('fresh-access');
     });
     // A stale cleanup from the replaced registration must leave b in place.
     unregisterA();
@@ -993,12 +1030,12 @@ describe('step-up retry', () => {
   });
 
   test('step-up calls store the fresh token themselves', async () => {
-    seedTab('old-access', 'old-refresh', 'prof-a');
+    seedTab(jwtFixture('old-access'), 'old-refresh', 'prof-a');
     scriptFetch(() =>
-      json(tokenResponse({ access_token: 'fresh-access', refresh_token: null })),
+      json(tokenResponse({ access_token: jwtFixture('fresh-access'), refresh_token: null })),
     );
     await client.session.stepUp.password('pw');
-    expect(getStoredToken()).toBe('fresh-access');
+    expect(getStoredToken()).toBe(jwtFixture('fresh-access'));
     expect(getStoredRefreshToken()).toBe('old-refresh');
   });
 });
@@ -1008,12 +1045,12 @@ describe('step-up retry', () => {
 describe('fork call', () => {
   test('sends the sibling token, stores the new lineage, and never signs out on failure', async () => {
     const calls = scriptFetch(() =>
-      json(tokenResponse({ access_token: 'fork-access', refresh_token: 'fork-refresh' })),
+      json(tokenResponse({ access_token: jwtFixture('fork-access'), refresh_token: 'fork-refresh' })),
     );
     await client.session.fork({ accessToken: 'sibling-access' });
     expect(calls[0]!.url).toBe('http://localhost:8080/v1/session/fork');
     expect(bearer(calls[0]!)).toBe('Bearer sibling-access');
-    expect(getStoredToken()).toBe('fork-access');
+    expect(getStoredToken()).toBe(jwtFixture('fork-access'));
     expect(getStoredRefreshToken()).toBe('fork-refresh');
   });
 
@@ -1054,7 +1091,7 @@ describe('handoff verifier and challenge', () => {
     await client.auth.handoff('code-1', 'v'.repeat(43));
     expect(calls[0]!.url).toBe('http://localhost:8080/v1/auth/handoff');
     expect(calls[0]!.body).toEqual({ code: 'code-1', verifier: 'v'.repeat(43) });
-    expect(getStoredToken()).toBe('access-1');
+    expect(getStoredToken()).toBe(jwtFixture('access-1'));
   });
 });
 
@@ -1117,7 +1154,7 @@ describe('client methods hit the final routes', () => {
     );
     expect(calls[0]!.url).toBe('http://localhost:8080/v1/bootstrap');
     expect(calls[0]!.headers['X-Setup-Token']).toBe('setup-123');
-    expect(getStoredToken()).toBe('access-1');
+    expect(getStoredToken()).toBe(jwtFixture('access-1'));
   });
 
   test('removed route families are gone from the client', () => {
