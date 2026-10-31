@@ -3027,3 +3027,13 @@ items:
           The new sentence links the X-Setup-Token statement to architecture/sessions-and-tokens.md#client-contract, but that section covers the Bearer and credentials policy and never mentions the setup token. The setup-token material is under the Setup-token bootstrap section. Separately, the sentence (and the server.go comment) say the oidc-config writes carry the header, but gui/src/lib/oidc-config.ts and its tests send X-Setup-Token on GET reads too. The allowed-header list is method-independent, so behavior is correct and only the wording is narrow.
         recommendation:
           Point the link at architecture/sessions-and-tokens.md#setup-token-bootstrap, and say 'the /v1/oidc-config calls' instead of 'writes'.
+    - title: Update /v1/self paths in oidc_config_test (ty
+      id: 7eEW
+      date: "2026-10-31"
+      tags:
+        - type:style
+        - priority:low
+        - effort:small
+        - plan/phase:users-identity-final
+        - plan/slug:identity-model-impl
+      text: Update /v1/self paths in oidc_config_test (type:documentation). api/internal/handlers/oidc_config_test.go lines 538, 576 and 743 issue GET /v1/self, a removed route. The test asserts the unconfirmed-OIDC gate answers 503 verbatim. Change the request path to /v1/me. Code change, left unedited by the task agent.
