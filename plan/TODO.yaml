@@ -1664,7 +1664,7 @@ phases:
           slug: align-cors-setup-token-and-docs
           title: Allow X-Setup-Token In CORS And Correct CORS Docs
           path: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Added X-Setup-Token to CORS allowed headers with a test, corrected docs/cors.md, removed two stale Known limits lines.
           findings:
