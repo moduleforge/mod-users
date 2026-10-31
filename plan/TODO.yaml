@@ -428,7 +428,8 @@ phases:
           digest: 'Reconciled 21 mod-users followups read-only: 13 confirmed superseded with proposed removals, 2 closed cross-project, 6 retained for manager decision. No followups mutation made.'
           git:
             branch: plan/identity-model-impl-11-002
-            commit: []
+            commit:
+                - 4fc8ace6
             merge: null
     - number: 12
       slug: remediation-01
