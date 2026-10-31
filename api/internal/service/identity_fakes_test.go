@@ -142,6 +142,8 @@ type observation struct {
 type recordingObserver struct {
 	mu   sync.Mutex
 	seen []observation
+	// committed records the after-commit observations, with the acting profile.
+	committed []observation
 }
 
 func (r *recordingObserver) Observe(ctx context.Context, _ pgx.Tx, op, resource string, target *int64, _, _ any) error {
@@ -158,7 +160,18 @@ func (r *recordingObserver) Observe(ctx context.Context, _ pgx.Tx, op, resource 
 	return nil
 }
 
-func (r *recordingObserver) ObserveAfterCommit(context.Context, string, string, *int64, any) {}
+func (r *recordingObserver) ObserveAfterCommit(ctx context.Context, op, resource string, target *int64, _ any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	o := observation{Op: op, Resource: resource}
+	if target != nil {
+		o.Target = *target
+	}
+	if profile, ok := opctx.ProfileID(ctx); ok {
+		o.Actor = profile
+	}
+	r.committed = append(r.committed, o)
+}
 
 func (f *fakeUsersQ) GetIdentifierByID(_ context.Context, id int64) (usersdb.UserIdentifier, error) {
 	return f.getIdentifierByID(id)

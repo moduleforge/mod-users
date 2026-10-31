@@ -37,9 +37,10 @@ const (
 // Observer resources and ops the bootstrap flow emits beyond the shared ones
 // (API surface section 10.1).
 const (
-	resourceBootstrap = "bootstrap"
-	resourceGrant     = "grant"
-	opGrant           = "grant"
+	resourceBootstrap    = "bootstrap"
+	resourceOrganization = "organization"
+	resourceGrant        = "grant"
+	opGrant              = "grant"
 )
 
 // manageOperationSlug is the mod-authz operation the operator administrator
@@ -96,6 +97,23 @@ type BootstrapResult struct {
 	PasswordID        int64
 	GrantID           int64
 	SessionID         int64
+
+	// user is the first user's creation result and org the operator
+	// organization's (nil when the operator is the user's own person). They are
+	// carried out of the transaction only so Bootstrap, which owns the commit,
+	// can dispatch the after-commit `create` observations once tx.Commit
+	// succeeds. Unexported: they carry internal ids that must not reach an HTTP
+	// response.
+	user CreatedUser
+	org  *createdOperatorOrg
+}
+
+// createdOperatorOrg is what the operator organization's after-commit
+// observation needs: the entity id and the payload mod-core's own Create sends.
+type createdOperatorOrg struct {
+	ID    int64
+	UUID  uuid.UUID
+	After map[string]any
 }
 
 // BootstrapService runs the first-run bootstrap of a deployment (decisions U9
@@ -239,7 +257,24 @@ func (s *BootstrapService) Bootstrap(ctx context.Context, in BootstrapInput) (Bo
 		return BootstrapResult{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
+		// WHY nothing is dispatched here: the rows were rolled back, so an
+		// after-commit `create` would announce entities that do not exist.
+		// IMPLIES: post-commit observers only ever see committed bootstraps.
 		return BootstrapResult{}, fmt.Errorf("users: bootstrap commit: %w", err)
+	}
+
+	// WHY after the commit: mod-core's CreateInTx primitives only observe in the
+	// transaction and leave the after-commit `create` to the code that owns the
+	// commit, which is this method. The acting context is the one the
+	// in-transaction observations used (the first user's personal profile).
+	// IMPLIES: observers see exactly one natural_person create (the first
+	// user's own person, which is also the operator party for the natural_person
+	// kind) and, for the organization kind, exactly one organization create;
+	// observer errors never unwind the committed bootstrap (they are logged by
+	// the group).
+	s.users.ObserveCreatedAfterCommit(ctx, res.user)
+	if res.org != nil && s.obs != nil {
+		s.obs.ObserveAfterCommit(res.user.ActingContext(ctx), opCreate, resourceOrganization, &res.org.ID, res.org.After)
 	}
 	return res, nil
 }
@@ -277,15 +312,17 @@ func (s *BootstrapService) bootstrapInTx(ctx context.Context, tx pgx.Tx, in Boot
 
 	// 2. The operator party.
 	var (
-		partyID   int64
-		partyUUID uuid.UUID
+		partyID    int64
+		partyUUID  uuid.UUID
+		createdOrg *createdOperatorOrg
 	)
 	switch strings.TrimSpace(in.Operator.Kind) {
 	case BootstrapOperatorOrganization:
-		partyID, partyUUID, err = s.createOrganization(personalCtx, tx, in.Operator)
+		createdOrg, err = s.createOrganization(personalCtx, tx, in.Operator)
 		if err != nil {
 			return BootstrapResult{}, err
 		}
+		partyID, partyUUID = createdOrg.ID, createdOrg.UUID
 	default: // natural_person, validated above
 		partyID, partyUUID = user.PersonID, user.PersonUUID
 	}
@@ -388,6 +425,8 @@ func (s *BootstrapService) bootstrapInTx(ctx context.Context, tx pgx.Tx, in Boot
 		PasswordID:        pw.ID,
 		GrantID:           grantID,
 		SessionID:         sess.ID,
+		user:              user,
+		org:               createdOrg,
 	}, nil
 }
 
@@ -399,12 +438,16 @@ func (s *BootstrapService) bootstrapInTx(ctx context.Context, tx pgx.Tx, in Boot
 // core_claim_operator_party), applies mod-core's input normalization and
 // tax_id encryption path, and emits the in-transaction `create` `organization`
 // observation.
-func (s *BootstrapService) createOrganization(ctx context.Context, tx pgx.Tx, op BootstrapOperator) (int64, uuid.UUID, error) {
+//
+// After-commit contract: CreateInTx emits no after-commit observation, so the
+// returned createdOperatorOrg carries the entity id and payload for Bootstrap
+// to dispatch once its transaction commits.
+func (s *BootstrapService) createOrganization(ctx context.Context, tx pgx.Tx, op BootstrapOperator) (*createdOperatorOrg, error) {
 	if s.orgs == nil {
 		// WHY: the dependency is injected, and a nil one would otherwise panic
 		// mid-transaction. IMPLIES: a mis-wired composition root fails the
 		// bootstrap with a clear error (rolled back) instead of crashing.
-		return 0, uuid.Nil, errors.New("users: no organization service configured for bootstrap")
+		return nil, errors.New("users: no organization service configured for bootstrap")
 	}
 	// WHY WithoutOwner: the operator organization is the root of the party
 	// tree and has no owner (decision U10); CreateEntity's default would own it
@@ -413,21 +456,28 @@ func (s *BootstrapService) createOrganization(ctx context.Context, tx pgx.Tx, op
 	// CreateInTx re-validates legal_name and legal_form with the same
 	// predicates ValidateBootstrapInput already applied, so its validation
 	// errors cannot occur here and the bootstrap's own 400s keep precedence.
-	_, entityUUID, entityID, err := s.orgs.CreateInTx(ctx, tx, coreservice.CreateOrganizationInput{
+	org, entityUUID, entityID, err := s.orgs.CreateInTx(ctx, tx, coreservice.CreateOrganizationInput{
 		LegalName:    op.LegalName,
 		LegalForm:    op.LegalForm,
 		Jurisdiction: op.Jurisdiction,
 	}, coreservice.WithoutOwner())
 	if err != nil {
-		return 0, uuid.Nil, fmt.Errorf("users: bootstrap: create organization: %w", err)
+		return nil, fmt.Errorf("users: bootstrap: create organization: %w", err)
 	}
-	// NOTE: CreateInTx documents that its caller dispatches ObserveAfterCommit
-	// (create, organization, entityID) after the commit. This module does not
-	// dispatch post-commit observations for any in-transaction creation it
-	// composes (NaturalPersonService.CreateInTx in user_service.go and
-	// user_self_service.go is the same), so the bootstrap follows that
-	// convention; the gap is recorded as a finding.
-	return entityID, entityUUID, nil
+	// WHY the payload is built here: only this function holds the created row,
+	// and the post-commit event must carry what mod-core's Create sends (uuid,
+	// normalized legal name and form, jurisdiction; never the tax id).
+	// IMPLIES: Bootstrap can dispatch after tx.Commit without re-reading.
+	return &createdOperatorOrg{
+		ID:   entityID,
+		UUID: entityUUID,
+		After: map[string]any{
+			"uuid":         entityUUID.String(),
+			"legal_name":   org.LegalName,
+			"legal_form":   org.LegalForm,
+			"jurisdiction": org.Jurisdiction.String,
+		},
+	}, nil
 }
 
 // createWildcardManageGrant inserts the admin profile's wildcard `manage`

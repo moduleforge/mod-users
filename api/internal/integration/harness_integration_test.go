@@ -104,6 +104,9 @@ type observation struct {
 type recorder struct {
 	mu   sync.Mutex
 	list []observation
+	// committed holds the after-commit observations, which the group dispatches
+	// only once a transaction has committed. A rollback leaves it untouched.
+	committed []observation
 }
 
 func (r *recorder) Observe(ctx context.Context, _ pgx.Tx, op, resource string, target *int64, before, after any) error {
@@ -118,12 +121,40 @@ func (r *recorder) Observe(ctx context.Context, _ pgx.Tx, op, resource string, t
 	return nil
 }
 
-func (r *recorder) ObserveAfterCommit(context.Context, string, string, *int64, any) {}
+func (r *recorder) ObserveAfterCommit(ctx context.Context, op, resource string, target *int64, after any) {
+	o := observation{Op: op, Resource: resource, After: after}
+	if target != nil {
+		o.Target = *target
+	}
+	o.Auth, o.HasAuth = opctx.Auth(ctx)
+	r.mu.Lock()
+	r.committed = append(r.committed, o)
+	r.mu.Unlock()
+}
 
-// reset clears the list.
+// afterCommit returns a copy of the after-commit observations.
+func (r *recorder) afterCommit() []observation {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]observation(nil), r.committed...)
+}
+
+// afterCommitCount counts the after-commit observations of one op and resource.
+func (r *recorder) afterCommitCount(op, resource string) int {
+	n := 0
+	for _, o := range r.afterCommit() {
+		if o.Op == op && o.Resource == resource {
+			n++
+		}
+	}
+	return n
+}
+
+// reset clears both lists.
 func (r *recorder) reset() {
 	r.mu.Lock()
 	r.list = nil
+	r.committed = nil
 	r.mu.Unlock()
 }
 

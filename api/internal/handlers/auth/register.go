@@ -78,6 +78,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		verify   svc.IssuedChallenge
 		emailTo  string
 		haveCode bool
+		created  svc.CreatedUser
 	)
 	err = h.inTx(r.Context(), func(tx pgx.Tx) error {
 		user, err := h.users.CreateBYOUserInTx(r.Context(), tx, svc.CreateBYOUserInput{
@@ -86,6 +87,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		created = user
 		actCtx := user.ActingContext(r.Context())
 		ident, err := h.users.AddIdentifierInTx(actCtx, tx, svc.AddIdentifierInput{
 			UserID: user.User.EntityID, Kind: svc.IdentifierKindEmail, Value: req.Email, Primary: true,
@@ -118,6 +120,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
+
+	// WHY after inTx: mod-core's CreateInTx observed the new person only inside
+	// the transaction; the after-commit `create` natural_person belongs to the
+	// code that owns the commit, and inTx has now committed. IMPLIES: a failed
+	// registration (rolled back) dispatches nothing, and observers see exactly
+	// one create per registered person, as the in-transaction acting profile.
+	h.users.ObserveCreatedAfterCommit(r.Context(), created)
 
 	if haveCode {
 		code := verify.Code
