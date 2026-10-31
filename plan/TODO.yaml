@@ -411,7 +411,7 @@ phases:
           slug: mod-users-drift-scan
           title: Mod-Users Documentation Drift Scan
           path: phase-11-users-identity-final/001-mod-users-drift-scan.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Scanned mod-users for old-model terms; docs already clean. Fixed 10 stale code comments, left legitimate history matches, reported 3 followups. All build, test, lint and verify checks pass.
           git:
