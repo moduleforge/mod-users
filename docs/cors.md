@@ -8,7 +8,9 @@ How the mod-users API decides which browser origins may call it cross-origin, th
 
 CORS is default-deny. The API emits CORS headers only for origins you list explicitly.
 
-The API authenticates with a Bearer access token in the `Authorization` header only; no route reads an authentication cookie (the `oidc_state` cookie of the OIDC redirect is not an authentication cookie). Browser clients send that header explicitly and do not need credentialed (cookie-carrying) cross-origin requests; the GUI client sends `credentials: 'omit'`. The one exception is the two OIDC start POSTs (the sign-in and link authorize-URL starts), which send `credentials: 'include'` so the browser stores the `oidc_state` cookie; a cross-origin front end must therefore be in the explicit `CORS_ORIGINS` list. See [the client contract](architecture/sessions-and-tokens.md#client-contract).
+The API authenticates with a Bearer access token in the `Authorization` header only; no route reads an authentication cookie (the `oidc_state` cookie of the OIDC redirect is not an authentication cookie). Browser clients send that header explicitly and do not need credentialed (cookie-carrying) cross-origin requests; the GUI client sends `credentials: 'omit'`. The one exception is the two OIDC start POSTs (the link and step-up authorize-URL starts), which send `credentials: 'include'` so the browser stores the `oidc_state` cookie; a cross-origin front end must therefore be in the explicit `CORS_ORIGINS` list. The sign-in start is a plain GET navigation and needs no credentials. A credentialed start needs an explicit `CORS_ORIGINS` entry even in `DEPLOY_MODE=local`, because the local wildcard never sends `Access-Control-Allow-Credentials`.
+
+The setup-token routes (`POST /v1/bootstrap` and the `/v1/oidc-config` writes) send an `X-Setup-Token` header, which is in the allowed request headers. See [the client contract](architecture/sessions-and-tokens.md#client-contract).
 
 | `DEPLOY_MODE` | `CORS_ORIGINS` | Result |
 |---|---|---|
