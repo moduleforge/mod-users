@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 15
-    tasks_added: 71
+    tasks_added: 72
 phases:
     - number: 6
       slug: users-identity-core
@@ -1655,5 +1655,22 @@ phases:
       slug: remediation-15
       title: Remediation Round 15
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 10
-      tasks: []
+      tasks:
+        - number: 1
+          slug: align-cors-setup-token-and-docs
+          title: Allow X-Setup-Token In CORS And Correct CORS Docs
+          path: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - gz8M
+            - EqWE
+            - Yo85
+            - 7Yab
+          git:
+            branch: null
+            commit: []
+            merge: null
