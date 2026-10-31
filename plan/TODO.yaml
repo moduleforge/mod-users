@@ -1633,7 +1633,7 @@ phases:
           findings:
             - cRuN
           git:
-            branch: null
+            branch: plan/identity-model-impl-26-005
             commit: []
             merge: null
         - number: 6
