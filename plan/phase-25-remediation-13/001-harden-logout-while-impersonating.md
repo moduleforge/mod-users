@@ -24,3 +24,10 @@ This task addresses findings `H5Po`, `NfAS`, and `D3Q9`. The work targets the pl
 - Finding `H5Po` in this plan's `plan/findings.yaml`.
 - Finding `NfAS` in this plan's `plan/findings.yaml`.
 - Finding `D3Q9` in this plan's `plan/findings.yaml`.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Validation: auth-context tests (impersonating logout order, local-only fallback, late restore/user load guard) pass; `bun test` (453), `bun run typecheck`, `make build.gui`, `make lint.gui` pass.
+- Files: `gui/src/lib/auth-context.tsx`, `gui/src/lib/auth-context.test.tsx`.
+- Decisions: logout is single-flight; a logout-generation counter plus a logging-out flag drop late `loadUser`/hydration results and session events; the impersonating check uses stored state only when a restore was in flight (snapshot is stale then).
