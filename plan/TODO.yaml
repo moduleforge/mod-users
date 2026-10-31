@@ -1629,6 +1629,7 @@ phases:
           path: phase-26-remediation-14/005-fix-oidc-redirect-error-code.md
           done: false
           tier: haiku-med
+          digest: Replaced auth_failed with authentication_failed in the refusals table of docs/oidc-troubleshooting.md and in the resolver decision-table comment. Both validation checks pass.
           findings:
             - cRuN
           git:
