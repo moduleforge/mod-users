@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 12
-    tasks_added: 59
+    tasks_added: 60
 phases:
     - number: 6
       slug: users-identity-core
@@ -1447,5 +1447,19 @@ phases:
       slug: remediation-12
       title: Remediation Round 12
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 9
-      tasks: []
+      tasks:
+        - number: 1
+          slug: route-step-up-refresh-through-single-flight
+          title: Route the OIDC Step-Up Refresh Through the Single-Flight Refresh
+          path: phase-24-remediation-12/001-route-step-up-refresh-through-single-flight.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - 6qD2
+          git:
+            branch: null
+            commit: []
+            merge: null
