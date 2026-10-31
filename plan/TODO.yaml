@@ -1484,7 +1484,7 @@ phases:
           slug: revoke-admin-session-on-impersonated-logout
           title: Revoke the Administrator Session When Logging Out While Impersonating
           path: phase-24-remediation-12/003-revoke-admin-session-on-impersonated-logout.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Logout restores the administrator session on users.impersonation_ended and revokes it; local state cleared in every case; one test added; all gui checks pass.
           findings:
