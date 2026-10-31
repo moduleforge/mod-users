@@ -298,7 +298,8 @@ phases:
           digest: Rebuilt gui/src/lib on final API; lib tests pass 223/0; component-level failures deferred to tasks 002-005 by design; jRXp filed as type:conflict.
           git:
             branch: plan/identity-model-impl-09-001
-            commit: []
+            commit:
+                - dd54577
             merge: null
         - number: 2
           slug: build-profile-chrome
