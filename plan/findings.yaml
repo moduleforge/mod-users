@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Selection page loses return path on reload
-      id: AReg
-      date: "2026-10-31"
-      tags:
-        - type:enhancement
-        - plan/phase:users-gui-and-frontend-contract
-        - priority:medium
-        - effort:small
-      text: After a sign-in answers selection_required, LoginForm/RegisterForm/EmailCodePage/OidcCallbackPage hand the host the selection route and the return path (onSelectionRequired), but SelectProfilePage (gui/src/components/select-profile-page.tsx) has no prop or storage to resume at that return path, so each host must carry it itself. Also, selectionRequired lives only in AuthProvider memory (gui/src/lib/auth-context.tsx), so reloading the selection page renders nothing (SelectProfilePage returns null when selectionRequired is false) even though the tab still holds a refresh token. Consider persisting the pending-selection flag per tab and accepting a returnPath on SelectProfilePage.
     - title: Login, register, email-code verify, handoff…
       id: zwCX
       date: "2026-10-31"
@@ -2167,4 +2158,16 @@ closed:
       title: OIDC state cookie vs credentials omit
       disposition: promoted
       ref: jRXp
+      date: "2026-10-31"
+    - id: AReg
+      title: Selection page loses return path on reload
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 004. The pending selection is persisted per tab
+        (gui/src/lib/config.ts:401-475, selection list under `<key>.selection` and return
+        path under `<key>.selection_return`; written in commitTokenResponse at
+        gui/src/lib/api.ts:744-749), a reload restores selectionRequired and the profile list
+        (gui/src/lib/auth-context.tsx:406-423), and SelectProfilePage takes a `returnPath`
+        prop, else the stored path, validated with isSafeReturnPath
+        (gui/src/components/select-profile-page.tsx:27, 53-61).
       date: "2026-10-31"
