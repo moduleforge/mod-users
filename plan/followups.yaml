@@ -2954,3 +2954,16 @@ items:
           The impersonation_ended event starts restoreAdministrator, whose committed token_response triggers loadUser (new session uuid) while logout continues to revoke and then clears state. A loadUser response landing after logout's setUser(null) could repopulate the user record in memory after sign-out. Local storage is cleared (no token or marker leak; later session.get is skipped because the stored token is null).
         recommendation:
           Guard loadUser/setUser with a signed-out check (the session ref) so a late response after logout is discarded.
+    - title: CORS AllowCredentials on Bearer-only API
+      id: x3It
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - priority:low
+        - effort:small
+        - plan/phase:doc-updates
+        - plan/slug:identity-model-impl
+      text: |-
+        api/internal/server/server.go line 88 sets CORS AllowCredentials although the API is Bearer-only (every call sends credentials:'omit' except the two OIDC start POSTs, which need the oidc_state cookie). Decide whether AllowCredentials should be limited to the two OIDC start routes or dropped. Found by phase 10 task 003 (repository docs review); a design decision, not fixed there.
+
+        Open question (quoted evaluator data): Should the API keep Access-Control-Allow-Credentials: true for every explicitly allow-listed origin, restrict it to the two OIDC start POSTs that need the oidc_state cookie, or drop it entirely? Options: (1) keep as is and document why (no code change; exposure limited to the non-authenticating oidc_state cookie); (2) restrict to the two OIDC start routes (needs route-scoped CORS handling, tests, docs; plan overview lists CORS default-deny policy and oidc_state cookie behavior as must-not-change); (3) drop entirely (breaks cross-origin OIDC sign-in). Recommended option: keep as is and document why.
