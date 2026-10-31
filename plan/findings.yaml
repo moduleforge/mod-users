@@ -80,15 +80,6 @@ items:
           Still says the CORS middleware "still lists the removed X-Step-Up-Token among its allowed request headers". This diff removed it, so the note is now stale.
         recommendation:
           Update the line to say the entry was removed in remediation 14.
-    - title: 'Confirmed: the comment does not name CORE_FI…'
-      id: UuyR
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - plan/phase:remediation-14
-        - priority:low
-        - effort:small
-      text: 'Evaluator proposed dismissing as moot: no code risk; only notes the api/cmd/server/main.go:232-237 comment does not name CORE_FIELD_KEY_HEX (tracked by AMeC; documented at .env.example:207-215). A type:security dismiss is never auto-applied and internal escalation is off, so the question surfaces. Recommended: dismiss. Suggestion-level, optional comment wording.'
     - title: A concrete 32-byte hex field-encryption seed…
       id: CubF
       date: "2026-10-31"
@@ -2242,4 +2233,9 @@ closed:
       title: The "Persisted signing key" section explains…
       disposition: promoted
       ref: e4f6
+      date: "2026-10-31"
+    - id: UuyR
+      title: 'Confirmed: the comment does not name CORE_FI…'
+      disposition: promoted
+      ref: UuyR
       date: "2026-10-31"
