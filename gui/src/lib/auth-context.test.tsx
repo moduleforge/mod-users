@@ -845,6 +845,46 @@ describe('logout', () => {
     expect(m.auth().token).toBeNull();
   });
 
+  test('an expired impersonation token restores the administrator session and revokes it on logout', async () => {
+    seedTab('admin-access');
+    const impSession = { ...tokenResponse().session!, uuid: 'imp-sess', impersonating: true };
+    let impExpired = false;
+    const calls = mockApi({
+      'GET /v1/session': (call) =>
+        // The dropped impersonation token and the bare (tokenless) restore
+        // request both 401, as the server would for an expired/absent token.
+        (call.authorization === 'Bearer imp-access' && impExpired) || call.authorization === undefined
+          ? errorReply(401, 'unauthorized')
+          : SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/impersonations': () =>
+        jsonResponse(
+          tokenResponse({ access_token: 'imp-access', refresh_token: null, session: impSession, profile: PROFILE_B }),
+          201,
+        ),
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'admin-access-2', refresh_token: 'r2' }),
+      'POST /v1/session/logout': (call) =>
+        call.authorization === 'Bearer admin-access-2' ? undefined : errorReply(401, 'unauthorized'),
+    });
+    const m = mount();
+    await settled(m);
+    await act(async () => {
+      await api.impersonations.start({ profile_uuid: 'prof-b', reason: 'support' });
+    });
+    impExpired = true;
+    await act(async () => {
+      await m.auth().logout();
+    });
+    // The last request is the logout, issued under the administrator token.
+    expect(calls.at(-1)!.path).toBe('/v1/session/logout');
+    expect(calls.at(-1)!.authorization).toBe('Bearer admin-access-2');
+    // The administrator lineage was refreshed exactly once.
+    expect(calls.filter((c) => c.path === '/v1/auth/token')).toHaveLength(1);
+    expect(getStoredToken()).toBeNull();
+    expect(getStoredRefreshToken()).toBeNull();
+    expect(m.auth().token).toBeNull();
+  });
+
   test('an unsafe loginPath falls back to the default login route', async () => {
     seedTab();
     mockApi({

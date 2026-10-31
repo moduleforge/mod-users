@@ -19,3 +19,10 @@ This task addresses finding `Bq75`. The work targets the plan branch `plan/ident
 ## References
 
 - Finding `Bq75` in this plan's `plan/findings.yaml`.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Validation: new auth-context test passes; `cd gui && bun test` (450 pass), `bun run typecheck`, `make build.gui`, `make lint.gui` all pass.
+- Files: `gui/src/lib/auth-context.tsx`, `gui/src/lib/auth-context.test.tsx`.
+- Note: the logout request is `POST /v1/session/logout` (the task text says DELETE/logout); the test asserts the POST.
