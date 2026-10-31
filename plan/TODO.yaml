@@ -1568,7 +1568,7 @@ phases:
           slug: document-persisted-signing-key-risk
           title: Document Persisted Signing Key Exposure
           path: phase-26-remediation-14/001-document-persisted-signing-key-risk.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Documented in the Persisted signing key section that the key is stored unencrypted, that access to the table or a backup allows forging tokens, and that production should set JWT_SIGNING_KEY from a secret store. Doc-only change.
           findings:
