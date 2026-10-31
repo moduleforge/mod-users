@@ -22,3 +22,9 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 
 - Finding N2lP in this plan's `plan/findings.yaml`.
 - Finding kmxU in this plan's `plan/findings.yaml`.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Validation: AGENTS.md no longer contains "Registrars of authenticated routes mount"; `docs/architecture.md` OIDC configuration row states the OpenAPI omission; `grep -c oidc-config api/openapi.yaml` is 0.
+- Files: `AGENTS.md`, `docs/architecture.md`.
