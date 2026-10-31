@@ -17,7 +17,7 @@ export interface RegisterFormProps {
   onSuccess?: (returnPath: string | null) => void;
   /** Site-relative path echoed to `onSuccess`. An explicit value wins over the query param. */
   returnPath?: string;
-  /** The app (slug) the new session signs in to; sent as `app` on register. */
+  /** The app (uuid) the new session signs in to; sent as `app` on register. */
   app?: string;
   /**
    * Called instead of `onSuccess` when the new session found no landing

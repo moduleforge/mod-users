@@ -56,7 +56,7 @@ export interface AuthPageProps {
    */
   onForgotPassword?: () => void;
   /**
-   * The app (slug) the session signs in to; forwarded as `app` to login and
+   * The app (uuid) the session signs in to; forwarded as `app` to login and
    * registration.
    */
   app?: string;
