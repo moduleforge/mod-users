@@ -1486,6 +1486,7 @@ phases:
           path: phase-24-remediation-12/003-revoke-admin-session-on-impersonated-logout.md
           done: false
           tier: sonnet-med
+          digest: Logout restores the administrator session on users.impersonation_ended and revokes it; local state cleared in every case; one test added; all gui checks pass.
           findings:
             - Bq75
           git:
