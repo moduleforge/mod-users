@@ -346,7 +346,8 @@ phases:
           digest: Built bootstrap page, setup gate routing across bootstrap and OIDC state, OIDC config page without isAdmin, JIT-mode and trust-ACR provider fields, README first-run section. 421 tests pass; lint and build pass.
           git:
             branch: plan/identity-model-impl-09-005
-            commit: []
+            commit:
+                - 564a7c5
             merge: null
         - number: 6
           slug: review-gui-exports-and-contract-docs
