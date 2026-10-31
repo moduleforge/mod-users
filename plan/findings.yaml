@@ -1,28 +1,5 @@
 version: 2
 items:
-    - title: The `app` option is documented as an app "sl…
-      id: paQk
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:users-gui-and-frontend-contract
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/auth-context.tsx
-        lines: 65-67
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          The `app` option is documented as an app "slug" in AuthContext RegisterOptions
-          (auth-context.tsx 66), LoginForm (login-form.tsx 87), RegisterForm (register-form.tsx 20),
-          EmailCodePage (email-code-page.tsx 31) and AuthPage (auth-page.tsx 59), but api/openapi.yaml
-          defines `app` on register, login and email-code verify as "The app (uuid)", and api.ts types
-          document uuid. A host following the prop docs would send a slug and be refused.
-        recommendation:
-          Change the prop docs to say uuid (or resolve slug to uuid explicitly if slug is intended).
     - title: The stepped_up=1 branch calls api.auth.token…
       id: wafz
       date: "2026-10-31"
@@ -2043,4 +2020,13 @@ closed:
         Already fixed by phase 23 task 005. sendCode takes an explicit `inDialog` flag
         (gui/src/components/identifiers-panel.tsx:174, 183-188) and openVerify calls
         `sendCode(identifier, true)` (line 203), so a first-send failure is shown in the dialog.
+      date: "2026-10-31"
+    - id: paQk
+      title: The `app` option is documented as an app "sl…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 006. Every named doc comment now says "The app (uuid)":
+        gui/src/lib/auth-context.tsx:67, gui/src/components/login-form.tsx:87,
+        register-form.tsx:20, email-code-page.tsx:31 and auth-page.tsx:59. A grep for "slug"
+        in those files finds no remaining hit.
       date: "2026-10-31"
