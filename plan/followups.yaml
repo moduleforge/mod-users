@@ -2365,3 +2365,13 @@ items:
         - plan/phase:adopt-core-engine-remediation
         - plan/slug:identity-model-impl
       text: 'needs-sibling: mod-workflows. With mod-users'' row-filtered access functions installed (localAuthz.AccessFuncGenerator, predicate mod_users.access_row_permitted), a list query run without mod-core setup.BindAuthInputs on its transaction passes NULL authentication inputs to the predicate and silently drops every row a restrictive party policy gates, even for a caller meeting the policy. Unbound list queries: model/queries/workflow_definitions.sql ListWorkflowDefinitions (accessible_workflow_definition_ids_for_actor; api/service/definition.go DefinitionService.List) and model/queries/workflow_instances.sql ListWorkflowInstances (accessible_workflow_instance_ids_for_actor; api/service/instance.go ListInstances). Run each in one read-only transaction per request, call BindAuthInputs first and refuse the request on its error.'
+    - title: 'needs-sibling: mod-core organizationService'
+      id: wyTd
+      date: "2026-10-30"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:small
+        - plan/phase:adopt-core-engine-remediation
+        - plan/slug:identity-model-impl
+      text: 'needs-sibling: mod-core. mod-core''s moduleforge.module.yaml provides coreServices (*coreservice.Services) and naturalPersonService (coreservice.NaturalPersonFromServices) but no organization service, so mod-users'' moduleforge.module.yaml carries a local bootstrapOrganizationService (usersservice.OrganizationFromServices over service:coreServices) to feed usersservice.NewBootstrapService. A mod-core provider (an OrganizationFromServices constructor and an organizationService manifest entry, mirroring naturalPersonService) would let mod-users drop the local extraction and its extra requires entry for coreServices.'
