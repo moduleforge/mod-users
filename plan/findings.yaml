@@ -1,34 +1,5 @@
 version: 2
 items:
-    - title: While impersonating, the tab holds the imper…
-      id: 4EHb
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:users-gui-and-frontend-contract
-        - priority:high
-        - effort:medium
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/api.ts
-        lines: 973-984, 1441-1452
-        severity: major
-        confidence: medium
-        concerns: correctness
-        description:
-          While impersonating, the tab holds the impersonation access token but the administrator's own
-          refresh token and profile uuid. When the impersonation token expires, any request 401s
-          with a non-revocation code and the pipeline refreshes; the grant returns the
-          administrator's own access token, which is committed and the original request is replayed with
-          it. A write the user issued from the impersonated context therefore executes as the
-          administrator's own profile, and the impersonation silently ends (the banner just disappears).
-          The same replay hazard applies to ImpersonationBanner "End" when the token already expired:
-          DELETE /v1/impersonations/current is replayed with the administrator's token.
-        recommendation:
-          When the request was sent with an impersonation session (session.impersonating in the
-          last committed response, or a stored marker), do not auto-refresh and replay: end the
-          impersonation locally (restore the administrator token), emit an event, and fail the
-          request with a clear error so the UI can tell the user. Make end() tolerate an expired token.
     - title: In hydrate, any failure of session.get other…
       id: oFfM
       date: "2026-10-31"
@@ -2109,4 +2080,15 @@ closed:
         `selection_required` instead of calling endTabSession (gui/src/lib/api.ts:843-869),
         and hydrate restores the selection state without calling session.get when a pending
         selection is stored (gui/src/lib/auth-context.tsx:406-423).
+      date: "2026-10-31"
+    - id: 4EHb
+      title: While impersonating, the tab holds the imper…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 003. execute captures `sentAsImpersonation` at send
+        time (gui/src/lib/api.ts:1002-1005) and, on a non-revocation 401, neither refreshes nor
+        replays: it drops the dead token and marker, emits impersonation_ended and throws
+        users.impersonation_ended (api.ts:1071-1094). impersonations.end treats that error as
+        already ended and restores the administrator without a replayed DELETE
+        (api.ts:1575-1608). The fail-open residual of the marker is tracked as vAo0.
       date: "2026-10-31"
