@@ -2405,3 +2405,13 @@ items:
         - plan/phase:adopt-core-engine-remediation
         - plan/slug:identity-model-impl
       text: 'Plan-note edits (manager-only, plan/notes/): decisions-and-resolutions.md amendment to U5/U14 (marker-based system actor replaces inferred rule; unmarked sessionless context is gated and fails closed; anonymous exemption stays as anonymous) and Decision E resolution of Ddx9 and qvSR; mod-users-api-surface.md section 3 (access_row_permitted six-arg and owning_party_gate signatures), section 6.2 (marker rule, localAuthz.AccessFuncGenerator and AccessRowFilter, BindAuthInputs obligation), /v1/principals row, and NewBootstrapService orgs parameter plus OrganizationFromServices.'
+    - title: Coordination note on link-siblings.sh in deci
+      id: j7Ym
+      date: "2026-10-30"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:adopt-core-engine-remediation
+        - plan/slug:identity-model-impl
+      text: Coordination note on link-siblings.sh in decisions-and-resolutions.md may be stale; check.
