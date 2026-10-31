@@ -2325,3 +2325,13 @@ items:
           decision is confirmed deliberate rather than an omission.
         recommendation:
           No change required if suspend/resume under impersonation is intended; otherwise extend the guard.
+    - title: Stale party-policy SQL comment
+      id: c6Dh
+      date: "2026-10-30"
+      tags:
+        - type:documentation
+        - priority:medium
+        - effort:small
+        - plan/phase:adopt-core-engine-remediation
+        - plan/slug:identity-model-impl
+      text: 'model/migrations/sql/0100_baseline.sql, the comment above mod_users.session_meets_party_policy (around line 1702) ends: "An unknown session, a revoked or unknown credential, or neither id fails closed (false): trusted contexts without a session or credential are the engine''s to skip, not this function''s." The engine (api/internal/authz/authz.go gated) no longer treats a context without a session or credential as trusted: it skips the owning-party gate only for opctx.IsSystemActor contexts (mod-core''s explicit marker) and the anonymous context, and an unmarked sessionless context reaches this function and gets false. The comment should say that system-actor contexts (opctx.IsSystemActor) and the anonymous context are the engine''s to skip, and that an unmarked sessionless context is refused here. Comment-only change; the function body is correct.'
