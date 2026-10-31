@@ -15,8 +15,8 @@ items:
       tags:
         - type:enhancement
         - plan/phase:users-gui-and-frontend-contract
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: After a sign-in answers selection_required, LoginForm/RegisterForm/EmailCodePage/OidcCallbackPage hand the host the selection route and the return path (onSelectionRequired), but SelectProfilePage (gui/src/components/select-profile-page.tsx) has no prop or storage to resume at that return path, so each host must carry it itself. Also, selectionRequired lives only in AuthProvider memory (gui/src/lib/auth-context.tsx), so reloading the selection page renders nothing (SelectProfilePage returns null when selectionRequired is false) even though the tab still holds a refresh token. Consider persisting the pending-selection flag per tab and accepting a returnPath on SelectProfilePage.
     - title: Login, register, email-code verify, handoff…
       id: zwCX
