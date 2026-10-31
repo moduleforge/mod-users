@@ -423,7 +423,7 @@ phases:
           slug: reconcile-superseded-followups
           title: Reconcile Superseded Mod-Users Followups
           path: phase-11-users-identity-final/002-reconcile-superseded-followups.md
-          done: false
+          done: true
           tier: haiku-med
           digest: 'Reconciled 21 mod-users followups read-only: 13 confirmed superseded with proposed removals, 2 closed cross-project, 6 retained for manager decision. No followups mutation made.'
           git:
