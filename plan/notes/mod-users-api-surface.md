@@ -740,4 +740,6 @@ args `context`, `field:cfg.LocalAuth`), `authenticator` (`auth.NewAuthenticator`
   `BindAuthInputs` and checks its error.
 - **Bootstrap.** `NewBootstrapService` takes an organization-service parameter (`OrganizationFromServices`);
   bootstrap creates the organization through `Organization.CreateInTx(ctx, tx, in, service.WithoutOwner())`
-  and calls `ObserveAfterCommit` after commit (finding 06rd tracks the missing call at some sites).
+  and calls `ObserveAfterCommit` after commit at every call site (phase 22 task 003, finding 06rd).
+  A sessionless context counts as a system actor only when it carries the explicit marker
+  (`opctx.WithSystemActor`) and no session or credential (phase 22 task 001, finding tpls).
