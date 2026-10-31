@@ -6,6 +6,7 @@ import {
   getStoredHandoffVerifier,
   getStoredToken,
   setStoredHandoffVerifier,
+  setStoredImpersonating,
   setStoredProfileUuid,
   setStoredRefreshToken,
   setStoredToken,
@@ -222,6 +223,20 @@ describe('OidcCallbackPage link and step-up returns', () => {
     });
     await waitFor(() => expect(outcome.completed).toEqual(['/']));
     expect(outcome.errors).toEqual([]);
+  });
+
+  test('#stepped_up=1 while impersonating issues no token request and does not report raised assurance', async () => {
+    const session = signInTab();
+    setStoredImpersonating(true);
+    setHash('#stepped_up=1&return=%2Fadmin');
+    const { calls, outcome } = await mountCallback({
+      ...session,
+      'POST /v1/auth/token': () => tokenResponse({ access_token: jwtFixture('fresh-access') }),
+    });
+    await waitFor(() => expect(outcome.errors).toHaveLength(1));
+    expect(outcome.completed).toEqual([]);
+    expect(tokenCalls(calls)).toHaveLength(0);
+    expect(getStoredToken()).toBe(jwtFixture('old-access'));
   });
 
   test('#stepped_up=1 reports an error when the refresh fails', async () => {

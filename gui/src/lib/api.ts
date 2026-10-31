@@ -1360,14 +1360,22 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
        * pipeline, so it joins a rotation already in flight and never spends
        * the same refresh token twice; a rotation that landed after `sentToken`
        * was observed is not repeated.
+       *
+       * Resolves `true` when the tab's token was refreshed (assurance raised)
+       * and `false` when the refresh was deliberately skipped because the tab
+       * is impersonating, so the caller must not treat assurance as raised.
        */
-      refreshAfterStepUp: async (sentToken: string | null): Promise<void> => {
+      refreshAfterStepUp: async (sentToken: string | null): Promise<boolean> => {
         // WHY: an impersonating tab holds the target's access token while the
         // stored refresh lineage is the administrator's. IMPLIES rotating here
         // would replace the impersonation token with the administrator's, so
         // the impersonation token is never refreshed; the tab just returns.
-        if (getStoredImpersonating()) return;
+        // It returns false (not void) because the skipped refresh leaves the
+        // token's assurance unraised; a caller that assumed success would
+        // resume the interrupted action and loop on step_up_required.
+        if (getStoredImpersonating()) return false;
         await refreshTabToken(sentToken, resolveBaseUrl);
+        return true;
       },
 
       /**
