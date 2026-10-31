@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 11
-    tasks_added: 54
+    tasks_added: 55
 phases:
     - number: 6
       slug: users-identity-core
@@ -1352,7 +1352,7 @@ phases:
       slug: remediation-11
       title: Remediation Round 11
       kind: remediation
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 9
       tasks:
         - number: 1
@@ -1365,6 +1365,18 @@ phases:
             - zwCX
             - oFfM
             - A6aq
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: handle-oidc-link-and-step-up-returns
+          title: Handle OIDC Link and Step-Up Return Fragments
+          path: phase-23-remediation-11/002-handle-oidc-link-and-step-up-returns.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - 4ohc
           git:
             branch: null
             commit: []
