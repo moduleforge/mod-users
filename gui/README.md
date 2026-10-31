@@ -160,6 +160,11 @@ All components are client components (`'use client'` is not retained in `dist`; 
 | `ProfileRemedy` | `remedy: LockRemedy \| null` | Describes a lock remedy; for `sign_in_with_provider` it also starts the provider step-up (`session.stepUp.startOidc`) and navigates to the returned `http(s)` authorize URL. |
 | `SelectProfilePage` | `onSelected?(response: TokenResponse)` | Mount at `USERS_GUI_ROUTES.selectProfile`. Shown only while `selectionRequired`; lists profiles with availability and lands the tab on the chosen available one. |
 | `InvitationsView` | `stepUpHandler?`; `onStepUpRequired?(error)` | Mount at `USERS_GUI_ROUTES.invitations`. Lists `invited` profiles (accept, decline) and active party profiles (leave) from `GET /v1/me/profiles`, then refreshes the list and the auth context. `stepUpHandler` is registered through `useStepUpHandler` while mounted; `onStepUpRequired` fires when an action still ends in `users.step_up_required`. |
+| `StepUpDialog` | `providers?: OIDCProvider[]` | The step-up prompt. Mount once under `AuthProvider`; it registers itself as the step-up handler. See [Account self-service panels](#account-self-service-panels). |
+| `CredentialsPanel` | `onActionRequired?(error)`; `title?`; `description?`; `oidcReturnPath?` | Mount at `USERS_GUI_ROUTES.accountCredentials`. Lists, adds (password, SSH key, provider link), edits and revokes credentials; shows `GuestUpgradeForm` for a guest. Needs `AuthProvider`. |
+| `IdentifiersPanel` | `onActionRequired?(error)`; `title?`; `description?` | Mount at `USERS_GUI_ROUTES.accountIdentifiers`. Email addresses: add, verify, set primary, delete. Needs `AuthProvider`. |
+| `SessionsPanel` | `onActionRequired?(error)`; `title?`; `description?` | Mount at `USERS_GUI_ROUTES.accountSessions`. Lists live sessions with the current one marked; revoke others; revoking the current one signs the tab out. Needs `AuthProvider`. |
+| `GuestUpgradeForm` | `onUpgraded?(user)`; `onActionRequired?(error)`; `title?`; `description?` | Turns a guest into a registered user (`POST /v1/me/upgrade`). `CredentialsPanel` renders it for guests; mount it yourself elsewhere if you want. Needs `AuthProvider`. |
 | `ImpersonationBanner` | none | Visible while `impersonating`: the impersonated profile, the time remaining, renew and end actions. `ClientLayout` mounts it above the sidebar; apps with their own shell should render it at the top of every page. |
 | `AuthPage` | `initialMode?: 'login' \| 'register'`; `onAuthenticated?(returnPath: string \| null, mode: 'login' \| 'register')`; `onSelectionRequired?(selectProfilePath, returnPath, mode)`; `initialError?`; `returnPath?`; `app?`; `allowRegistration?` (default `true`); `onForgotPassword?()` | Login and register in one card. `allowRegistration={false}` removes the register control and panel and forces login mode. Needs `AuthProvider`. |
 | `LoginForm` | `onSuccess?(returnPath: string \| null)`; `onSelectionRequired?(selectProfilePath, returnPath)`; `initialError?`; `returnPath?`; `app?`; `idPrefix?`; `onForgotPassword?()` | Email and password plus OIDC provider buttons (listed from `GET /v1/auth/providers`; each starts the handoff-bound flow with `api.auth.oidcStart`). `app` is sent as `app` on login. `onForgotPassword` renders a "Forgot password?" button. Needs `AuthProvider`. |
@@ -262,6 +267,39 @@ The message is also rendered on the page itself, so an app that does not navigat
 `OidcSetupGate` is for apps that do not use `ClientLayout`. While OIDC is unconfirmed even the login page's provider call fails, so the gate probes first: it renders `children('ready')` once OIDC is confirmed (any probe failure, including a network error, is treated as needs-setup so an operator can still reach the config page), calls `onNavigateToConfig` when the user is on any other route while OIDC is unconfirmed, and renders `children('setup')` when `currentPath` is the config page. Render the `'ready'` branch inside your `AuthProvider`; render the `'setup'` branch **without** one (`/v1/me` would answer `503`). `OidcConfigPage` itself works inside or outside an `AuthProvider`, and an `AuthProvider` above it will not loop because of the same-path guard.
 
 `ClientLayout` already composes `OidcSetupGate` and `AuthProvider`; use one or the other, not both.
+
+## Account self-service panels
+
+Five components cover the account pages, all on `/v1/me` and `/v1/session`. They need `AuthProvider`, and every write on `/v1/me` can answer `409 users.step_up_required`, so mount one `StepUpDialog` for the whole app.
+
+```tsx
+import {
+  AuthProvider,
+  CredentialsPanel,
+  IdentifiersPanel,
+  SessionsPanel,
+  StepUpDialog,
+} from '@moduleforge/users-gui';
+
+// Once, in the app shell: the prompt for every gated request.
+<AuthProvider onNavigate={navigate}>
+  <StepUpDialog />
+  {children}
+</AuthProvider>
+
+// On the account pages (the standard paths are in USERS_GUI_ROUTES):
+<CredentialsPanel onActionRequired={(e) => navigate(e.path)} />   // accountCredentials
+<IdentifiersPanel onActionRequired={(e) => navigate(e.path)} />   // accountIdentifiers
+<SessionsPanel onActionRequired={(e) => navigate(e.path)} />      // accountSessions
+```
+
+- **`StepUpDialog`** registers itself with `useStepUpHandler`, so a `409 users.step_up_required` opens it and the interrupted request is retried once with the fresh access token the chosen factor returns. Factors: the account password (`session.stepUp.password`), an emailed six-digit code (`requestEmailCode` / `verifyEmailCode`, resend after a 30 second cooldown) and one button per OIDC provider (`startOidc`, which leaves the page; the provider callback completes the step-up and returns, and the user repeats the action). `providers` skips the `GET /v1/auth/providers` lookup. Cancelling rejects the handler, so the caller sees the original `ApiActionRequiredError`; the panels then say nothing was changed. No step-up token exists: each factor answers with an access token the client stores for the tab. Without a mounted prompt the panels still work for sessions fresh enough to skip step-up.
+- **`CredentialsPanel`** lists `GET /v1/me/credentials` by kind (password, emailed code, linked provider, SSH key, others as their raw kind) and offers add password, add SSH key (the server's `users.ssh_key_*` details become field messages; the fingerprint is shown in the list), link a provider (`startOidcLink`, a full-page navigation to an `http(s)` authorize URL), edit (`label` and `default_profile_uuid`, only the changed members are sent) and revoke. A `409 users.last_credential` is explained in the revoke dialog and the credential stays. Revoking can end sessions that signed in with it, including this one: the panel refreshes the session afterwards, and the request layer signs the tab out if it was ended. For a guest (`useAuth().user.is_guest`, or after any `409 users.guest_upgrade_required`) the add controls give way to `GuestUpgradeForm`.
+- **`IdentifiersPanel`** lists, adds, verifies (opening the dialog emails the code), sets primary and deletes email identifiers through `/v1/me/identifiers*`. `users.identifier_taken` and `users.identifier_in_use` have readable messages. It refreshes the auth context after each change so `emailVerified` follows.
+- **`SessionsPanel`** lists `GET /v1/me/sessions` with the current session marked. Other sessions are revoked at once; the current one asks first and then calls `useAuth().logout()`, which clears the tab and navigates to the login path.
+- **`GuestUpgradeForm`** posts email, password and names to `POST /v1/me/upgrade`, then refreshes the auth context.
+
+`onActionRequired` receives every action-required error except the step-up (for example `users.email_unverified`, whose `path` is `USERS_GUI_ROUTES.verifyEmail`); the panels never navigate themselves.
 
 ## Next.js (app router)
 
@@ -479,7 +517,7 @@ So integrators do not assume otherwise:
 
 - Local-login return handling is opt-in via `unauthenticatedReturnParam`. The callback receives the validated return path or `null`; without that setting the app reads its own `?return=` as before.
 - `AuthPage` has no link to the email-code flow; render your own link to `EmailCodePage`'s route if you want one.
-- There is no built-in step-up prompt in the lib layer: register a `StepUpHandler` (see [Step-up](#step-up)) whose UI calls `api.session.stepUp.*`.
+- The step-up prompt is opt-in: mount `StepUpDialog` (see [Account self-service panels](#account-self-service-panels)) or register your own `StepUpHandler` (see [Step-up](#step-up)). With neither, a `409 users.step_up_required` reaches the caller as `ApiActionRequiredError`.
 - `VerifyEmailPage` does not check on mount whether the email is already verified.
 - `ClientLayout` and `SidebarNav` are mod-users admin chrome. `ClientLayout` has no `loginPath` prop and `SidebarNav` hard-codes `/auth/login`; apps with their own shell should use `AuthProvider` and `OidcSetupGate` directly.
 - `allowRegistration={false}` is UI-only: the API's register endpoint stays open.
@@ -493,6 +531,7 @@ The client was rebuilt on the final mod-users API; these changes break earlier i
 - `RequireAuth` lost the `requireAdmin` and `onUnauthorized` props and gained `onSelectionRequired`; `SidebarNav` no longer hides admin links from non-administrators.
 - `useAuth()` lost `isAdmin`, `emailVerifiedAt`, `setTokenAndUser` and `completeExternalLogin`; it gained the members listed under [The auth context](#the-auth-context). `completeHandoff(code)` replaces `completeExternalLogin(token)`: OIDC returns a one-time `#handoff=` code, never a token.
 - The client dropped `self`, `userAccounts` (including `grantAdmin`, `revokeAdmin`, `assume`), `sshKeys`, `stepUp` (the old `X-Step-Up-Token` flow), `apps` and `auth.verifyEmail`, and the types `UserAccount*`, `UserAccountSelf`, `SessionUser`, `LoginResponse`, `StepUpOptions`, `StepUpVerifyResponse`, `SSHKey*`, `RegisterSSHKeyRequest` and the app types. Use `me.*`, `session.*`, `impersonations.*` and `bootstrap.*`.
+- `SSHKeysPanel` is gone: SSH keys are a credential kind, managed in `CredentialsPanel`. The old inline email-code step-up inside the panel is replaced by `StepUpDialog`.
 - `LoginForm`, `RegisterForm`, `EmailCodePage` and `OidcCallbackPage` gained `onSelectionRequired` and `app` (the callback page has no `app`); `RegisterForm.onSuccess` and `EmailCodePage.onSuccess` now receive the return path. `OidcCallbackPage` no longer reads `?error=` or a JWT from the redirect; it reads `#handoff=` / `#error=`. `VerifyEmailPage` no longer shows an email field and verifies through `/v1/me/identifiers`.
 - `register` answers a session directly (`201` with a token response), so there is no follow-up login.
 - `NEXT_PUBLIC_API_BASE_URL=""` means same-origin instead of falling through to the localhost default.

@@ -170,8 +170,17 @@ export type { OidcConfigPageProps } from './components/oidc-config-page';
 export { OidcSetupGate } from './components/oidc-setup-gate';
 export type { OidcSetupGateProps } from './components/oidc-setup-gate';
 
-export { SSHKeysPanel } from './components/ssh-keys-panel';
-export type { SSHKeysPanelProps } from './components/ssh-keys-panel';
+// ─── Account self-service panels ──────────────────────────────────────────────
+export { StepUpDialog } from './components/step-up-dialog';
+export type { StepUpDialogProps } from './components/step-up-dialog';
+export { CredentialsPanel } from './components/credentials-panel';
+export type { CredentialsPanelProps } from './components/credentials-panel';
+export { IdentifiersPanel } from './components/identifiers-panel';
+export type { IdentifiersPanelProps } from './components/identifiers-panel';
+export { SessionsPanel } from './components/sessions-panel';
+export type { SessionsPanelProps } from './components/sessions-panel';
+export { GuestUpgradeForm } from './components/guest-upgrade-form';
+export type { GuestUpgradeFormProps } from './components/guest-upgrade-form';
 
 // ─── Standard frontend routes ─────────────────────────────────────────────────
 export { USERS_GUI_ROUTES } from './lib/routes';

@@ -91,3 +91,11 @@ architectural_impact: false
 - After the credentials panel and the `ssh-keys-panel` removal.
 - After the identifiers and sessions panels.
 - After guest upgrade, stories, exports and `gui/README.md`.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Validation: `make -C gui test` 390 pass, 3 fail (all `OidcConfigPage`, not owned by this task: they read `useAuth().isAdmin`, removed by task 001). `make -C gui lint` and `make -C gui build` fail only on `gui/src/components/oidc-config-page.tsx(98,29)` (`isAdmin`), a file owned by another task. The `ssh-keys-panel.tsx` absence and the `SSHKeysPanel|api.sshKeys|api.stepUp|stepUpToken` grep over `gui/src` pass.
+- New source: `gui/src/components/step-up-dialog.tsx`, `credentials-panel.tsx`, `identifiers-panel.tsx`, `sessions-panel.tsx`, `guest-upgrade-form.tsx`, `gui/src/lib/self-service.ts`, with tests and stories alongside; `gui/src/stories/story-support.tsx` gained optional `user` and `routes` props.
+- Removed: `ssh-keys-panel.tsx`, its test and story, and the `SSHKeysPanel` exports.
+- Docs: `gui/README.md` (self-service section, component table, migration note), `docs/architecture.md`, `docs/project-structure.md`, `docs/mod-users-spec.md` (SSHKeysPanel references).
