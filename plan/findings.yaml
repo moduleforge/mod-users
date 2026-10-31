@@ -9,15 +9,6 @@ items:
         - priority:high
         - effort:small
       text: 'needs-sibling: mod-authz. api/service/stepup.go stepUpStale returns false (no step-up needed) for any AuthContext with SessionID == 0 and CredentialID == 0, inferring trusted system code from absent fields. mod-core now defines trust explicitly through opctx.IsSystemActor (the SystemActor marker set only by opctx.WithSystemActor), and its api/authz/authz.go contract says a context with no session, no credential and no marker is not trusted. mod-users'' engine (api/internal/authz/authz.go gated) now keys on opctx.IsSystemActor and fails closed for unmarked sessionless contexts; mod-users builds such contexts for real users in its unauthenticated flows (withActingProfile, CreatedUser.ActingContext, UnauthenticatedActingContext, the idp_jit context). stepUpStale should skip step-up only when opctx.IsSystemActor(ctx) is true, so a real user''s sessionless context reaching mod-authz''s grant or operation services is refused rather than exempt. Its callers'' tests that use sessionless contexts as trusted system code would move to opctx.WithSystemActor.'
-    - title: Stale party-policy SQL comment
-      id: c6Dh
-      date: "2026-10-30"
-      tags:
-        - type:documentation
-        - plan/phase:adopt-core-engine-remediation
-        - priority:medium
-        - effort:small
-      text: 'model/migrations/sql/0100_baseline.sql, the comment above mod_users.session_meets_party_policy (around line 1702) ends: "An unknown session, a revoked or unknown credential, or neither id fails closed (false): trusted contexts without a session or credential are the engine''s to skip, not this function''s." The engine (api/internal/authz/authz.go gated) no longer treats a context without a session or credential as trusted: it skips the owning-party gate only for opctx.IsSystemActor contexts (mod-core''s explicit marker) and the anonymous context, and an unmarked sessionless context reaches this function and gets false. The comment should say that system-actor contexts (opctx.IsSystemActor) and the anonymous context are the engine''s to skip, and that an unmarked sessionless context is refused here. Comment-only change; the function body is correct.'
     - title: mod-repos lists lack BindAuthInputs
       id: owkI
       date: "2026-10-30"
@@ -2170,3 +2161,8 @@ closed:
       disposition: promoted
       ref: eIMh
       date: "2026-10-29"
+    - id: c6Dh
+      title: Stale party-policy SQL comment
+      disposition: promoted
+      ref: c6Dh
+      date: "2026-10-31"
