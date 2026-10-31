@@ -48,3 +48,13 @@ Environment and working rules:
 - Finding `06rd` (plan findings, `plan/findings.yaml`): the after-commit dispatch contract is undocumented on the `*InTx` primitives.
 - Finding `7sEV` (plan findings, `plan/findings.yaml`): manifest regeneration drift after phase 21.
 - [Decisions and resolutions](../notes/decisions-and-resolutions.md): Decisions D through M.
+
+## Status
+
+Outcome: succeeded (2026-10-30).
+
+- `CreatedUser` now carries the person's names; `UserService.ObserveCreatedAfterCommit` dispatches the `create` `natural_person` event as the in-transaction acting context. `BootstrapResult` carries the created user and the operator organization (unexported) so `Bootstrap` dispatches `natural_person` and `organization` creates after `tx.Commit`. Register, OIDC just-in-time BYO sign-in and `SelfUpgradeGuest` dispatch after their commit. Nothing is dispatched on rollback.
+- NOTE comment in `api/internal/service/bootstrap_service.go` removed; the after-commit contract is documented on `CreateBYOUserInTx`, `createOrganization` and the `usersservice.NewBootstrapService` facade.
+- Validation: unit tests, `make build`, `make test`, `make lint` pass; integration suites (`authz`, `config`, `integration`) pass against a throwaway `postgres:16` (POSTGRES_USER=users because the suites hardcode users/users); container removed.
+- Manifest regeneration (7sEV): AGENTS.md documents no regeneration step for this repo's manifest and no generated output derived from it is committed here (mfgen generates app composition roots). mfgen was built from source into scratch and run against a scratch copy of app-mfdemo's app manifest pointed at this worktree: manifest validated and `main.go` emitted wiring `bootstrapOrganizationService` and `NewBootstrapService`; its `go mod tidy` step fails on app-mfdemo's own stale `users` import alias (unrelated). Nothing to commit from regeneration.
+- `plan/notes/mod-users-api-surface.md` lines 741-743 still say finding 06rd tracks missing calls; manager-only edit, flagged in the report.

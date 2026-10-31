@@ -304,12 +304,17 @@ var sessionlessContextRoots = []string{
 	"internal/handlers/auth/oidc_flows.go:OIDCHandler.sessionActingContext",
 	"internal/handlers/auth/register.go:Handler.Register",
 	"internal/handlers/auth/reset.go:Handler.replacePassword",
+	// Bootstrap and ObserveCreatedAfterCommit build the personal-profile context
+	// only to attribute the after-commit `create` observations; they dispatch
+	// to the observer group and never reach an Authorize entry point.
+	"internal/service/bootstrap_service.go:BootstrapService.Bootstrap",
 	"internal/service/bootstrap_service.go:BootstrapService.bootstrapInTx",
 	"internal/service/helpers.go:withActingProfile",
 	"internal/service/session_service.go:UnauthenticatedActingContext",
 	"internal/service/user_service.go:CreatedUser.ActingContext",
 	"internal/service/user_service.go:UserService.CreateBYOUserInTx",
 	"internal/service/user_service.go:UserService.CreateGuestUserInTx",
+	"internal/service/user_service.go:UserService.ObserveCreatedAfterCommit",
 }
 
 // sessionlessReceivers are the functions the roots hand a sessionless context

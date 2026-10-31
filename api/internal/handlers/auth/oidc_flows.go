@@ -114,15 +114,27 @@ func (h *OIDCHandler) callbackLogin(w http.ResponseWriter, r *http.Request, prov
 		return
 	}
 
-	var code string
+	var (
+		code    string
+		created *svc.CreatedUser
+	)
 	err = h.inTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		code, err = h.signInInTx(ctx, tx, res, id, policy, st.HandoffChallenge)
+		code, created, err = h.signInInTx(ctx, tx, res, id, policy, st.HandoffChallenge)
 		return err
 	})
 	if err != nil {
 		h.finishCallbackError(w, r, providerID, "sign-in", err)
 		return
+	}
+	// WHY after inTx: a just-in-time bring-your-own sign-in created a person
+	// through mod-core's CreateInTx, which only observes inside the transaction;
+	// the after-commit `create` natural_person belongs to the code that owns the
+	// commit, and inTx has now committed. IMPLIES: a refused or rolled-back
+	// sign-in dispatches nothing; created is nil for logins and managed
+	// just-in-time users, which create no person.
+	if created != nil {
+		h.users.ObserveCreatedAfterCommit(ctx, *created)
 	}
 	slog.InfoContext(ctx, "oidc login succeeded", "provider", providerID)
 	h.redirectOutcome(w, r, fragHandoff, code, st.ReturnPath)
@@ -131,31 +143,38 @@ func (h *OIDCHandler) callbackLogin(w http.ResponseWriter, r *http.Request, prov
 // signInInTx performs the writes of one sign-in decision and returns the
 // handoff code, bound to handoffChallenge. The principal is the credential's
 // (login) or the user just created (just-in-time).
-func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.Resolution, id localauth.ExternalIdentity, policy localauth.ProviderPolicy, handoffChallenge string) (string, error) {
+func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.Resolution, id localauth.ExternalIdentity, policy localauth.ProviderPolicy, handoffChallenge string) (string, *svc.CreatedUser, error) {
 	var (
 		principalID    int64
 		credentialID   int64
 		defaultProfile int64
+		// created is set only for a bring-your-own just-in-time sign-in; the
+		// committing caller dispatches its after-commit observation.
+		created *svc.CreatedUser
 	)
 	switch res.Action {
 	case localauth.ActionLogin:
 		cred := res.Credential
 		principalID, credentialID, defaultProfile = cred.PrincipalID, cred.ID, cred.DefaultProfileID.Int64
 		if err := usersdb.New(tx).TouchCredentialLastUsed(ctx, cred.ID); err != nil {
-			return "", fmt.Errorf("touch credential: %w", err)
+			return "", nil, fmt.Errorf("touch credential: %w", err)
 		}
 	case localauth.ActionCreateBYO:
-		var err error
-		if principalID, credentialID, err = h.createBYOUser(ctx, tx, id, policy); err != nil {
-			return "", err
+		var (
+			err error
+			c   svc.CreatedUser
+		)
+		if principalID, credentialID, err = h.createBYOUser(ctx, tx, id, policy, &c); err != nil {
+			return "", nil, err
 		}
+		created = &c
 	case localauth.ActionCreateManaged:
 		var err error
 		if principalID, credentialID, err = h.createManagedUser(ctx, tx, id, policy); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	default:
-		return "", fmt.Errorf("unexpected resolver action %d", res.Action)
+		return "", nil, fmt.Errorf("unexpected resolver action %d", res.Action)
 	}
 
 	// CreateSessionInTx writes the `login` observation with the unauthenticated
@@ -166,7 +185,7 @@ func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.R
 		CredentialDefaultProfileID: defaultProfile,
 	})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	issued, err := h.challenges.IssueTokenInTx(ctx, tx, svc.IssueTokenInput{
 		Kind:    svc.ChallengeLoginHandoff,
@@ -175,17 +194,19 @@ func (h *OIDCHandler) signInInTx(ctx context.Context, tx pgx.Tx, res localauth.R
 		BindingHash: handoffChallenge,
 	})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return issued.Code, nil
+	return issued.Code, created, nil
 }
 
 // createBYOUser creates the account of a bring-your-own just-in-time sign-in:
 // the user with its person and personal profile, the email identifier (verified
 // only when the IdP asserted email_verified) and the oidc credential, confined
 // to the provider's party when the provider is bound to one. Every
-// observation runs as the new user's personal profile.
-func (h *OIDCHandler) createBYOUser(ctx context.Context, tx pgx.Tx, id localauth.ExternalIdentity, policy localauth.ProviderPolicy) (principalID, credentialID int64, err error) {
+// observation runs as the new user's personal profile. createdOut receives the
+// creation result so the committing caller can dispatch the after-commit
+// observation of the new person (UserService.ObserveCreatedAfterCommit).
+func (h *OIDCHandler) createBYOUser(ctx context.Context, tx pgx.Tx, id localauth.ExternalIdentity, policy localauth.ProviderPolicy, createdOut *svc.CreatedUser) (principalID, credentialID int64, err error) {
 	settings, err := coredb.New(tx).GetPlatformSettings(ctx)
 	if err != nil {
 		return 0, 0, fmt.Errorf("load platform settings: %w", err)
@@ -203,6 +224,10 @@ func (h *OIDCHandler) createBYOUser(ctx context.Context, tx pgx.Tx, id localauth
 	if err != nil {
 		return 0, 0, err
 	}
+	// WHY createdOut: the person's after-commit observation must wait for the
+	// commit this function does not own. IMPLIES: the signInInTx caller
+	// dispatches it only after inTx succeeds; a later failure here discards it.
+	*createdOut = created
 	actCtx := created.ActingContext(ctx)
 	if _, err := h.users.AddIdentifierInTx(actCtx, tx, svc.AddIdentifierInput{
 		UserID:   created.User.EntityID,

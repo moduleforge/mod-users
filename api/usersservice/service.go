@@ -324,6 +324,9 @@ var (
 // profile creation (lifecycle observers fire for the admin profile); orgs is
 // mod-core's organization service, used only for its trusted CreateInTx to
 // create the operator organization (it is never exposed through a handler).
+// Bootstrap dispatches the after-commit `create` observations (organization and
+// the first user's natural_person) once its transaction commits, because the
+// CreateInTx primitives observe only inside the transaction.
 func NewBootstrapService(
 	pool *pgxpool.Pool,
 	az coreAuthz.Authorizer,

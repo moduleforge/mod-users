@@ -99,6 +99,13 @@ type CreatedUser struct {
 	// PersonID and PersonUUID are zero for guests and managed users.
 	PersonID   int64
 	PersonUUID uuid.UUID
+	// PersonGivenName and PersonFamilyName are the trimmed names the person was
+	// created with. They are carried out of the transaction only so the
+	// committing caller can build the after-commit observation payload
+	// (ObserveCreatedAfterCommit) without re-reading the row; zero for guests
+	// and managed users.
+	PersonGivenName  string
+	PersonFamilyName string
 }
 
 // ActingContext returns ctx carrying the AuthContext the flow should use for
@@ -167,6 +174,13 @@ type CreateBYOUserInput struct {
 // personal profile (API surface section 10.1): `create` `user`, and the
 // person's own observation from mod-core. Use CreatedUser.ActingContext for
 // the caller's further observations.
+//
+// After-commit contract: mod-core's NaturalPersonService.CreateInTx only
+// observes in the transaction, so this primitive emits no after-commit
+// observation either. The caller that owns the commit MUST call
+// ObserveCreatedAfterCommit with the returned CreatedUser after tx.Commit
+// succeeds (and must not call it on rollback), so post-commit observers see
+// the `create` `natural_person` event.
 func (s *UserService) CreateBYOUserInTx(ctx context.Context, tx pgx.Tx, in CreateBYOUserInput) (CreatedUser, error) {
 	given, family := strings.TrimSpace(in.GivenName), strings.TrimSpace(in.FamilyName)
 	if given == "" {
@@ -202,11 +216,55 @@ func (s *UserService) CreateBYOUserInTx(ctx context.Context, tx pgx.Tx, in Creat
 	}
 	created.User = linked
 	created.PersonID, created.PersonUUID = personID, personUUID
+	// WHY the names ride on the result: mod-core's CreateInTx emitted only the
+	// in-transaction observation; the after-commit one is this primitive's
+	// committing caller's job and needs the same payload Create would send.
+	// IMPLIES: the caller must call ObserveCreatedAfterCommit once tx.Commit
+	// succeeds, and never on rollback.
+	created.PersonGivenName, created.PersonFamilyName = given, family
 
 	if err := observeInTx(actCtx, s.obs, tx, opCreate, resourceUser, userID, nil, userAudit(linked, created.UserUUID)); err != nil {
 		return CreatedUser{}, err
 	}
 	return created, nil
+}
+
+// ObserveCreatedAfterCommit dispatches the after-commit `create`
+// `natural_person` observation for the person CreateBYOUserInTx created. The
+// committing caller calls it exactly once, only after tx.Commit succeeded.
+//
+// It acts as created.ActingContext(ctx), the context CreateBYOUserInTx's
+// in-transaction observation used, so both observations are attributed to the
+// same actor. Nothing is dispatched for a user without a person (guest,
+// managed) or when no observer group is configured.
+func (s *UserService) ObserveCreatedAfterCommit(ctx context.Context, created CreatedUser) {
+	if created.PersonID == 0 {
+		// WHY: guests and managed users have no person record, so no
+		// natural_person was created and there is nothing to announce.
+		// IMPLIES: a mis-use on those kinds is a harmless no-op, never a bogus
+		// event with a zero entity id.
+		return
+	}
+	s.observePersonCreatedAfterCommit(created.ActingContext(ctx), created.PersonID, created.PersonUUID,
+		created.PersonGivenName, created.PersonFamilyName)
+}
+
+// observePersonCreatedAfterCommit sends the post-commit `create`
+// `natural_person` event with the payload mod-core's own Create sends (uuid and
+// names; never the SSN). ctx must be the acting context of the in-transaction
+// observation.
+func (s *UserService) observePersonCreatedAfterCommit(ctx context.Context, personID int64, personUUID uuid.UUID, given, family string) {
+	if s.obs == nil {
+		// WHY: the group is injected and optional in unit wiring. IMPLIES: with
+		// no group there are no observers to notify; skipping avoids a nil
+		// dereference after the commit already happened.
+		return
+	}
+	s.obs.ObserveAfterCommit(ctx, opCreate, resourceNaturalPerson, &personID, map[string]any{
+		"uuid":        personUUID.String(),
+		"given_name":  given,
+		"family_name": family,
+	})
 }
 
 // createUserAndProfile inserts the principal entity, principal, users row and

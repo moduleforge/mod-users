@@ -409,6 +409,13 @@ func (s *UserService) SelfUpdate(ctx context.Context, in UpdateSelfInput) (UserV
 	return view, nil
 }
 
+// createdPersonInfo carries the person SelfUpgradeGuest created out of its
+// transaction closure, for the after-commit observation.
+type createdPersonInfo struct {
+	id   int64
+	uuid uuid.UUID
+}
+
 // updatePersonName applies a name change to the user's own person record and
 // records the old and new values in before and after. It refuses a guest, a
 // user without a person, and a person the user does not own.
@@ -545,7 +552,10 @@ func (s *UserService) SelfUpgradeGuest(ctx context.Context, in UpgradeGuestInput
 	}
 
 	userID := ac.PrincipalID
-	var view UserView
+	var (
+		view          UserView
+		createdPerson *createdPersonInfo
+	)
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		q, cq := s.usersQ(tx), s.coreQuerier(tx)
 		user, err := q.GetUserByEntityIDForUpdate(ctx, userID)
@@ -575,7 +585,7 @@ func (s *UserService) SelfUpgradeGuest(ctx context.Context, in UpgradeGuestInput
 		}
 		profileID := personal.EntityID
 
-		_, _, personID, err := s.np.CreateInTx(ctx, tx, coreservice.CreateNaturalPersonInput{
+		_, personUUID, personID, err := s.np.CreateInTx(ctx, tx, coreservice.CreateNaturalPersonInput{
 			GivenName:          given,
 			FamilyName:         family,
 			OwnerID:            &userID,
@@ -584,6 +594,11 @@ func (s *UserService) SelfUpgradeGuest(ctx context.Context, in UpgradeGuestInput
 		if err != nil {
 			return fmt.Errorf("users: create person: %w", err)
 		}
+		// WHY captured: CreateInTx only observed in the transaction; the
+		// after-commit `create` natural_person is dispatched below once
+		// inTx's commit succeeds. IMPLIES: a rollback anywhere in this closure
+		// (or a failed commit) returns an error before the dispatch below and nothing is sent.
+		createdPerson = &createdPersonInfo{id: personID, uuid: personUUID}
 		upgraded, err := q.UpgradeGuestUser(ctx, usersdb.UpgradeGuestUserParams{
 			EntityID: userID, PersonID: pgtype.Int8{Int64: personID, Valid: true},
 		})
@@ -628,6 +643,13 @@ func (s *UserService) SelfUpgradeGuest(ctx context.Context, in UpgradeGuestInput
 	})
 	if err != nil {
 		return UserView{}, err
+	}
+	// WHY here: inTx returned nil, so the commit succeeded and the person
+	// exists. The context is the one the in-transaction person observation used
+	// (the guest's own session). IMPLIES: exactly one after-commit `create`
+	// natural_person per successful upgrade, none on any failure above.
+	if createdPerson != nil {
+		s.observePersonCreatedAfterCommit(ctx, createdPerson.id, createdPerson.uuid, given, family)
 	}
 	return view, nil
 }

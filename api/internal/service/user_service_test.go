@@ -173,6 +173,39 @@ func TestCreateBYOUserInTx(t *testing.T) {
 	}
 }
 
+// TestObserveCreatedAfterCommit: CreateBYOUserInTx itself dispatches no
+// after-commit observation (the transaction may still roll back); the
+// committing caller's ObserveCreatedAfterCommit sends exactly one `create`
+// `natural_person` for the new person, as the new personal profile, and none
+// for a user without a person.
+func TestObserveCreatedAfterCommit(t *testing.T) {
+	t.Parallel()
+	log := &creationLog{}
+	cq := newCreationCoreQ(log)
+	rec := &recordingObserver{}
+	s := newTestUserService(creationUsersQ(log), cq, &fakeNaturalPersons{log: log}, nil, rec)
+
+	got, err := s.CreateBYOUserInTx(actorCtx(42), nil, CreateBYOUserInput{GivenName: "Ada", FamilyName: "Lovelace"})
+	if err != nil {
+		t.Fatalf("CreateBYOUserInTx: %v", err)
+	}
+	if len(rec.committed) != 0 {
+		t.Fatalf("after-commit observations before the commit = %+v, want none", rec.committed)
+	}
+
+	s.ObserveCreatedAfterCommit(actorCtx(42), got)
+	want := observation{Op: "create", Resource: "natural_person", Target: got.PersonID, Actor: got.PersonalProfileID}
+	if len(rec.committed) != 1 || rec.committed[0] != want {
+		t.Fatalf("after-commit observations = %+v, want [%+v]", rec.committed, want)
+	}
+
+	// A user without a person (guest, managed) announces nothing.
+	s.ObserveCreatedAfterCommit(actorCtx(42), CreatedUser{})
+	if len(rec.committed) != 1 {
+		t.Fatalf("a personless user dispatched: %+v", rec.committed)
+	}
+}
+
 func TestCreateBYOUserInTx_RequiresNames(t *testing.T) {
 	t.Parallel()
 	log := &creationLog{}
