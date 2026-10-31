@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 11
-    tasks_added: 58
+    tasks_added: 59
 phases:
     - number: 6
       slug: users-identity-core
@@ -1352,7 +1352,7 @@ phases:
       slug: remediation-11
       title: Remediation Round 11
       kind: remediation
-      tasks_added: 5
+      tasks_added: 6
       remediates_phase: 9
       tasks:
         - number: 1
@@ -1414,6 +1414,18 @@ phases:
           tier: sonnet-low
           findings:
             - Qo20
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 6
+          slug: document-app-option-as-uuid
+          title: Document the App Option as a UUID
+          path: phase-23-remediation-11/006-document-app-option-as-uuid.md
+          done: false
+          tier: haiku-med
+          findings:
+            - paQk
           git:
             branch: null
             commit: []
