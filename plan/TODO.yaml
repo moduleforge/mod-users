@@ -1582,13 +1582,15 @@ phases:
           slug: alias-facade-api-key-and-profile-summary
           title: Re-Export API Key And Profile Summary Types From Facade
           path: phase-26-remediation-14/002-alias-facade-api-key-and-profile-summary.md
-          done: false
+          done: true
           tier: sonnet-low
+          digest: Added three facade type aliases in api/usersservice/service.go next to their services, plus a compile-only external-package test. No surprises.
           findings:
             - iZ3E
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-26-002
+            commit:
+                - 961ec79a
             merge: null
         - number: 3
           slug: align-cors-options-and-docs
