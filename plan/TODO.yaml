@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 10
-    tasks_added: 51
+    tasks_added: 52
 phases:
     - number: 6
       slug: users-identity-core
@@ -1287,7 +1287,7 @@ phases:
       title: Remediation Round 10
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 21
       tasks:
         - number: 1
@@ -1298,6 +1298,18 @@ phases:
           tier: sonnet-med
           findings:
             - tpls
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: apply-assurance-gate-on-principal-list
+          title: Apply The Operation Assurance Gate To The Principal List
+          path: phase-22-remediation-10/002-apply-assurance-gate-on-principal-list.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - P0yG
           git:
             branch: null
             commit: []
