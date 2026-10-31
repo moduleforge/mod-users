@@ -98,9 +98,49 @@ changes, hit Test — the banner on `/oidc-config` tells you directly
 whether the id_token verified, and if not, the exact error.
 
 Flow: click Test → a new tab opens → authenticate at the IdP →
-redirected back to `/oidc-config?test_result=ok|fail&…` → banner
-renders the outcome. Your admin session in the original tab is
+redirected back to `/oidc-config` (under `USERS_COOKIE_PATH` when that is set) with
+`test_result=ok` plus `test_email`, `test_sub` and `test_issuer`, or `test_result=fail`
+plus `test_error` → banner renders the outcome. Your admin session in the original tab is
 untouched; no user records are created or modified.
+
+## Refusals raised by mod-users
+
+Sign-in never returns a token in the redirect. A successful sign-in lands on `/auth/oidc/return`
+with a one-time `#handoff=<code>` in the URL fragment, which the page exchanges once at
+`POST /v1/auth/handoff`; a refused sign-in lands there with `#error=<code>`. The code is bound
+to the browser tab that started the sign-in, so a code pasted into another tab does not work.
+
+The resolver never links an identity by email. The codes below come from the decision table in
+`api/internal/auth/resolver.go`:
+
+| Code | Cause | What to do |
+|---|---|---|
+| `account_exists_sign_in_and_link` | The provider's verified email matches an existing account, and the provider identity is not yet linked | Sign in with the existing method, then link the provider from the signed-in account |
+| `no_account` | No linked identity and the provider's `jit_mode` is `none` | Create the account first, or set `jit_mode` to `byo` or `managed` |
+| `missing_email` | `jit_mode` is `byo` and the provider returned no email | Request the `email` scope (`openid email profile`) and check the provider returns an email claim |
+| `auth_failed` | The identity is linked to a different provider | Sign in with the provider it is linked to |
+
+### Just-in-time modes
+
+Each provider row (`oidc_providers`) carries a `jit_mode` that decides what a first sign-in
+creates:
+
+| `jit_mode` | First sign-in with no linked account |
+|---|---|
+| `none` | Refused (`no_account`); no account is created |
+| `byo` | Creates a bring-your-own user with its own personal profile |
+| `managed` | Creates a user managed by the provider's party; requires `party_id` |
+
+The provider row also carries `party_id` (the party the provider is bound to) and a `trust_acr`
+flag. See [docs/architecture.md](./architecture.md) for the provider columns.
+
+### Setup token
+
+The OIDC setup routes accept the setup token only while OIDC is unconfirmed. The token is
+cleared when both the bootstrap and the OIDC confirmation are done. If the token was not shown
+(`TOKEN_DISPLAY=none`), the bootstrap cannot run until a display mode is configured. For
+`localhost`, read it from `GET /v1/oidc-config/setup-token` over loopback. See
+[docs/architecture/sessions-and-tokens.md](./architecture/sessions-and-tokens.md#setup-token-bootstrap).
 
 ## When code really is the problem
 
