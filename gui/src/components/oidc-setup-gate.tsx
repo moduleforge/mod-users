@@ -65,7 +65,7 @@ export interface OidcSetupGateProps {
    * - `'ready'`: setup is done (bootstrapped and OIDC confirmed); render the
    *   app normally (typically inside an `AuthProvider`).
    * - `'setup'`: setup is pending and `currentPath` is the OIDC config page.
-   *   Render it WITHOUT an `AuthProvider` (`/v1/self` would 503 while OIDC is
+   *   Render it WITHOUT an `AuthProvider` (`/v1/me` would 503 while OIDC is
    *   unconfirmed).
    * - `'bootstrap'`: setup is pending and `currentPath` is the bootstrap page.
    *   Render it WITHOUT an `AuthProvider`: there is no operator to sign in
@@ -177,7 +177,7 @@ export function OidcSetupGate({
 
   // Off the allowed pages the redirect above is dispatching; show the loading
   // screen meanwhile so the caller's AuthProvider never mounts and never
-  // fires `/v1/self` (which would 503 under unconfirmed).
+  // fires `/v1/me` (which would 503 under unconfirmed).
   if (route.kind === 'redirect') {
     return <LoadingScreen />;
   }

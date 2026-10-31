@@ -23,7 +23,7 @@ import (
 // enforces the operation's max_auth_age, answering a stale authentication with
 // the shared action-required error users.step_up_required. Neither `manage` nor
 // `impersonate` is consulted by these methods, and no method authorizes
-// `assume` or `impersonate` for credential or SSH-key administration.
+// impersonation for credential or SSH-key administration.
 //
 // Two refusals precede the principal lookup. An impersonating session is
 // refused with ErrImpersonationNotAllowed (users.impersonation_not_allowed,

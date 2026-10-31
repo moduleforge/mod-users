@@ -81,9 +81,9 @@ func main() {
 	// incoming Bearer tokens — post-Phase 9 those are always the local JWTs
 	// minted by /v1/auth/login or the OIDC callback, never a raw provider
 	// id_token. So the verifier is local-only. NewLocalVerifier pins the
-	// accepted algorithm to JWT_ALG: EdDSA-signed local tokens (verified
+	// accepted algorithm: only EdDSA-signed local tokens are accepted (verified
 	// against the public half of JWT_SIGNING_KEY plus any
-	// JWT_VERIFY_PUBLIC_KEYS) when JWT_ALG=EdDSA, HS256 otherwise.
+	// JWT_VERIFY_PUBLIC_KEYS); HS256 and JWT_ALG are removed.
 	verifier, err := auth.NewLocalVerifier(ctx, cfg.LocalAuth)
 	if err != nil {
 		slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
@@ -274,7 +274,7 @@ func main() {
 	// The DDL is idempotent; safe to run on every startup.
 	//
 	// The slug list must match all resources that have a list query JOINing
-	// an access function. legal_entity composes natural_person + corporation;
+	// an access function. legal_entity composes natural_person + organization;
 	// contacts list queries JOIN accessible_legal_entity_ids_for_actor.
 	//
 	// See core-module/docs/architecture/authorization-design.md "Row-level

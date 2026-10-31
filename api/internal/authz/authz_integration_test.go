@@ -59,7 +59,7 @@ package authz_test
 //  2. Wildcard read holder — passes read/list, denied on update/delete/impersonate.
 //  3. Targeted grant holder — permitted only on the granted target.
 //  4. No-grants user — denied everywhere (nil-target and specific target).
-//  5. Bootstrap first user — first registered account automatically holds wildcard manage.
+//  5. Bootstrap operator admin — the user bootstrap creates holds a wildcard manage grant.
 //  6. Revocation — deleting the wildcard manage grant demotes the user immediately.
 //  7. Nil-target Authorize — wildcard admins pass; non-wildcards are denied.
 //  8. OIDC-role admin path removed — JWT roles claim does NOT confer admin privileges.
@@ -435,15 +435,15 @@ func TestInteg_NoGrantsUser_DeniedEverywhere(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 5: Bootstrap first-user — verified to hold wildcard manage grant
+// Scenario 5: Bootstrap operator admin — verified to hold wildcard manage grant
 // ---------------------------------------------------------------------------
 
 // TestInteg_Bootstrap_FirstUserHasWildcardGrant verifies the structural
 // expectation: after calling seedWildcardGrant (simulating what the bootstrap
-// hook does), the entity passes Authorize("manage", nil).
+// transaction does), the entity passes Authorize("manage", nil).
 //
-// Note: the actual first-user-hook is exercised in the full server integration
-// test (not here, where we cannot control registration order). This test pins
+// Note: the actual setup-token bootstrap is exercised in the full server
+// integration test (see bootstrap_integration_test.go). This test pins
 // the policy semantics: a wildcard manage grant confers full admin privileges.
 func TestInteg_Bootstrap_WildcardGrantConfersFull(t *testing.T) {
 	firstUserID := seedUser(t, "first-s5@example.com", true) // true = wildcard manage grant
