@@ -36,15 +36,6 @@ items:
         - priority:medium
         - effort:medium
       text: 'mod-core''s NaturalPersonService.CreateInTx and OrganizationService.CreateInTx document that the caller dispatches ObserveAfterCommit (create, <resource>, entity id) after the transaction commits. mod-users never does: api/internal/service/user_service.go (np.CreateInTx near line 187), api/internal/service/user_self_service.go (np.CreateInTx near line 578) and api/internal/service/bootstrap_service.go (createOrganization via OrganizationService.CreateInTx) all rely on the in-transaction observation only, so post-commit observers (anything subscribed via ObserverGroup.ObserveAfterCommit) never see the natural_person or organization creation. Needs a design decision on how the committing public methods (Bootstrap, user registration and self-service flows) carry the entity id out of their InTx bodies and dispatch after commit.'
-    - title: 'Plan-note edit needed (manager-only): mod-use'
-      id: Ysh7
-      date: "2026-10-30"
-      tags:
-        - type:ambiguity
-        - plan/phase:adopt-core-engine-remediation
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Plan-note edit needed (manager-only): mod-users-api-surface.md for the new NewBootstrapService orgs parameter and OrganizationFromServices.'
     - title: Stale localAuthz package doc on step 1
       id: wkvN
       date: "2026-10-30"
@@ -2144,4 +2135,12 @@ closed:
         Not actionable: a process note that a task agent used python3 once to patch two test
         files; the result was verified by build and tests, and no code change could resolve a
         past tool-use deviation.
+      date: "2026-10-31"
+    - id: Ysh7
+      title: 'Plan-note edit needed (manager-only): mod-use'
+      disposition: dismissed
+      reason: |-
+        Already fixed: plan/notes/mod-users-api-surface.md lines 741-743 (Amendments 2026-10-30,
+        phase 21, "Bootstrap") record the NewBootstrapService organization-service parameter and
+        OrganizationFromServices.
       date: "2026-10-31"
