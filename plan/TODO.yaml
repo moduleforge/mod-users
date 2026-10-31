@@ -329,7 +329,7 @@ phases:
           slug: build-self-service-panels
           title: Build Self Service Panels
           path: phase-09-users-gui-and-frontend-contract/004-build-self-service-panels.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Built self-service panels (StepUpDialog, CredentialsPanel, IdentifiersPanel, SessionsPanel, GuestUpgradeForm) on the rebuilt client; SSHKeysPanel removed; step-up, last-credential, sign-out and guest-upgrade paths tested. Known out-of-scope: docs/mod-users-spec.md line 188 still describes old X-Step-Up-Token semantics.'
           git:
