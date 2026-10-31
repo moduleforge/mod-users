@@ -324,7 +324,7 @@ phases:
             branch: plan/identity-model-impl-09-003
             commit:
                 - a250ccb
-            merge: null
+            merge: 76a062c83bfcb859bc835be03429caa363524bce
         - number: 4
           slug: build-self-service-panels
           title: Build Self Service Panels
