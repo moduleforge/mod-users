@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 11
-    tasks_added: 55
+    tasks_added: 56
 phases:
     - number: 6
       slug: users-identity-core
@@ -1352,7 +1352,7 @@ phases:
       slug: remediation-11
       title: Remediation Round 11
       kind: remediation
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 9
       tasks:
         - number: 1
@@ -1377,6 +1377,18 @@ phases:
           tier: sonnet-med
           findings:
             - 4ohc
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: stop-impersonation-refresh-replay
+          title: Stop Refresh-and-Replay of Impersonated Requests as the Administrator
+          path: phase-23-remediation-11/003-stop-impersonation-refresh-replay.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - 4EHb
           git:
             branch: null
             commit: []
