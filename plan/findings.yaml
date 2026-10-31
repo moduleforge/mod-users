@@ -18,6 +18,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: Fix corporation wording in authz_test comment (type:documentation). api/internal/authz/authz_test.go:308 says NULL owner_id (corporation, authz_actor_group, authz_target_group by design). Confirm which entity types have NULL owner_id and reword with organization if applicable. Not confirmed from code, so unedited.
+    - title: Scan docs/mf-standards for old identity terms
+      id: 4HXk
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: Scan docs/mf-standards for old identity terms (type:documentation). Submodule uninitialized in the worktree, so not scanned. Check it for old-model terms.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
