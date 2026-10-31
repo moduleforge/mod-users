@@ -357,7 +357,7 @@ phases:
           tier: sonnet-low
           digest: 'Verification pass over merged GUI work: exports, stories and contract docs consistent. README Other exports table added. Manager to remove followups HPJi and PRvD as resolved.'
           git:
-            branch: null
+            branch: plan/identity-model-impl-09-006
             commit: []
             merge: null
     - number: 10
