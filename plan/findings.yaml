@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: Still says the CORS middleware "still lists…
-      id: 7Yab
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - plan/phase:remediation-14
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/consumer-upgrade-notes.md
-        lines: 270
-        severity: suggestion
-        confidence: high
-        concerns: security
-        description:
-          Still says the CORS middleware "still lists the removed X-Step-Up-Token among its allowed request headers". This diff removed it, so the note is now stale.
-        recommendation:
-          Update the line to say the entry was removed in remediation 14.
     - title: A concrete 32-byte hex field-encryption seed…
       id: CubF
       date: "2026-10-31"
@@ -2205,6 +2186,11 @@ closed:
       date: "2026-10-31"
     - id: Yo85
       title: The new text says the exception covers "the…
+      disposition: fixed
+      ref: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
+      date: "2026-10-31"
+    - id: 7Yab
+      title: Still says the CORS middleware "still lists…
       disposition: fixed
       ref: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
       date: "2026-10-31"
