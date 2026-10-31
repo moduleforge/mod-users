@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 10
-    tasks_added: 52
+    tasks_added: 53
 phases:
     - number: 6
       slug: users-identity-core
@@ -1287,7 +1287,7 @@ phases:
       title: Remediation Round 10
       kind: remediation
       security_review: required
-      tasks_added: 2
+      tasks_added: 3
       remediates_phase: 21
       tasks:
         - number: 1
@@ -1310,6 +1310,20 @@ phases:
           tier: sonnet-med
           findings:
             - P0yG
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 3
+          slug: dispatch-after-commit-observations
+          title: Dispatch After-Commit Observations For CreateInTx Creations
+          path: phase-22-remediation-10/003-dispatch-after-commit-observations.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - DDfb
+            - bwMq
+            - 06rd
           git:
             branch: null
             commit: []
