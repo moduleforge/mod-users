@@ -389,7 +389,7 @@ phases:
             branch: plan/identity-model-impl-10-002
             commit:
                 - 24f6ef32
-            merge: null
+            merge: 6030f9691fa43f994017fe33304e675aea4adb02
         - number: 3
           slug: review-repository-docs
           title: Review Repository Docs
