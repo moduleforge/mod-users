@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: The stepped_up=1 branch calls api.auth.token…
-      id: wafz
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:remediation-11
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/components/oidc-callback-page.tsx
-        lines: 63-84
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          The stepped_up=1 branch calls api.auth.token (refresh_token grant) directly, bypassing the module's refreshTabToken single-flight. On this page load AuthProvider hydrates concurrently; if the stored access token is expired, session.get also refreshes through the same rotating refresh token. Two concurrent rotations of one refresh token can trip refresh_reuse, which revokes the whole session and signs the user out after a successful step-up.
-        recommendation:
-          Route the post-step-up rotation through the shared refreshTabToken single-flight (export a helper from api.ts), or skip it when hydration already refreshed.
     - title: logout on a 401 retries via api.session.get(…
       id: LdOO
       date: "2026-10-31"
@@ -2029,4 +2010,14 @@ closed:
         gui/src/lib/auth-context.tsx:67, gui/src/components/login-form.tsx:87,
         register-form.tsx:20, email-code-page.tsx:31 and auth-page.tsx:59. A grep for "slug"
         in those files finds no remaining hit.
+      date: "2026-10-31"
+    - id: wafz
+      title: The stepped_up=1 branch calls api.auth.token…
+      disposition: dismissed
+      reason: |-
+        Duplicate of 6qD2. Both describe the same defect at the same place: the stepped_up=1
+        branch in gui/src/components/oidc-callback-page.tsx:124-136 calls api.auth.token with
+        the stored refresh token directly, bypassing the refreshTabToken single-flight
+        (gui/src/lib/api.ts:786-810), so a concurrent hydrate refresh can trip refresh_reuse.
+        6qD2, which carries the security classification, is kept and fixed.
       date: "2026-10-31"
