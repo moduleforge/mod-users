@@ -317,7 +317,7 @@ phases:
           slug: port-auth-pages-to-session-api
           title: Port Auth Pages to Session API
           path: phase-09-users-gui-and-frontend-contract/003-port-auth-pages-to-session-api.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: 'Ported public sign-in pages to the final session API and the #handoff flow; selection_required routing; users.* error mapping; OIDC start via api.auth.oidcStart; VerifyEmailPage via /v1/me/identifiers; tests, stories, README updated. Finding AReg filed (selection page loses return path on reload).'
           git:
