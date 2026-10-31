@@ -73,9 +73,14 @@ secret.
 When `JWT_SIGNING_KEY` is not supplied via the environment and a database URL
 is resolved, `config.Load()` fetches the signing key from the single-row
 `mod_users.auth_signing_keys` table, or generates an Ed25519 key and persists it
-on first boot. This keeps zero-configuration local development working; a
-production deployment can supply `JWT_SIGNING_KEY` from its secret store
-instead, and an explicit key always wins and skips the database.
+on first boot. This keeps zero-configuration local development working, and an
+explicit key always wins and skips the database.
+
+The persisted Ed25519 private key is stored unencrypted (a plain `BYTEA`
+column, `private_key`) in `mod_users.auth_signing_keys`. Read access to that
+table, or to any database backup that contains it, grants the ability to forge
+access tokens for any session. Production deployments should therefore set
+`JWT_SIGNING_KEY` from a secret store rather than rely on the persisted key.
 
 The bootstrap runs before the application's connection pool and this module's
 migrations, so it opens its own short-lived connection (10 second timeout),
