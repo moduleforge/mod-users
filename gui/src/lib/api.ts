@@ -1339,6 +1339,25 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         }),
 
       /**
+       * Rotates this tab's refresh token after an OIDC step-up so the access
+       * token carries the raised assurance. `sentToken` is the access token the
+       * caller observed before asking (null when there was none).
+       *
+       * Goes through the per-tab single-flight shared with the request
+       * pipeline, so it joins a rotation already in flight and never spends
+       * the same refresh token twice; a rotation that landed after `sentToken`
+       * was observed is not repeated.
+       */
+      refreshAfterStepUp: async (sentToken: string | null): Promise<void> => {
+        // WHY: an impersonating tab holds the target's access token while the
+        // stored refresh lineage is the administrator's. IMPLIES rotating here
+        // would replace the impersonation token with the administrator's, so
+        // the impersonation token is never refreshed; the tab just returns.
+        if (getStoredImpersonating()) return;
+        await refreshTabToken(sentToken, resolveBaseUrl);
+      },
+
+      /**
        * `POST /v1/auth/handoff` — exchanges the one-time OIDC `#handoff=`
        * code, with the verifier behind the challenge this tab sent at OIDC
        * start, for a token response. Prefer the auth context's
