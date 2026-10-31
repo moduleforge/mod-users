@@ -219,7 +219,9 @@ export function StepUpDialog({ providers: providedProviders }: StepUpDialogProps
         return;
       }
       // Full page navigation: the provider callback completes the step-up and
-      // returns here, so the interrupted request is not retried by this
+      // redirects to the OIDC return page with `#stepped_up=1&return=<path>`,
+      // which refreshes the access token and then routes back to this page, so
+      // the interrupted request is not retried by this
       // prompt; the user repeats the action. `busy` stays set while leaving.
       window.location.assign(authorize_url);
     } catch (err) {

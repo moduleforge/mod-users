@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, screen, waitFor } from '@testing-library/react';
 import { OidcCallbackPage } from './oidc-callback-page';
-import { getStoredHandoffVerifier, getStoredToken, setStoredHandoffVerifier } from '../lib/config';
+import {
+  getStoredHandoffVerifier,
+  getStoredToken,
+  setStoredHandoffVerifier,
+  setStoredProfileUuid,
+  setStoredRefreshToken,
+  setStoredToken,
+} from '../lib/config';
 import {
   type Call,
   errorReply,
@@ -119,6 +126,86 @@ describe('OidcCallbackPage handoff', () => {
         tokenResponse({ access_token: null, selection_required: true, profile: null }),
     });
     await waitFor(() => expect(outcome.completed).toEqual(['/auth/select-profile']));
+  });
+});
+
+/** A tab that is already signed in, as at a link or step-up return. */
+function signInTab(): Parameters<typeof mockApi>[0] {
+  setStoredToken('old-access');
+  setStoredRefreshToken('old-refresh');
+  setStoredProfileUuid('prof-a');
+  const base = tokenResponse();
+  return {
+    'GET /v1/session': () => ({
+      session: base.session,
+      profile: PROFILE_A,
+      profiles: [PROFILE_A],
+    }),
+  };
+}
+
+const tokenCalls = (calls: Call[]) => calls.filter((c) => c.path === '/v1/auth/token');
+
+describe('OidcCallbackPage link and step-up returns', () => {
+  test('#linked=1 routes back to a safe return path without a handoff or error', async () => {
+    const session = signInTab();
+    setHash('#linked=1&return=%2Fsettings');
+    const { calls, outcome } = await mountCallback(session);
+    await waitFor(() => expect(outcome.completed).toEqual(['/settings']));
+    expect(outcome.errors).toEqual([]);
+    expect(handoffCalls(calls)).toHaveLength(0);
+    // A link does not raise assurance, so no token is minted.
+    expect(tokenCalls(calls)).toHaveLength(0);
+    expect(window.location.hash).toBe('');
+  });
+
+  test('#linked=1 with an unsafe return path falls back to the default', async () => {
+    const session = signInTab();
+    setHash('#linked=1&return=%2F%2Fevil.test');
+    const { outcome } = await mountCallback(session);
+    await waitFor(() => expect(outcome.completed).toEqual(['/']));
+    expect(outcome.errors).toEqual([]);
+  });
+
+  test('#stepped_up=1 takes a fresh access token, then routes to a safe return path', async () => {
+    const session = signInTab();
+    setHash('#stepped_up=1&return=%2Fadmin%2Fusers');
+    const { calls, outcome } = await mountCallback({
+      ...session,
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'fresh-access' }),
+    });
+    await waitFor(() => expect(outcome.completed).toEqual(['/admin/users']));
+    expect(outcome.errors).toEqual([]);
+    expect(tokenCalls(calls)).toHaveLength(1);
+    expect(tokenCalls(calls)[0]!.body).toMatchObject({
+      grant_type: 'refresh_token',
+      refresh_token: 'old-refresh',
+      profile_uuid: 'prof-a',
+    });
+    expect(getStoredToken()).toBe('fresh-access');
+    expect(handoffCalls(calls)).toHaveLength(0);
+  });
+
+  test('#stepped_up=1 with an unsafe return path falls back to the default', async () => {
+    const session = signInTab();
+    setHash('#stepped_up=1&return=https%3A%2F%2Fevil.test');
+    const { outcome } = await mountCallback({
+      ...session,
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'fresh-access' }),
+    });
+    await waitFor(() => expect(outcome.completed).toEqual(['/']));
+    expect(outcome.errors).toEqual([]);
+  });
+
+  test('#stepped_up=1 reports an error when the refresh fails', async () => {
+    const session = signInTab();
+    setHash('#stepped_up=1&return=%2Fadmin');
+    const { outcome } = await mountCallback({
+      ...session,
+      'POST /v1/auth/token': () => errorReply(500, 'internal', 'boom'),
+    });
+    await waitFor(() => expect(outcome.errors).toHaveLength(1));
+    expect(outcome.completed).toEqual([]);
   });
 });
 
