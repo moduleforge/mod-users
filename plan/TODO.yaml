@@ -1369,7 +1369,8 @@ phases:
             - A6aq
           git:
             branch: plan/identity-model-impl-23-001
-            commit: []
+            commit:
+                - 18ee982
             merge: null
         - number: 2
           slug: handle-oidc-link-and-step-up-returns
