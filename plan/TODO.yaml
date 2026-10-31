@@ -293,7 +293,7 @@ phases:
           slug: rebuild-api-client-and-auth-context
           title: Rebuild API Client and Auth Context
           path: phase-09-users-gui-and-frontend-contract/001-rebuild-api-client-and-auth-context.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: Rebuilt gui/src/lib on final API; lib tests pass 223/0; component-level failures deferred to tasks 002-005 by design; jRXp filed as type:conflict.
           git:
