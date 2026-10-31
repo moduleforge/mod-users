@@ -1620,7 +1620,8 @@ phases:
             - kmxU
           git:
             branch: plan/identity-model-impl-26-004
-            commit: []
+            commit:
+                - 55c2b891
             merge: null
         - number: 5
           slug: fix-oidc-redirect-error-code
