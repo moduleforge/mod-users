@@ -1311,6 +1311,7 @@ phases:
           path: phase-22-remediation-10/002-apply-assurance-gate-on-principal-list.md
           done: false
           tier: sonnet-med
+          digest: ListPrincipals now runs the operation assurance gate via new Authorizer.CheckAssurance before the transaction; fails closed when the authorizer lacks the capability; OpenAPI 409 added.
           findings:
             - P0yG
           git:
