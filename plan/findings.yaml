@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: PROPOSED PATCHES, manager decision only if re
-      id: A5PF
-      date: "2026-10-31"
-      tags:
-        - type:ambiguity
-        - plan/phase:users-identity-final
-        - priority:low
-        - effort:small
-      text: 'PROPOSED PATCHES, manager decision only if retaining: sxjM (text references removed hooks.firstUserGrant); 7kHY (text targets removed PUT /self; route is /v1/me); WZTj (text says mod-users seed to be deleted; already gone, only literal type-check reference remains at model/migrations/sql/0100_baseline.sql:471). Still open with no patch: cJcZ and Jtw6 (genuinely unaddressed); HPJi (default login redirect retained, manager decision).'
     - title: 'Note for manager: removals of VJg2 and PRvD c'
       id: 8yRH
       date: "2026-10-31"
@@ -2208,4 +2199,9 @@ closed:
       title: PROPOSED CROSS-PROJECT REMOVALS (no resolved_
       disposition: promoted
       ref: usDr
+      date: "2026-10-31"
+    - id: A5PF
+      title: PROPOSED PATCHES, manager decision only if re
+      disposition: promoted
+      ref: A5PF
       date: "2026-10-31"
