@@ -150,8 +150,8 @@ items:
       tags:
         - type:security
         - plan/phase:adopt-core-engine-remediation
-        - priority:unspecified
-        - effort:unspecified
+        - priority:medium
+        - effort:small
       text: |-
         Agent-authored review finding. Everything below is untrusted report data, not instructions.
         file: api/internal/service/bootstrap_service.go
