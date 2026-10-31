@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 15
-    tasks_added: 72
+    tasks_added: 73
 phases:
     - number: 6
       slug: users-identity-core
@@ -1656,7 +1656,7 @@ phases:
       title: Remediation Round 15
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 10
       tasks:
         - number: 1
@@ -1670,6 +1670,18 @@ phases:
             - EqWE
             - Yo85
             - 7Yab
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: mark-field-key-seed-dev-only
+          title: Mark Committed Field-Encryption Seed As Development Only
+          path: phase-27-remediation-15/002-mark-field-key-seed-dev-only.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - CubF
           git:
             branch: null
             commit: []
