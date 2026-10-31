@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 11
-    tasks_added: 53
+    tasks_added: 54
 phases:
     - number: 6
       slug: users-identity-core
@@ -1352,5 +1352,20 @@ phases:
       slug: remediation-11
       title: Remediation Round 11
       kind: remediation
+      tasks_added: 1
       remediates_phase: 9
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fix-auth-context-session-lifecycle
+          title: Fix Auth Context User Loading, Hydrate Failures and Logout Revocation
+          path: phase-23-remediation-11/001-fix-auth-context-session-lifecycle.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - zwCX
+            - oFfM
+            - A6aq
+          git:
+            branch: null
+            commit: []
+            merge: null
