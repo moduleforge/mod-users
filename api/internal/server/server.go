@@ -81,9 +81,14 @@ func corsOptions(cfg *config.Config) (cors.Options, bool) {
 	}
 
 	return cors.Options{
-		AllowedOrigins:   origins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-App", "X-Request-ID", "X-Step-Up-Token"},
+		AllowedOrigins: origins,
+		// PATCH is listed because the API serves PATCH routes; without it a
+		// cross-origin preflight for them is rejected and browsers block the call.
+		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		// The retired step-up header is deliberately absent: no route reads it
+		// (step-up rides on the Bearer token), so advertising it would only
+		// widen the preflight surface.
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-App", "X-Request-ID"},
 		ExposedHeaders:   []string{"X-Request-ID"},
 		AllowCredentials: !wildcard,
 		MaxAge:           300,
