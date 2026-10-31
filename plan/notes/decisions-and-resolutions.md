@@ -289,3 +289,7 @@ Each ADR impact note with a mod-users share maps to a phase of this plan (phase 
 - **Consequence for composed modules.** A module list query that does not bind its authorization inputs
   silently drops rows of restrictive-policy parties from cross-party collaborators (fail closed). Such
   modules are tracked as needs-sibling findings (owkI, QbSc, ZEu4, ck8O, yDll, wyTd).
+
+## Amendments (2026-10-31, phase 9 gate): OIDC start credentials mode (finding jRXp)
+
+Decision (user, 2026-10-31): the two OIDC start POSTs (`/v1/me/credentials/oidc/{provider}/start` and `/v1/session/step-up/oidc/{provider}/start`) keep the `oidc_state` cookie and send `credentials: 'include'`. This is a documented exception to the frontend contract's `credentials: 'omit'` rule. The API does not change. Consequences: API surface section 12 and `gui/README.md` must state the exception and name the two calls (carried by the phase 10 contract-doc tasks); no GUI code change is needed for this finding.
