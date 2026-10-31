@@ -2976,8 +2976,13 @@ paths:
         Users and service accounts the caller may list, through the
         `accessible_*_ids_for_actor` access functions. A row owned by a party
         whose authentication policy the caller's session does not meet is
-        omitted from the list, consistent with the refusal the single-row read
-        of that principal gives.
+        omitted from the list: the row filter makes the list and the
+        single-row read agree on the grant arms and the owning-party gate. The
+        operation-level assurance gate (`min_acr`, `max_auth_age` of the list
+        operation) is not a row filter; it is applied once to the whole
+        request, before any row is read, and a session that does not meet it
+        is refused with 409 `users.step_up_required`. A caller with no list
+        grants still receives an empty page.
       tags: [Principals]
       operationId: listPrincipals
       parameters:
@@ -3003,6 +3008,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/StepUpRequired"
 
   /v1/principals/{uuid}:
     parameters:

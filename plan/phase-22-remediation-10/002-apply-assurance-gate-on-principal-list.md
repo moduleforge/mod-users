@@ -41,3 +41,7 @@ Environment and working rules:
 - Finding `P0yG` (plan findings, `plan/findings.yaml`): the principal list path does not apply the operation assurance gate.
 - Finding `wkvN` (plan findings, `plan/findings.yaml`): stale prelude item 1 in the `api/localAuthz/authz.go` package doc.
 - [Decisions and resolutions](../notes/decisions-and-resolutions.md): Decisions D through M.
+
+## Status
+
+Outcome: succeeded (2026-10-30). Added `Authorizer.CheckAssurance` (api/internal/authz/authz.go), called once by `ListPrincipals` (api/internal/service/principal_admin.go) before any query through an optional `assuranceChecker` capability on the service authorizer (fails closed if absent). Narrowed the parity wording in api/internal/authz/authz.go, api/localAuthz/authz.go (stale prelude item 1 also fixed) and api/openapi.yaml (also documents 409 on GET /v1/principals). Added `TestPrincipalList_AssuranceGate` in api/internal/integration/principal_list_gate_integration_test.go. Validation: new integration test passes; mutation (gate call removed) fails it with status 200 vs 409, restored; grep for the old wording is empty; make build/test/lint and the authz, config and integration suites pass against a throwaway postgres:16 (POSTGRES_USER=users, removed afterwards).

@@ -110,9 +110,20 @@ SELECT e.id, e.created_at, pr.disabled_at, pr.disabled_reason,
   LEFT JOIN public.entities mpe ON mpe.id = u.managing_party_id
  WHERE e.id = ANY($1::bigint[])`
 
+// assuranceChecker is the engine seam ListPrincipals uses to apply the list
+// operation's assurance policy: *authz.Authorizer implements it. It is an
+// optional capability of coreAuthz.Authorizer (the same pattern as
+// TypeAuthorizer), so the service reuses the engine's check instead of
+// duplicating the policy logic.
+type assuranceChecker interface {
+	CheckAssurance(ctx context.Context, operation string) error
+}
+
 // ListPrincipals lists the principals the caller may list, oldest first
 // (GET /v1/principals). The row scope is the access functions' (decision U18);
-// a caller with no list authority gets an empty page.
+// a caller with no list authority gets an empty page. The list operation's
+// assurance policy is applied to the whole request first, so a session below
+// it is refused with users.step_up_required.
 func (s *UserService) ListPrincipals(ctx context.Context, in ListPrincipalsInput) (PrincipalPage, error) {
 	ac, err := adminCaller(ctx)
 	if err != nil {
@@ -126,6 +137,25 @@ func (s *UserService) ListPrincipals(ctx context.Context, in ListPrincipalsInput
 	if s.ops == nil || s.pool == nil {
 		return PrincipalPage{}, errors.New("users: principal listing is not configured")
 	}
+
+	// WHY the assurance gate here, once, before any query: the access functions
+	// filter rows by grant arms and the owning-party gate but never apply the
+	// list operation's min_acr or max_auth_age, so without this call a session
+	// below the policy would list what a single-row Authorize refuses with
+	// users.step_up_required. IMPLIES: the refusal is the engine's own (same
+	// skip rule as Authorize for anonymous and trusted system actors, same
+	// error), the check runs before the transaction opens so a refused request
+	// reads nothing, it adds no 403 (a caller with no list grants still gets an
+	// empty page), and an authorizer that cannot apply the gate fails the
+	// request closed rather than listing ungated.
+	checker, ok := s.az.(assuranceChecker)
+	if !ok {
+		return PrincipalPage{}, errors.New("users: principal listing needs an authorizer that applies the assurance gate")
+	}
+	if err := checker.CheckAssurance(ctx, opSlugList); err != nil {
+		return PrincipalPage{}, err
+	}
+
 	limit, offset := coreservice.Pagination{Limit: in.Limit, Offset: in.Offset}.Normalize()
 	opIDs, err := s.ops.SatisfiedBy(opSlugList)
 	if err != nil {

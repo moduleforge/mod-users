@@ -13,8 +13,11 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
+
+	authzdb "github.com/moduleforge/authz-model/db"
 )
 
 // listedPrincipals returns the uuids of GET /v1/principals?kind=user for the
@@ -100,5 +103,78 @@ func TestPrincipalList_OwningPartyGate(t *testing.T) {
 	}
 	if !listed[self] {
 		t.Errorf("meeting the policy: the collaborator's own record is missing from its list")
+	}
+}
+
+// setListPolicy rewrites the list operation's assurance policy and reloads the
+// engine's operation registry, restoring the original policy when the test
+// ends. The registry caches policies at startup, so a table update alone would
+// not reach the running engine.
+func (s *stack) setListPolicy(t *testing.T, minACR int, maxAuthAge string) {
+	t.Helper()
+	ctx := context.Background()
+	var origACR int
+	var origAge *string
+	if err := s.pool.QueryRow(ctx,
+		`SELECT min_acr, max_auth_age::text FROM authz_operations WHERE slug = 'list'`).Scan(&origACR, &origAge); err != nil {
+		t.Fatalf("read list policy: %v", err)
+	}
+	apply := func(acr int, age *string) {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE authz_operations SET min_acr = $1, max_auth_age = $2::interval WHERE slug = 'list'`, acr, age); err != nil {
+			t.Fatalf("set list policy: %v", err)
+		}
+		if err := s.opReg.Reload(ctx, authzdb.New(s.pool)); err != nil {
+			t.Fatalf("reload operation registry: %v", err)
+		}
+	}
+	// The restore runs even when the test fails, so a failure here cannot leak a
+	// tightened list policy into the suites that follow.
+	t.Cleanup(func() { apply(origACR, origAge) })
+	var age *string
+	if maxAuthAge != "" {
+		age = &maxAuthAge
+	}
+	apply(minACR, age)
+}
+
+// TestPrincipalList_AssuranceGate proves the list operation's min_acr and
+// max_auth_age refuse GET /v1/principals as a single-row Authorize is refused
+// (409 users.step_up_required): the row filter never applies them, so the list
+// service must. A session that meets the policy lists as before, and a caller
+// with no list grants still gets an empty page rather than a new 403.
+func TestPrincipalList_AssuranceGate(t *testing.T) {
+	s := env
+	a := s.register(t)
+	tk := s.login(t, a)
+	principal := s.principalID(t, a.Email)
+
+	// A session below the operation's min_acr is refused. Every password
+	// session sits below acr 3, so the policy cannot be met.
+	s.setListPolicy(t, 3, "")
+	s.do(t, http.MethodGet, "/v1/principals?kind=user", tk.access(), nil).wantAction(t, http.StatusConflict, "users.step_up_required")
+
+	// A session past the operation's max_auth_age is refused.
+	s.setListPolicy(t, 1, "10 minutes")
+	s.exec(t, "age auth_time",
+		`UPDATE mod_users.sessions SET auth_time = now() - interval '11 minutes' WHERE uuid = $1::uuid`, tk.Session.UUID)
+	s.do(t, http.MethodGet, "/v1/principals?kind=user", tk.access(), nil).wantAction(t, http.StatusConflict, "users.step_up_required")
+
+	// A session that meets the policy lists as before: its own record.
+	s.exec(t, "fresh auth_time",
+		`UPDATE mod_users.sessions SET auth_time = now() WHERE uuid = $1::uuid`, tk.Session.UUID)
+	if listed := s.listedPrincipals(t, tk.access()); !listed[s.entityUUID(t, principal)] {
+		t.Errorf("a session meeting the list policy did not list its own record")
+	}
+
+	// A caller with no list grants over the kind still gets an empty page, not a
+	// 403: the gate adds no refusal beyond step-up.
+	var page struct {
+		Principals []json.RawMessage `json:"principals"`
+		Total      int64             `json:"total"`
+	}
+	s.do(t, http.MethodGet, "/v1/principals?kind=service_account", tk.access(), nil).wantStatus(t, http.StatusOK).into(t, &page)
+	if len(page.Principals) != 0 || page.Total != 0 {
+		t.Errorf("a caller with no service-account grants listed %d (total %d), want an empty page", len(page.Principals), page.Total)
 	}
 }
