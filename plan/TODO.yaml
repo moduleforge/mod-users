@@ -355,6 +355,7 @@ phases:
           path: phase-09-users-gui-and-frontend-contract/006-review-gui-exports-and-contract-docs.md
           done: false
           tier: sonnet-low
+          digest: 'Verification pass over merged GUI work: exports, stories and contract docs consistent. README Other exports table added. Manager to remove followups HPJi and PRvD as resolved.'
           git:
             branch: null
             commit: []
