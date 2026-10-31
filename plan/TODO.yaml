@@ -1383,7 +1383,8 @@ phases:
             - 4ohc
           git:
             branch: plan/identity-model-impl-23-002
-            commit: []
+            commit:
+                - 5525f60
             merge: null
         - number: 3
           slug: stop-impersonation-refresh-replay
