@@ -186,6 +186,32 @@ describe('OidcCallbackPage link and step-up returns', () => {
     expect(handoffCalls(calls)).toHaveLength(0);
   });
 
+  test('#stepped_up=1 joins a hydrate-driven refresh in flight: one grant, no sign-out', async () => {
+    const session = signInTab();
+    setHash('#stepped_up=1&return=%2Fadmin');
+    let sessionCalls = 0;
+    const { calls, outcome } = await mountCallback({
+      // The first session read answers 401 so hydrate itself starts a refresh.
+      'GET /v1/session': (call) => {
+        sessionCalls += 1;
+        if (sessionCalls === 1) return errorReply(401, 'unauthenticated');
+        return (session['GET /v1/session'] as (c: Call) => object)(call);
+      },
+      'POST /v1/auth/token': async () => {
+        // Hold the rotation open long enough that both the hydrate refresh and
+        // the step-up callback ask for it while it is in flight.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return tokenResponse({ access_token: 'fresh-access' });
+      },
+    });
+    await waitFor(() => expect(outcome.completed).toEqual(['/admin']));
+    // WHY: a second grant with the spent refresh token would trip reuse
+    // detection and sign the tab out; exactly one POST proves the join.
+    expect(tokenCalls(calls)).toHaveLength(1);
+    expect(outcome.errors).toEqual([]);
+    expect(getStoredToken()).toBe('fresh-access');
+  });
+
   test('#stepped_up=1 with an unsafe return path falls back to the default', async () => {
     const session = signInTab();
     setHash('#stepped_up=1&return=https%3A%2F%2Fevil.test');

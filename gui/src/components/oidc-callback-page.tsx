@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth-context';
 import { api, ApiRequestError, USERS_ERROR_CODES } from '../lib/api';
-import { getStoredProfileUuid, getStoredRefreshToken } from '../lib/config';
+import { getStoredProfileUuid, getStoredRefreshToken, getStoredToken } from '../lib/config';
 import { isSafeReturnPath } from '../lib/return-path';
 import { finishSignIn } from '../lib/sign-in';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@moduleforge/core-gui';
@@ -121,6 +121,7 @@ export function OidcCallbackPage({
         const back = isSafeReturnPath(returnCandidate) ? returnCandidate : defaultReturnPath;
         const refreshToken = getStoredRefreshToken();
         const profileUuid = getStoredProfileUuid();
+        const sentToken = getStoredToken();
         if (steppedUp && refreshToken && profileUuid) {
           // The step-up raised the assurance server-side, but this tab's
           // access token predates it. Take a fresh one through the refresh
@@ -129,11 +130,13 @@ export function OidcCallbackPage({
           // rotate) the tab just returns and the request pipeline handles
           // any 401.
           try {
-            await api.auth.token({
-              grant_type: 'refresh_token',
-              refresh_token: refreshToken,
-              profile_uuid: profileUuid,
-            });
+            // WHY: a hydrate-driven refresh of the same refresh token may be
+            // in flight; the shared single-flight joins it instead of
+            // issuing a second grant. IMPLIES a concurrent rotation is never
+            // replayed with the spent token (which would revoke the session),
+            // and a rotation that already landed after this page observed
+            // its token is not repeated.
+            await api.auth.refreshAfterStepUp(sentToken);
           } catch (err) {
             // The step-up itself succeeded but the new token could not be
             // obtained: report it rather than returning with stale assurance.

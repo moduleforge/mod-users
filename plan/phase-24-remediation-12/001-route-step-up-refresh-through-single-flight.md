@@ -21,3 +21,7 @@ This task addresses finding `6qD2`. The work targets the plan branch `plan/ident
 ## References
 
 - Finding `6qD2` in this plan's `plan/findings.yaml`.
+
+## Status
+
+succeeded, 2026-10-31. Added `api.auth.refreshAfterStepUp(sentToken)` in `gui/src/lib/api.ts` (routes through `refreshTabToken` single-flight; no-op while impersonating) and switched `gui/src/components/oidc-callback-page.tsx` to it. New test in `gui/src/components/oidc-callback-page.test.tsx`. bun test (447 pass), typecheck, build.gui, lint.gui all pass.
