@@ -180,6 +180,22 @@ All components are client components (`'use client'` is not retained in `dist`; 
 | `ClientLayout` | `children`; `currentPath: string`; `onNavigateToConfig?()`; `onNavigateToBootstrap?()`; `onNavigate?(path)`; `LinkComponent` | mod-users admin chrome (`ImpersonationBanner` above a sidebar shell, plus `AuthProvider` plus `OidcSetupGate`). `SidebarNav` takes `currentPath` and `LinkComponent`, shows the `ProfileSwitcher` and an Invitations entry for a signed-in user, and no longer filters links by admin status (the server's `403` is the authority). |
 | `USERS_GUI_ROUTES` | constant | The standard path set; see [Routes](#routes). |
 
+### Other exports
+
+Beyond the components above, `index.ts` exports these helpers (types are exported alongside):
+
+| Export | Purpose |
+| --- | --- |
+| `api`, `createUsersClient({ baseUrl })` | The shared client (`me.*`, `session.*`, `impersonations.*`, `bootstrap.*`, `auth.*`) and the factory for a client with its own base URL. |
+| `commitTokenResponse(response)` | Stores a token response in the tab and notifies `useAuth()` through `subscribeSessionEvents`. |
+| `setStepUpHandler(handler)` | Registers the step-up handler outside React and returns an unregister function; `useStepUpHandler` and `AuthProvider`'s `stepUpHandler` wrap it. |
+| `fetchProviders()` | Lists the OIDC providers offered on the login page. |
+| `fetchOIDCStatus`, `postOIDCConfirm`, `fetchOIDCSaved` | First-run OIDC confirmation calls used by `OidcConfigPage`. |
+| `fetchOIDCProvider`, `createOIDCProvider`, `updateOIDCProvider`, `revertOIDCProvider`, `validateJitPolicy`, `testProviderURL`, `PROVIDER_ID_PATTERN`, `WELL_KNOWN_HINTS`, `OIDC_JIT_MODES`, `OIDC_JIT_MODE_HELP` | Provider administration calls and validation helpers used by `OidcConfigPage`. |
+| `profileLabel(profile)` | The display label `ProfileSwitcher` uses for a profile. |
+| `cn` | The class-name merge helper used by the components. |
+| `Dialog*`, `Switch`, `Table*`, `Separator` | The UI primitives the components are built from. |
+
 ### Sign-in outcomes
 
 Every sign-in form (`LoginForm`, `RegisterForm`, `EmailCodePage`, `AuthPage`, `OidcCallbackPage`) decides what happens next from the token response:

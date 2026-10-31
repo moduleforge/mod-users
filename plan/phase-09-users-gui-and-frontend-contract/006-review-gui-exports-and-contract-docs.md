@@ -57,3 +57,7 @@ architectural_impact: false
 - [API surface section 12](../notes/mod-users-api-surface.md#12-frontend-contract-resolution-c).
 - [Work packages, phase `users-gui-and-frontend-contract`](../notes/work-packages.md).
 - Task documents 001 to 005 in this phase directory.
+
+## Status
+
+succeeded, 2026-10-31. `make -C gui build`, `test` (421 pass) and `lint` pass; `bun run preview:build` passes. Sweep hits are all intentional (README migration notes, tests asserting `localStorage` is unused, comments on `/v1/self` 503). `gui/src/index.ts` needed no change (no duplicates, no removed symbols). Added an "Other exports" table to `gui/README.md`. Stories omitted by choice: `ClientLayout`, `ProfileLockNotice`, `ProfileRemedy`, `OidcSetupGate` (need provider or gate context). Followups `HPJi` and `PRvD` are resolved by the merged code.
