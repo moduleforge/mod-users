@@ -9,38 +9,6 @@ items:
         - priority:medium
         - effort:medium
       text: 'mod-core''s NaturalPersonService.CreateInTx and OrganizationService.CreateInTx document that the caller dispatches ObserveAfterCommit (create, <resource>, entity id) after the transaction commits. mod-users never does: api/internal/service/user_service.go (np.CreateInTx near line 187), api/internal/service/user_self_service.go (np.CreateInTx near line 578) and api/internal/service/bootstrap_service.go (createOrganization via OrganizationService.CreateInTx) all rely on the in-transaction observation only, so post-commit observers (anything subscribed via ObserverGroup.ObserveAfterCommit) never see the natural_person or organization creation. Needs a design decision on how the committing public methods (Bootstrap, user registration and self-service flows) carry the entity id out of their InTx bodies and dispatch after commit.'
-    - title: createOrganization uses OrganizationService.…
-      id: bwMq
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:adopt-core-engine-remediation
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/service/bootstrap_service.go
-        lines: 391-431
-        severity: minor
-        confidence: high
-        concerns: correctness
-        description:
-          createOrganization uses OrganizationService.CreateInTx, whose documented
-          contract (task 003) requires the caller to dispatch ObserveAfterCommit
-          (create, organization, entityID) after tx.Commit succeeds. Bootstrap()
-          commits and returns without dispatching it, so post-commit observers never
-          see the operator organization creation. Task 003 allows following the
-          existing module convention (NaturalPersonService.CreateInTx is also not
-          dispatched) provided a finding is filed, and finding 06rd records this.
-          It is therefore a known, sanctioned gap rather than an oversight. It still
-          leaves the stated intent ("ObserveAfterCommit must follow commit") unmet
-          for the one call site this phase touches.
-        recommendation:
-          Carry the organization entity id out of bootstrapInTx (for example a field
-          on BootstrapResult when the operator kind is organization) and call
-          s.obs.ObserveAfterCommit(ctx, opCreate, "organization", &id, ...) after a
-          successful tx.Commit in Bootstrap, or resolve finding 06rd for all three
-          CreateInTx call sites together.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -1814,6 +1782,11 @@ closed:
       date: "2026-10-31"
     - id: DDfb
       title: createOrganization now creates the operator…
+      disposition: fixed
+      ref: phase-22-remediation-10/003-dispatch-after-commit-observations.md
+      date: "2026-10-31"
+    - id: bwMq
+      title: createOrganization uses OrganizationService.…
       disposition: fixed
       ref: phase-22-remediation-10/003-dispatch-after-commit-observations.md
       date: "2026-10-31"
