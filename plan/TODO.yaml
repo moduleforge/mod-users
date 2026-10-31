@@ -1530,7 +1530,8 @@ phases:
             - m3Jr
           git:
             branch: plan/identity-model-impl-25-002
-            commit: []
+            commit:
+                - 91a3006
             merge: null
         - number: 3
           slug: signal-step-up-refresh-skip-while-impersonating
