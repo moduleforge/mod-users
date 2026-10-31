@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 14
-    tasks_added: 68
+    tasks_added: 69
 phases:
     - number: 6
       slug: users-identity-core
@@ -1560,7 +1560,7 @@ phases:
       title: Remediation Round 14
       kind: remediation
       security_review: required
-      tasks_added: 3
+      tasks_added: 4
       remediates_phase: 10
       tasks:
         - number: 1
@@ -1597,6 +1597,19 @@ phases:
             - BNNN
             - ndUS
             - fb9H
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 4
+          slug: fix-api-layer-route-docs
+          title: Correct Route Mounting And OpenAPI Coverage Notes
+          path: phase-26-remediation-14/004-fix-api-layer-route-docs.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - N2lP
+            - kmxU
           git:
             branch: null
             commit: []
