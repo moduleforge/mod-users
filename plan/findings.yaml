@@ -1,5 +1,14 @@
 version: 2
-items: []
+items:
+    - title: OIDC state cookie vs credentials omit
+      id: jRXp
+      date: "2026-10-31"
+      tags:
+        - type:conflict
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: 'gui/src/lib/api.ts startRedirectFlow (used by client.me.credentials.startOidcLink and client.session.stepUp.startOidc) sends credentials: ''include'', which contradicts the frontend contract of ''credentials: omit on every request''. Both POST routes (api/openapi.yaml /v1/me/credentials/oidc/{provider}/start and /v1/session/step-up/oidc/{provider}/start) answer {authorize_url} AND set the signed oidc_state cookie on that response, and browsers discard Set-Cookie from a credentials: ''omit'' fetch, so the callback would later fail with users.oidc_state_cookie_required. Decide whether to keep the include exception (requires CORS AllowCredentials with a non-wildcard origin, already set in api/internal/server/server.go) or change the API to carry the state outside a cookie (for example return it in the body and have the callback read it from the URL), and update the frontend contract text accordingly.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
