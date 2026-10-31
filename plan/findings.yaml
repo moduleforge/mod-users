@@ -1,24 +1,5 @@
 version: 2
-items:
-    - title: The impersonation_ended event starts restore…
-      id: D3Q9
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - plan/phase:remediation-12
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/auth-context.tsx
-        lines: 559-584
-        severity: suggestion
-        confidence: low
-        concerns: security
-        description:
-          The impersonation_ended event starts restoreAdministrator, whose committed token_response triggers loadUser (new session uuid) while logout continues to revoke and then clears state. A loadUser response landing after logout's setUser(null) could repopulate the user record in memory after sign-out. Local storage is cleared (no token or marker leak; later session.get is skipped because the stored token is null).
-        recommendation:
-          Guard loadUser/setUser with a signed-out check (the session ref) so a late response after logout is discarded.
+items: []
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2005,4 +1986,9 @@ closed:
       title: The refreshAfterStepUp no-op while impersona…
       disposition: promoted
       ref: LJFE
+      date: "2026-10-31"
+    - id: D3Q9
+      title: The impersonation_ended event starts restore…
+      disposition: promoted
+      ref: D3Q9
       date: "2026-10-31"
