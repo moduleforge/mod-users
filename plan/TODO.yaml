@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 13
-    tasks_added: 62
+    tasks_added: 63
 phases:
     - number: 6
       slug: users-identity-core
@@ -1498,5 +1498,21 @@ phases:
       slug: remediation-13
       title: Remediation Round 13
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 9
-      tasks: []
+      tasks:
+        - number: 1
+          slug: harden-logout-while-impersonating
+          title: Revoke the Administrator Session on Every Impersonated Logout and Guard Late State Commits
+          path: phase-25-remediation-13/001-harden-logout-while-impersonating.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - H5Po
+            - NfAS
+            - D3Q9
+          git:
+            branch: null
+            commit: []
+            merge: null
