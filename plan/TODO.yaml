@@ -1295,7 +1295,7 @@ phases:
           slug: require-sessionless-system-actor
           title: Gate System-Actor Contexts That Carry A Session Or Credential
           path: phase-22-remediation-10/001-require-sessionless-system-actor.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Marked system-actor contexts carrying a session or credential are now gated in gated() and access_row_permitted; stale session_meets_party_policy comment fixed; tests added and both mutation directions verified.
           findings:
