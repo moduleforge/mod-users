@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Scan docs/mf-standards for old identity terms
-      id: 4HXk
-      date: "2026-10-31"
-      tags:
-        - type:documentation
-        - plan/phase:users-identity-final
-        - priority:low
-        - effort:small
-      text: Scan docs/mf-standards for old identity terms (type:documentation). Submodule uninitialized in the worktree, so not scanned. Check it for old-model terms.
     - title: PROPOSED REMOVALS for manager to apply after
       id: 1JCd
       date: "2026-10-31"
@@ -2220,4 +2211,9 @@ closed:
       title: Fix corporation wording in authz_test comment
       disposition: promoted
       ref: VtaW
+      date: "2026-10-31"
+    - id: 4HXk
+      title: Scan docs/mf-standards for old identity terms
+      disposition: promoted
+      ref: 4HXk
       date: "2026-10-31"
