@@ -27,18 +27,6 @@ items:
         - priority:medium
         - effort:small
       text: 'api/usersservice/service.go exports CredentialService, DirectoryService and PrincipalSummary but no aliases for inner.IssueAPIKeyInput, inner.IssuedAPIKey (arguments and result of CredentialService.IssueAPIKeyInTx) or inner.ProfileSummary (value of DirectoryService.ProfileSummaries). A module outside api/ cannot name these types, so a caller such as app-mfmanager cannot build the IssueAPIKeyInTx input. Add the three aliases to the facade (AGENTS.md convention: re-export every type a public method takes or returns).'
-    - title: CORS AllowCredentials on Bearer-only API
-      id: x3It
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - priority:low
-        - plan/phase:doc-updates
-        - effort:small
-      text: |-
-        api/internal/server/server.go line 88 sets CORS AllowCredentials although the API is Bearer-only (every call sends credentials:'omit' except the two OIDC start POSTs, which need the oidc_state cookie). Decide whether AllowCredentials should be limited to the two OIDC start routes or dropped. Found by phase 10 task 003 (repository docs review); a design decision, not fixed there.
-
-        Open question (quoted evaluator data): Should the API keep Access-Control-Allow-Credentials: true for every explicitly allow-listed origin, restrict it to the two OIDC start POSTs that need the oidc_state cookie, or drop it entirely? Options: (1) keep as is and document why (no code change; exposure limited to the non-authenticating oidc_state cookie); (2) restrict to the two OIDC start routes (needs route-scoped CORS handling, tests, docs; plan overview lists CORS default-deny policy and oidc_state cookie behavior as must-not-change); (3) drop entirely (breaks cross-origin OIDC sign-in). Recommended option: keep as is and document why.
     - title: CORE_FIELD_KEY_HEX read by no code here
       id: RVUM
       date: "2026-10-31"
@@ -2161,4 +2149,9 @@ closed:
         file on these grounds as CTF3 and HzgJ. The durable question of whether to keep, ignore
         or exempt the file is already in the project backlog as VIcU and 76Ma (both promoted).
         The phase did not change the file; it predates the plan (17bc64e, per CTF3).
+      date: "2026-10-31"
+    - id: x3It
+      title: CORS AllowCredentials on Bearer-only API
+      disposition: promoted
+      ref: x3It
       date: "2026-10-31"
