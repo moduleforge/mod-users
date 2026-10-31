@@ -1596,15 +1596,17 @@ phases:
           slug: align-cors-options-and-docs
           title: Align CORS Methods Headers And Docs With Routes
           path: phase-26-remediation-14/003-align-cors-options-and-docs.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Aligned CORS AllowedMethods and AllowedHeaders with the routes, added a test, and documented the OIDC start POST credentials exception in docs/cors.md. No surprises.
           findings:
             - BNNN
             - ndUS
             - fb9H
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-26-003
+            commit:
+                - 179d2ec3
             merge: null
         - number: 4
           slug: fix-api-layer-route-docs
