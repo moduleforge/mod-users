@@ -1522,7 +1522,7 @@ phases:
           slug: tighten-impersonation-marker-fail-closed
           title: Make the Impersonation Marker Fail Closed for Undecodable Tokens and Handler-Supplied Step-Up Tokens
           path: phase-25-remediation-13/002-tighten-impersonation-marker-fail-closed.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Tightened the impersonation marker so undecodable stored tokens are treated as impersonating, and made the step-up path set-only. Migrated the GUI test fixtures to JWT-shaped tokens and added tests for both scenarios.
           findings:
