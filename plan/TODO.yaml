@@ -1301,7 +1301,7 @@ phases:
           findings:
             - tpls
           git:
-            branch: null
+            branch: plan/identity-model-impl-22-001
             commit: []
             merge: null
         - number: 2
