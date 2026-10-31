@@ -382,11 +382,13 @@ phases:
           slug: write-consumer-upgrade-notes
           title: Write Consumer Upgrade Notes
           path: phase-10-doc-updates/002-write-consumer-upgrade-notes.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added Identity model rewrite section to consumer-upgrade-notes.md (Go packages, routes, config, tokens, database, manifest, bootstrap, impersonation, per-consumer migration); rewrote EdDSA, GUI, cookie, error-precedence and authorization sections against merged code; fixed hPqK anchor. Filed findings ndUS (CORS X-Step-Up-Token) and iZ3E (usersservice facade aliases). Docs only.
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-10-002
+            commit:
+                - 24f6ef32
             merge: null
         - number: 3
           slug: review-repository-docs
