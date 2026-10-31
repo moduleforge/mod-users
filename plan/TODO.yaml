@@ -1612,7 +1612,7 @@ phases:
           slug: fix-api-layer-route-docs
           title: Correct Route Mounting And OpenAPI Coverage Notes
           path: phase-26-remediation-14/004-fix-api-layer-route-docs.md
-          done: false
+          done: true
           tier: sonnet-low
           digest: Reworded the AGENTS.md error-precedence bullet to match docs/architecture.md and added the /v1/oidc-config OpenAPI omission note to the architecture OIDC row. Nothing else was touched.
           findings:
