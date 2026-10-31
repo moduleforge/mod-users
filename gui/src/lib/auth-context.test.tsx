@@ -240,14 +240,45 @@ describe('mount', () => {
     }
   });
 
-  test('any other failure drops the unusable stored session', async () => {
+  test('a non-auth client failure drops the unusable stored session', async () => {
     seedTab();
-    mockApi({ 'GET /v1/session': () => errorReply(500, 'internal_error') });
+    mockApi({ 'GET /v1/session': () => errorReply(400, 'bad_request') });
     const m = mount();
     await settled(m);
     expect(m.auth().token).toBeNull();
     expect(getStoredToken()).toBeNull();
     expect(getStoredRefreshToken()).toBeNull();
+  });
+
+  test('a network failure on reload keeps the tokens and exposes a retryable error', async () => {
+    seedTab();
+    globalThis.fetch = (async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch;
+    const m = mount();
+    await settled(m);
+    expect(getStoredRefreshToken()).toBe('old-refresh');
+    expect(getStoredToken()).toBe('old-access');
+    expect(m.auth().sessionError?.status).toBe(0);
+    // Back online: the retry establishes the session and clears the error.
+    mockApi({
+      'GET /v1/session': () => SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+    });
+    await act(async () => {
+      await m.auth().retrySession();
+    });
+    expect(m.auth().sessionError).toBeNull();
+    await waitFor(() => expect(m.auth().user).not.toBeNull());
+  });
+
+  test('a 503 on reload keeps the stored refresh token', async () => {
+    seedTab();
+    mockApi({ 'GET /v1/session': () => errorReply(503, 'unavailable') });
+    const m = mount();
+    await settled(m);
+    expect(getStoredRefreshToken()).toBe('old-refresh');
+    expect(m.auth().sessionError?.status).toBe(503);
   });
 
   test('a revoked session on reload signs the tab out and runs the unauthenticated handler once', async () => {
@@ -333,6 +364,56 @@ describe('login and profile selection', () => {
     expect(m.auth().profile?.uuid).toBe('prof-a');
     expect(m.auth().selectionRequired).toBe(false);
     expect(m.auth().session?.uuid).toBe('sess-1');
+  });
+
+  test('a child gated on the user does not see unauthenticated while GET /v1/me is pending', async () => {
+    const m = mount();
+    await settled(m);
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    mockApi({
+      'POST /v1/auth/login': () => tokenResponse(),
+      'GET /v1/me': async () => {
+        await gate;
+        return USER_VIEW;
+      },
+    });
+    await act(async () => {
+      await m.auth().login('ada@example.test', 'pw');
+    });
+    // Token committed, user not yet loaded: must read as loading.
+    expect(m.auth().token).toBe('access-1');
+    expect(m.auth().user).toBeNull();
+    expect(m.auth().isLoading).toBe(true);
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(m.auth().user).not.toBeNull());
+    expect(m.auth().isLoading).toBe(false);
+  });
+
+  test('a forked tab reads as loading until its delayed user record arrives', async () => {
+    (globalThis as { BroadcastChannel?: unknown }).BroadcastChannel = FakeBroadcastChannel;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    mockApi({
+      'POST /v1/session/fork': () => tokenResponse({ access_token: 'fork-access', refresh_token: 'fork-refresh' }),
+      'GET /v1/me': async () => {
+        await gate;
+        return USER_VIEW;
+      },
+    });
+    const sibling = (await import('./fork')).startForkResponder(() => 'sibling-access');
+    const m = mount();
+    await waitFor(() => expect(m.auth().token).toBe('fork-access'));
+    sibling();
+    expect(m.auth().user).toBeNull();
+    expect(m.auth().isLoading).toBe(true);
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(m.auth().user).not.toBeNull());
+    expect(m.auth().isLoading).toBe(false);
   });
 
   test('selection_required flow: no access token until selectProfile makes the refresh grant', async () => {
@@ -675,6 +756,39 @@ describe('logout', () => {
     expect(m.auth().token).toBeNull();
     expect(getStoredToken()).toBeNull();
     expect(m.navigations).toEqual(['/auth/login']);
+  });
+
+  test('an expired access token refreshes once, then the logout request revokes the session', async () => {
+    seedTab();
+    let expired = false;
+    const calls = mockApi({
+      'GET /v1/session': (call) =>
+        expired && call.authorization === 'Bearer old-access'
+          ? errorReply(401, 'unauthorized')
+          : SESSION_INFO,
+      'GET /v1/me': () => USER_VIEW,
+      'POST /v1/auth/token': () => tokenResponse({ access_token: 'access-2', refresh_token: 'refresh-2' }),
+      'POST /v1/session/logout': (call) =>
+        call.authorization === 'Bearer access-2' ? undefined : errorReply(401, 'unauthorized'),
+    });
+    const m = mount();
+    await settled(m);
+    expired = true;
+    await act(async () => {
+      await m.auth().logout();
+    });
+    const paths = calls.map((c) => `${c.method} ${c.path}`);
+    const afterMount = paths.slice(paths.indexOf('GET /v1/me') + 1);
+    expect(afterMount).toEqual([
+      'POST /v1/session/logout',
+      'GET /v1/session',
+      'POST /v1/auth/token',
+      'GET /v1/session',
+      'POST /v1/session/logout',
+    ]);
+    expect(calls.at(-1)!.authorization).toBe('Bearer access-2');
+    expect(getStoredRefreshToken()).toBeNull();
+    expect(m.auth().token).toBeNull();
   });
 
   test('an unsafe loginPath falls back to the default login route', async () => {

@@ -24,3 +24,13 @@ This task addresses findings zwCX, oFfM, and A6aq. The work targets the plan bra
 - Finding `zwCX` in this plan's `plan/findings.yaml`.
 - Finding `oFfM` in this plan's `plan/findings.yaml`.
 - Finding `A6aq` in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). Validation: gui `bun test` (426 pass), `bun run typecheck`, `make build.gui`, `make lint.gui` all pass.
+
+- `loadUser` now raises a user-loading flag (counter-backed) in the same batch as the token commit; the context's `isLoading` folds it in, so RequireAuth waits instead of redirecting (login, register, email-code, handoff, fork).
+- Hydrate keeps tokens on status 0 and 5xx and exposes `sessionError` plus `retrySession`; RequireAuth shows a retry notice and does not call onUnauthenticated for it. Other non-auth failures still clear the session.
+- `logout` retries once after a 401 when a refresh token exists (`session.get` refreshes through the shared lineage, then logout again); if that fails the logout is local-only, documented in comments. Local state is always cleared.
+
+Files: `gui/src/lib/auth-context.tsx`, `gui/src/components/require-auth.tsx`, `gui/src/lib/auth-context.test.tsx`.
