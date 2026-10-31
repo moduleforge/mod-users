@@ -2783,3 +2783,13 @@ items:
         Escalation question (quoted data, unresolved by internal-escalation: certainty standard is off; decisions-and-resolutions.md retains the oidc_state cookie but does not decide the credentials mode): Should the two OIDC start POSTs remain a documented credentials:'include' exception to the 'omit' rule, or should the API carry the OIDC state outside a cookie so every request can use 'omit'?
         Option A (recommended): Keep the include exception for the two start calls and amend the frontend contract (API-surface section 12, gui/README.md). No api/gui code change; keeps resolution (c) and overview 'What must not change' intact.
         Option B: Remove the cookie; return state in the start body and verify in callback. API change in oidc.go and openapi.yaml, new CSRF binding needing security review; contradicts overview 'What must not change'.
+    - title: api/server/CLAUDE.md unreachable from README
+      id: UmzX
+      date: "2026-10-31"
+      tags:
+        - type:documentation
+        - priority:low
+        - effort:small
+        - plan/phase:remediation-11
+        - plan/slug:identity-model-impl
+      text: 'Agent-authored report data (readme-reachability, severity minor, confidence high, concern documentation): api/server/CLAUDE.md is not reachable from README.md via any chain of project-doc links. Not touched by this phase''s diff. Recommendation: link it from a doc reachable from README.md (e.g. AGENTS.md).'
