@@ -8,21 +8,7 @@ items:
         - plan/phase:doc-updates
         - priority:medium
         - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/jwt-eddsa.md
-        lines: 71-78
-        severity: suggestion
-        confidence: medium
-        concerns: security
-        description:
-          The "Persisted signing key" section explains that the Ed25519 private key is stored in
-          mod_users.auth_signing_keys when JWT_SIGNING_KEY is unset, but does not state the consequence: anyone with
-          database read access or a DB backup can forge tokens for any session. It says production "can" use a secret
-          store, not that it should.
-        recommendation:
-          Add one sentence that the persisted key is stored unencrypted, that DB read access or backups equal token
-          forgery capability, and that production deployments should set JWT_SIGNING_KEY from a secret store.
+      text: 'Evaluator proposed dismissing as fixed by phase 26 task 001 (docs/jwt-eddsa.md:79-83 now states unencrypted storage, forgery via DB or backup access, and that production should set JWT_SIGNING_KEY from a secret store). A type:security dismiss is never auto-applied, and internal escalation is off, so the question surfaces: dismiss (appears resolved) or keep. Recommended: dismiss. Original finding: the Persisted signing key section of docs/jwt-eddsa.md did not state the forgery consequence nor recommend a secret store.'
     - title: The new text says the exception covers "the…
       id: Yo85
       date: "2026-10-31"
