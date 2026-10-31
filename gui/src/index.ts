@@ -1,5 +1,17 @@
 // ─── API client ──────────────────────────────────────────────────────────────
-export { createUsersClient, api, API_BASE_URL, ApiRequestError, ApiActionRequiredError, fetchProviders } from './lib/api';
+export {
+  createUsersClient,
+  api,
+  API_BASE_URL,
+  ApiRequestError,
+  ApiActionRequiredError,
+  fetchProviders,
+  commitTokenResponse,
+  subscribeSessionEvents,
+  setStepUpHandler,
+  USERS_ERROR_CODES,
+  STEP_UP_REQUIRED_ACTION,
+} from './lib/api';
 export type {
   UsersClient,
   UsersClientOptions,
@@ -9,33 +21,50 @@ export type {
   ApiAction,
   ApiActionResponse,
   RequestOptions,
-  LoginResponse,
-  LoginUser,
-  SessionUser,
+  TokenResponse,
+  AnonymousTokenResponse,
+  SessionView,
+  SessionInfo,
+  ProfileView,
+  PartyView,
+  ProfileLock,
+  LockRemedy,
+  LockRemedyKind,
   OIDCProvider,
   RegisterRequest,
+  LoginOptions,
+  AnonymousRequest,
   EmailCodePurpose,
   EmailCodeRequest,
   EmailCodeVerifyRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
-  UserAccountSelf,
-  UserAccount,
-  UserAccountListResponse,
-  UpdateProfileRequest,
+  RefreshTokenRequest,
+  AuthorizeURL,
+  StartImpersonationRequest,
+  UserView,
+  UpdateMeRequest,
+  ProfileList,
+  IdentifierView,
+  IdentifierList,
+  AddIdentifierRequest,
+  CredentialView,
+  CredentialList,
+  AddPasswordRequest,
+  AddSSHKeyRequest,
+  PatchCredentialRequest,
+  SelfSession,
+  SessionList,
+  UpgradeRequest,
+  BootstrapStatus,
+  BootstrapOperator,
+  BootstrapRequest,
   AuditEntry,
   AuditListResponse,
-  App,
-  AppListResponse,
-  AppMember,
-  AppMembersResponse,
-  CreateAppRequest,
-  AddAppMemberRequest,
-  SSHKey,
-  SSHKeyListResponse,
-  RegisterSSHKeyRequest,
-  StepUpVerifyResponse,
-  StepUpOptions,
+  StepUpHandler,
+  StepUpRequest,
+  SessionEvent,
+  SignOutReason,
 } from './lib/api';
 
 // ─── Runtime configuration ───────────────────────────────────────────────────
@@ -51,7 +80,17 @@ export {
 export type { UsersApiConfig, UnauthenticatedContext } from './lib/config';
 
 // ─── Auth context ─────────────────────────────────────────────────────────────
-export { AuthProvider, useAuth, useOptionalAuth } from './lib/auth-context';
+export {
+  AuthProvider,
+  useAuth,
+  useOptionalAuth,
+  useStepUpHandler,
+} from './lib/auth-context';
+export type {
+  AuthContextValue,
+  AuthProviderProps,
+  ProfileLockState,
+} from './lib/auth-context';
 
 // ─── Return-path safety ───────────────────────────────────────────────────────
 export { isSafeReturnPath, readReturnPath } from './lib/return-path';

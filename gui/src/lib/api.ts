@@ -5,8 +5,9 @@
 // "GUI-facing error-data contract"), imported and re-exported here rather than
 // redefined locally so this module stays the single source of truth consumers
 // import from (`@moduleforge/users-gui`) without diverging from the shared
-// contract. The local `request()` implementation below is kept (it carries
-// users-specific auth/token/redirect logic); only the types are reconciled.
+// contract. The local request pipeline below carries the users-specific
+// frontend contract (per-tab Bearer tokens, refresh lineage, step-up retry,
+// unauthenticated handling); only the types are reconciled with core-gui.
 
 import type {
   ApiError,
@@ -14,7 +15,21 @@ import type {
   FieldErrorData,
 } from '@moduleforge/core-gui';
 import { ApiRequestError } from '@moduleforge/core-gui';
-import { getApiBaseUrl, getStoredToken, handleUnauthenticated } from './config';
+import {
+  clearStoredProfileUuid,
+  clearStoredSession,
+  clearStoredToken,
+  getApiBaseUrl,
+  getStoredProfileUuid,
+  getStoredRefreshToken,
+  getStoredToken,
+  handleUnauthenticated,
+  isSafeReturnPath,
+  setStoredProfileUuid,
+  setStoredRefreshToken,
+  setStoredToken,
+} from './config';
+import { beginHandoff } from './handoff';
 
 export type { ApiError, ApiErrorResponse, FieldErrorData };
 export { ApiRequestError };
@@ -165,39 +180,139 @@ function sanitizeActionPath(path: string): string {
 export interface RequestOptions extends RequestInit {
   /**
    * When true, a 401 response is surfaced to the caller as an
-   * `ApiRequestError` without clearing the stored token or triggering a hard
-   * redirect (default `/auth/login`, see `configureUsersApi`). Use this when the caller needs to handle
-   * authentication failures itself (e.g., the OAuth return page, which must
-   * redirect to a login URL that carries an `?error=...` message).
+   * `ApiRequestError` (carrying the response's own error code) without
+   * refreshing the token, clearing the tab's tokens, or running the
+   * unauthenticated handler. Use this when the caller needs to handle
+   * authentication failures itself: sign-in routes (a 401 there means bad
+   * credentials, not an expired session), the OIDC return page, and the
+   * step-up and refresh calls themselves.
    *
-   * Defaults to false: a 401 clears the token and hard-redirects, matching
-   * the original behavior for normal authenticated requests.
+   * Defaults to false: a 401 first tries one token refresh, and when that
+   * cannot repair the session the tab's tokens are cleared and the configured
+   * unauthenticated handler runs (see `configureUsersApi`).
    */
   skipAuthRedirect?: boolean;
-}
-
-// ─── Auth ────────────────────────────────────────────────────────────────────
-
-export interface LoginResponse {
-  token: string;
   /**
-   * The server's login, email-code and assume-identity payloads always carry
-   * `email_verified_at` (timestamp, or explicit null while unverified), same
-   * as `/v1/self`, so `useAuth().emailVerifiedAt` is correct right after
-   * sign-in. Those payloads carry only a subset of the other fields
-   * (`uuid`, `email`); call `refreshUser()` when the full profile is needed.
+   * When true, a `409 users.step_up_required` response is thrown as an
+   * `ApiActionRequiredError` without consulting the registered step-up
+   * handler. Set by the step-up routes themselves, where that 409 means "wrong
+   * password or code" and prompting again would recurse.
    */
-  user: LoginUser;
+  skipStepUp?: boolean;
+  /**
+   * Bearer token to send instead of this tab's stored access token. Implies no
+   * refresh and no sign-out on 401, because the token is not this tab's own
+   * (used by the fork call, which carries a sibling tab's access token).
+   */
+  accessToken?: string;
+  /**
+   * The profile uuid a `401 users.profile_unavailable` on this call refers to
+   * (default: this tab's active profile). Lets a profile selection or switch
+   * attribute the lock to the profile the caller asked for.
+   */
+  profileUuid?: string;
+  /**
+   * Internal: send this one request with `credentials: 'include'` so the
+   * browser stores the `Set-Cookie` of the response. Every other request is
+   * `credentials: 'omit'`. Only the OIDC authorize-URL start calls set it.
+   */
+  allowStateCookie?: boolean;
 }
 
-/** The user fields present on login, email-code and assume payloads. */
-export type LoginUser = Pick<UserAccountSelf, 'uuid' | 'email' | 'email_verified_at'>;
+// ─── Token response, session and profile types ───────────────────────────────
+
+/** The session as carried in a token response or `GET /v1/session`. */
+export interface SessionView {
+  uuid: string;
+  acr: number;
+  amr: string[];
+  /** RFC 3339 time the caller last authenticated; step-up refreshes it. */
+  auth_time: string;
+  impersonating: boolean;
+}
+
+export interface PartyView {
+  uuid: string;
+  /** The party's fundamental type slug (for example `organization`). */
+  kind: string;
+  display_name: string;
+}
 
 /**
- * Session user held by the auth context: the login fields are always present;
- * the rest of `UserAccountSelf` is present only after `/v1/self` hydration.
+ * What would lift a profile lock. Kept open (`string & {}`) so a server-side
+ * addition cannot break typing; components switch on the known kinds and fall
+ * back to the lock reason text for any other.
  */
-export type SessionUser = LoginUser & Partial<UserAccountSelf>;
+export type LockRemedyKind =
+  | 'sign_in_with_provider'
+  | 'step_up'
+  | 'sign_in_with_authorized_credential'
+  | 'accept_invitation'
+  | (string & {});
+
+export interface LockRemedy {
+  kind: LockRemedyKind;
+  /** Present for `sign_in_with_provider`: the provider to sign in with. */
+  provider_id?: string;
+}
+
+/** Why a profile is not available to the session, and what would fix it. */
+export interface ProfileLock {
+  /**
+   * A `profile_availability` reason (for example `profile_suspended`,
+   * `acr_too_low`, `credential_not_authorized`) or `app_login_not_granted`.
+   */
+  reason: string;
+  remedy: LockRemedy | null;
+}
+
+export interface ProfileView {
+  uuid: string;
+  kind: 'personal' | 'party';
+  /** The party of a party profile; null for a personal profile. */
+  party: PartyView | null;
+  status: string;
+  display_name: string;
+  /** Whether this session (or credential) may act as this profile. */
+  available: boolean;
+  /** Why the profile is not available; null when it is. */
+  lock: ProfileLock | null;
+}
+
+/**
+ * The token response of every sign-in, refresh, handoff, switch, fork,
+ * step-up and impersonation call. `access_token` is null when the landing
+ * chain found no profile (`selection_required` is then true and the client
+ * calls the refresh grant with a chosen profile via `selectProfile`);
+ * `refresh_token` is null when none was minted (switch, step-up,
+ * impersonation).
+ */
+export interface TokenResponse {
+  access_token: string | null;
+  token_type: 'Bearer';
+  /** Access-token lifetime in seconds. */
+  expires_in: number;
+  refresh_token: string | null;
+  session: SessionView | null;
+  profile: ProfileView | null;
+  selection_required: boolean;
+  profiles: ProfileView[];
+}
+
+/** The guest sign-in response: a token response plus the one-time device token. */
+export interface AnonymousTokenResponse extends TokenResponse {
+  /** Returned once, only when a guest is created; signs the guest back in later. */
+  device_token?: string;
+}
+
+/** `GET /v1/session`. */
+export interface SessionInfo {
+  session: SessionView | null;
+  profile: ProfileView | null;
+  profiles: ProfileView[];
+}
+
+// ─── Auth request types ──────────────────────────────────────────────────────
 
 export interface OIDCProvider {
   id: string;
@@ -209,24 +324,27 @@ export interface RegisterRequest {
   password: string;
   given_name: string;
   family_name: string;
+  /** The app (uuid) the new session signs in to. */
+  app?: string;
 }
 
-/**
- * Response shape for `/v1/auth/register`. Unlike `LoginResponse`, this
- * intentionally carries no token/user — registration does not establish a
- * session because email verification runs asynchronously.
- */
-export interface RegisterResponse {
-  uuid: string;
-  email: string;
-  email_verification_required: boolean;
+export interface LoginOptions {
+  /** The app (uuid) the session signs in to. */
+  app?: string;
+  /** The profile to land on. */
+  profile_uuid?: string;
 }
 
-/**
- * What the emailed code is for. Omitted keeps the wire body unchanged (the
- * backend defaults to `'login'`).
- */
-export type EmailCodePurpose = 'login' | 'verify_email';
+export interface AnonymousRequest {
+  /** Stable device fingerprint supplied by the client. */
+  device_id: string;
+  /** A previous call's device token: signs that guest back in. */
+  device_token?: string;
+  app?: string;
+}
+
+/** The only email-code purpose the API accepts is a sign-in. */
+export type EmailCodePurpose = 'login';
 
 export interface EmailCodeRequest {
   email: string;
@@ -237,6 +355,8 @@ export interface EmailCodeVerifyRequest {
   email: string;
   code: string;
   purpose?: EmailCodePurpose;
+  app?: string;
+  profile_uuid?: string;
 }
 
 export interface ForgotPasswordRequest {
@@ -248,39 +368,182 @@ export interface ResetPasswordRequest {
   password: string;
 }
 
-// ─── User Accounts ───────────────────────────────────────────────────────────
+/** The `refresh_token` grant of `POST /v1/auth/token`. */
+export interface RefreshTokenRequest {
+  grant_type: 'refresh_token';
+  refresh_token: string;
+  profile_uuid: string;
+}
 
-export interface UserAccountSelf {
+export interface AuthorizeURL {
+  authorize_url: string;
+}
+
+export interface StartImpersonationRequest {
+  profile_uuid: string;
+  reason: string;
+}
+
+// ─── Me types ────────────────────────────────────────────────────────────────
+
+export interface UserView {
   uuid: string;
-  entity_uuid: string;
-  email: string;
-  /** ISO timestamp the account's email was verified, or null if unverified. */
-  email_verified_at: string | null;
-  given_name: string;
-  family_name: string;
-  is_admin: boolean;
+  kind: string;
+  is_guest: boolean;
+  /** True for a managed user (owned by a party). */
+  managed: boolean;
+  given_name: string | null;
+  family_name: string | null;
+  display_name: string;
+  /** The primary email identifier. */
+  email: string | null;
+  /** True when the user holds at least one verified email. */
+  email_verified: boolean;
+  default_profile_uuid: string | null;
+  default_app_uuid: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface UserAccount {
-  uuid: string;
-  email: string;
-  given_name: string;
-  family_name: string;
-  is_admin: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface UserAccountListResponse {
-  user_accounts: UserAccount[];
-  total: number;
-}
-
-export interface UpdateProfileRequest {
+/** Absent fields are left unchanged; the two default fields accept null to clear. */
+export interface UpdateMeRequest {
   given_name?: string;
   family_name?: string;
+  default_profile_uuid?: string | null;
+  default_app_uuid?: string | null;
+}
+
+export interface ProfileList {
+  profiles: ProfileView[];
+}
+
+export interface IdentifierView {
+  uuid: string;
+  kind: 'email';
+  value: string;
+  is_primary: boolean;
+  verified: boolean;
+  verified_at: string | null;
+  created_at: string;
+}
+
+export interface IdentifierList {
+  identifiers: IdentifierView[];
+}
+
+export interface AddIdentifierRequest {
+  kind?: 'email';
+  value: string;
+}
+
+/**
+ * An active credential: identifying and display attributes only, never a
+ * secret. Kind-specific members are present only for their kind.
+ */
+export interface CredentialView {
+  uuid: string;
+  /** Credential kind (for example `password`, `oidc`, `ssh_key`, `email_otp`, `api_key`, `anon`). */
+  kind: string;
+  label: string;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  default_profile_uuid: string | null;
+  confined_to_party_uuid: string | null;
+  /** The identifier a password or email-code credential is bound to. */
+  identifier_uuid?: string;
+  /** Present for `oidc`. */
+  provider_id?: string;
+  /** Present for `oidc`: the email the provider asserted when linked. */
+  email_at_link?: string;
+  /** Present for `ssh_key`. */
+  key_type?: string;
+  fingerprint?: string;
+  /** Present for `ssh_key`: canonical `authorized_keys` form. */
+  public_key?: string;
+  /** Present for `api_key`. */
+  client_id?: string;
+}
+
+export interface CredentialList {
+  credentials: CredentialView[];
+}
+
+export interface AddPasswordRequest {
+  password: string;
+  label?: string;
+  /** One of the caller's identifiers; the primary email when omitted. */
+  identifier_uuid?: string;
+}
+
+export interface AddSSHKeyRequest {
+  /** A single `authorized_keys`-format line. */
+  public_key: string;
+  label?: string | null;
+}
+
+/** At least one member is required; `default_profile_uuid` accepts null to clear. */
+export interface PatchCredentialRequest {
+  label?: string;
+  default_profile_uuid?: string | null;
+}
+
+export interface SelfSession {
+  uuid: string;
+  acr: number;
+  amr: string[];
+  auth_time: string;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  impersonating: boolean;
+  /** True for the session that made the request. */
+  current: boolean;
+}
+
+export interface SessionList {
+  sessions: SelfSession[];
+}
+
+export interface UpgradeRequest {
+  email: string;
+  password: string;
+  given_name: string;
+  family_name: string;
+}
+
+// ─── Bootstrap types ─────────────────────────────────────────────────────────
+
+export interface BootstrapStatus {
+  /** The deployment has an operator party. */
+  bootstrapped: boolean;
+  /** The OIDC configuration is confirmed (including an opt-out). */
+  oidc_confirmed: boolean;
+}
+
+export type BootstrapOperator =
+  | {
+      kind: 'organization';
+      legal_name: string;
+      legal_form:
+        | 'corporation'
+        | 'llc'
+        | 'partnership'
+        | 'nonprofit'
+        | 'public_body'
+        | 'trust';
+      jurisdiction?: string;
+    }
+  | { kind: 'natural_person' };
+
+export interface BootstrapRequest {
+  operator: BootstrapOperator;
+  admin: {
+    email: string;
+    password: string;
+    given_name: string;
+    family_name: string;
+  };
 }
 
 // ─── Audit ───────────────────────────────────────────────────────────────────
@@ -301,87 +564,489 @@ export interface AuditListResponse {
   total: number;
 }
 
-// ─── Apps ────────────────────────────────────────────────────────────────────
+// ─── Error and action codes ──────────────────────────────────────────────────
 
-export interface App {
-  uuid: string;
-  slug: string;
-  name: string;
-  created_at: string;
-}
+/**
+ * Error codes the client branches on. Other codes pass through on
+ * `ApiRequestError.code` untouched.
+ */
+export const USERS_ERROR_CODES = {
+  invalidCredentials: 'users.invalid_credentials',
+  sessionRevoked: 'users.session_revoked',
+  profileUnavailable: 'users.profile_unavailable',
+  refreshReuse: 'users.refresh_reuse',
+  /** Client-synthesized (status 0): an OIDC handoff was attempted without this tab's verifier. */
+  handoffVerifierMissing: 'handoff_verifier_missing',
+} as const;
 
-export interface AppListResponse {
-  apps: App[];
-  total: number;
-}
+/** The action-required code that starts the step-up flow. */
+export const STEP_UP_REQUIRED_ACTION = 'users.step_up_required';
 
-export interface AppMember {
-  user_uuid: string;
-  email: string;
-  given_name: string;
-  family_name: string;
-  role: string;
-  added_at: string;
-}
+/** 401 codes that mean the session is dead for good: the tab signs out. */
+const SIGN_OUT_CODES: ReadonlySet<string> = new Set([
+  USERS_ERROR_CODES.sessionRevoked,
+  USERS_ERROR_CODES.refreshReuse,
+]);
 
-export interface AppMembersResponse {
-  members: AppMember[];
+// ─── Step-up handler ─────────────────────────────────────────────────────────
+
+/** What the registered step-up handler is told when a request needs a step-up. */
+export interface StepUpRequest {
+  /** The `409 users.step_up_required` action that interrupted the request. */
+  error: ApiActionRequiredError;
 }
 
 /**
- * Body for `POST /v1/apps` and (as `Partial`) `PUT /v1/apps/{uuid}`. Both
- * fields are required on create; the server treats a blank field on update as
- * "leave unchanged".
+ * Prompts the user for a step-up (password, emailed code or OIDC) and resolves
+ * with the FRESH access token the step-up call returned. The client then
+ * retries the interrupted request once with it. Reject (for example when the
+ * user cancels) to abandon the retry: the original `ApiActionRequiredError`
+ * propagates to the caller.
+ *
+ * The step-up calls (`client.session.stepUp.*`) already store the fresh token
+ * for the tab, so the handler only has to pass `response.access_token` along.
+ * One handler call serves every request that hits the 409 concurrently.
  */
-export interface CreateAppRequest {
-  slug: string;
-  name: string;
+export interface StepUpHandler {
+  (request: StepUpRequest): Promise<string>;
 }
 
-export interface AddAppMemberRequest {
-  user_uuid: string;
-  /** Role names to assign; the server accepts an array (possibly empty). */
-  roles?: string[];
+let stepUpHandler: StepUpHandler | null = null;
+let stepUpInFlight: Promise<string> | null = null;
+
+/**
+ * Registers (or with `null` clears) the step-up handler. There is one slot per
+ * page; the auth context's `registerStepUpHandler` / `useStepUpHandler` wrap
+ * this. A later registration replaces an earlier one. Returns an unregister
+ * function that clears the slot only if it still holds this handler, so a
+ * stale cleanup cannot remove a newer registration.
+ */
+export function setStepUpHandler(handler: StepUpHandler | null): () => void {
+  stepUpHandler = handler;
+  return () => {
+    // Skip when another registration replaced this one in the meantime.
+    if (stepUpHandler === handler) stepUpHandler = null;
+  };
 }
 
-// ─── SSH keys ────────────────────────────────────────────────────────────────
-
-export interface SSHKey {
-  uuid: string;
-  /** Kept as `string` (not a closed union) so a server-side allow-list change cannot break typing. */
-  key_type: string;
-  fingerprint: string;
-  public_key: string;
-  label: string;
-  created_at: string;
+/** Runs the handler once for all concurrent callers. */
+function runStepUp(error: ApiActionRequiredError): Promise<string> {
+  // Callers arriving while a prompt is open share it: asking the user to step
+  // up N times for N parallel requests would be both noisy and unnecessary,
+  // since one fresh token serves them all.
+  if (stepUpInFlight) return stepUpInFlight;
+  const handler = stepUpHandler;
+  if (!handler) return Promise.reject(error);
+  const pending = handler({ error }).finally(() => {
+    // Always release the slot, resolved or rejected, so the next 409 can prompt.
+    stepUpInFlight = null;
+  });
+  stepUpInFlight = pending;
+  return pending;
 }
 
-export interface SSHKeyListResponse {
-  items: SSHKey[];
-  total: number;
+// ─── Tab session events ──────────────────────────────────────────────────────
+
+/** Why the tab's session ended without the user asking. */
+export type SignOutReason =
+  | 'session_revoked'
+  | 'refresh_reuse'
+  | 'unauthenticated';
+
+/**
+ * Tab-session changes the auth context mirrors into React state. The request
+ * layer cannot touch React, so it publishes here.
+ */
+export type SessionEvent =
+  /** A token response was committed to this tab's storage. */
+  | { type: 'token_response'; response: TokenResponse }
+  /** The tab's tokens were cleared because the session ended. */
+  | { type: 'signed_out'; reason: SignOutReason }
+  /** A call answered `401 users.profile_unavailable`. */
+  | {
+      type: 'profile_unavailable';
+      /** The profile the lock refers to, when known. */
+      profileUuid: string | null;
+      /** The lock reason (`error.details[0].code`), or `''` when absent. */
+      reason: string;
+    };
+
+type SessionListener = (event: SessionEvent) => void;
+const sessionListeners = new Set<SessionListener>();
+
+/** Subscribes to tab-session events; returns the unsubscribe function. */
+export function subscribeSessionEvents(listener: SessionListener): () => void {
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+  };
 }
 
-export interface RegisterSSHKeyRequest {
-  public_key: string;
-  label?: string | null;
+function emitSessionEvent(event: SessionEvent): void {
+  // Iterate a copy: a listener may unsubscribe (or subscribe) while handling.
+  for (const listener of [...sessionListeners]) {
+    try {
+      listener(event);
+    } catch (err) {
+      // One broken subscriber must not stop the others or fail the request
+      // that produced the event.
+      console.error('[api] session event listener threw', err);
+    }
+  }
 }
 
-/** Response of `POST /v1/self/credential/step-up/verify`. */
-export interface StepUpVerifyResponse {
-  step_up_token: string;
-  expires_in: number;
+/**
+ * Writes a token response into this tab's storage and publishes it. Every
+ * client method that returns a `TokenResponse` goes through here, so storage
+ * and the auth context can never disagree about the tab's session.
+ */
+export function commitTokenResponse(response: TokenResponse): void {
+  // A non-null refresh token is a new lineage (sign-in, fork) or a rotation;
+  // either way the old one is spent. A null means "none minted" (switch,
+  // step-up, impersonation) and the tab keeps the lineage it has.
+  if (response.refresh_token) {
+    setStoredRefreshToken(response.refresh_token);
+  }
+  if (response.access_token) {
+    setStoredToken(response.access_token);
+  } else {
+    // `selection_required`: no acting profile, so no usable access token. Keep
+    // no stale one around, or requests would silently act as an old profile.
+    clearStoredToken();
+  }
+  // An impersonation token acts as the target profile, but the refresh grant
+  // must keep naming the administrator's own profile, because the refresh
+  // token belongs to the administrator's lineage. So an impersonating
+  // response never overwrites the stored profile.
+  const impersonating = response.session?.impersonating === true;
+  if (!impersonating) {
+    if (response.profile) {
+      setStoredProfileUuid(response.profile.uuid);
+    } else if (response.refresh_token) {
+      // A fresh lineage with no landing profile: the profile from an earlier
+      // session in this tab would be wrong for the new one.
+      clearStoredProfileUuid();
+    }
+  }
+  emitSessionEvent({ type: 'token_response', response });
 }
 
-/** Optional step-up proof for a step-up-gated call (sent as `X-Step-Up-Token`). */
-export interface StepUpOptions {
-  stepUpToken?: string;
+/**
+ * Ends the tab's session locally: clears every token, tells subscribers, then
+ * runs the configured unauthenticated handler (the one place the library
+ * navigates). The server session is already dead or unreachable by the time
+ * this runs, so no logout call is made.
+ */
+function endTabSession(reason: SignOutReason): void {
+  clearStoredSession();
+  emitSessionEvent({ type: 'signed_out', reason });
+  handleUnauthenticated();
 }
 
-/** Builds the `X-Step-Up-Token` header only when a non-empty token is supplied. */
-function stepUpHeaders(options?: StepUpOptions): Record<string, string> | undefined {
-  return options?.stepUpToken
-    ? { 'X-Step-Up-Token': options.stepUpToken }
-    : undefined;
+// ─── Refresh lineage ─────────────────────────────────────────────────────────
+
+let refreshInFlight: Promise<void> | null = null;
+
+/**
+ * Rotates this tab's refresh token and stores the new access token, at most
+ * one rotation in flight per tab: a second rotation of the same refresh token
+ * would trip the server's reuse detection and revoke the whole session.
+ *
+ * `sentToken` is the access token the failing request carried. If the stored
+ * token differs, another request already refreshed after this one was sent,
+ * so there is nothing to rotate: the caller just retries with the new token.
+ */
+function refreshTabToken(
+  sentToken: string | null,
+  resolveBaseUrl: () => string,
+): Promise<void> {
+  if (getStoredToken() !== sentToken) return Promise.resolve();
+  // Concurrent callers share the one rotation (see above).
+  if (refreshInFlight) return refreshInFlight;
+  const pending = doRefresh(resolveBaseUrl).finally(() => {
+    // Release in both outcomes so a later expiry can refresh again.
+    refreshInFlight = null;
+  });
+  refreshInFlight = pending;
+  return pending;
+}
+
+async function doRefresh(resolveBaseUrl: () => string): Promise<void> {
+  const refreshToken = getStoredRefreshToken();
+  const profileUuid = getStoredProfileUuid();
+  if (!refreshToken || !profileUuid) {
+    // No lineage to refresh (or no profile to name): the session cannot be
+    // repaired, so this is a sign-out, not an error to retry.
+    endTabSession('unauthenticated');
+    throw new ApiRequestError(
+      'unauthenticated',
+      'Authentication required',
+      401,
+    );
+  }
+  const body: RefreshTokenRequest = {
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    profile_uuid: profileUuid,
+  };
+  let response: TokenResponse;
+  try {
+    response = await execute<TokenResponse>(
+      resolveBaseUrl,
+      '/v1/auth/token',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        // The refresh call must never recurse into refresh or step-up.
+        skipAuthRedirect: true,
+        skipStepUp: true,
+        profileUuid,
+      },
+      { refreshed: true, steppedUp: true },
+    );
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 401) {
+      if (err.code === USERS_ERROR_CODES.profileUnavailable) {
+        // The lock event was already published by `execute`. The refresh
+        // token stays usable (the server does not spend it), so keep the
+        // tokens: the user can pick another profile with `selectProfile`.
+        throw err;
+      }
+      // A revoked session, a reused token, or a refresh token the server no
+      // longer knows: the lineage is dead for good.
+      endTabSession(signOutReasonFor(err.code));
+    }
+    // Network and server errors keep the tokens: the failure may be transient.
+    throw err;
+  }
+  if (!response.access_token) {
+    // A refresh with a named profile must yield an access token; treating the
+    // answer as success would leave the retry without credentials.
+    throw new ApiRequestError(
+      'invalid_token_response',
+      'The refresh answered without an access token.',
+      0,
+    );
+  }
+  commitTokenResponse(response);
+}
+
+function signOutReasonFor(code: string): SignOutReason {
+  if (code === USERS_ERROR_CODES.refreshReuse) return 'refresh_reuse';
+  if (code === USERS_ERROR_CODES.sessionRevoked) return 'session_revoked';
+  return 'unauthenticated';
+}
+
+// ─── Request pipeline ────────────────────────────────────────────────────────
+
+/** Per-call retry flags: each repair is attempted at most once per call. */
+interface AttemptState {
+  refreshed: boolean;
+  steppedUp: boolean;
+}
+
+/** Reads a JSON body, or undefined when absent or unparseable. */
+async function readBody(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    // A missing or malformed body falls through to the generic error path.
+    return undefined;
+  }
+}
+
+function toRequestError(
+  status: number,
+  body: unknown,
+  fallbackCode: string,
+  fallbackMessage: string,
+): ApiRequestError {
+  let code = fallbackCode;
+  let message = fallbackMessage;
+  let details: FieldErrorData[] | undefined;
+  const apiError = extractApiError(body);
+  if (apiError) {
+    code = apiError.code;
+    message = apiError.message;
+    if (apiError.details !== undefined) {
+      if (isFieldErrorDataArray(apiError.details)) {
+        details = apiError.details;
+      } else {
+        // Malformed body: degrade gracefully (treat details as absent)
+        // rather than passing through a shape that could crash a
+        // FieldError/ErrorBanner render downstream.
+        console.error(
+          '[api] malformed error.details in response body',
+          apiError.details,
+        );
+      }
+    }
+  }
+  return new ApiRequestError(code, message, status, details);
+}
+
+async function execute<T>(
+  resolveBaseUrl: () => string,
+  path: string,
+  options: RequestOptions,
+  state: AttemptState,
+): Promise<T> {
+  const {
+    skipAuthRedirect = false,
+    skipStepUp = false,
+    accessToken: explicitToken,
+    profileUuid,
+    allowStateCookie = false,
+    ...fetchOptions
+  } = options;
+  // An explicit token (the fork call) stands in for the tab's own.
+  const sentToken = explicitToken ?? getStoredToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(fetchOptions.headers as Record<string, string> | undefined),
+  };
+  if (sentToken) {
+    headers['Authorization'] = `Bearer ${sentToken}`;
+  }
+
+  let response: Response;
+  try {
+    // `credentials` is applied after the caller's init so nothing but the
+    // explicit `allowStateCookie` flag can switch ambient cookies back on:
+    // the token travels only as `Authorization: Bearer`. The flag exists for
+    // the two OIDC authorize-URL start calls (see `startRedirectFlow`).
+    response = await fetch(`${resolveBaseUrl()}${path}`, {
+      ...fetchOptions,
+      headers,
+      credentials: allowStateCookie ? 'include' : 'omit',
+    });
+  } catch (err) {
+    // Network error — API is unreachable.
+    console.error(`[api] Network error: ${path}`, err);
+    throw new ApiRequestError(
+      'network_error',
+      'Could not reach the API server. Is it running?',
+      0,
+    );
+  }
+
+  if (response.status === 401) {
+    const body = await readBody(response);
+    const failure = toRequestError(
+      401,
+      body,
+      'unauthenticated',
+      'Authentication required',
+    );
+
+    if (failure.code === USERS_ERROR_CODES.profileUnavailable) {
+      // The session is alive but the acting profile is locked. This is not an
+      // expiry: refreshing would fail the same way, and the tokens stay valid
+      // for choosing another profile. Publish the lock for the UI and surface
+      // the error; the lock reason is the first detail's code.
+      emitSessionEvent({
+        type: 'profile_unavailable',
+        profileUuid: profileUuid ?? getStoredProfileUuid(),
+        reason: failure.details?.[0]?.code ?? '',
+      });
+      throw failure;
+    }
+
+    if (skipAuthRedirect || explicitToken !== undefined) {
+      // The caller handles this 401 itself (bad credentials, a foreign token,
+      // the refresh call): no refresh, no sign-out. The throw is unconditional
+      // and relied upon by those callers.
+      throw failure;
+    }
+
+    if (SIGN_OUT_CODES.has(failure.code)) {
+      // Revoked or reused: the server killed the session, so refreshing is
+      // pointless and any retained token is a liability. Sign the tab out.
+      endTabSession(signOutReasonFor(failure.code));
+      throw failure;
+    }
+
+    if (!state.refreshed && getStoredRefreshToken()) {
+      // An expired or missing access token with a lineage to draw on: rotate
+      // once and replay. `refreshed` makes a second 401 fall through to the
+      // sign-out below instead of looping.
+      await refreshTabToken(sentToken, resolveBaseUrl);
+      return execute<T>(
+        resolveBaseUrl,
+        path,
+        options,
+        { ...state, refreshed: true },
+      );
+    }
+
+    // No lineage, or the replay still failed: the tab is unauthenticated.
+    endTabSession('unauthenticated');
+    throw failure;
+  }
+
+  if (!response.ok) {
+    // Parse the body once, then inspect the top-level member before
+    // classifying: a body carrying `action` is a flow-control signal, not
+    // an error, and MUST NEVER be thrown as ApiRequestError. This
+    // short-circuit must run before any error-body handling below.
+    const body = await readBody(response);
+
+    const action = extractApiAction(body);
+    if (action) {
+      const actionError = new ApiActionRequiredError(
+        action.code,
+        action.message,
+        sanitizeActionPath(action.path),
+        response.status,
+        action.data,
+      );
+      if (
+        action.code === STEP_UP_REQUIRED_ACTION &&
+        !skipStepUp &&
+        !state.steppedUp &&
+        stepUpHandler
+      ) {
+        // A handler is registered, so the user can raise the session's
+        // assurance in place; replay once with the fresh token. `steppedUp`
+        // stops a repeated 409 from prompting forever.
+        let fresh: string;
+        try {
+          fresh = await runStepUp(actionError);
+        } catch {
+          // The user cancelled or the step-up failed: the original action
+          // is what the caller needs to see, not the handler's rejection.
+          throw actionError;
+        }
+        if (!fresh) throw actionError;
+        // The step-up calls store their own token; storing again covers a
+        // handler that obtained the token another way, and is a no-op
+        // otherwise.
+        if (fresh !== getStoredToken()) setStoredToken(fresh);
+        return execute<T>(
+          resolveBaseUrl,
+          path,
+          options,
+          { ...state, steppedUp: true },
+        );
+      }
+      // No handler (or already retried, or a step-up route): the caller
+      // decides what to do with the action.
+      throw actionError;
+    }
+
+    throw toRequestError(
+      response.status,
+      body,
+      'unknown_error',
+      `Request failed with status ${response.status}`,
+    );
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json() as Promise<T>;
 }
 
 // ─── Client factory ──────────────────────────────────────────────────────────
@@ -394,8 +1059,21 @@ export interface UsersClientOptions {
   baseUrl: string | (() => string);
 }
 
+function jsonBody(data: unknown): Pick<RequestInit, 'method' | 'body'> {
+  return { method: 'POST', body: JSON.stringify(data) };
+}
+
+/** A path segment from a caller-supplied identifier. */
+const seg = (value: string): string => encodeURIComponent(value);
+
 /**
  * Creates a bound users-module API client.
+ *
+ * Every request sends `Authorization: Bearer <this tab's access token>` and
+ * `credentials: 'omit'`. A 401 that is not a revocation triggers one shared
+ * refresh and a single replay; a `409 users.step_up_required` consults the
+ * handler registered with `setStepUpHandler` and replays once. Methods that
+ * return a `TokenResponse` also commit it to this tab's storage.
  *
  * Usage (in the consuming app):
  * ```ts
@@ -407,107 +1085,51 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
   const resolveBaseUrl = (): string =>
     typeof baseUrl === 'function' ? baseUrl() : baseUrl;
 
-  function getToken(): string | null {
-    return getStoredToken();
+  function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    return execute<T>(resolveBaseUrl, path, options, {
+      refreshed: false,
+      steppedUp: false,
+    });
   }
 
-  async function request<T>(
+  /** `request` for a call that answers a `TokenResponse`: commits it, returns it. */
+  async function tokenRequest<T extends TokenResponse = TokenResponse>(
     path: string,
     options: RequestOptions = {},
   ): Promise<T> {
-    const { skipAuthRedirect = false, ...fetchOptions } = options;
-    const token = getToken();
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...fetchOptions.headers,
-    };
+    const response = await request<T>(path, options);
+    commitTokenResponse(response);
+    return response;
+  }
 
-    if (token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
-    }
-
-    let response: Response;
-    try {
-      response = await fetch(`${resolveBaseUrl()}${path}`, {
-        ...fetchOptions,
-        headers,
-      });
-    } catch (err) {
-      // Network error — API is unreachable.
-      console.error(`[api] Network error: ${path}`, err);
-      throw new ApiRequestError(
-        'network_error',
-        'Could not reach the API server. Is it running?',
-        0,
-      );
-    }
-
-    if (response.status === 401) {
-      if (!skipAuthRedirect) {
-        handleUnauthenticated();
-      }
-      // Unconditional: this throw is intentional and relied upon even when
-      // skipAuthRedirect suppresses the redirect above — see the
-      // skipAuthRedirect doc comment on RequestOptions. Only the redirect is
-      // skipped; the throw always happens so opted-out callers (e.g. the
-      // OAuth return page) can catch and handle the failure themselves.
-      throw new ApiRequestError('unauthenticated', 'Authentication required', 401);
-    }
-
-    if (!response.ok) {
-      // Parse the body once, then inspect the top-level member before
-      // classifying: a body carrying `action` is a flow-control signal, not
-      // an error, and MUST NEVER be thrown as ApiRequestError. This
-      // short-circuit must run before any error-body handling below.
-      let body: unknown;
-      try {
-        body = await response.json();
-      } catch {
-        // ignore JSON parse errors — body stays undefined, falls through to
-        // the generic error path below.
-      }
-
-      const action = extractApiAction(body);
-      if (action) {
-        throw new ApiActionRequiredError(
-          action.code,
-          action.message,
-          sanitizeActionPath(action.path),
-          response.status,
-          action.data,
+  /**
+   * A POST that answers `{authorize_url}` and sets the signed OIDC state
+   * cookie on that response. Browsers drop `Set-Cookie` from a
+   * `credentials: 'omit'` fetch, so these two calls (OIDC link and OIDC
+   * step-up start) are the library's only requests that include credentials.
+   * The cookie is the callback's anti-forgery state, not an authentication
+   * cookie: no route reads authentication from a cookie, and the call still
+   * carries the Bearer token.
+   */
+  function startRedirectFlow(
+    path: string,
+    returnPath: string | undefined,
+  ): Promise<AuthorizeURL> {
+    let target = path;
+    if (returnPath !== undefined) {
+      if (!isSafeReturnPath(returnPath)) {
+        // Refuse before any network call: the server would refuse it too,
+        // and an unsafe value must never reach a redirect.
+        return Promise.reject(
+          new TypeError('returnPath must be a safe site-relative path'),
         );
       }
-
-      let errorCode = 'unknown_error';
-      let errorMessage = `Request failed with status ${response.status}`;
-      let errorDetails: FieldErrorData[] | undefined;
-      const apiError = extractApiError(body);
-      if (apiError) {
-        errorCode = apiError.code;
-        errorMessage = apiError.message;
-        const { details } = apiError;
-        if (details !== undefined) {
-          if (isFieldErrorDataArray(details)) {
-            errorDetails = details;
-          } else {
-            // Malformed body: degrade gracefully (treat details as absent)
-            // rather than passing through a shape that could crash a
-            // FieldError/ErrorBanner render downstream.
-            console.error(
-              '[api] malformed error.details in response body',
-              details,
-            );
-          }
-        }
-      }
-      throw new ApiRequestError(errorCode, errorMessage, response.status, errorDetails);
+      target += `?return=${encodeURIComponent(returnPath)}`;
     }
-
-    if (response.status === 204) {
-      return undefined as T;
-    }
-
-    return response.json() as Promise<T>;
+    return request<AuthorizeURL>(target, {
+      method: 'POST',
+      allowStateCookie: true,
+    });
   }
 
   return {
@@ -517,31 +1139,43 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
     },
 
     auth: {
-      login: (email: string, password: string) =>
-        request<LoginResponse>('/v1/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email, password }),
-          // 401 here means wrong email or password (login.go), not an expired session.
+      /** `POST /v1/auth/register` — 201 with the new session's token response. */
+      register: (data: RegisterRequest) =>
+        tokenRequest('/v1/auth/register', {
+          ...jsonBody(data),
+          // A 401 here is never an expired session.
           skipAuthRedirect: true,
         }),
 
-      register: (data: RegisterRequest) =>
-        request<RegisterResponse>('/v1/auth/register', {
-          method: 'POST',
-          body: JSON.stringify(data),
+      /**
+       * `POST /v1/auth/login`. `access_token` is null and `selection_required`
+       * true when no landing profile was found.
+       */
+      login: (email: string, password: string, options: LoginOptions = {}) =>
+        tokenRequest('/v1/auth/login', {
+          ...jsonBody({ email, password, ...options }),
+          // 401 here means wrong email or password, not an expired session.
+          skipAuthRedirect: true,
+          profileUuid: options.profile_uuid,
+        }),
+
+      /** `POST /v1/auth/anonymous` — guest sign-in (201 new guest, 200 returning). */
+      anonymous: (data: AnonymousRequest) =>
+        tokenRequest<AnonymousTokenResponse>('/v1/auth/anonymous', {
+          ...jsonBody(data),
+          skipAuthRedirect: true,
         }),
 
       forgotPassword: (data: ForgotPasswordRequest) =>
         request<void>('/v1/auth/password-reset/request', {
-          method: 'POST',
-          body: JSON.stringify(data),
+          ...jsonBody(data),
+          skipAuthRedirect: true,
         }),
 
       resetPassword: (data: ResetPasswordRequest) =>
         request<void>('/v1/auth/password-reset/confirm', {
-          method: 'POST',
-          body: JSON.stringify(data),
-          // 401 here means an invalid or expired reset token (reset.go), not an expired session.
+          ...jsonBody(data),
+          // 401 here means an invalid or expired reset token, not an expired session.
           skipAuthRedirect: true,
         }),
 
@@ -550,161 +1184,297 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
         options?: Pick<RequestOptions, 'skipAuthRedirect'>,
       ) =>
         request<void>('/v1/auth/email-code/request', {
-          method: 'POST',
-          body: JSON.stringify(data),
+          ...jsonBody(data),
           ...options,
         }),
 
       verifyEmailCode: (data: EmailCodeVerifyRequest) =>
-        request<LoginResponse>('/v1/auth/email-code/verify', {
+        tokenRequest('/v1/auth/email-code/verify', {
+          ...jsonBody(data),
+          // 401 here means a wrong, expired, or unknown-user code.
+          skipAuthRedirect: true,
+          profileUuid: data.profile_uuid,
+        }),
+
+      /**
+       * `POST /v1/auth/token` with the `refresh_token` grant: rotates the
+       * supplied refresh token and issues an access token for the named
+       * profile. Used by `selectProfile`; ordinary expiry is refreshed
+       * automatically by the request pipeline.
+       */
+      token: (data: RefreshTokenRequest) =>
+        tokenRequest('/v1/auth/token', {
+          ...jsonBody(data),
+          // The grant carries its own credential; never refresh around it.
+          skipAuthRedirect: true,
+          skipStepUp: true,
+          profileUuid: data.profile_uuid,
+        }),
+
+      /**
+       * `POST /v1/auth/handoff` — exchanges the one-time OIDC `#handoff=`
+       * code, with the verifier behind the challenge this tab sent at OIDC
+       * start, for a token response. Prefer the auth context's
+       * `completeHandoff`, which supplies and clears the stored verifier.
+       */
+      handoff: (code: string, verifier: string) =>
+        tokenRequest('/v1/auth/handoff', {
+          ...jsonBody({ code, verifier }),
+          skipAuthRedirect: true,
+        }),
+
+      /** `GET /v1/auth/providers` — never throws; see {@link fetchProviders}. */
+      providers: (): Promise<OIDCProvider[]> => fetchProviders(),
+
+      /**
+       * Begins an OIDC sign-in: creates this tab's handoff verifier, stores
+       * it, and resolves with the URL of `GET /v1/auth/oidc/{provider}/start`
+       * carrying the verifier's SHA-256 challenge (and the optional return
+       * path). The caller navigates the browser to it (the route answers with
+       * a redirect, so it cannot be a fetch).
+       */
+      oidcStart: async (
+        provider: string,
+        options: { returnPath?: string } = {},
+      ): Promise<string> => {
+        const { returnPath } = options;
+        if (returnPath !== undefined && !isSafeReturnPath(returnPath)) {
+          // Reject before storing a verifier or building a URL: an unsafe
+          // return value must never be forwarded to the server.
+          throw new TypeError('returnPath must be a safe site-relative path');
+        }
+        const challenge = await beginHandoff();
+        const query = new URLSearchParams({ handoff_challenge: challenge });
+        if (returnPath !== undefined) query.set('return', returnPath);
+        return `${resolveBaseUrl()}/v1/auth/oidc/${seg(provider)}/start?${query.toString()}`;
+      },
+    },
+
+    session: {
+      /** `GET /v1/session` — the session, acting profile and profile list. */
+      get: (options?: Pick<RequestOptions, 'skipAuthRedirect'>) =>
+        request<SessionInfo>('/v1/session', options),
+
+      /**
+       * `POST /v1/session/switch` — a new access token acting as another
+       * profile of the same session. Replaces only this tab's access token and
+       * active profile (no refresh token is minted).
+       */
+      switch: (profileUuid: string) =>
+        tokenRequest('/v1/session/switch', {
+          ...jsonBody({ profile_uuid: profileUuid }),
+          profileUuid,
+        }),
+
+      /**
+       * `POST /v1/session/fork` — a new refresh lineage for this tab, using
+       * an access token handed over by a sibling tab (the caller's own tab
+       * has none yet).
+       */
+      fork: (options: { accessToken: string }) =>
+        tokenRequest('/v1/session/fork', {
           method: 'POST',
+          accessToken: options.accessToken,
+        }),
+
+      stepUp: {
+        /** `POST /v1/session/step-up/password` — returns a fresh access token. */
+        password: (password: string) =>
+          tokenRequest('/v1/session/step-up/password', {
+            ...jsonBody({ password }),
+            // A wrong password is the same 409 action; it is not a prompt.
+            skipStepUp: true,
+          }),
+
+        /** `POST /v1/session/step-up/email-code/request` — emails a code (204). */
+        requestEmailCode: (email?: string) =>
+          request<void>('/v1/session/step-up/email-code/request', {
+            ...jsonBody(email ? { email } : {}),
+            skipStepUp: true,
+          }),
+
+        /** `POST /v1/session/step-up/email-code/verify` — returns a fresh access token. */
+        verifyEmailCode: (code: string, email?: string) =>
+          tokenRequest('/v1/session/step-up/email-code/verify', {
+            ...jsonBody(email ? { code, email } : { code }),
+            skipStepUp: true,
+          }),
+
+        /**
+         * `POST /v1/session/step-up/oidc/{provider}/start` — resolves with the
+         * provider's authorize URL; the caller navigates the browser to it.
+         */
+        startOidc: (provider: string, returnPath?: string) =>
+          startRedirectFlow(
+            `/v1/session/step-up/oidc/${seg(provider)}/start`,
+            returnPath,
+          ),
+      },
+
+      /**
+       * `POST /v1/session/logout` — revokes the session and its lineages.
+       * Does not touch local storage; the auth context's `logout` does.
+       */
+      logout: () =>
+        request<void>('/v1/session/logout', {
+          method: 'POST',
+          // An already-dead session is a successful logout, not a failure to
+          // redirect on.
+          skipAuthRedirect: true,
+        }),
+    },
+
+    me: {
+      get: (options?: Pick<RequestOptions, 'skipAuthRedirect'>) =>
+        request<UserView>('/v1/me', options),
+      update: (data: UpdateMeRequest) =>
+        request<UserView>('/v1/me', {
+          method: 'PUT',
           body: JSON.stringify(data),
-          // 401 here means a wrong, expired, or unknown-user code (emailcode.go), not an expired session.
+        }),
+
+      profiles: {
+        list: () => request<ProfileList>('/v1/me/profiles'),
+        /** Accepts an invitation; resolves with the profile as this session sees it. */
+        accept: (uuid: string) =>
+          request<ProfileView>(`/v1/me/profiles/${seg(uuid)}/accept`, {
+            method: 'POST',
+          }),
+        decline: (uuid: string) =>
+          request<void>(`/v1/me/profiles/${seg(uuid)}/decline`, {
+            method: 'POST',
+          }),
+        leave: (uuid: string) =>
+          request<void>(`/v1/me/profiles/${seg(uuid)}/leave`, {
+            method: 'POST',
+          }),
+      },
+
+      identifiers: {
+        list: () => request<IdentifierList>('/v1/me/identifiers'),
+        add: (data: AddIdentifierRequest) =>
+          request<IdentifierView>('/v1/me/identifiers', jsonBody(data)),
+        /** Verifies an identifier with the emailed code. */
+        verify: (uuid: string, code: string) =>
+          request<IdentifierView>(`/v1/me/identifiers/${seg(uuid)}/verify`, {
+            ...jsonBody({ code }),
+          }),
+        /** Emails a verification code (204). */
+        resendVerification: (uuid: string) =>
+          request<void>(`/v1/me/identifiers/${seg(uuid)}/verification`, {
+            method: 'POST',
+          }),
+        setPrimary: (uuid: string) =>
+          request<IdentifierView>(`/v1/me/identifiers/${seg(uuid)}/primary`, {
+            method: 'PUT',
+          }),
+        delete: (uuid: string) =>
+          request<void>(`/v1/me/identifiers/${seg(uuid)}`, {
+            method: 'DELETE',
+          }),
+      },
+
+      credentials: {
+        list: () => request<CredentialList>('/v1/me/credentials'),
+        addPassword: (data: AddPasswordRequest) =>
+          request<CredentialView>('/v1/me/credentials/password', jsonBody(data)),
+        addSshKey: (data: AddSSHKeyRequest) =>
+          request<CredentialView>(
+            '/v1/me/credentials/ssh-keys',
+            jsonBody(data),
+          ),
+        /**
+         * `POST /v1/me/credentials/oidc/{provider}/start` — resolves with the
+         * provider's authorize URL for linking; the caller navigates to it.
+         */
+        startOidcLink: (provider: string, returnPath?: string) =>
+          startRedirectFlow(
+            `/v1/me/credentials/oidc/${seg(provider)}/start`,
+            returnPath,
+          ),
+        /** Updates the label and/or landing profile (`null` clears the latter). */
+        patch: (uuid: string, data: PatchCredentialRequest) =>
+          request<CredentialView>(`/v1/me/credentials/${seg(uuid)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+          }),
+        /** Revokes a credential; the last interactive one is `409 users.last_credential`. */
+        delete: (uuid: string) =>
+          request<void>(`/v1/me/credentials/${seg(uuid)}`, {
+            method: 'DELETE',
+          }),
+      },
+
+      sessions: {
+        list: () => request<SessionList>('/v1/me/sessions'),
+        revoke: (uuid: string) =>
+          request<void>(`/v1/me/sessions/${seg(uuid)}`, { method: 'DELETE' }),
+      },
+
+      /** `POST /v1/me/upgrade` — turns the calling guest into a registered user. */
+      upgrade: (data: UpgradeRequest) =>
+        request<UserView>('/v1/me/upgrade', jsonBody(data)),
+    },
+
+    impersonations: {
+      /**
+       * `POST /v1/impersonations` — starts an impersonation of a profile. The
+       * tab then holds the impersonation access token; its refresh lineage
+       * and stored profile stay the administrator's own.
+       */
+      start: (data: StartImpersonationRequest) =>
+        tokenRequest('/v1/impersonations', jsonBody(data)),
+
+      /** `POST /v1/impersonations/current/renew` — extends the impersonation. */
+      renew: () =>
+        tokenRequest('/v1/impersonations/current/renew', { method: 'POST' }),
+
+      /**
+       * `DELETE /v1/impersonations/current` — ends the impersonation, then
+       * restores the administrator's own access token with the tab's refresh
+       * lineage.
+       */
+      end: async (): Promise<void> => {
+        await request<void>('/v1/impersonations/current', { method: 'DELETE' });
+        // The impersonation token is now dead; swap back to the
+        // administrator's own token. Force the rotation by passing the
+        // current token as the "sent" one.
+        if (getStoredRefreshToken()) {
+          await refreshTabToken(getStoredToken(), resolveBaseUrl);
+        } else {
+          // Nothing to restore from: the tab can only sign out.
+          endTabSession('unauthenticated');
+        }
+      },
+    },
+
+    bootstrap: {
+      /** `GET /v1/bootstrap/status` — public. */
+      status: () =>
+        request<BootstrapStatus>('/v1/bootstrap/status', {
           skipAuthRedirect: true,
         }),
 
       /**
-       * Marks the address verified using the emailed code (`purpose:
-       * 'verify_email'`); the backend answers `204 No Content` (no token).
-       * Passes `skipAuthRedirect` because a wrong or expired code is a `401`
-       * that must not clear the session or redirect to login.
+       * `POST /v1/bootstrap` — first-run bootstrap with the setup token
+       * (sent as `X-Setup-Token`, never stored or logged). 201 with a token
+       * response landing on the administrator profile.
        */
-      verifyEmail: (data: { email: string; code: string }) =>
-        request<void>('/v1/auth/email-code/verify', {
-          method: 'POST',
-          body: JSON.stringify({ ...data, purpose: 'verify_email' }),
+      bootstrap: (data: BootstrapRequest, setupToken: string) =>
+        tokenRequest('/v1/bootstrap', {
+          ...jsonBody(data),
+          headers: { 'X-Setup-Token': setupToken },
+          // 401 here is a wrong setup token, not an expired session.
           skipAuthRedirect: true,
         }),
-    },
-
-    self: {
-      get: (options?: Pick<RequestOptions, 'skipAuthRedirect'>) =>
-        request<UserAccountSelf>('/v1/self', options),
-      update: (data: UpdateProfileRequest) =>
-        request<UserAccountSelf>('/v1/self', {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        }),
-    },
-
-    userAccounts: {
-      list: (query?: string) => {
-        const qs = query ? `?q=${encodeURIComponent(query)}` : '';
-        return request<UserAccountListResponse>(`/v1/user-accounts${qs}`);
-      },
-      get: (uuid: string) => request<UserAccount>(`/v1/user-accounts/${uuid}`),
-      update: (uuid: string, data: UpdateProfileRequest) =>
-        request<UserAccount>(`/v1/user-accounts/${uuid}`, {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        }),
-      grantAdmin: (uuid: string) =>
-        request<UserAccount>(`/v1/user-accounts/${uuid}/admin`, { method: 'POST' }),
-      revokeAdmin: (uuid: string) =>
-        request<UserAccount>(`/v1/user-accounts/${uuid}/admin`, { method: 'DELETE' }),
-      assume: (uuid: string) =>
-        request<LoginResponse>(`/v1/user-accounts/${uuid}/assume`, { method: 'POST' }),
-      audit: (uuid: string) =>
-        request<AuditListResponse>(`/v1/user-accounts/${uuid}/audit`),
     },
 
     audit: {
       list: () => request<AuditListResponse>('/v1/audit'),
       byEntity: (entityUuid: string) =>
-        request<AuditListResponse>(`/v1/audit?entity_uuid=${encodeURIComponent(entityUuid)}`),
-    },
-
-    apps: {
-      list: () => request<AppListResponse>('/v1/apps'),
-      get: (uuid: string) => request<App>(`/v1/apps/${uuid}`),
-      create: (data: CreateAppRequest) =>
-        request<App>('/v1/apps', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        }),
-      update: (uuid: string, data: Partial<CreateAppRequest>) =>
-        request<App>(`/v1/apps/${uuid}`, {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        }),
-      delete: (uuid: string) =>
-        request<void>(`/v1/apps/${uuid}`, { method: 'DELETE' }),
-      getMembers: (uuid: string) =>
-        request<AppMembersResponse>(`/v1/apps/${uuid}/user-accounts`),
-      addMember: (uuid: string, data: AddAppMemberRequest) =>
-        request<void>(`/v1/apps/${uuid}/user-accounts`, {
-          method: 'POST',
-          body: JSON.stringify(data),
-        }),
-      removeMember: (uuid: string, userUuid: string) =>
-        request<void>(`/v1/apps/${uuid}/user-accounts/${userUuid}`, {
-          method: 'DELETE',
-        }),
-    },
-
-    sshKeys: {
-      /**
-       * `GET /v1/self/ssh-keys` - lists the caller's registered SSH keys.
-       */
-      list: (params?: { limit?: number; offset?: number }) => {
-        const qs = new URLSearchParams();
-        if (params?.limit !== undefined) qs.set('limit', String(params.limit));
-        if (params?.offset !== undefined) qs.set('offset', String(params.offset));
-        const query = qs.toString();
-        return request<SSHKeyListResponse>(
-          `/v1/self/ssh-keys${query ? `?${query}` : ''}`,
-        );
-      },
-
-      /**
-       * `POST /v1/self/ssh-keys` - registers a public key. Step-up gated:
-       * when `AUTH_REQUIRE_STEP_UP` is on and no valid `stepUpToken` is
-       * supplied, rejects with `ApiActionRequiredError` code
-       * `users.step_up_required` (409). Rejects with `users.email_unverified`
-       * (action-required) when the account's email is unverified.
-       */
-      register: (data: RegisterSSHKeyRequest, options?: StepUpOptions) =>
-        request<SSHKey>('/v1/self/ssh-keys', {
-          method: 'POST',
-          body: JSON.stringify(data),
-          headers: stepUpHeaders(options),
-        }),
-
-      /**
-       * `DELETE /v1/self/ssh-keys/{keyUuid}` - revokes a key (204, resolves
-       * `void`). Same step-up gating and `users.step_up_required` /
-       * `users.email_unverified` action-required outcomes as `register`.
-       */
-      revoke: (keyUuid: string, options?: StepUpOptions) =>
-        request<void>(`/v1/self/ssh-keys/${encodeURIComponent(keyUuid)}`, {
-          method: 'DELETE',
-          headers: stepUpHeaders(options),
-        }),
-    },
-
-    stepUp: {
-      /**
-       * `POST /v1/self/credential/step-up` - asks the server to send a
-       * step-up code (204, resolves `void`).
-       */
-      request: () =>
-        request<void>('/v1/self/credential/step-up', { method: 'POST' }),
-
-      /**
-       * `POST /v1/self/credential/step-up/verify` - exchanges the emailed
-       * code for a short-lived step-up token. A wrong or expired code is
-       * answered with `401`; this call always passes `skipAuthRedirect: true`
-       * so that 401 surfaces as an `ApiRequestError` (`unauthenticated`)
-       * instead of clearing the session token and redirecting to login.
-       */
-      verify: (code: string) =>
-        request<StepUpVerifyResponse>('/v1/self/credential/step-up/verify', {
-          method: 'POST',
-          body: JSON.stringify({ code }),
-          // A 401 here means "wrong/expired code", not "session expired";
-          // without this flag request() would log the user out.
-          skipAuthRedirect: true,
-        }),
+        request<AuditListResponse>(
+          `/v1/audit?entity_uuid=${encodeURIComponent(entityUuid)}`,
+        ),
     },
   };
 }
@@ -712,11 +1482,11 @@ export function createUsersClient({ baseUrl }: UsersClientOptions) {
 export type UsersClient = ReturnType<typeof createUsersClient>;
 
 // ─── Default singleton (convenience for the embedded AuthProvider) ────────────
-// The library's AuthProvider calls api.self.get() / api.auth.login() etc.
-// internally. It reads the base URL from the environment at module load time
-// so consumers do NOT need to wire in the client themselves — the env var is
-// enough for 95% of use cases. Consumers that need SSR-safe base URL injection
-// can instead use `createUsersClient` directly.
+// The library's AuthProvider calls api.session.get() / api.auth.login() etc.
+// internally. It reads the base URL lazily so consumers do NOT need to wire in
+// the client themselves — the env var is enough for 95% of use cases.
+// Consumers that need SSR-safe base URL injection can instead use
+// `createUsersClient` directly.
 
 /**
  * Computed once at module load.
@@ -742,6 +1512,7 @@ export async function fetchProviders(): Promise<OIDCProvider[]> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/v1/auth/providers`, {
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'omit',
     });
     if (!response.ok) {
       console.error(
