@@ -1701,8 +1701,10 @@ $$;
 -- party_policy_gate_for(...) = 'available': a profile_policy_confirmations row
 -- for (p_profile_id, p_party_id) exempts the credential rule only, never
 -- min_acr. An unknown session, a revoked or unknown credential, or neither id
--- fails closed (false): trusted contexts without a session or credential are
--- the engine's to skip, not this function's.
+-- fails closed (false): this function never exempts any context itself. The
+-- engine (gated() and access_row_permitted) skips the gate only for a marked
+-- system actor that carries no session and no credential; every other context,
+-- including a marked one that carries either, reaches this function.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.session_meets_party_policy(
   p_session_id    BIGINT,
@@ -1898,13 +1900,21 @@ SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
   -- WHY: the single-row prelude skips the owning-party gate for a trusted
-  -- system actor (gated() and opctx.IsSystemActor), and this mirrors it.
-  -- IMPLIES: only IS TRUE exempts. true is bound only for a context built
-  -- with opctx.WithSystemActor (never anonymous, never impersonating); NULL
-  -- (unbound) and false (bound, not a system actor) never exempt and fall
-  -- through to the gate, so they fail closed. Never write IS NOT FALSE or
+  -- system actor (gated() and opctx.IsSystemActor), and this mirrors it,
+  -- including its session/credential condition: SystemActor is an exported
+  -- field, so a mis-built context can carry the marker together with a real
+  -- session or credential, and such a context is gated rather than trusted.
+  -- IMPLIES: only IS TRUE exempts, and only with no session and no credential
+  -- (COALESCE(..., 0) = 0 treats an unbound NULL id as none, matching the Go
+  -- zero value). true is bound only for a context built with
+  -- opctx.WithSystemActor (never anonymous, never impersonating); NULL
+  -- (unbound) and false (bound, not a system actor) never exempt, and a marked
+  -- context with a non-zero session or credential falls through to the gate,
+  -- so all of these fail closed. Never write IS NOT FALSE or
   -- COALESCE(p_system_actor, true) here.
-  IF p_system_actor IS TRUE THEN
+  IF p_system_actor IS TRUE
+     AND COALESCE(p_session_id, 0) = 0
+     AND COALESCE(p_credential_id, 0) = 0 THEN
     RETURN true;
   END IF;
 
