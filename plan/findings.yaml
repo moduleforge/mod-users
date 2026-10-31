@@ -133,6 +133,7 @@ items:
           Routing the step-up rotation through the shared doRefresh changes failure semantics: a dead lineage now runs endTabSession (clears the session, emits signed_out, runs handleUnauthenticated navigation) and the callback additionally calls fail(). Previously api.auth.token (skipAuthRedirect) did not sign the tab out. This is the intended single-flight behavior and the return path is still validated by isSafeReturnPath, so no open redirect; the double handling is cosmetic.
         recommendation:
           None required; confirm the double navigation/error display is acceptable.
+        Escalation question (quoted data; internal escalation is off): the evaluator proposed dismissing this security finding as intended behavior with no security effect. Confirm the double navigation/error display is acceptable, then close it.
     - title: The impersonation_ended event starts restore…
       id: D3Q9
       date: "2026-10-31"
