@@ -560,10 +560,34 @@ export function AuthProvider({
           await api.session.get();
           await api.session.logout();
         } catch (retryErr) {
-          // Refresh or the retried revoke failed (dead lineage, outage): the
-          // logout is then local-only. The server session may outlive this
-          // tab until it expires, but the user is still signed out here.
-          console.error('[auth] logout is local-only; revoke failed', retryErr);
+          if (
+            retryErr instanceof ApiRequestError &&
+            retryErr.code === 'users.impersonation_ended'
+          ) {
+            // WHY: the expired token was an impersonation token, so the
+            // pipeline refused to refresh/replay it (it would run as the
+            // administrator) and dropped it, keeping the administrator's
+            // lineage. IMPLICATION: the administrator session is still alive
+            // server-side; skipping its revoke would leave it open behind a
+            // local sign-out. Restore it (this session.get now refreshes
+            // through the administrator lineage) and revoke it explicitly.
+            try {
+              await api.session.get();
+              await api.session.logout();
+            } catch (adminErr) {
+              // WHY: the restore or revoke failed (dead lineage, outage).
+              // IMPLICATION: local-only logout; local state is cleared below.
+              console.error(
+                '[auth] logout is local-only; administrator revoke failed',
+                adminErr,
+              );
+            }
+          } else {
+            // Refresh or the retried revoke failed (dead lineage, outage): the
+            // logout is then local-only. The server session may outlive this
+            // tab until it expires, but the user is still signed out here.
+            console.error('[auth] logout is local-only; revoke failed', retryErr);
+          }
         }
       } else {
         // An unreachable server must not trap the user in a signed-in UI,
