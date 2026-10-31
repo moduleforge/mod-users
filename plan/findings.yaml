@@ -27,10 +27,10 @@ items:
       id: AMeC
       date: "2026-10-31"
       tags:
-        - type:ambiguity
+        - type:documentation
         - plan/phase:remediation-14
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: The main.go comment at api/cmd/server/main.go:232-237 does not mention CORE_FIELD_KEY_HEX or first-boot-only seed semantics. The task did not ask for a code change, so no change was made. If the manager wants that comment to name the env var, file it as a separate task.
     - title: The new text says the exception covers "the…
       id: Yo85
