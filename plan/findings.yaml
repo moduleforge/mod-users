@@ -227,6 +227,133 @@ items:
           document uuid. A host following the prop docs would send a slug and be refused.
         recommendation:
           Change the prop docs to say uuid (or resolve slug to uuid explicitly if slug is intended).
+    - title: The stepped_up=1 branch calls api.auth.token…
+      id: wafz
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:remediation-11
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/components/oidc-callback-page.tsx
+        lines: 63-84
+        severity: minor
+        confidence: medium
+        concerns: correctness
+        description:
+          The stepped_up=1 branch calls api.auth.token (refresh_token grant) directly, bypassing the module's refreshTabToken single-flight. On this page load AuthProvider hydrates concurrently; if the stored access token is expired, session.get also refreshes through the same rotating refresh token. Two concurrent rotations of one refresh token can trip refresh_reuse, which revokes the whole session and signs the user out after a successful step-up.
+        recommendation:
+          Route the post-step-up rotation through the shared refreshTabToken single-flight (export a helper from api.ts), or skip it when hydration already refreshed.
+    - title: logout on a 401 retries via api.session.get(…
+      id: LdOO
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:remediation-11
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/auth-context.tsx
+        lines: 541-575
+        severity: minor
+        confidence: low
+        concerns: correctness
+        description:
+          logout on a 401 retries via api.session.get() then logout(). While an impersonation token is stored and expired, session.get now throws impersonationEnded (no refresh), so the retry is abandoned and the logout is local-only. The administrator's server session is left alive, which is the case task 001 set out to avoid.
+        recommendation:
+          In the logout catch, treat impersonationEnded as a cue to retry session.get/logout once more (the marker is now cleared), or revoke after restoring the administrator token.
+    - title: On "#stepped_up=1" the callback calls api.au…
+      id: 6qD2
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - plan/phase:remediation-11
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/components/oidc-callback-page.tsx
+        lines: 125-141
+        severity: minor
+        confidence: medium
+        concerns: security
+        description:
+          On "#stepped_up=1" the callback calls api.auth.token with the stored
+          refresh token directly, bypassing the single-flight refreshTabToken guard
+          in api.ts. The mounted AuthProvider hydrate (session.get, which refreshes
+          on a 401 for an expired access token) can rotate the same refresh token
+          concurrently; the second rotation trips server refresh-reuse detection and
+          revokes the whole session. The fragment is attacker-suppliable (a crafted
+          link to the return page with "#stepped_up=1"), so a victim with an expired
+          access token can be induced into a self-inflicted session revocation. No
+          privilege gain and no data exposure.
+        recommendation:
+          Route the post-step-up rotation through the shared refresh path (export a
+          single-flight refresh helper from api.ts) or perform it only after
+          hydration settles (isLoading false). Optionally require a locally recorded
+          pending-step-up marker before honouring "stepped_up=1".
+    - title: 'The impersonation guard is fail-open: an abs…'
+      id: vAo0
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - plan/phase:remediation-11
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/config.ts
+        lines: 489-491
+        severity: minor
+        confidence: medium
+        concerns: security
+        description:
+          The impersonation guard is fail-open: an absent marker reads as "not
+          impersonating", and the marker is learned only from commitTokenResponse
+          and session.get. Paths where the tab can hold an impersonation access
+          token with no marker (a token stored by a custom step-up handler via
+          setStoredToken at api.ts:1151, a changed tokenStorageKey, a request fired
+          on a reload before the first session.get settles, a tab from before this
+          change) fall back to the old refresh-and-replay behaviour, running that
+          request (including a DELETE from end()) as the administrator. Narrow and
+          requires an uncommon state, but the control that matters most here relies
+          on client bookkeeping rather than on the token itself.
+        recommendation:
+          Prefer a fail-closed signal where cheap: have setStoredToken callers set
+          or clear the marker explicitly (api.ts:1151), and gate non-hydration
+          requests until session.get has set the marker on a reloaded tab with a
+          token. If the server issues JWT-style tokens, derive impersonation from
+          the token claims instead of a separate flag.
+    - title: logout while the tab holds an impersonation…
+      id: Bq75
+      date: "2026-10-31"
+      tags:
+        - type:security
+        - plan/phase:remediation-11
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/auth-context.tsx
+        lines: 546-575
+        severity: suggestion
+        confidence: low
+        concerns: security
+        description:
+          logout while the tab holds an impersonation token: the logout 401 retry
+          calls session.get, which (correctly) ends the impersonation and throws
+          impersonation_ended without refreshing. The catch treats this as
+          local-only, so the administrator's server-side session is not revoked
+          although the tab clears its tokens and shows signed out. The administrator
+          refresh lineage stays valid on the server until expiry. No exposure to the
+          page; a hardening gap in the "logout revokes after refresh" intent.
+        recommendation:
+          When the retry fails with impersonation_ended, restore the administrator
+          (the second session.get refreshes) and then call session.logout once more
+          before clearing local state.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
