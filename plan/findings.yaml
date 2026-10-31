@@ -27,6 +27,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: api/internal/server/server.go corsOptions still lists "X-Step-Up-Token" in AllowedHeaders, although the step-up token header no longer exists (step-up is a session factor now). Remove the entry and update any test that pins the header list.
+    - title: Facade lacks input/summary type aliases
+      id: iZ3E
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:doc-updates
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/usersservice/service.go exports CredentialService, DirectoryService and PrincipalSummary but no aliases for inner.IssueAPIKeyInput, inner.IssuedAPIKey (arguments and result of CredentialService.IssueAPIKeyInTx) or inner.ProfileSummary (value of DirectoryService.ProfileSummaries). A module outside api/ cannot name these types, so a caller such as app-mfmanager cannot build the IssueAPIKeyInTx input. Add the three aliases to the facade (AGENTS.md convention: re-export every type a public method takes or returns).'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
