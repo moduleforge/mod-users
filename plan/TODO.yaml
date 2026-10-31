@@ -1589,7 +1589,8 @@ phases:
             - iZ3E
           git:
             branch: plan/identity-model-impl-26-002
-            commit: []
+            commit:
+                - 961ec79a
             merge: null
         - number: 3
           slug: align-cors-options-and-docs
