@@ -1456,7 +1456,7 @@ phases:
           slug: route-step-up-refresh-through-single-flight
           title: Route the OIDC Step-Up Refresh Through the Single-Flight Refresh
           path: phase-24-remediation-12/001-route-step-up-refresh-through-single-flight.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Routed post-step-up rotation through shared per-tab single-flight via new client method; concurrent hydrate test added.
           findings:
