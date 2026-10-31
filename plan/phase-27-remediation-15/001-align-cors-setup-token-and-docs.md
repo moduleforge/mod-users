@@ -29,3 +29,7 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 - Finding EqWE in this plan's `plan/findings.yaml`.
 - Finding Yo85 in this plan's `plan/findings.yaml`.
 - Finding 7Yab in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). Validation: `go test ./internal/server/...` passes and fails with X-Setup-Token removed; `grep 'sign-in and link' docs/cors.md` is empty; both stale Known limits lines removed. Files: api/internal/server/server.go, api/internal/server/cors_test.go, docs/cors.md, docs/consumer-upgrade-notes.md.

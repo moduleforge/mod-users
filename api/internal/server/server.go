@@ -88,7 +88,10 @@ func corsOptions(cfg *config.Config) (cors.Options, bool) {
 		// The retired step-up header is deliberately absent: no route reads it
 		// (step-up rides on the Bearer token), so advertising it would only
 		// widen the preflight surface.
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-App", "X-Request-ID"},
+		// X-Setup-Token is listed because POST /v1/bootstrap and the /v1/oidc-config
+		// writes carry it; without it the browser preflight for those calls fails,
+		// which implies a cross-origin setup client could never complete them.
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-App", "X-Request-ID", "X-Setup-Token"},
 		ExposedHeaders:   []string{"X-Request-ID"},
 		AllowCredentials: !wildcard,
 		MaxAge:           300,
