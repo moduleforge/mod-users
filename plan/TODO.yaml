@@ -416,7 +416,8 @@ phases:
           digest: Scanned mod-users for old-model terms; docs already clean. Fixed 10 stale code comments, left legitimate history matches, reported 3 followups. All build, test, lint and verify checks pass.
           git:
             branch: plan/identity-model-impl-11-001
-            commit: []
+            commit:
+                - f52c194a
             merge: null
         - number: 2
           slug: reconcile-superseded-followups
