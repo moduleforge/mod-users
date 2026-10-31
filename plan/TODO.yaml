@@ -398,7 +398,7 @@ phases:
           tier: sonnet-low
           digest: 'Repository docs reviewed and corrected: removed stale step-up, account-merge and plan-phase references; documented config variables in .env.example; rewrote model/README.md baseline section; removed completed or obsolete next-steps items. Code issues (CORS headers, credentials) recorded as findings. Docs only.'
           git:
-            branch: null
+            branch: plan/identity-model-impl-10-003
             commit: []
             merge: null
     - number: 11
