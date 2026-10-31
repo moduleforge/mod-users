@@ -84,3 +84,9 @@ Suggested role doc: `plugins/flow/roles/tech-writer.md`.
 - After `model/README.md`, `gui/README.md` and the `docs/` files.
 - After `.env.example`, `next-steps.md` and `deploy/`.
 - After `api/openapi.yaml` descriptions.
+
+## Status
+
+- Outcome: succeeded (2026-10-31). Validation: stale-term grep clean except two justified hits; no plan links; env/config parity holds; openapi parses; relative links resolve except docs/mf-standards (uninitialized submodule in worktrees).
+- Changed: `.env.example` (added commented vars read by config.go), `AGENTS.md`, `.claude/CLAUDE.md`, `model/README.md`, `gui/README.md` (checked, no change), `docs/cors.md`, `docs/oidc-troubleshooting.md`, `docs/project-structure.md`, `next-steps.md`, `README.md`, `deploy/local/README.md`, `deploy/k8s/README.md`, `deploy/serverless/README.md`, `api/openapi.yaml`.
+- Open for the manager (not edited here): `api/internal/server/server.go` CORS allow-list still names `X-Step-Up-Token`, and still sets `Allow-Credentials` for explicit origins; `.env.example` `CORE_FIELD_KEY_HEX` is read by no code in this repo.
