@@ -784,6 +784,16 @@ describe('impersonated requests are never replayed as the administrator', () => 
     expect(getStoredToken()).toBe(jwtFixture('admin-access-2'));
   });
 
+  test('refreshAfterStepUp while impersonating issues no token request, keeps the token and signals the skip', async () => {
+    await impersonatingTab();
+    const calls = scriptFetch(() => json(tokenResponse()));
+    const raised = await client.auth.refreshAfterStepUp('imp-access');
+    expect(raised).toBe(false);
+    expect(calls.filter((c) => c.url.endsWith('/v1/auth/token'))).toHaveLength(0);
+    expect(getStoredToken()).toBe('imp-access');
+    expect(getStoredImpersonating()).toBe(true);
+  });
+
   test('a non-impersonating 401 still refreshes and replays', async () => {
     seedTab(jwtFixture('old-access'), 'old-refresh', 'prof-a');
     const calls = scriptFetch((call) => {

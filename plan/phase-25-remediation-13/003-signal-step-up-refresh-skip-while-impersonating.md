@@ -21,3 +21,7 @@ This task addresses findings `LJFE` and `Wstk`. The work targets the plan branch
 
 - Finding `LJFE` in this plan's `plan/findings.yaml`.
 - Finding `Wstk` in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-10-31). `refreshAfterStepUp` now resolves `false` when skipped while impersonating (`true` otherwise); `OidcCallbackPage` fails with a clear message instead of calling `onComplete`. Tests added in `gui/src/lib/api.test.ts` and `gui/src/components/oidc-callback-page.test.tsx`. Validation: `bun test` (458 pass), `bun run typecheck`, `make build.gui`, `make lint.gui` all pass. Source: `gui/src/lib/api.ts`, `gui/src/components/oidc-callback-page.tsx`.

@@ -136,7 +136,17 @@ export function OidcCallbackPage({
             // replayed with the spent token (which would revoke the session),
             // and a rotation that already landed after this page observed
             // its token is not repeated.
-            await api.auth.refreshAfterStepUp(sentToken);
+            const raised = await api.auth.refreshAfterStepUp(sentToken);
+            if (!raised) {
+              // WHY: the tab is impersonating, so the token was deliberately
+              // not refreshed and its assurance is NOT raised. IMPLIES calling
+              // onComplete would resume the interrupted action with the same
+              // token and loop on step_up_required; report instead and stop.
+              fail(
+                'Verification completed, but assurance cannot be raised while impersonating. End the impersonation and try again.',
+              );
+              return;
+            }
           } catch (err) {
             // The step-up itself succeeded but the new token could not be
             // obtained: report it rather than returning with stale assurance.
