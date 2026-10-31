@@ -152,3 +152,10 @@ architectural_impact: true
 - After updating `docs/architecture.md`.
 - After updating `docs/mod-users-spec.md`.
 - After updating `docs/architecture/ssh-keys.md` and `docs/jwt-eddsa.md`.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Validation: new `docs/architecture/sessions-and-tokens.md` covers every topic of requirement 4 and is linked from `docs/architecture.md` (overview, further reading) and `README.md`; no link into `plan/` from the edited docs; relative links and anchors in the edited and new files resolve (script check, 0 dangling); the stale-term and `/assume` greps return only intentional removal statements; routes, tables, SQL functions, claims and configuration variables the docs name were spot-checked against `api/openapi.yaml`, `model/migrations/sql/0100_baseline.sql`, `moduleforge.module.yaml` and `api/internal/config/config.go`.
+- Files: `docs/architecture/sessions-and-tokens.md` (new), `docs/architecture.md`, `docs/mod-users-spec.md`, `docs/architecture/ssh-keys.md`, `docs/jwt-eddsa.md`, `README.md` (one documentation-list link).
+- Decisions: logout while impersonating is documented as the client restoring and revoking the administrator session (the server's `POST /v1/session/logout` revokes the caller's own session, which is the impersonation child when an impersonation token is used). The OIDC start `credentials: 'include'` exception is documented in the new doc, the spec and the architecture GUI section; `gui/README.md` already states it. The impersonation data-protection-class design is described as planned, not built.
