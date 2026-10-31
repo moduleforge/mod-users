@@ -11,7 +11,6 @@ import {
 } from '@moduleforge/core-gui';
 import { LoginForm } from './login-form';
 import { RegisterForm } from './register-form';
-import { readReturnPath } from '../lib/return-path';
 
 export type AuthMode = 'login' | 'register';
 
@@ -56,6 +55,23 @@ export interface AuthPageProps {
    * `ForgotPasswordPage`.
    */
   onForgotPassword?: () => void;
+  /**
+   * The app (slug) the session signs in to; forwarded as `app` to login and
+   * registration.
+   */
+  app?: string;
+  /**
+   * Called instead of `onAuthenticated` when a login or registration
+   * succeeded but found no landing profile (`selection_required`): navigate
+   * to `selectProfilePath` and resume at `returnPath` after the choice. When
+   * omitted, `onAuthenticated` receives `selectProfilePath` in place of the
+   * return path.
+   */
+  onSelectionRequired?: (
+    selectProfilePath: string,
+    returnPath: string | null,
+    mode: AuthMode,
+  ) => void;
 }
 
 export function AuthPage({
@@ -65,6 +81,8 @@ export function AuthPage({
   returnPath,
   allowRegistration = true,
   onForgotPassword,
+  app,
+  onSelectionRequired,
 }: AuthPageProps) {
   // Internal, uncontrolled mode state — this module does not own routing
   // (per docs/mod-users-spec.md's Non-goals), so mode-switching must not
@@ -95,6 +113,11 @@ export function AuthPage({
               onSuccess={(path) => onAuthenticated?.(path, 'login')}
               initialError={initialError}
               returnPath={returnPath}
+              app={app}
+              onSelectionRequired={
+                onSelectionRequired &&
+                ((path, resume) => onSelectionRequired(path, resume, 'login'))
+              }
               onForgotPassword={onForgotPassword}
             />
           </CardContent>
@@ -122,7 +145,13 @@ export function AuthPage({
             <CardContent>
               <RegisterForm
                 idPrefix="register"
-                onSuccess={() => onAuthenticated?.(returnPath ?? readReturnPath(), 'register')}
+                returnPath={returnPath}
+                app={app}
+                onSuccess={(path) => onAuthenticated?.(path, 'register')}
+                onSelectionRequired={
+                  onSelectionRequired &&
+                  ((path, resume) => onSelectionRequired(path, resume, 'register'))
+                }
               />
             </CardContent>
             <CardFooter className="text-sm text-center">

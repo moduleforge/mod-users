@@ -15,21 +15,41 @@ import {
 import { ErrorMessage } from './error-message';
 import { useAuth } from '../lib/auth-context';
 import { api, ApiRequestError } from '../lib/api';
+import { readReturnPath } from '../lib/return-path';
+import { describeSignInError, finishSignIn } from '../lib/sign-in';
 
 type Step = 'request' | 'verify';
 
 export interface EmailCodePageProps {
-  /** Called after successful code verification and sign-in. Defaults to a no-op. */
-  onSuccess?: () => void;
+  /**
+   * Called after successful code verification and sign-in with the effective
+   * return path (the validated `?<unauthenticatedReturnParam>=` value, else
+   * `null`). Callbacks that declare no parameter keep working. Defaults to a
+   * no-op.
+   */
+  onSuccess?: (returnPath: string | null) => void;
+  /** The app (slug) the session signs in to; sent as `app` on verify. */
+  app?: string;
+  /**
+   * Called instead of `onSuccess` when the sign-in found no landing profile
+   * (`selection_required`). When omitted, `onSuccess` receives the
+   * profile-selection route in place of the return path.
+   */
+  onSelectionRequired?: (selectProfilePath: string, returnPath: string | null) => void;
   /** Called when the user clicks "Sign in with password instead". Defaults to a no-op. */
   onNavigateToLogin?: () => void;
 }
 
-export function EmailCodePage({ onSuccess, onNavigateToLogin }: EmailCodePageProps) {
+export function EmailCodePage({
+  onSuccess,
+  app,
+  onSelectionRequired,
+  onNavigateToLogin,
+}: EmailCodePageProps) {
   // This component (unlike ForgotPasswordPage/ResetPasswordPage) calls
   // useAuth() directly to establish the session after a successful code
   // verification, matching LoginForm's use of useAuth().login().
-  const { setTokenAndUser } = useAuth();
+  const { loginWithEmailCode } = useAuth();
   const [step, setStep] = useState<Step>('request');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -60,11 +80,19 @@ export function EmailCodePage({ onSuccess, onNavigateToLogin }: EmailCodePagePro
     setError(null);
     setIsSubmitting(true);
     try {
-      const response = await api.auth.verifyEmailCode({ email, code });
-      setTokenAndUser(response.token, response.user);
-      onSuccess?.();
+      const response = await loginWithEmailCode(email, code, app ? { app } : undefined);
+      finishSignIn(response, readReturnPath(), { onSuccess, onSelectionRequired });
     } catch (err) {
-      if (err instanceof ApiRequestError && err.status === 401) {
+      const known = describeSignInError(err);
+      if (err instanceof ApiRequestError && err.code === 'users.invalid_credentials') {
+        // Wrong, expired or unknown-user code: the API gives all three the
+        // credentials code, so say "code", not "password".
+        setError('Invalid or expired code.');
+      } else if (known) {
+        // Other coded refusals (BYO identity off, app access not granted,
+        // profile unavailable) have shared copy.
+        setError(known);
+      } else if (err instanceof ApiRequestError && err.status === 401) {
         setError('Invalid or expired code.');
       } else if (err instanceof ApiRequestError) {
         setError(err.message);

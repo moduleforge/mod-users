@@ -40,3 +40,15 @@ export const LogsModeOnAuthenticated: Story = () => (
     />
   </AuthProvider>
 );
+
+export const WithAppAndSelectionRouting: Story = () => (
+  <AuthProvider>
+    <AuthPage
+      app="demo"
+      onAuthenticated={(returnPath, mode) => console.log('authenticated', { returnPath, mode })}
+      onSelectionRequired={(selectProfilePath, returnPath, mode) =>
+        console.log('select a profile', { selectProfilePath, returnPath, mode })
+      }
+    />
+  </AuthProvider>
+);

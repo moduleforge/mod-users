@@ -94,3 +94,13 @@ architectural_impact: false
 - After login, register and auth page.
 - After email-code, password-reset and verify-email pages.
 - After stories, exports and `gui/README.md`.
+
+## Status
+
+Outcome: succeeded (2026-10-31).
+
+- Validation: `make -C gui test` passes for every test this task owns (357 pass); the 31 remaining failures are all `SSHKeysPanel` and `OidcConfigPage` tests (files owned by tasks 004 and 005). `make -C gui lint` and `make -C gui build` report errors only in `gui/src/components/oidc-config-page.tsx`, `ssh-keys-panel.tsx`, `ssh-keys-panel.test.tsx` and `gui/src/stories/SSHKeysPanel.stories.tsx`. The `grep` for `completeExternalLogin|setTokenAndUser|looksLikeJwt|hashParams.get('token')` over `gui/src` returns nothing.
+- Pages: `gui/src/components/oidc-callback-page.tsx` (fragment `#handoff=` / `#error=`, fragment stripped first, single `completeHandoff`), `login-form.tsx`, `register-form.tsx`, `auth-page.tsx`, `email-code-page.tsx`, `verify-email-page.tsx` (identifier routes under `/v1/me/identifiers`). `forgot-password-page.tsx` and `reset-password-page.tsx` already pointed at the new routes through the task 001 client and needed no change.
+- New: `gui/src/lib/sign-in.ts` (error copy, selection routing), `gui/src/components/oidc-callback-page.test.tsx`, `gui/src/stories/OidcCallbackPage.stories.tsx`.
+- Additive change to task 001 code: `gui/src/lib/auth-context.tsx` gained `loginWithEmailCode` and an `options.app` argument on `register`; `RegisterOptions` is exported from `gui/src/index.ts`.
+- Differences from the API surface note, per the merged handlers: `app` is a slug (handlers resolve `AppSlug`); a wrong identifier-verification code is a 400 field error `users.code_invalid`, not 401; the email-code purpose accepts only sign-in, so verification moved to identifier routes; the OIDC `return` path arrives in the fragment next to `handoff`.

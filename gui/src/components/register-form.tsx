@@ -5,10 +5,26 @@ import { Button, Input, Label } from '@moduleforge/core-gui';
 import { ErrorMessage } from './error-message';
 import { useAuth } from '../lib/auth-context';
 import { ApiRequestError } from '../lib/api';
+import { readReturnPath } from '../lib/return-path';
+import { describeSignInError, finishSignIn } from '../lib/sign-in';
 
 export interface RegisterFormProps {
-  /** Called after a successful registration. */
-  onSuccess?: () => void;
+  /**
+   * Called after a successful registration with the effective return path
+   * (the `returnPath` prop, else the validated `?<unauthenticatedReturnParam>=`
+   * value, else `null`). Callbacks that declare no parameter keep working.
+   */
+  onSuccess?: (returnPath: string | null) => void;
+  /** Site-relative path echoed to `onSuccess`. An explicit value wins over the query param. */
+  returnPath?: string;
+  /** The app (slug) the new session signs in to; sent as `app` on register. */
+  app?: string;
+  /**
+   * Called instead of `onSuccess` when the new session found no landing
+   * profile (`selection_required`). When omitted, `onSuccess` receives the
+   * profile-selection route in place of the return path.
+   */
+  onSelectionRequired?: (selectProfilePath: string, returnPath: string | null) => void;
   /**
    * Namespaces this form's input `id`/`htmlFor` pairs (e.g. `${idPrefix}-email`)
    * so they stay unique when `LoginForm` and `RegisterForm` are mounted at the
@@ -18,7 +34,13 @@ export interface RegisterFormProps {
   idPrefix?: string;
 }
 
-export function RegisterForm({ onSuccess, idPrefix = 'register' }: RegisterFormProps) {
+export function RegisterForm({
+  onSuccess,
+  returnPath,
+  app,
+  onSelectionRequired,
+  idPrefix = 'register',
+}: RegisterFormProps) {
   const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,10 +64,20 @@ export function RegisterForm({ onSuccess, idPrefix = 'register' }: RegisterFormP
 
     setIsSubmitting(true);
     try {
-      await register(email, password, givenName, familyName);
-      onSuccess?.();
+      const response = await register(
+        email,
+        password,
+        givenName,
+        familyName,
+        app ? { app } : undefined,
+      );
+      finishSignIn(response, returnPath ?? readReturnPath(), { onSuccess, onSelectionRequired });
     } catch (err) {
-      if (err instanceof ApiRequestError) {
+      const known = describeSignInError(err);
+      if (known) {
+        // A coded refusal such as byo_identity_disabled has dedicated copy.
+        setError(known);
+      } else if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
         console.error('[register]', err);

@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AuthProvider } from '../lib/auth-context';
 import { createUsersClient } from '../lib/api';
-import { configureUsersApi, resetUsersApiConfig } from '../lib/config';
+import {
+  configureUsersApi,
+  getStoredToken,
+  resetUsersApiConfig,
+  setStoredRefreshToken,
+  setStoredToken,
+} from '../lib/config';
+import { PROFILE_A, tokenResponse, USER_VIEW } from '../test-support/users-fixtures';
 import { EmailCodePage } from './email-code-page';
 import { LoginForm } from './login-form';
 import { ResetPasswordPage } from './reset-password-page';
@@ -23,23 +30,19 @@ function json(status: number, body: unknown): Response {
 
 const unauthorized = () =>
   json(401, { error: { code: 'unauthorized', message: 'server wording' } });
+const invalidCredentials = () =>
+  json(401, { error: { code: 'users.invalid_credentials', message: 'server wording' } });
 
-const SELF = {
-  uuid: 'u1',
-  entity_uuid: 'e1',
-  email: 'session@example.com',
-  given_name: 'A',
-  family_name: 'B',
-  is_admin: false,
-  created_at: '',
-  updated_at: '',
-};
-
-// Mount-time calls (AuthProvider's /v1/self, the provider list) must succeed so
-// the seeded token survives until the credential call under test.
+// Mount-time calls (AuthProvider's session read and user load, the provider
+// list) must succeed so the seeded tokens survive until the credential call
+// under test.
 function baseResponder(url: string): Response | undefined {
   if (url.endsWith('/v1/auth/providers')) return json(200, []);
-  if (url.endsWith('/v1/self')) return json(200, SELF);
+  if (url.endsWith('/v1/session')) {
+    const base = tokenResponse();
+    return json(200, { session: base.session, profile: PROFILE_A, profiles: [PROFILE_A] });
+  }
+  if (url.endsWith('/v1/me')) return json(200, USER_VIEW);
   return undefined;
 }
 
@@ -64,7 +67,8 @@ beforeEach(() => {
     writable: true,
   });
   configureUsersApi({ baseUrl: '', onUnauthenticated: () => unauthCalls++ });
-  localStorage.setItem('auth_token', 'keep-me');
+  setStoredToken('keep-me');
+  setStoredRefreshToken('keep-refresh');
   responder = (url) => baseResponder(url) ?? unauthorized();
   globalThis.fetch = (async (input: RequestInfo | URL) =>
     responder(String(input))) as unknown as typeof fetch;
@@ -76,18 +80,38 @@ afterEach(() => {
   if (realLocationDescriptor) {
     Object.defineProperty(window, 'location', realLocationDescriptor);
   }
+  sessionStorage.clear();
   localStorage.clear();
   resetUsersApiConfig();
 });
 
 function expectNoSessionSideEffects(): void {
-  expect(localStorage.getItem('auth_token')).toBe('keep-me');
+  expect(getStoredToken()).toBe('keep-me');
   expect(hrefs).toEqual([]);
   expect(unauthCalls).toBe(0);
 }
 
 describe('credential-failure 401s show inline errors', () => {
   test('LoginForm: wrong password shows the inline error without redirecting', async () => {
+    render(
+      <AuthProvider>
+        <LoginForm />
+      </AuthProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.co' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Invalid email or password.',
+    );
+    expectNoSessionSideEffects();
+  });
+
+  test('LoginForm: a coded users.invalid_credentials 401 also stays inline', async () => {
+    responder = (url) =>
+      baseResponder(url) ??
+      (url.endsWith('/v1/auth/login') ? invalidCredentials() : unauthorized());
     render(
       <AuthProvider>
         <LoginForm />
@@ -155,7 +179,7 @@ describe('credential-failure 401s show inline errors', () => {
   test('regression: a 401 on an authenticated call still invokes onUnauthenticated', async () => {
     responder = unauthorized;
     const client = createUsersClient({ baseUrl: '' });
-    await client.self.update({ given_name: 'x' }).catch(() => undefined);
+    await client.me.update({ given_name: 'x' }).catch(() => undefined);
     expect(unauthCalls).toBe(1);
   });
 
@@ -164,8 +188,8 @@ describe('credential-failure 401s show inline errors', () => {
     configureUsersApi({ baseUrl: '' });
     responder = unauthorized;
     const client = createUsersClient({ baseUrl: '' });
-    await client.self.update({ given_name: 'x' }).catch(() => undefined);
-    expect(localStorage.getItem('auth_token')).toBeNull();
+    await client.me.update({ given_name: 'x' }).catch(() => undefined);
+    expect(getStoredToken()).toBeNull();
     expect(hrefs).toEqual(['/auth/login']);
   });
 });

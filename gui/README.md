@@ -122,14 +122,14 @@ OIDC sign-in returns through `#handoff=<code>` in the URL fragment (`#error=<cod
 | `isLoading` | `true` until the mount-time session check or fork finishes |
 | `selectionRequired`, `profileLock`, `impersonating` | See above |
 | `accessTokenExpiresAt` | Epoch milliseconds at which this tab's access token expires (last token response's `expires_in`); `null` when unknown, for example after a reload. The impersonation banner counts down to it |
-| `login(email, password, options?)`, `register(...)` | Sign in or register; both resolve with the `TokenResponse` |
+| `login(email, password, options?)`, `register(email, password, givenName, familyName, options?)`, `loginWithEmailCode(email, code, options?)` | Sign in, register, or sign in with an emailed code; each resolves with the `TokenResponse`. `options.app` is the app slug the session signs in to |
 | `selectProfile(uuid)`, `switchProfile(uuid)` | See [Profiles](#profiles) |
 | `completeHandoff(code)` | See [OIDC sign-in and handoff](#oidc-sign-in-and-handoff) |
 | `logout()` | Revokes the server session (best effort), clears this tab, and navigates to `loginPath` through `onNavigate` |
 | `refreshUser()` | Re-reads the session and user record |
 | `registerStepUpHandler(handler)` | See [Step-up](#step-up) |
 
-There is no `isAdmin`: platform-administrator authority is an operator-party profile plus grants and cannot be derived on the client, so the server's `403` is the authority. Every client method that returns a token response (`api.auth.login`, `register`, `verifyEmailCode`, `handoff`, `token`, `session.switch`, `session.fork`, `session.stepUp.*`, `impersonations.*`, `bootstrap.bootstrap`) stores it in the tab itself; `useAuth()` follows through `subscribeSessionEvents`, so calling the client directly (for example `EmailCodePage` calling `api.auth.verifyEmailCode`) signs the context in without any extra call.
+There is no `isAdmin`: platform-administrator authority is an operator-party profile plus grants and cannot be derived on the client, so the server's `403` is the authority. Every client method that returns a token response (`api.auth.login`, `register`, `verifyEmailCode`, `handoff`, `token`, `session.switch`, `session.fork`, `session.stepUp.*`, `impersonations.*`, `bootstrap.bootstrap`) stores it in the tab itself; `useAuth()` follows through `subscribeSessionEvents`, so calling the client directly signs the context in without any extra call. `loginWithEmailCode` is that call for `EmailCodePage`.
 
 ## Unauthenticated handling
 
@@ -161,18 +161,26 @@ All components are client components (`'use client'` is not retained in `dist`; 
 | `SelectProfilePage` | `onSelected?(response: TokenResponse)` | Mount at `USERS_GUI_ROUTES.selectProfile`. Shown only while `selectionRequired`; lists profiles with availability and lands the tab on the chosen available one. |
 | `InvitationsView` | `stepUpHandler?`; `onStepUpRequired?(error)` | Mount at `USERS_GUI_ROUTES.invitations`. Lists `invited` profiles (accept, decline) and active party profiles (leave) from `GET /v1/me/profiles`, then refreshes the list and the auth context. `stepUpHandler` is registered through `useStepUpHandler` while mounted; `onStepUpRequired` fires when an action still ends in `users.step_up_required`. |
 | `ImpersonationBanner` | none | Visible while `impersonating`: the impersonated profile, the time remaining, renew and end actions. `ClientLayout` mounts it above the sidebar; apps with their own shell should render it at the top of every page. |
-| `AuthPage` | `initialMode?: 'login' \| 'register'`; `onAuthenticated?(returnPath: string \| null, mode: 'login' \| 'register')`; `initialError?`; `returnPath?`; `allowRegistration?` (default `true`); `onForgotPassword?()` | Login and register in one card. `allowRegistration={false}` removes the register control and panel and forces login mode. Needs `AuthProvider`. |
-| `LoginForm` | `onSuccess?(returnPath: string \| null)`; `initialError?`; `returnPath?`; `idPrefix?`; `onForgotPassword?()` | Email and password plus OIDC provider buttons. `onForgotPassword` renders a "Forgot password?" button. Needs `AuthProvider`. |
-| `RegisterForm` | `onSuccess?()`; `idPrefix?` | Registers, then signs in. Needs `AuthProvider`. |
-| `OidcCallbackPage` | `onComplete(returnPath: string)`; `onError(message: string)`; `defaultReturnPath?` (default `'/'`) | Handles the OIDC return. Needs `AuthProvider`. |
+| `AuthPage` | `initialMode?: 'login' \| 'register'`; `onAuthenticated?(returnPath: string \| null, mode: 'login' \| 'register')`; `onSelectionRequired?(selectProfilePath, returnPath, mode)`; `initialError?`; `returnPath?`; `app?`; `allowRegistration?` (default `true`); `onForgotPassword?()` | Login and register in one card. `allowRegistration={false}` removes the register control and panel and forces login mode. Needs `AuthProvider`. |
+| `LoginForm` | `onSuccess?(returnPath: string \| null)`; `onSelectionRequired?(selectProfilePath, returnPath)`; `initialError?`; `returnPath?`; `app?`; `idPrefix?`; `onForgotPassword?()` | Email and password plus OIDC provider buttons (listed from `GET /v1/auth/providers`; each starts the handoff-bound flow with `api.auth.oidcStart`). `app` is sent as `app` on login. `onForgotPassword` renders a "Forgot password?" button. Needs `AuthProvider`. |
+| `RegisterForm` | `onSuccess?(returnPath: string \| null)`; `onSelectionRequired?(selectProfilePath, returnPath)`; `returnPath?`; `app?`; `idPrefix?` | Registers; the `201` response is already a signed-in session. Needs `AuthProvider`. |
+| `OidcCallbackPage` | `onComplete(returnPath: string)`; `onError(message: string)`; `onSelectionRequired?(selectProfilePath, returnPath)`; `defaultReturnPath?` (default `'/'`) | Handles the OIDC return: reads `#handoff=<code>` (or `#error=<code>`) and `return` from the fragment, strips the fragment at once, and exchanges the code exactly once with `completeHandoff`. See [OIDC callback page](#oidc-callback-page). Needs `AuthProvider`. |
 | `ForgotPasswordPage` | `onNavigateToLogin?()` | Requests a reset email. No `AuthProvider` needed. |
 | `ResetPasswordPage` | `token: string`; `onSuccess?()`; `onNavigateToLogin?()` | You read the token from the URL and pass it in. No `AuthProvider` needed. |
-| `EmailCodePage` | `onSuccess?()`; `onNavigateToLogin?()` | Sign in with an emailed code. Needs `AuthProvider`. |
+| `EmailCodePage` | `onSuccess?(returnPath: string \| null)`; `onSelectionRequired?(selectProfilePath, returnPath)`; `app?`; `onNavigateToLogin?()` | Sign in with an emailed code through `/v1/auth/email-code/request` and `/verify`. Needs `AuthProvider`. |
 | `VerifyEmailPage` | `onVerified?()`; `onNavigateToLogin?()`; `email?`; `message?`; `resendCooldownSeconds?` (default `30`, `0` disables) | See [Standard pages](#standard-pages). |
 | `OidcConfigPage` | `onComplete?()`; `redirectDelayMs?` (default `2000`) | See [Standard pages](#standard-pages). |
 | `OidcSetupGate` | `currentPath: string`; `onNavigateToConfig?()`; `children: (state: 'ready' \| 'setup') => ReactNode` | Render-prop gate for apps without the admin chrome. |
 | `ClientLayout` | `children`; `currentPath: string`; `onNavigateToConfig?()`; `onNavigate?(path)`; `LinkComponent` | mod-users admin chrome (`ImpersonationBanner` above a sidebar shell, plus `AuthProvider` plus `OidcSetupGate`). `SidebarNav` takes `currentPath` and `LinkComponent`, shows the `ProfileSwitcher` and an Invitations entry for a signed-in user, and no longer filters links by admin status (the server's `403` is the authority). |
 | `USERS_GUI_ROUTES` | constant | The standard path set; see [Routes](#routes). |
+
+### Sign-in outcomes
+
+Every sign-in form (`LoginForm`, `RegisterForm`, `EmailCodePage`, `AuthPage`, `OidcCallbackPage`) decides what happens next from the token response:
+
+- **`selection_required: true`** (the server found no landing profile; the tab holds a refresh token but no access token). The form calls `onSelectionRequired(selectProfilePath, returnPath)` with `USERS_GUI_ROUTES.selectProfile` and the return path to resume at after the choice. When no `onSelectionRequired` is given, `onSuccess` / `onAuthenticated` / `onComplete` receives `selectProfilePath` in place of the return path, so an app that simply navigates to the path it is handed still reaches `SelectProfilePage`. The return path is not carried across the selection page by the library; keep it yourself if you need it afterwards.
+- **Otherwise** the form calls `onSuccess(returnPath)`.
+- **Readable errors.** `users.invalid_credentials` ("Invalid email or password.", or "Invalid or expired code." on the email-code page), `users.byo_identity_disabled` (this site does not allow signing in or creating an account with your own email), `users.app_login_not_granted` (the account has no access to this application) and `users.profile_unavailable` map to fixed copy; other API errors show the server message.
 
 ### Return-path handling
 
@@ -226,10 +234,21 @@ Apps use the standard paths. A deviation needs a stated reason (for example an a
 
 A code-entry flow for the `/verify-email` route: the user requests a six-digit emailed code and enters it. There is no emailed link.
 
-- **Email source.** It uses the `email` prop if given, else the signed-in user's email from a surrounding `AuthProvider`, else shows an email field first.
+- **Verification route.** It verifies through the signed-in user's identifier routes: `GET /v1/me/identifiers` (once, lazily, on the first resend or verify) finds the email identifier, then `POST /v1/me/identifiers/{uuid}/verification` sends the code and `POST /v1/me/identifiers/{uuid}/verify` checks it. The tab therefore needs a session; the backend's `users.email_unverified` envelope is only answered to a signed-in user. A wrong, expired or exhausted code is a `400` field error `users.code_invalid` and shows a fixed message.
+- **Email source.** It verifies the identifier matching the `email` prop if given, else the signed-in user's email from a surrounding `AuthProvider`, else the account's first unverified email address (shown once found). There is no email field.
 - **Props.** `message` overrides the lead sentence (default: the backend's own text). `resendCooldownSeconds` throttles "Send a new code" on the client (default `30`, `0` disables). `onNavigateToLogin`, when given, renders a "Sign in with a different account" button; the page never signs the user out itself.
 - **`onVerified`** runs once after successful verification, after the signed-in user is refreshed when an `AuthProvider` is present. The app owns the navigation onward.
-- Works inside or outside an `AuthProvider`. It does not detect an already-verified email on its own.
+- Works inside or outside an `AuthProvider` (without one it uses whatever session the tab holds). An already-verified identifier completes without sending a code once the user submits.
+
+### OIDC callback page
+
+`OidcCallbackPage` is mounted at the backend-fixed OIDC return route. The API callback redirects there with the result in the URL **fragment** (never the query string, so it stays out of server logs):
+
+- `#handoff=<code>[&return=<path>]` on a sign-in. The page strips the fragment from the URL before doing anything else, then calls `completeHandoff(code)` exactly once (guarded against effect re-runs). `completeHandoff` supplies the verifier `LoginForm` stored when the tab started the sign-in. A valid `return` (checked with `isSafeReturnPath`, else `defaultReturnPath`) goes to `onComplete`; a `selection_required` response goes to `onSelectionRequired` (see [Sign-in outcomes](#sign-in-outcomes)).
+- `#error=<code>` on a refusal. The page shows readable copy and calls `onError(message)`: `account_exists_sign_in_and_link` (sign in with the existing method, then link the provider from account settings), `no_account`, `authentication_failed`, `missing_email`. An unrecognized code gets generic copy and is never echoed.
+- A tab that started no sign-in has no verifier, so the exchange is not attempted and the page shows "Sign-in must be completed in the same browser tab where it was started." A refused exchange shows a generic "session could not be established" message.
+
+The message is also rendered on the page itself, so an app that does not navigate away on `onError` still shows the reason.
 
 ### `OidcConfigPage` and `OidcSetupGate`
 
@@ -323,6 +342,7 @@ function LoginContent() {
     <AuthPage
       initialError={searchParams?.get('error') ?? null}
       onAuthenticated={(returnPath) => router.replace(returnPath ?? '/')}
+      onSelectionRequired={(selectPath) => router.replace(selectPath)}
       onForgotPassword={() => router.push(USERS_GUI_ROUTES.forgotPassword)}
     />
   );
@@ -378,6 +398,7 @@ export default function OidcReturnPage() {
   return (
     <OidcCallbackPage
       onComplete={(returnPath) => router.replace(returnPath)}
+      onSelectionRequired={(selectPath) => router.replace(selectPath)}
       onError={(message) =>
         router.replace(
           `${USERS_GUI_ROUTES.login}?error=${encodeURIComponent(message)}`,
@@ -459,7 +480,7 @@ So integrators do not assume otherwise:
 - Local-login return handling is opt-in via `unauthenticatedReturnParam`. The callback receives the validated return path or `null`; without that setting the app reads its own `?return=` as before.
 - `AuthPage` has no link to the email-code flow; render your own link to `EmailCodePage`'s route if you want one.
 - There is no built-in step-up prompt in the lib layer: register a `StepUpHandler` (see [Step-up](#step-up)) whose UI calls `api.session.stepUp.*`.
-- `VerifyEmailPage` does not detect an already-verified email.
+- `VerifyEmailPage` does not check on mount whether the email is already verified.
 - `ClientLayout` and `SidebarNav` are mod-users admin chrome. `ClientLayout` has no `loginPath` prop and `SidebarNav` hard-codes `/auth/login`; apps with their own shell should use `AuthProvider` and `OidcSetupGate` directly.
 - `allowRegistration={false}` is UI-only: the API's register endpoint stays open.
 - An explicit `returnPath` prop is not validated (see [Return-path handling](#return-path-handling)).
@@ -472,6 +493,7 @@ The client was rebuilt on the final mod-users API; these changes break earlier i
 - `RequireAuth` lost the `requireAdmin` and `onUnauthorized` props and gained `onSelectionRequired`; `SidebarNav` no longer hides admin links from non-administrators.
 - `useAuth()` lost `isAdmin`, `emailVerifiedAt`, `setTokenAndUser` and `completeExternalLogin`; it gained the members listed under [The auth context](#the-auth-context). `completeHandoff(code)` replaces `completeExternalLogin(token)`: OIDC returns a one-time `#handoff=` code, never a token.
 - The client dropped `self`, `userAccounts` (including `grantAdmin`, `revokeAdmin`, `assume`), `sshKeys`, `stepUp` (the old `X-Step-Up-Token` flow), `apps` and `auth.verifyEmail`, and the types `UserAccount*`, `UserAccountSelf`, `SessionUser`, `LoginResponse`, `StepUpOptions`, `StepUpVerifyResponse`, `SSHKey*`, `RegisterSSHKeyRequest` and the app types. Use `me.*`, `session.*`, `impersonations.*` and `bootstrap.*`.
+- `LoginForm`, `RegisterForm`, `EmailCodePage` and `OidcCallbackPage` gained `onSelectionRequired` and `app` (the callback page has no `app`); `RegisterForm.onSuccess` and `EmailCodePage.onSuccess` now receive the return path. `OidcCallbackPage` no longer reads `?error=` or a JWT from the redirect; it reads `#handoff=` / `#error=`. `VerifyEmailPage` no longer shows an email field and verifies through `/v1/me/identifiers`.
 - `register` answers a session directly (`201` with a token response), so there is no follow-up login.
 - `NEXT_PUBLIC_API_BASE_URL=""` means same-origin instead of falling through to the localhost default.
 - Wrong credentials (login, email code, reset token, handoff) show an inline error instead of redirecting to the login page.
