@@ -1627,7 +1627,7 @@ phases:
           slug: fix-oidc-redirect-error-code
           title: Use Authentication Failed Code In OIDC Troubleshooting
           path: phase-26-remediation-14/005-fix-oidc-redirect-error-code.md
-          done: false
+          done: true
           tier: haiku-med
           digest: Replaced auth_failed with authentication_failed in the refusals table of docs/oidc-troubleshooting.md and in the resolver decision-table comment. Both validation checks pass.
           findings:
