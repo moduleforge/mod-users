@@ -1574,7 +1574,7 @@ phases:
           findings:
             - e4f6
           git:
-            branch: null
+            branch: plan/identity-model-impl-26-001
             commit: []
             merge: null
         - number: 2
