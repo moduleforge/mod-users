@@ -1641,7 +1641,7 @@ phases:
           slug: document-core-field-key-env
           title: Document CORE_FIELD_KEY_HEX Ownership In Env Example
           path: phase-26-remediation-14/006-document-core-field-key-env.md
-          done: false
+          done: true
           tier: haiku-med
           digest: Moved CORE_FIELD_KEY_HEX out from under the Authelia/Timezone heading in .env.example into its own mod-core-owned comment block stating first-boot-only seed semantics and pointing rotation at POST /v1/field-crypto-keys/rotations. Value unchanged. No code changed.
           findings:
