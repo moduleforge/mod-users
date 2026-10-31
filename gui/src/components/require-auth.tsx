@@ -32,7 +32,8 @@ export function RequireAuth({
   onUnauthenticated,
   onSelectionRequired,
 }: RequireAuthProps) {
-  const { user, isLoading, selectionRequired, profileLock } = useAuth();
+  const { user, isLoading, selectionRequired, profileLock, sessionError, retrySession } =
+    useAuth();
 
   useEffect(() => {
     if (isLoading) return;
@@ -44,6 +45,10 @@ export function RequireAuth({
     // A lock keeps the tokens (so the user can recover), so it is not an
     // unauthenticated state and must not redirect to sign-in.
     if (profileLock) return;
+    // Hydration hit a transient failure and kept the tokens: the user is not
+    // known to be signed out, so redirecting to sign-in would discard a
+    // healthy session. The retry notice below handles it.
+    if (sessionError) return;
     if (!user) {
       onUnauthenticated?.();
     }
@@ -52,6 +57,7 @@ export function RequireAuth({
     isLoading,
     selectionRequired,
     profileLock,
+    sessionError,
     onUnauthenticated,
     onSelectionRequired,
   ]);
@@ -67,6 +73,23 @@ export function RequireAuth({
   if (selectionRequired) return null;
   // Show the reason and remedy instead of the protected content.
   if (profileLock) return <ProfileLockNotice />;
+  // A transient outage, not a sign-out: offer a retry in place of the content.
+  if (sessionError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2">
+        <p className="text-muted-foreground text-sm" role="alert">
+          Could not reach the server to restore your session.
+        </p>
+        <button
+          type="button"
+          className="text-sm underline"
+          onClick={() => void retrySession()}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
   if (!user) return null;
 
   return <>{children}</>;

@@ -78,7 +78,22 @@ export interface AuthContextValue {
   profiles: ProfileView[];
   /** The signed-in user record from `GET /v1/me`; null until loaded or when signed out. */
   user: UserView | null;
+  /**
+   * True until the tab's session is established AND any in-flight user-record
+   * load has settled. Folding the user load in matters: between a token commit
+   * (login, register, email-code verify, handoff, sibling fork) and the
+   * `GET /v1/me` answer there is a token but no user, which a consumer such as
+   * `RequireAuth` must not mistake for "signed out".
+   */
   isLoading: boolean;
+  /**
+   * Set when reload hydration failed for a transient reason (the API was
+   * unreachable, status 0, or answered 5xx). The stored tokens were kept, so
+   * the failure is retryable via `retrySession`; null otherwise.
+   */
+  sessionError: ApiRequestError | null;
+  /** Re-runs the reload hydration after a `sessionError`. */
+  retrySession: () => Promise<void>;
   /** True when the user holds at least one verified email; false when unverified or signed out. */
   emailVerified: boolean;
   /**
@@ -120,7 +135,12 @@ export interface AuthContextValue {
     code: string,
     options?: LoginOptions,
   ) => Promise<TokenResponse>;
-  /** Revokes the server session (best effort), clears this tab, and navigates to the login path. */
+  /**
+   * Revokes the server session (best effort), clears this tab, and navigates
+   * to the login path. When the access token is expired or absent but a
+   * refresh token exists, the session is refreshed once first so the revoke is
+   * authenticated; only if that refresh is impossible is the logout local-only.
+   */
   logout: () => Promise<void>;
   /**
    * Refresh grant with the chosen profile: lands the tab on `uuid` after a
@@ -231,6 +251,11 @@ export function AuthProvider({
     number | null
   >(null);
   const [isLoading, setIsLoading] = useState(true);
+  // True while at least one `GET /v1/me` is in flight (see `loadUser`).
+  const [userLoading, setUserLoading] = useState(false);
+  const [sessionError, setSessionError] = useState<ApiRequestError | null>(
+    null,
+  );
 
   // Refs let the long-lived event subscription read current values without
   // re-subscribing on every render.
@@ -241,6 +266,8 @@ export function AuthProvider({
   const userSessionRef = useRef<string | null>(null);
   const hydratedRef = useRef(false);
   const handoffsRef = useRef(new Map<string, Promise<TokenResponse>>());
+  // In-flight user loads; the loading flag stays up until the last settles.
+  const userLoadsRef = useRef(0);
 
   /**
    * Loads `GET /v1/me`. An action-required answer navigates (the session
@@ -249,6 +276,11 @@ export function AuthProvider({
    * already been handled by the request pipeline.
    */
   const loadUser = useCallback(async () => {
+    // Raised synchronously, in the same batch as the token commit that
+    // triggered the load, so no render sees "token present, user not loaded,
+    // not loading". This IMPLIES RequireAuth waits instead of redirecting.
+    userLoadsRef.current += 1;
+    setUserLoading(true);
     try {
       setUser(await api.me.get());
     } catch (err) {
@@ -260,6 +292,12 @@ export function AuthProvider({
         // A 401 is the request pipeline's business (refresh / sign-out).
         console.error('[auth] could not load the user record', err);
       }
+    } finally {
+      // Settled in every outcome (success, action-required, failure): drop
+      // the flag only when no overlapping load remains, else a fast load
+      // would end loading while a slower one is still pending.
+      userLoadsRef.current -= 1;
+      if (userLoadsRef.current === 0) setUserLoading(false);
     }
   }, []);
 
@@ -321,57 +359,85 @@ export function AuthProvider({
     );
   }, []);
 
+  /**
+   * Establishes the tab's session from storage (reload) or a sibling tab
+   * (new tab). Shared by the mount effect and `retrySession`.
+   */
+  const establishSession = useCallback(async (): Promise<void> => {
+    if (getStoredToken() || getStoredRefreshToken()) {
+      // A reload: the tab's storage survived. `session.get` also repairs an
+      // expired access token through the refresh lineage.
+      try {
+        const info = await api.session.get();
+        setSnapshot(snapshotOfInfo(info));
+        setToken(getStoredToken());
+        const sessionUuid = info.session?.uuid ?? null;
+        // A refresh during `session.get` already started the user load for
+        // this session through the event subscription; loading again would
+        // fetch the same record twice.
+        if (userSessionRef.current !== sessionUuid) {
+          userSessionRef.current = sessionUuid;
+          await loadUser();
+        }
+      } catch (err) {
+        if (err instanceof ApiActionRequiredError) {
+          // Action-required: navigate, don't alarm. Keeps the tokens.
+          if (!isCurrentPath(err.path)) navigateRef.current(err.path);
+        } else if (
+          err instanceof ApiRequestError &&
+          err.code === USERS_ERROR_CODES.profileUnavailable
+        ) {
+          // The lock event already populated `profileLock`; the tokens stay
+          // so the user can pick another profile or follow the remedy.
+          setToken(getStoredToken());
+        } else if (
+          err instanceof ApiRequestError &&
+          (err.status === 0 || err.status >= 500)
+        ) {
+          // Unreachable API (status 0) or a server fault: the session may be
+          // perfectly healthy, so wiping it would turn an outage into a
+          // forced re-login. Keep the tokens and surface a retryable error;
+          // this IMPLIES consumers show a retry affordance instead of
+          // treating the tab as signed out.
+          setToken(getStoredToken());
+          setSessionError(err);
+        } else {
+          // Any other failure (an authentication failure the pipeline did not
+          // already handle, or an unclassifiable error): the stored session
+          // is unusable. Drop it so the tab starts clean rather than
+          // half-signed-in.
+          clearStoredSession();
+          setToken(null);
+        }
+      }
+    } else {
+      // A new tab: ask sibling tabs for a session to fork. No answer in
+      // time leaves the tab signed out. The fork's token response reaches
+      // state through the event subscription above.
+      await forkFromSibling();
+    }
+  }, [loadUser]);
+
   // Establish the tab's session once on mount.
   useEffect(() => {
     // Guard against a development double-invocation: the work is idempotent
     // but the fork request would otherwise be sent twice.
     if (hydratedRef.current) return;
     hydratedRef.current = true;
+    void establishSession().finally(() => setIsLoading(false));
+  }, [establishSession]);
 
-    async function hydrate(): Promise<void> {
-      if (getStoredToken() || getStoredRefreshToken()) {
-        // A reload: the tab's storage survived. `session.get` also repairs an
-        // expired access token through the refresh lineage.
-        try {
-          const info = await api.session.get();
-          setSnapshot(snapshotOfInfo(info));
-          setToken(getStoredToken());
-          const sessionUuid = info.session?.uuid ?? null;
-          // A refresh during `session.get` already started the user load for
-          // this session through the event subscription; loading again would
-          // fetch the same record twice.
-          if (userSessionRef.current !== sessionUuid) {
-            userSessionRef.current = sessionUuid;
-            await loadUser();
-          }
-        } catch (err) {
-          if (err instanceof ApiActionRequiredError) {
-            // Action-required: navigate, don't alarm. Keeps the tokens.
-            if (!isCurrentPath(err.path)) navigateRef.current(err.path);
-          } else if (
-            err instanceof ApiRequestError &&
-            err.code === USERS_ERROR_CODES.profileUnavailable
-          ) {
-            // The lock event already populated `profileLock`; the tokens stay
-            // so the user can pick another profile or follow the remedy.
-            setToken(getStoredToken());
-          } else {
-            // Any other failure: the stored session is unusable. Drop it so
-            // the tab starts clean rather than half-signed-in.
-            clearStoredSession();
-            setToken(null);
-          }
-        }
-      } else {
-        // A new tab: ask sibling tabs for a session to fork. No answer in
-        // time leaves the tab signed out. The fork's token response reaches
-        // state through the event subscription above.
-        await forkFromSibling();
-      }
+  const retrySession = useCallback(async () => {
+    // Back to loading so RequireAuth shows the spinner rather than the stale
+    // error while the retry is in flight.
+    setSessionError(null);
+    setIsLoading(true);
+    try {
+      await establishSession();
+    } finally {
+      setIsLoading(false);
     }
-
-    void hydrate().finally(() => setIsLoading(false));
-  }, [loadUser]);
+  }, [establishSession]);
 
   const login = useCallback(
     (email: string, password: string, options?: LoginOptions) =>
@@ -413,10 +479,33 @@ export function AuthProvider({
     try {
       await api.session.logout();
     } catch (err) {
-      // An unreachable server must not trap the user in a signed-in UI; the
-      // local sign-out below still happens.
-      console.error('[auth] logout request failed', err);
+      if (
+        err instanceof ApiRequestError &&
+        err.status === 401 &&
+        getStoredRefreshToken()
+      ) {
+        // The logout call skips the pipeline's refresh, so an expired or
+        // absent access token answers 401 even though the session is alive
+        // server-side. Refresh once (`session.get` rotates through the shared
+        // refresh lineage on a 401) and retry, so the server session is
+        // actually revoked rather than left alive behind a local sign-out.
+        try {
+          await api.session.get();
+          await api.session.logout();
+        } catch (retryErr) {
+          // Refresh or the retried revoke failed (dead lineage, outage): the
+          // logout is then local-only. The server session may outlive this
+          // tab until it expires, but the user is still signed out here.
+          console.error('[auth] logout is local-only; revoke failed', retryErr);
+        }
+      } else {
+        // An unreachable server must not trap the user in a signed-in UI,
+        // and with no refresh token there is nothing to authenticate a
+        // retry: the logout is local-only. Local sign-out below still runs.
+        console.error('[auth] logout request failed', err);
+      }
     }
+    // Local state is cleared in every case above.
     clearStoredSession();
     userSessionRef.current = null;
     setSnapshot(SIGNED_OUT);
@@ -513,7 +602,10 @@ export function AuthProvider({
       profile: snapshot.profile,
       profiles: snapshot.profiles,
       user,
-      isLoading,
+      // A pending user load counts as loading (see `AuthContextValue`).
+      isLoading: isLoading || userLoading,
+      sessionError,
+      retrySession,
       emailVerified: user?.email_verified ?? false,
       selectionRequired: snapshot.selectionRequired,
       profileLock,
@@ -534,6 +626,9 @@ export function AuthProvider({
       snapshot,
       user,
       isLoading,
+      userLoading,
+      sessionError,
+      retrySession,
       profileLock,
       accessTokenExpiresAt,
       login,
