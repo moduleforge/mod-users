@@ -386,7 +386,7 @@ phases:
           tier: sonnet-med
           digest: Added Identity model rewrite section to consumer-upgrade-notes.md (Go packages, routes, config, tokens, database, manifest, bootstrap, impersonation, per-consumer migration); rewrote EdDSA, GUI, cookie, error-precedence and authorization sections against merged code; fixed hPqK anchor. Filed findings ndUS (CORS X-Step-Up-Token) and iZ3E (usersservice facade aliases). Docs only.
           git:
-            branch: null
+            branch: plan/identity-model-impl-10-002
             commit: []
             merge: null
         - number: 3
