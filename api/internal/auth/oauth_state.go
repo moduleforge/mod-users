@@ -19,28 +19,78 @@ type StatePayload struct {
 	Nonce      string `json:"n"` // base64 nonce used as the OIDC nonce claim
 	Expires    int64  `json:"e"` // unix seconds
 	// TestMode is set when the flow was initiated via /start?mode=test.
-	// The callback handler branches on this to skip UserResolver and
-	// IssueLocalJWT — no session is created — and redirect to a
+	// The callback handler branches on this to skip the resolver and
+	// session creation — no session is created — and redirect to a
 	// test-result URL instead. Zero-value (false) keeps back-compat
 	// with state cookies minted before 9.18.
 	TestMode bool `json:"t,omitempty"`
-	// LinkMode is true when the state was minted by a link-mode start
-	// (POST /v1/self/identities/oidc/{provider}/start). The callback
-	// handler skips UserResolver and instead inserts a new identity row
-	// for the authenticated user identified by LinkUserAccountID.
-	LinkMode          bool   `json:"lm,omitempty"`
-	LinkUserAccountID string `json:"luid,omitempty"` // user_account UUID; set iff LinkMode
+	// Flow is the flow the state was minted for. The zero value is a plain
+	// sign-in; FlowLink and FlowStepUp are minted only for an authenticated
+	// session and carry its identity in SessionUUID and PrincipalUUID.
+	Flow Flow `json:"f,omitempty"`
+	// SessionUUID is the uuid of the session that started a link or step-up
+	// flow; empty for a sign-in. The callback re-checks that this session is
+	// live and that its principal is PrincipalUUID before it acts.
+	SessionUUID string `json:"s,omitempty"`
+	// PrincipalUUID is the uuid of the principal that owns SessionUUID.
+	PrincipalUUID string `json:"pu,omitempty"`
+	// HandoffChallenge is the PKCE-style challenge (base64url SHA-256 of a
+	// browser-held verifier) of a sign-in flow. The callback stores it on the
+	// login_handoff challenge so the code can be redeemed only with the verifier.
+	// Required for a sign-in; empty for a test-mode, link or step-up state.
+	HandoffChallenge string `json:"hc,omitempty"`
 }
+
+// Flow names what an OIDC round trip is for.
+type Flow string
+
+const (
+	// FlowLogin is the plain sign-in flow (the zero value).
+	FlowLogin Flow = ""
+	// FlowLink adds an oidc credential to the authenticated session's principal.
+	FlowLink Flow = "link"
+	// FlowStepUp adds the oidc credential as a factor of the authenticated
+	// session, raising its acr and auth_time.
+	FlowStepUp Flow = "step_up"
+)
+
+// Authenticated reports whether the flow acts on an existing session.
+func (f Flow) Authenticated() bool { return f == FlowLink || f == FlowStepUp }
 
 // Expired reports whether the payload's expiry is in the past.
 func (s StatePayload) Expired(now time.Time) bool {
 	return now.Unix() > s.Expires
 }
 
+// validateFlow rejects a flow the callback does not know, and a link or
+// step-up state that does not name its session and principal (or a sign-in
+// state that does).
+func (s StatePayload) validateFlow() error {
+	switch {
+	case s.Flow.Authenticated():
+		if s.SessionUUID == "" || s.PrincipalUUID == "" {
+			return errors.New("oauth state: authenticated flow without session")
+		}
+		if s.HandoffChallenge != "" {
+			return errors.New("oauth state: authenticated flow carries a handoff challenge")
+		}
+	case s.Flow == FlowLogin:
+		if s.SessionUUID != "" || s.PrincipalUUID != "" {
+			return errors.New("oauth state: sign-in flow carries a session")
+		}
+		if s.HandoffChallenge != "" && !ValidHandoffChallenge(s.HandoffChallenge) {
+			return errors.New("oauth state: malformed handoff challenge")
+		}
+	default:
+		return errors.New("oauth state: unknown flow")
+	}
+	return nil
+}
+
 // StateSigner signs and verifies OAuth state payloads using HMAC-SHA256.
-// The key is the explicit JWT_SECRET when set (shared with the HS256 local JWT
-// signer, so the operator has no second secret to rotate), otherwise a key
-// derived from the EdDSA signing key under LabelOAuthState; see OAuthStateKey.
+// The key is the explicit JWT_SECRET when set (its only remaining use),
+// otherwise a key derived from the Ed25519 signing key under
+// LabelOAuthState; see OAuthStateKey.
 type StateSigner struct {
 	key []byte
 }
@@ -106,6 +156,9 @@ func (s *StateSigner) Verify(token string) (StatePayload, error) {
 
 	if payload.Expired(time.Now()) {
 		return empty, errors.New("oauth state: expired")
+	}
+	if err := payload.validateFlow(); err != nil {
+		return empty, err
 	}
 
 	return payload, nil

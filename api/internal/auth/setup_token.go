@@ -59,9 +59,11 @@ func VerifySetupToken(plain, storedHash string) bool {
 
 // PrintSetupTokenBanner writes a human-scannable ASCII banner to stderr so
 // the operator can copy the token even when JSON logs dominate the stream.
-// A matching structured slog.Error is emitted so log aggregators can still
-// alert on it. Returns nothing — banner emission is best-effort; a failed
-// stderr write falls through to the structured log.
+// The one token serves both first-run steps (decision U9): bootstrapping the
+// operator account (POST /v1/bootstrap) and configuring OIDC at
+// guiConfigURL. A matching structured slog.Error is emitted so log
+// aggregators can still alert on it. Returns nothing — banner emission is
+// best-effort; a failed stderr write falls through to the structured log.
 func PrintSetupTokenBanner(token, guiConfigURL string) {
 	// Boxed banner for humans. Width is fixed so the output stays aligned
 	// regardless of token length (64 hex chars fits comfortably inside 66).
@@ -69,11 +71,14 @@ func PrintSetupTokenBanner(token, guiConfigURL string) {
 	const thin = "------------------------------------------------------------------"
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, rule)
-	fmt.Fprintln(os.Stderr, "                 OIDC SETUP TOKEN (one-time use)")
+	fmt.Fprintln(os.Stderr, "                     SETUP TOKEN (first run)")
 	fmt.Fprintln(os.Stderr, thin)
 	fmt.Fprintln(os.Stderr, "  "+token)
 	fmt.Fprintln(os.Stderr, thin)
-	fmt.Fprintln(os.Stderr, "  Paste into "+guiConfigURL+" to configure OIDC.")
+	fmt.Fprintln(os.Stderr, "  1. Bootstrap the operator account: POST /v1/bootstrap with")
+	fmt.Fprintln(os.Stderr, "     this token in the X-Setup-Token header.")
+	fmt.Fprintln(os.Stderr, "  2. Configure OIDC at "+guiConfigURL+".")
+	fmt.Fprintln(os.Stderr, "  The token stays valid until both steps are done.")
 	fmt.Fprintln(os.Stderr, "  This banner repeats only on first boot in this state.")
 	fmt.Fprintln(os.Stderr, rule)
 	fmt.Fprintln(os.Stderr)
@@ -81,8 +86,9 @@ func PrintSetupTokenBanner(token, guiConfigURL string) {
 	// Structured counterpart for log aggregators / automation. The token is
 	// deliberately NOT in the structured log — ops should find it in the
 	// banner above; the structured event just flags that a token exists.
-	slog.Error("oidc onboarding required: setup token generated",
+	slog.Error("first-run setup required: setup token generated (bootstrap and OIDC configuration)",
 		"setup_token_required", true,
+		"bootstrap_route", "/v1/bootstrap",
 		"config_url", guiConfigURL,
 	)
 }

@@ -8,7 +8,9 @@ import {
   revertOIDCProvider,
   testProviderURL,
   updateOIDCProvider,
+  validateJitPolicy,
   type OIDCFieldSource,
+  type OIDCJitMode,
   type OIDCProviderAuth,
   type OIDCProviderView,
   type OIDCProviderWriteBody,
@@ -23,6 +25,7 @@ import {
 } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { ErrorMessage } from './error-message';
+import { OidcProviderPolicyFields } from './oidc-provider-policy-fields';
 import { Badge, Button, Input, Label } from '@moduleforge/core-gui';
 
 interface OidcProviderEditModalProps {
@@ -46,6 +49,9 @@ interface FormState {
   /** Comma-joined; parsed into string[] on save. */
   scopes: string;
   enabled: boolean;
+  partyUuid: string;
+  jitMode: OIDCJitMode;
+  trustAcr: boolean;
 }
 
 function emptyForm(): FormState {
@@ -58,6 +64,9 @@ function emptyForm(): FormState {
     claimStyle: '',
     scopes: '',
     enabled: true,
+    partyUuid: '',
+    jitMode: 'byo',
+    trustAcr: false,
   };
 }
 
@@ -79,6 +88,9 @@ function viewToForm(view: OIDCProviderView): FormState {
       ? view.scopes.join(', ')
       : (view.scopes_default ?? []).join(', '),
     enabled: view.enabled,
+    partyUuid: view.party_uuid ?? '',
+    jitMode: view.jit_mode,
+    trustAcr: view.trust_acr,
   };
 }
 
@@ -116,6 +128,13 @@ function buildWriteBody(form: FormState, view: OIDCProviderView): OIDCProviderWr
     claim_style: resolveOverride(form.claimStyle, view.claim_style_default),
     scopes: resolveScopesOverride(form.scopes, view.scopes_default),
     enabled: form.enabled,
+    // The policy fields are always sent: a PUT with them absent would keep the
+    // stored values, which is also what an unchanged form means, but sending
+    // the form's values keeps the write body a complete statement of the form.
+    // A blank party is null (unbind); the server treats null and "" alike.
+    party_uuid: form.partyUuid.trim() === '' ? null : form.partyUuid.trim(),
+    jit_mode: form.jitMode,
+    trust_acr: form.trustAcr,
   };
   if (form.clientSecret !== '') {
     body.client_secret = form.clientSecret;
@@ -163,7 +182,12 @@ function formsEqual(a: FormState, b: FormState): boolean {
     a.clearSecret === b.clearSecret &&
     a.claimStyle === b.claimStyle &&
     a.scopes === b.scopes &&
-    a.enabled === b.enabled
+    a.enabled === b.enabled &&
+    // Policy fields count toward dirtiness so changing only the JIT mode
+    // or ACR trust enables Save (and disables Test, which uses persisted config).
+    a.partyUuid === b.partyUuid &&
+    a.jitMode === b.jitMode &&
+    a.trustAcr === b.trustAcr
   );
 }
 
@@ -215,6 +239,7 @@ export function OidcProviderEditModal({
   const [baselineForm, setBaselineForm] = useState<FormState>(emptyForm);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isReverting, setIsReverting] = useState(false);
@@ -234,6 +259,7 @@ export function OidcProviderEditModal({
       setBaselineForm(emptyForm());
       setLoadError(null);
       setFormError(null);
+      setPolicyError(null);
       setShowSecret(false);
       setCopied(false);
       return;
@@ -280,6 +306,11 @@ export function OidcProviderEditModal({
   const handleSave = useCallback(async () => {
     if (!providerId || !auth || !view) return;
     setFormError(null);
+    // managed JIT needs a party: refuse locally; a server-side refusal of the
+    // same rule is shown through the catch below.
+    const policyProblem = validateJitPolicy(form.jitMode, form.partyUuid);
+    setPolicyError(policyProblem);
+    if (policyProblem !== null) return;
     setIsSaving(true);
     try {
       const updated = await updateOIDCProvider(
@@ -300,7 +331,12 @@ export function OidcProviderEditModal({
       // Modal stays open until admin hits Cancel / X.
     } catch (err) {
       if (err instanceof ApiRequestError) {
-        setFormError(err.message);
+        // Prefer the per-field details (party_unknown, jit_mode_invalid, ...)
+        // over the generic envelope message.
+        const detailMessages = (err.details ?? [])
+          .map((d) => d.message)
+          .filter((m) => m.length > 0);
+        setFormError(detailMessages.length > 0 ? detailMessages.join(' ') : err.message);
       } else {
         setFormError('Could not save provider.');
       }
@@ -554,6 +590,22 @@ export function OidcProviderEditModal({
               onChange={(v) => setForm((f) => ({ ...f, scopes: v }))}
               helpText="Comma-separated (e.g. openid, email, profile)."
               sourceText={sourceLabel(view.scopes_source, view.id, 'scopes')}
+            />
+
+            <OidcProviderPolicyFields
+              idPrefix="edit"
+              value={{
+                partyUuid: form.partyUuid,
+                jitMode: form.jitMode,
+                trustAcr: form.trustAcr,
+              }}
+              onChange={(next) => {
+                // Editing a policy field withdraws the stale local error: it is
+                // re-evaluated on the next save, so a fixed form is not blocked.
+                setForm((f) => ({ ...f, ...next }));
+                setPolicyError(null);
+              }}
+              policyError={policyError}
             />
 
             <div className="flex flex-col gap-1.5">

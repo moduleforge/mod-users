@@ -65,7 +65,7 @@ func TestValidateReturnPath(t *testing.T) {
 }
 
 // TestOAuth_EndToEnd walks through AuthorizeURL → token exchange → ID-token
-// verification → Principal mapping, using a fully-local fake OIDC provider.
+// verification → ExternalIdentity mapping, using a fully-local fake OIDC provider.
 // A correctly-signed id_token with the expected issuer/audience/nonce passes
 // all checks; this pins down that our wiring matches the protocol.
 func TestOAuth_EndToEnd(t *testing.T) {
@@ -166,7 +166,6 @@ func TestOAuth_EndToEnd(t *testing.T) {
 	// 3. Build a Config pointing at the fake provider.
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -193,7 +192,7 @@ func TestOAuth_EndToEnd(t *testing.T) {
 
 	// 4. Drive AuthorizeURL → capture the nonce and state for the mock token
 	//    endpoint to echo back.
-	authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile", false)
+	authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile", false, testHandoffChallenge)
 	if err != nil {
 		t.Fatalf("AuthorizeURL: %v", err)
 	}
@@ -233,7 +232,7 @@ func TestOAuth_Exchange_StateCookieMismatch(t *testing.T) {
 	oauth := newOAuthForStateOnlyTest(t)
 
 	// Generate a valid state token for one return path.
-	authURL, state, err := oauth.AuthorizeURL("google", "/profile", false)
+	authURL, state, err := oauth.AuthorizeURL("google", "/profile", false, testHandoffChallenge)
 	if err != nil {
 		t.Fatalf("AuthorizeURL: %v", err)
 	}
@@ -262,7 +261,7 @@ func TestOAuth_Exchange_MissingState(t *testing.T) {
 
 func TestOAuth_AuthorizeURL_UnknownProvider(t *testing.T) {
 	oauth := newOAuthForStateOnlyTest(t)
-	_, _, err := oauth.AuthorizeURL("unknown", "/", false)
+	_, _, err := oauth.AuthorizeURL("unknown", "/", false, testHandoffChallenge)
 	if err == nil {
 		t.Fatal("expected ErrUnknownProvider")
 	}
@@ -315,7 +314,7 @@ func TestOAuth_Exchange_IDTokenTampering(t *testing.T) {
 				t.Fatalf("NewOAuth: %v", err)
 			}
 
-			authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile", false)
+			authURL, stateToken, err := oauth.AuthorizeURL("google", "/profile", false, testHandoffChallenge)
 			if err != nil {
 				t.Fatalf("AuthorizeURL: %v", err)
 			}
@@ -432,7 +431,6 @@ func newFakeOIDCHarness(t *testing.T, mutate func(jwt.MapClaims, string, string)
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -480,7 +478,6 @@ func newOAuthForStateOnlyTest(t *testing.T) *OAuth {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -535,7 +532,6 @@ func TestNewOAuth_PartialInitFailure(t *testing.T) {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -610,7 +606,7 @@ func TestNewOAuth_PartialInitFailure(t *testing.T) {
 
 	// AuthorizeURL likewise should refuse to build an auth URL for the bad
 	// provider — otherwise we'd redirect the browser to a broken flow.
-	_, _, err = oauth.AuthorizeURL("microsoft", "/", false)
+	_, _, err = oauth.AuthorizeURL("microsoft", "/", false, testHandoffChallenge)
 	if err == nil {
 		t.Fatal("AuthorizeURL on bad provider: expected error, got nil")
 	}
@@ -626,7 +622,6 @@ func TestOAuth_Status(t *testing.T) {
 	baseCfg := func() *config.Config {
 		return &config.Config{
 			Auth: config.AuthConfig{
-				AdminRole:            "admin",
 				FrontendReturnURL:    "http://gui.test/return",
 				OAuthRedirectBaseURL: "http://api.test",
 			},
@@ -829,7 +824,6 @@ func newFakeMultiTenantHarness(t *testing.T, tokenIssuer string) *fakeMultiTenan
 	// ClaimStyle "microsoft" exercises the mapper path we actually care about.
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -861,7 +855,7 @@ func newFakeMultiTenantHarness(t *testing.T, tokenIssuer string) *fakeMultiTenan
 // exchange tests: it drives AuthorizeURL → Exchange and returns whatever
 // Exchange produced, so each test can assert success or a specific failure
 // without duplicating setup.
-func runMultiTenantExchange(t *testing.T, h *fakeMultiTenantHarness) (Principal, StatePayload, error) {
+func runMultiTenantExchange(t *testing.T, h *fakeMultiTenantHarness) (ExternalIdentity, StatePayload, error) {
 	t.Helper()
 
 	oauth, err := NewOAuth(context.Background(), h.cfg)
@@ -869,7 +863,7 @@ func runMultiTenantExchange(t *testing.T, h *fakeMultiTenantHarness) (Principal,
 		t.Fatalf("NewOAuth: %v", err)
 	}
 
-	authURL, stateToken, err := oauth.AuthorizeURL("microsoft", "/profile", false)
+	authURL, stateToken, err := oauth.AuthorizeURL("microsoft", "/profile", false, testHandoffChallenge)
 	if err != nil {
 		t.Fatalf("AuthorizeURL: %v", err)
 	}
@@ -914,7 +908,6 @@ func TestOAuth_Rebuild(t *testing.T) {
 
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
@@ -1015,7 +1008,7 @@ func enabledIDs(o *OAuth) []string {
 // TestOAuth_MultiTenant_HappyPath verifies that a multi-tenant Microsoft
 // provider (discovery returns the "{tenantid}" placeholder, id_token carries
 // a tenant-UUID issuer) completes the full Exchange flow and yields a
-// Principal. This pins down the intended happy path end-to-end.
+// ExternalIdentity. This pins down the intended happy path end-to-end.
 func TestOAuth_MultiTenant_HappyPath(t *testing.T) {
 	tokenIssuer := "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0"
 	h := newFakeMultiTenantHarness(t, tokenIssuer)
@@ -1025,13 +1018,13 @@ func TestOAuth_MultiTenant_HappyPath(t *testing.T) {
 		t.Fatalf("Exchange: %v", err)
 	}
 	if principal.Issuer != tokenIssuer {
-		t.Errorf("Principal.Issuer = %q, want %q", principal.Issuer, tokenIssuer)
+		t.Errorf("ExternalIdentity.Issuer = %q, want %q", principal.Issuer, tokenIssuer)
 	}
 	if principal.Subject != "ms-sub-123" {
-		t.Errorf("Principal.Subject = %q, want %q", principal.Subject, "ms-sub-123")
+		t.Errorf("ExternalIdentity.Subject = %q, want %q", principal.Subject, "ms-sub-123")
 	}
 	if principal.Email != "user@example.com" {
-		t.Errorf("Principal.Email = %q, want %q", principal.Email, "user@example.com")
+		t.Errorf("ExternalIdentity.Email = %q, want %q", principal.Email, "user@example.com")
 	}
 	if payload.ReturnPath != "/profile" {
 		t.Errorf("payload.ReturnPath = %q, want /profile", payload.ReturnPath)
@@ -1066,5 +1059,35 @@ func TestOAuth_MultiTenant_NonUUIDTenantRejected(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "microsoft issuer not accepted") {
 		t.Errorf("error should mention issuer rejection, got: %v", err)
+	}
+}
+
+func TestAuthorizeURL_SignInRequiresAHandoffChallenge(t *testing.T) {
+	oauth := newOAuthForStateOnlyTest(t)
+	for _, bad := range []string{"", "short", testHandoffChallenge + "x"} {
+		if _, _, err := oauth.AuthorizeURL("google", "/", false, bad); !errors.Is(err, ErrInvalidHandoffChallenge) {
+			t.Errorf("challenge %q: got %v, want ErrInvalidHandoffChallenge", bad, err)
+		}
+	}
+	// A refused provider keeps its own answer whatever the challenge.
+	if _, _, err := oauth.AuthorizeURL("unknown", "/", false, ""); errors.Is(err, ErrInvalidHandoffChallenge) {
+		t.Errorf("unknown provider answered with the challenge refusal: %v", err)
+	}
+	// A test-mode flow creates no handoff, so it needs (and carries) no challenge.
+	_, state, err := oauth.AuthorizeURL("google", "/", true, "")
+	if err != nil {
+		t.Fatalf("test mode: %v", err)
+	}
+	payload, err := oauth.StateSigner.Verify(state)
+	if err != nil || payload.HandoffChallenge != "" || !payload.TestMode {
+		t.Errorf("test-mode state = %+v, %v", payload, err)
+	}
+	// A valid challenge is carried in the signed state.
+	_, state, err = oauth.AuthorizeURL("google", "/", false, testHandoffChallenge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload, err = oauth.StateSigner.Verify(state); err != nil || payload.HandoffChallenge != testHandoffChallenge {
+		t.Errorf("sign-in state = %+v, %v", payload, err)
 	}
 }

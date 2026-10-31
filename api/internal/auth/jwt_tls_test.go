@@ -47,7 +47,7 @@ func TestNewVerifierWithOptions_TLSVerifiedByDefault(t *testing.T) {
 
 func TestNewVerifier_TLSVerifiedAlways(t *testing.T) {
 	srv := newOIDCTestServer(t, true)
-	if _, err := NewVerifier(context.Background(), srv.URL, "cid", "", ""); err == nil {
+	if _, err := NewVerifierWithOptions(context.Background(), WithOIDC(srv.URL, "cid")); err == nil {
 		t.Fatal("expected failure for untrusted certificate")
 	}
 }

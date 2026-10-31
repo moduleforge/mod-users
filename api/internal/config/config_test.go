@@ -1,6 +1,10 @@
 package config_test
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"strings"
 	"testing"
 	"time"
@@ -8,16 +12,32 @@ import (
 	"github.com/moduleforge/mod-users/api/internal/config"
 )
 
+// testSigningKeyPEM is a throwaway Ed25519 key generated per test run, so
+// Load never needs the database to bootstrap a signing key. No key material
+// is checked in.
+var testSigningKeyPEM = func() string {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		panic(err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+}()
+
 // requiredEnv is a complete set of required environment variables with valid
 // values that exercise the local-auth-only happy path. Tests derive from this
 // by adding provider keys or clearing specific fields.
 var requiredEnv = map[string]string{
-	"DB_URL":      "postgres://user:pass@localhost:5432/users",
-	"JWT_SECRET":  "supersecretkey",
-	"SMTP_HOST":   "smtp.example.com",
-	"SMTP_PORT":   "1025",
-	"SMTP_FROM":   "no-reply@example.com",
-	"DEPLOY_MODE": "local",
+	"DB_URL":          "postgres://user:pass@localhost:5432/users",
+	"JWT_SIGNING_KEY": testSigningKeyPEM,
+	"JWT_SECRET":      "supersecretkey",
+	"SMTP_HOST":       "smtp.example.com",
+	"SMTP_PORT":       "1025",
+	"SMTP_FROM":       "no-reply@example.com",
+	"DEPLOY_MODE":     "local",
 }
 
 // setEnv applies the given map to the process environment. t.Setenv handles
@@ -106,8 +126,8 @@ func TestLoad(t *testing.T) {
 		if len(cfg.Providers) != 0 {
 			t.Errorf("Providers = %v, want empty registry", cfg.Providers)
 		}
-		if cfg.Auth.AdminRole != "admin" {
-			t.Errorf("Auth.AdminRole = %q, want %q", cfg.Auth.AdminRole, "admin")
+		if cfg.LocalAuth.JWTSigningKey == nil {
+			t.Error("LocalAuth.JWTSigningKey is nil")
 		}
 	})
 
@@ -127,7 +147,7 @@ func TestLoad(t *testing.T) {
 		// that never sends email may leave it entirely unset.
 		required := []string{
 			"DB_URL",
-			"JWT_SECRET",
+			"JWT_SIGNING_KEY",
 		}
 		for _, field := range required {
 			if !strings.Contains(err.Error(), field) {

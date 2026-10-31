@@ -30,11 +30,44 @@ spec:
                 secretKeyRef:
                   name: users-api-secrets
                   key: database-url
+            # Access tokens are EdDSA only. JWT_SIGNING_KEY is a PKCS#8 PEM
+            # Ed25519 private key. When unset, the service uses (or generates
+            # and persists) the key in mod_users.auth_signing_keys.
+            - name: JWT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: users-api-secrets
+                  key: jwt-signing-key
+                  optional: true
+            # Optional "kid" header for the signing key (needed for rotation).
+            - name: JWT_SIGNING_KID
+              valueFrom:
+                secretKeyRef:
+                  name: users-api-secrets
+                  key: jwt-signing-kid
+                  optional: true
+            # Optional verify-only keys for rotation: a PEM public key or a
+            # JSON kid-to-PEM map.
+            - name: JWT_VERIFY_PUBLIC_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: users-api-secrets
+                  key: jwt-verify-public-keys
+                  optional: true
+            # Optional. Only keys the OAuth state; when unset the state key is
+            # derived from the signing key.
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: users-api-secrets
                   key: jwt-secret
+                  optional: true
+            # Optional lifetime and audience settings (set via the ConfigMap):
+            # AUTH_ACCESS_TOKEN_TTL, AUTH_SESSION_MAX_AGE,
+            # AUTH_SESSION_IDLE_TIMEOUT, AUTH_CLIENT_CREDENTIALS_TTL,
+            # AUTH_IMPERSONATION_TTL, AUTH_IMPERSONATION_MAX,
+            # AUTH_SELF_SERVICE_MAX_AUTH_AGE, AUTH_DEFAULT_AUDIENCE,
+            # AUTH_ACCEPTED_AUDIENCES.
           resources:
             requests:
               cpu: 100m

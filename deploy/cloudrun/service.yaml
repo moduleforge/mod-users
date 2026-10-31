@@ -61,11 +61,37 @@ spec:
                 secretKeyRef:
                   name: users-api-database-url
                   key: latest
-            - name: JWT_SECRET
+            # Access tokens are EdDSA only. JWT_SIGNING_KEY is a PKCS#8 PEM
+            # Ed25519 private key. When unset, the service uses (or generates
+            # and persists) the key in mod_users.auth_signing_keys.
+            - name: JWT_SIGNING_KEY
               valueFrom:
                 secretKeyRef:
-                  name: users-api-jwt-secret
+                  name: users-api-jwt-signing-key
                   key: latest
+            # Optional "kid" header for the signing key (needed for rotation).
+            # - name: JWT_SIGNING_KID
+            #   value: key-2026-01
+            # Optional verify-only keys for rotation: a PEM public key or a
+            # JSON kid-to-PEM map.
+            # - name: JWT_VERIFY_PUBLIC_KEYS
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: users-api-jwt-verify-public-keys
+            #       key: latest
+            # Optional. Only keys the OAuth state; when unset the state key is
+            # derived from the signing key. Omit unless needed.
+            # - name: JWT_SECRET
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: users-api-jwt-secret
+            #       key: latest
+            # Optional lifetime and audience settings (plain env values):
+            # AUTH_ACCESS_TOKEN_TTL, AUTH_SESSION_MAX_AGE,
+            # AUTH_SESSION_IDLE_TIMEOUT, AUTH_CLIENT_CREDENTIALS_TTL,
+            # AUTH_IMPERSONATION_TTL, AUTH_IMPERSONATION_MAX,
+            # AUTH_SELF_SERVICE_MAX_AUTH_AGE, AUTH_DEFAULT_AUDIENCE,
+            # AUTH_ACCEPTED_AUDIENCES.
             # OIDC client secret(s) — one per enabled provider. Example shows
             # Google; add additional AUTH_PROVIDER_<ID>_CLIENT_SECRET entries
             # for other providers (microsoft, authelia, etc.).

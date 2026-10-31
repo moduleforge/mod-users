@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { OidcConfigPage } from './oidc-config-page';
 import { AuthProvider } from '../lib/auth-context';
-import { configureUsersApi, resetUsersApiConfig } from '../lib/config';
+import {
+  configureUsersApi,
+  resetUsersApiConfig,
+  setStoredProfileUuid,
+  setStoredRefreshToken,
+  setStoredToken,
+} from '../lib/config';
+import { setUpHarness, tearDownHarness } from '../test-support/chrome-harness';
+import { PROFILE_A, tokenResponse, USER_VIEW } from '../test-support/users-fixtures';
 import type { OIDCStatus } from '../lib/oidc-config';
 import type { OIDCProviderView } from '../lib/oidc-provider';
 
@@ -63,20 +71,12 @@ const GOOGLE_VIEW: OIDCProviderView = {
   scopes_default: ['openid', 'email', 'profile'],
   scopes_source: 'well_known',
   enabled: true,
+  party_uuid: null,
+  jit_mode: 'byo',
+  trust_acr: false,
   init_ok: true,
   callback_url: 'http://localhost:8080/v1/auth/oidc/google/callback',
   well_known: true,
-};
-
-const ADMIN = {
-  uuid: 'u1',
-  entity_uuid: 'e1',
-  email: 'admin@example.com',
-  given_name: 'A',
-  family_name: 'B',
-  is_admin: true,
-  created_at: '',
-  updated_at: '',
 };
 
 function pathOf(url: string): string {
@@ -84,13 +84,19 @@ function pathOf(url: string): string {
 }
 
 beforeEach(() => {
+  setUpHarness();
   calls = [];
   routes = {};
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     const call: Call = {
       url: String(url),
       method: init?.method ?? 'GET',
-      headers: { ...((init?.headers as Record<string, string>) ?? {}) },
+      // The API client may pass a Headers instance; the raw oidc helpers pass
+      // a plain object. Normalize both to a record.
+      headers:
+        init?.headers instanceof Headers
+          ? Object.fromEntries(init.headers.entries())
+          : { ...((init?.headers as Record<string, string>) ?? {}) },
       body: init?.body ? JSON.parse(init.body as string) : undefined,
     };
     calls.push(call);
@@ -98,16 +104,23 @@ beforeEach(() => {
     const handler = routes[key];
     if (handler) return handler(call);
     if (key === 'GET /v1/oidc-config/status') return json(200, status());
-    if (key === 'GET /v1/self') return json(200, ADMIN);
+    // Bootstrapped by default: a token-mode confirmation then finishes setup.
+    if (key === 'GET /v1/bootstrap/status') return json(200, { bootstrapped: true, oidc_confirmed: false });
+    // Only a mounted AuthProvider with stored tokens reaches these two.
+    if (key === 'GET /v1/session') {
+      const base = tokenResponse();
+      return json(200, { session: base.session, profile: PROFILE_A, profiles: [PROFILE_A] });
+    }
+    if (key === 'GET /v1/me') return json(200, USER_VIEW);
     return json(404, { error: { code: 'not_found', message: `unrouted ${key}` } });
   }) as unknown as typeof fetch;
 });
 
 afterEach(() => {
   jest.useRealTimers();
+  tearDownHarness();
   globalThis.fetch = originalFetch;
   window.open = originalOpen;
-  localStorage.clear();
   resetUsersApiConfig();
   happyDOM.setURL('about:blank');
 });
@@ -209,11 +222,12 @@ describe('OidcConfigPage: token mode', () => {
 
     const confirm = callsTo('POST', '/v1/oidc-config/confirm');
     expect(confirm).toHaveLength(1);
+    // The setup token travels only in the header, never in the body.
     expect(confirm[0]!.body).toEqual({
-      setup_token: 'abc123',
       enabled_providers: ['google', 'microsoft'],
       opt_out: false,
     });
+    expect(confirm[0]!.headers['X-Setup-Token']).toBe('abc123');
     expect(confirm[0]!.headers.Authorization).toBeUndefined();
 
     expect(screen.getByText('Configuration saved')).toBeInTheDocument();
@@ -259,7 +273,6 @@ describe('OidcConfigPage: token mode', () => {
     fireEvent.click(saveButton());
     await waitFor(() => expect(callsTo('POST', '/v1/oidc-config/confirm')).toHaveLength(1));
     expect(callsTo('POST', '/v1/oidc-config/confirm')[0]!.body).toEqual({
-      setup_token: 'abc',
       enabled_providers: [],
       opt_out: true,
     });
@@ -333,9 +346,16 @@ describe('OidcConfigPage: token mode', () => {
   });
 });
 
-describe('OidcConfigPage: admin mode', () => {
-  async function renderAdmin(onComplete?: () => void) {
-    localStorage.setItem('auth_token', 'admin-jwt');
+/** Mounts the page under an AuthProvider whose tab already holds a session. */
+function signInTab() {
+  setStoredToken('admin-jwt');
+  setStoredRefreshToken('old-refresh');
+  setStoredProfileUuid('prof-a');
+}
+
+describe('OidcConfigPage: session mode', () => {
+  async function renderSession(onComplete?: () => void) {
+    signInTab();
     render(
       <AuthProvider>
         <OidcConfigPage onComplete={onComplete} redirectDelayMs={0} />
@@ -344,7 +364,7 @@ describe('OidcConfigPage: admin mode', () => {
     await screen.findByText('Toggle providers and confirm. Changes take effect immediately.');
   }
 
-  test('hides the token field, sends a bearer token, stays on the page with refreshed status', async () => {
+  test('hides the token field, sends the tab bearer token, stays on the page with refreshed status', async () => {
     let completed = 0;
     routes['POST /v1/oidc-config/confirm'] = () =>
       json(
@@ -357,7 +377,7 @@ describe('OidcConfigPage: admin mode', () => {
           ],
         }),
       );
-    await renderAdmin(() => completed++);
+    await renderSession(() => completed++);
     expect(screen.queryByLabelText('Setup token')).toBeNull();
 
     fireEvent.click(screen.getByRole('switch', { name: 'Microsoft' }));
@@ -366,6 +386,7 @@ describe('OidcConfigPage: admin mode', () => {
     expect(await screen.findByText('Configuration saved.')).toBeInTheDocument();
     const confirm = callsTo('POST', '/v1/oidc-config/confirm')[0]!;
     expect(confirm.headers.Authorization).toBe('Bearer admin-jwt');
+    expect(confirm.headers['X-Setup-Token']).toBeUndefined();
     expect(confirm.body).toEqual({ enabled_providers: ['google', 'microsoft'], opt_out: false });
 
     // Refreshed status: both badges OK, no init error, Save clean again.
@@ -377,17 +398,110 @@ describe('OidcConfigPage: admin mode', () => {
     expect(screen.queryByText('Redirecting to the login page...')).toBeNull();
   });
 
-  test('a non-admin session still renders token mode inside AuthProvider', async () => {
-    localStorage.setItem('auth_token', 'user-jwt');
-    routes['GET /v1/self'] = () => json(200, { ...ADMIN, is_admin: false });
-    render(
-      <AuthProvider>
-        <OidcConfigPage />
-      </AuthProvider>,
+  test('a 403 on confirm is shown as requiring an operator admin profile', async () => {
+    routes['POST /v1/oidc-config/confirm'] = () =>
+      json(403, { error: { code: 'forbidden', message: 'forbidden' } });
+    await renderSession();
+    fireEvent.click(screen.getByRole('switch', { name: 'Microsoft' }));
+    fireEvent.click(saveButton());
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'requires an operator admin profile',
     );
-    await screen.findByRole('switch', { name: 'Google' });
-    await waitFor(() => expect(callsTo('GET', '/v1/self')).toHaveLength(1));
-    expect(screen.getByLabelText('Setup token')).toBeInTheDocument();
+  });
+
+  test('a 403 without a session keeps the server message (no operator-admin hint)', async () => {
+    routes['POST /v1/oidc-config/confirm'] = () =>
+      json(403, { error: { code: 'forbidden', message: 'server says no' } });
+    await renderLoaded();
+    typeToken('abc');
+    fireEvent.click(screen.getByRole('switch', { name: 'Microsoft' }));
+    fireEvent.click(saveButton());
+    expect((await screen.findByRole('alert')).textContent).toContain('server says no');
+  });
+});
+
+describe('OidcConfigPage: token mode and the setup-token lifecycle', () => {
+  test('confirming while the bootstrap is pending points to the bootstrap page and calls onBootstrapPending', async () => {
+    let completed = 0;
+    let pending = 0;
+    routes['GET /v1/bootstrap/status'] = () =>
+      json(200, { bootstrapped: false, oidc_confirmed: false });
+    routes['POST /v1/oidc-config/confirm'] = () => json(200, status({ confirmed: true }));
+    await renderLoaded(
+      <OidcConfigPage
+        onComplete={() => completed++}
+        onBootstrapPending={() => pending++}
+        redirectDelayMs={0}
+      />,
+    );
+    typeToken('abc');
+    fireEvent.click(screen.getByRole('switch', { name: 'Microsoft' }));
+    fireEvent.click(saveButton());
+
+    expect(await screen.findByText(/Setup is not finished/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Continue to bootstrap' })).toHaveAttribute('href', '/bootstrap');
+    await waitFor(() => expect(pending).toBe(1));
+    expect(completed).toBe(0);
+    expect(screen.queryByText('Redirecting to the login page...')).toBeNull();
+  });
+
+  test('an unreadable bootstrap status is treated as pending, not as a spent token', async () => {
+    let completed = 0;
+    let pending = 0;
+    routes['GET /v1/bootstrap/status'] = () =>
+      json(500, { error: { code: 'internal_error', message: 'boom' } });
+    routes['POST /v1/oidc-config/confirm'] = () => json(200, status({ confirmed: true }));
+    await renderLoaded(
+      <OidcConfigPage
+        onComplete={() => completed++}
+        onBootstrapPending={() => pending++}
+        redirectDelayMs={0}
+      />,
+    );
+    typeToken('abc');
+    fireEvent.click(screen.getByRole('switch', { name: 'Microsoft' }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(pending).toBe(1));
+    expect(completed).toBe(0);
+  });
+
+  test('no session and OIDC confirmed with the bootstrap pending: no form, link to bootstrap', async () => {
+    routes['GET /v1/oidc-config/status'] = () => json(200, status({ confirmed: true }));
+    routes['GET /v1/bootstrap/status'] = () =>
+      json(200, { bootstrapped: false, oidc_confirmed: true });
+    render(<OidcConfigPage />);
+    expect(await screen.findByText(/setup token now works only on the bootstrap page/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Setup token')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Go to bootstrap' })).toHaveAttribute('href', '/bootstrap');
+  });
+
+  test('no session and OIDC confirmed after bootstrap: no form, link to sign-in', async () => {
+    routes['GET /v1/oidc-config/status'] = () => json(200, status({ confirmed: true }));
+    routes['GET /v1/bootstrap/status'] = () =>
+      json(200, { bootstrapped: true, oidc_confirmed: true });
+    render(<OidcConfigPage />);
+    expect(
+      await screen.findByText('Sign in with an operator admin profile to change the OIDC configuration.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to sign in' })).toHaveAttribute('href', '/auth/login');
+  });
+
+  test('every oidc-config request omits ambient credentials', async () => {
+    const seen: Array<RequestCredentials | undefined> = [];
+    const inner = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/v1/oidc-config/')) seen.push(init?.credentials);
+      return inner(url, init);
+    }) as unknown as typeof fetch;
+    routes['POST /v1/oidc-config/confirm'] = () => json(200, status({ confirmed: true }));
+    await renderLoaded(<OidcConfigPage redirectDelayMs={0} />);
+    typeToken('abc');
+    fireEvent.click(screen.getByRole('switch', { name: 'Microsoft' }));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(callsTo('POST', '/v1/oidc-config/confirm')).toHaveLength(1));
+    // The initial status read and the confirm both carried 'omit'.
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+    expect(seen.every((c) => c === 'omit')).toBe(true);
   });
 });
 
@@ -491,7 +605,8 @@ describe('OidcConfigPage: provider modals', () => {
       claim_style: null,
       scopes: null,
       enabled: true,
-      setup_token: 'setup-tok',
+      jit_mode: 'byo',
+      trust_acr: false,
     });
     await waitFor(() => expect(callsTo('GET', '/v1/oidc-config/status')).toHaveLength(2));
     expect(callsTo('GET', '/v1/oidc-config/status')[1]!.url).toBe('/v1/oidc-config/status');
@@ -557,7 +672,9 @@ describe('OidcConfigPage: provider modals', () => {
       claim_style: null,
       scopes: null,
       enabled: true,
-      setup_token: 'setup-tok',
+      party_uuid: null,
+      jit_mode: 'byo',
+      trust_acr: false,
     });
     expect(await within(dialog).findByText('Source: DB override')).toBeInTheDocument();
     await waitFor(() => expect(callsTo('GET', '/v1/oidc-config/status')).toHaveLength(2));
@@ -570,8 +687,8 @@ describe('OidcConfigPage: provider modals', () => {
     await waitFor(() => expect(callsTo('GET', '/v1/oidc-config/status')).toHaveLength(3));
   });
 
-  test('admin mode opens the edit modal with a bearer token', async () => {
-    localStorage.setItem('auth_token', 'admin-jwt');
+  test('session mode opens the edit modal with a bearer token', async () => {
+    signInTab();
     routes['GET /v1/oidc-config/providers/google'] = () => json(200, GOOGLE_VIEW);
     render(
       <AuthProvider>
@@ -583,5 +700,85 @@ describe('OidcConfigPage: provider modals', () => {
     const get = callsTo('GET', '/v1/oidc-config/providers/google')[0]!;
     expect(get.headers.Authorization).toBe('Bearer admin-jwt');
     expect(get.headers['X-Setup-Token']).toBeUndefined();
+  });
+
+  test('add modal: managed JIT without a party is refused locally, then sent with the new fields', async () => {
+    routes['POST /v1/oidc-config/providers'] = () => json(201, { ...GOOGLE_VIEW, id: 'okta' });
+    await renderLoaded();
+    typeToken('setup-tok');
+    fireEvent.click(screen.getByRole('button', { name: 'Add provider' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('ID (slug)'), { target: { value: 'okta' } });
+
+    // Each mode carries a short explanation.
+    expect(within(dialog).getByText(/byo: an unknown identity gets a personal account/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('JIT mode'), { target: { value: 'managed' } });
+    expect(within(dialog).getByText(/managed: an unknown identity gets an account managed/)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create provider' }));
+    expect(await within(dialog).findByText('jit_mode managed requires a party UUID.')).toBeInTheDocument();
+    expect(callsTo('POST', '/v1/oidc-config/providers')).toHaveLength(0);
+
+    fireEvent.change(within(dialog).getByLabelText('Party UUID'), {
+      target: { value: ' 11111111-2222-3333-4444-555555555555 ' },
+    });
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Trust ACR' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create provider' }));
+    await waitFor(() => expect(callsTo('POST', '/v1/oidc-config/providers')).toHaveLength(1));
+    expect(callsTo('POST', '/v1/oidc-config/providers')[0]!.body).toMatchObject({
+      id: 'okta',
+      party_uuid: '11111111-2222-3333-4444-555555555555',
+      jit_mode: 'managed',
+      trust_acr: true,
+    });
+  });
+
+  test('add modal surfaces the server error for an unknown party', async () => {
+    routes['POST /v1/oidc-config/providers'] = () =>
+      json(400, {
+        error: {
+          code: 'invalid_input',
+          message: 'invalid input',
+          details: [{ field: 'party_uuid', code: 'users.party_unknown', message: 'party_uuid does not name a party' }],
+        },
+      });
+    await renderLoaded();
+    typeToken('setup-tok');
+    fireEvent.click(screen.getByRole('button', { name: 'Add provider' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('ID (slug)'), { target: { value: 'okta' } });
+    fireEvent.change(within(dialog).getByLabelText('Party UUID'), {
+      target: { value: '99999999-2222-3333-4444-555555555555' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create provider' }));
+    expect(await within(dialog).findByText('party_uuid does not name a party')).toBeInTheDocument();
+  });
+
+  test('edit modal shows the stored policy, blocks managed without a party, and writes the changed fields', async () => {
+    routes['GET /v1/oidc-config/providers/google'] = () =>
+      json(200, { ...GOOGLE_VIEW, jit_mode: 'none', trust_acr: true });
+    routes['PUT /v1/oidc-config/providers/google'] = () =>
+      json(200, { ...GOOGLE_VIEW, party_uuid: 'pp-1', jit_mode: 'managed', trust_acr: true });
+    await renderLoaded();
+    typeToken('setup-tok');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Google' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('Edit provider: google');
+    expect(within(dialog).getByLabelText('JIT mode')).toHaveValue('none');
+    expect(within(dialog).getByRole('switch', { name: 'Trust ACR' })).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.change(within(dialog).getByLabelText('JIT mode'), { target: { value: 'managed' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByText('jit_mode managed requires a party UUID.')).toBeInTheDocument();
+    expect(callsTo('PUT', '/v1/oidc-config/providers/google')).toHaveLength(0);
+
+    fireEvent.change(within(dialog).getByLabelText('Party UUID'), { target: { value: 'pp-1' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(callsTo('PUT', '/v1/oidc-config/providers/google')).toHaveLength(1));
+    expect(callsTo('PUT', '/v1/oidc-config/providers/google')[0]!.body).toMatchObject({
+      party_uuid: 'pp-1',
+      jit_mode: 'managed',
+      trust_acr: true,
+    });
   });
 });

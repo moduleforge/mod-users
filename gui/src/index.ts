@@ -1,5 +1,17 @@
 // ─── API client ──────────────────────────────────────────────────────────────
-export { createUsersClient, api, API_BASE_URL, ApiRequestError, ApiActionRequiredError, fetchProviders } from './lib/api';
+export {
+  createUsersClient,
+  api,
+  API_BASE_URL,
+  ApiRequestError,
+  ApiActionRequiredError,
+  fetchProviders,
+  commitTokenResponse,
+  subscribeSessionEvents,
+  setStepUpHandler,
+  USERS_ERROR_CODES,
+  STEP_UP_REQUIRED_ACTION,
+} from './lib/api';
 export type {
   UsersClient,
   UsersClientOptions,
@@ -9,33 +21,50 @@ export type {
   ApiAction,
   ApiActionResponse,
   RequestOptions,
-  LoginResponse,
-  LoginUser,
-  SessionUser,
+  TokenResponse,
+  AnonymousTokenResponse,
+  SessionView,
+  SessionInfo,
+  ProfileView,
+  PartyView,
+  ProfileLock,
+  LockRemedy,
+  LockRemedyKind,
   OIDCProvider,
   RegisterRequest,
+  LoginOptions,
+  AnonymousRequest,
   EmailCodePurpose,
   EmailCodeRequest,
   EmailCodeVerifyRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
-  UserAccountSelf,
-  UserAccount,
-  UserAccountListResponse,
-  UpdateProfileRequest,
+  RefreshTokenRequest,
+  AuthorizeURL,
+  StartImpersonationRequest,
+  UserView,
+  UpdateMeRequest,
+  ProfileList,
+  IdentifierView,
+  IdentifierList,
+  AddIdentifierRequest,
+  CredentialView,
+  CredentialList,
+  AddPasswordRequest,
+  AddSSHKeyRequest,
+  PatchCredentialRequest,
+  SelfSession,
+  SessionList,
+  UpgradeRequest,
+  BootstrapStatus,
+  BootstrapOperator,
+  BootstrapRequest,
   AuditEntry,
   AuditListResponse,
-  App,
-  AppListResponse,
-  AppMember,
-  AppMembersResponse,
-  CreateAppRequest,
-  AddAppMemberRequest,
-  SSHKey,
-  SSHKeyListResponse,
-  RegisterSSHKeyRequest,
-  StepUpVerifyResponse,
-  StepUpOptions,
+  StepUpHandler,
+  StepUpRequest,
+  SessionEvent,
+  SignOutReason,
 } from './lib/api';
 
 // ─── Runtime configuration ───────────────────────────────────────────────────
@@ -51,7 +80,18 @@ export {
 export type { UsersApiConfig, UnauthenticatedContext } from './lib/config';
 
 // ─── Auth context ─────────────────────────────────────────────────────────────
-export { AuthProvider, useAuth, useOptionalAuth } from './lib/auth-context';
+export {
+  AuthProvider,
+  useAuth,
+  useOptionalAuth,
+  useStepUpHandler,
+} from './lib/auth-context';
+export type {
+  AuthContextValue,
+  AuthProviderProps,
+  ProfileLockState,
+  RegisterOptions,
+} from './lib/auth-context';
 
 // ─── Return-path safety ───────────────────────────────────────────────────────
 export { isSafeReturnPath, readReturnPath } from './lib/return-path';
@@ -79,10 +119,14 @@ export {
   revertOIDCProvider,
   PROVIDER_ID_PATTERN,
   WELL_KNOWN_HINTS,
+  OIDC_JIT_MODES,
+  OIDC_JIT_MODE_HELP,
+  validateJitPolicy,
   testProviderURL,
 } from './lib/oidc-provider';
 export type {
   OIDCProviderView,
+  OIDCJitMode,
   OIDCFieldSource,
   OIDCProviderWriteBody,
   OIDCProviderAuth,
@@ -96,6 +140,16 @@ export { cn } from './lib/utils';
 export { ClientLayout } from './components/client-layout';
 export type { ClientLayoutProps } from './components/client-layout';
 export { RequireAuth } from './components/require-auth';
+export { ProfileSwitcher, profileLabel } from './components/profile-switcher';
+export type { ProfileSwitcherProps } from './components/profile-switcher';
+export { ProfileLockNotice } from './components/profile-lock-notice';
+export { ProfileRemedy } from './components/profile-remedy';
+export type { ProfileRemedyProps } from './components/profile-remedy';
+export { SelectProfilePage } from './components/select-profile-page';
+export type { SelectProfilePageProps } from './components/select-profile-page';
+export { InvitationsView } from './components/invitations-view';
+export type { InvitationsViewProps } from './components/invitations-view';
+export { ImpersonationBanner } from './components/impersonation-banner';
 export { OidcCallbackPage } from './components/oidc-callback-page';
 export type { OidcCallbackPageProps } from './components/oidc-callback-page';
 export { SidebarNav } from './components/sidebar-nav';
@@ -119,9 +173,20 @@ export { OidcConfigPage } from './components/oidc-config-page';
 export type { OidcConfigPageProps } from './components/oidc-config-page';
 export { OidcSetupGate } from './components/oidc-setup-gate';
 export type { OidcSetupGateProps } from './components/oidc-setup-gate';
+export { BootstrapPage } from './components/bootstrap-page';
+export type { BootstrapPageProps } from './components/bootstrap-page';
 
-export { SSHKeysPanel } from './components/ssh-keys-panel';
-export type { SSHKeysPanelProps } from './components/ssh-keys-panel';
+// ─── Account self-service panels ──────────────────────────────────────────────
+export { StepUpDialog } from './components/step-up-dialog';
+export type { StepUpDialogProps } from './components/step-up-dialog';
+export { CredentialsPanel } from './components/credentials-panel';
+export type { CredentialsPanelProps } from './components/credentials-panel';
+export { IdentifiersPanel } from './components/identifiers-panel';
+export type { IdentifiersPanelProps } from './components/identifiers-panel';
+export { SessionsPanel } from './components/sessions-panel';
+export type { SessionsPanelProps } from './components/sessions-panel';
+export { GuestUpgradeForm } from './components/guest-upgrade-form';
+export type { GuestUpgradeFormProps } from './components/guest-upgrade-form';
 
 // ─── Standard frontend routes ─────────────────────────────────────────────────
 export { USERS_GUI_ROUTES } from './lib/routes';

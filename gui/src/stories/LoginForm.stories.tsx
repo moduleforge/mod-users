@@ -30,3 +30,18 @@ export const WithForgotPassword: Story = () => (
     </div>
   </AuthProvider>
 );
+
+/** Signs in to a specific app (uuid) and routes a no-landing-profile result to selection. */
+export const WithAppAndSelectionRouting: Story = () => (
+  <AuthProvider>
+    <div className="w-full max-w-sm p-6">
+      <LoginForm
+        app="demo"
+        onSuccess={(returnPath) => console.log('signed in', returnPath)}
+        onSelectionRequired={(selectProfilePath, returnPath) =>
+          console.log('choose a profile at', selectProfilePath, 'then resume', returnPath)
+        }
+      />
+    </div>
+  </AuthProvider>
+);

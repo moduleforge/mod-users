@@ -1,6 +1,7 @@
 import type { Story } from '@ladle/react';
 import { RequireAuth } from '../components/require-auth';
 import { AuthProvider } from '../lib/auth-context';
+import { SignedInStory, STORY_PERSONAL } from './story-support';
 
 // RequireAuth requires an AuthProvider in scope.
 // These stories exercise the loading, unauthenticated, and authenticated states.
@@ -28,3 +29,16 @@ export const Unauthenticated: Story = () => {
     </AuthProvider>
   );
 };
+
+export const Authenticated: Story = () => (
+  <SignedInStory profiles={[STORY_PERSONAL]}>
+    <RequireAuth onUnauthenticated={() => console.log('[story] unexpected redirect')}>
+      <div className="p-4 text-sm">Protected content</div>
+    </RequireAuth>
+  </SignedInStory>
+);
+
+// `onSelectionRequired` fires instead of `onUnauthenticated` when a sign-in
+// found no landing profile; a profile lock renders `ProfileLockNotice` in
+// place of the children. Both states need a live API response, so they are
+// covered by the component tests rather than a static story.

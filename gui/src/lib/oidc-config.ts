@@ -2,10 +2,18 @@ import { ApiRequestError, type ApiErrorResponse } from './api';
 import { getApiBaseUrl } from './config';
 
 /**
- * OIDC onboarding API helpers. These endpoints are unauthenticated
- * (`/v1/oidc-config/*` is exempt from `RequireOIDCConfirmed` and does not
- * require a bearer token), so none of these helpers send an Authorization
- * header — mirroring the `fetchProviders()` pattern in `api.ts`.
+ * OIDC onboarding API helpers. `status` and `saved` are public
+ * (`/v1/oidc-config/*` is exempt from `RequireOIDCConfirmed`), so those two
+ * send no credential. `confirm` authorizes with one of two credentials:
+ *   - an operator-admin Bearer token (session mode), or
+ *   - the setup token in the `X-Setup-Token` header (token mode). The server
+ *     accepts the token only while OIDC is unconfirmed; once confirmed, an
+ *     operator-admin session is required even while the bootstrap is pending.
+ *
+ * Every request sends `credentials: 'omit'`: the credential is always an
+ * explicit header, never an ambient cookie. (The `oidc_state` cookie of the
+ * provider redirect is set and read by the server during the browser
+ * navigation and needs no client handling.)
  */
 
 export type OIDCState =
@@ -34,7 +42,6 @@ export interface OIDCStatus {
 }
 
 export interface OIDCConfirmRequest {
-  setup_token: string;
   enabled_providers: string[];
   opt_out: boolean;
 }
@@ -42,8 +49,10 @@ export interface OIDCConfirmRequest {
 /**
  * Args for {@link postOIDCConfirm}. Exactly one authorization path must be
  * provided:
- *   - `setup_token` in the body (pre-confirmation onboarding flow).
- *   - `adminBearer` header (authenticated admin re-configuring post-setup).
+ *   - `setup_token`, sent as `X-Setup-Token` (onboarding while OIDC is
+ *     unconfirmed).
+ *   - `adminBearer`, sent as `Authorization: Bearer` (an operator admin
+ *     session; required once OIDC is confirmed).
  */
 export type OIDCConfirmArgs =
   | {
@@ -68,16 +77,20 @@ export interface OIDCSavedConfig {
 async function parseError(response: Response): Promise<ApiRequestError> {
   let code = 'unknown_error';
   let message = `Request failed with status ${response.status}`;
+  let details: ApiErrorResponse['error']['details'];
   try {
     const body = (await response.json()) as ApiErrorResponse;
     if (body.error) {
       code = body.error.code;
       message = body.error.message;
+      // Per-field details (for example users.party_unknown on party_uuid)
+      // let the modals show the specific reason instead of a generic line.
+      details = body.error.details;
     }
   } catch {
     // ignore JSON parse errors — keep defaults
   }
-  return new ApiRequestError(code, message, response.status);
+  return new ApiRequestError(code, message, response.status, details);
 }
 
 /**
@@ -92,6 +105,7 @@ export async function fetchOIDCStatus(): Promise<OIDCStatus> {
   try {
     response = await fetch(`${getApiBaseUrl()}/v1/oidc-config/status`, {
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'omit',
     });
   } catch (err) {
     console.error('[oidc-config] fetchOIDCStatus network error', err);
@@ -110,9 +124,9 @@ export async function fetchOIDCStatus(): Promise<OIDCStatus> {
 }
 
 /**
- * Submits the onboarding confirmation. Accepts EITHER a `setup_token` in
- * the body (pre-confirmation flow) OR an `adminBearer` string (admin
- * re-configure post-setup; sent as Authorization: Bearer). On 200 the API
+ * Submits the onboarding confirmation. Accepts EITHER a `setup_token`
+ * (sent as `X-Setup-Token`) OR an `adminBearer` string (sent as
+ * Authorization: Bearer). On 200 the API
  * returns the refreshed status (same shape as GET /status). Errors (401
  * invalid token, 400 bad body, 500 rebuild failure) surface as
  * ApiRequestError so the page can render `err.message` inline.
@@ -123,19 +137,20 @@ export async function postOIDCConfirm(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  let body: OIDCConfirmRequest | Omit<OIDCConfirmRequest, 'setup_token'>;
+  // The body never carries a credential: the server evaluates the Bearer and
+  // the X-Setup-Token header before it reads the body, so a wrong token is a
+  // 401 even when the body is malformed.
+  const body: OIDCConfirmRequest = {
+    enabled_providers: args.enabled_providers,
+    opt_out: args.opt_out,
+  };
   if ('adminBearer' in args && args.adminBearer) {
+    // Session mode: implies the OIDC may already be confirmed, where the
+    // setup token would be refused.
     headers.Authorization = `Bearer ${args.adminBearer}`;
-    body = {
-      enabled_providers: args.enabled_providers,
-      opt_out: args.opt_out,
-    };
-  } else if ('setup_token' in args && args.setup_token !== undefined) {
-    body = {
-      setup_token: args.setup_token,
-      enabled_providers: args.enabled_providers,
-      opt_out: args.opt_out,
-    };
+  } else if ('setup_token' in args && args.setup_token) {
+    // Token mode: only valid while OIDC is unconfirmed.
+    headers['X-Setup-Token'] = args.setup_token;
   } else {
     throw new ApiRequestError(
       'bad_request',
@@ -150,6 +165,7 @@ export async function postOIDCConfirm(
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      credentials: 'omit',
     });
   } catch (err) {
     console.error('[oidc-config] postOIDCConfirm network error', err);
@@ -176,6 +192,7 @@ export async function fetchOIDCSaved(): Promise<OIDCSavedConfig> {
   try {
     response = await fetch(`${getApiBaseUrl()}/v1/oidc-config/saved`, {
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'omit',
     });
   } catch (err) {
     console.error('[oidc-config] fetchOIDCSaved network error', err);

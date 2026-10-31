@@ -220,3 +220,49 @@ func TestLoadProviders(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadProviders_EnvOnlyPolicy(t *testing.T) {
+	setup := func(t *testing.T) {
+		resetProviderEnv(t)
+		t.Setenv("AUTH_PROVIDER_GOOGLE_CLIENT_ID", "gid")
+		t.Setenv("AUTH_PROVIDER_GOOGLE_CLIENT_SECRET", "gsecret")
+	}
+
+	t.Run("env-only provider is unbound byo that does not trust acr", func(t *testing.T) {
+		setup(t)
+		t.Setenv("NO_OIDC_ACCOUNTS", "")
+		reg, err := config.LoadProviders()
+		if err != nil {
+			t.Fatalf("LoadProviders: %v", err)
+		}
+		g := reg["google"]
+		if g.PartyID != 0 || g.JITMode != config.JITModeBYO || g.TrustACR {
+			t.Fatalf("policy = party %d mode %q trust %v", g.PartyID, g.JITMode, g.TrustACR)
+		}
+	})
+
+	t.Run("NO_OIDC_ACCOUNTS turns jit off", func(t *testing.T) {
+		setup(t)
+		t.Setenv("NO_OIDC_ACCOUNTS", "1")
+		reg, err := config.LoadProviders()
+		if err != nil {
+			t.Fatalf("LoadProviders: %v", err)
+		}
+		if got := reg["google"].JITMode; got != config.JITModeNone {
+			t.Fatalf("JITMode = %q, want none", got)
+		}
+	})
+}
+
+func TestValidJITMode(t *testing.T) {
+	for _, m := range []string{"none", "byo", "managed"} {
+		if !config.ValidJITMode(m) {
+			t.Errorf("%q should be valid", m)
+		}
+	}
+	for _, m := range []string{"", "BYO", "auto", "managed "} {
+		if config.ValidJITMode(m) {
+			t.Errorf("%q should be invalid", m)
+		}
+	}
+}

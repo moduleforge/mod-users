@@ -8,12 +8,47 @@ for the rationale behind the Postgres + goose choices.
 
 ## Layout
 
-- `migrations/` — goose versioned migration files (`.sql`)
-- `queries/` — sqlc query files (`.sql`), one per concept
-- `internal/db/` — sqlc-generated Go code (do not edit)
+- `migrations/sql/` — goose versioned migration files (`.sql`); currently the single
+  `0100_baseline.sql`, which creates every mod-users table, trigger and function in the
+  `mod_users` schema (see the file's header comment for the schema rule and the `MF101`–`MF103`
+  SQLSTATE contract: `MF101` session, `MF102` credential, `MF103` user invariant violations).
+  Baseline contents, by group: users and user identifiers (the party `profiles` and
+  `profile_policy_confirmations` tables are mod-core's, which the baseline requires); OIDC config and providers (`party_id`, `jit_mode`,
+  `trust_acr`); credentials, the `credential_kinds` lookup and the `cred_*` subtables; party
+  authentication policies and credential authorizations; sessions, session factors and refresh
+  tokens; auth challenges; and the persisted signing keys (`auth_signing_keys`). The predicates
+  `mod_users.access_row_permitted` (list-side row filter) and `mod_users.owning_party_gate` are
+  defined here as well. The baseline is edited in place, so an existing dev database must be
+  dropped and recreated (`make clean.data`).
+- `migrations/migrate.go` — embeds `migrations/sql/*.sql` and exposes `Migrate`
+- `queries/` — sqlc query files (`.sql`), one per concept; they reference `mod_users` relations only
+  (sqlc compiles against `migrations/sql/` alone), and call `mod_users` functions for anything
+  that needs mod-core tables:
+  - `users.sql` — `mod_users.users` (create, `GetUserByEntityID`, defaults, guest upgrade, managed-user lists)
+  - `identifiers.sql` — `user_identifiers` (create, lookup by kind/value, primary switch, verify, delete)
+  - `credentials.sql` — `credentials` and the `cred_password`/`cred_email_otp`/`cred_oidc`/`cred_ssh_key`/`cred_api_key`/`cred_anon`
+    subtables (active lookups by identifier, issuer/subject, fingerprint, client id, token hash; revoke;
+    revoke sessions holding a credential)
+  - `challenges.sql` — `auth_challenges` (`create_challenge_with_cooldown`, consume, attempt counter)
+  - `sessions.sql` — sessions, factors, refresh lineages (rotation, reuse lookup) and the
+    `session_liveness`, `credential_liveness`, `profile_availability`,
+    `credential_profile_availability`, `profile_gate`, `profile_gate_for` and `session_acr` wrappers
+    (`profile_gate` is `profile_availability` without the profile-status check, and `profile_gate_for`
+    is its status-agnostic core; the leave route uses `profile_gate`)
+  - `party_policies.sql` — `party_authn_policies` and `credential_party_authorizations`, and the
+    `holder_policy_mismatch` wrapper (whether a holder's credentials can meet a party's policy; the
+    check shared by the invitation and outside-collaborator paths, with an invite-time mode: relaxed, the
+    `authorized` rule is met by any usable interactive credential since no credential can be
+    authorized before the profile exists; strict, for outside collaborators, it requires a
+    `credential_party_authorizations` row or a confinement)
+  - `oidc_config.sql`, `oidc_providers.sql` — the OIDC onboarding singleton and provider overrides
+    (providers carry `party_id`, `jit_mode`, `trust_acr`)
+  - `signing_keys.sql` — the persisted Ed25519 signing key
+- `db/` — sqlc-generated Go code (package `usersdb`; do not edit — run `make gen`, and delete the
+  `*.sql.go` of a removed query file, since sqlc does not)
 - `scripts/shadow-db-lint.sh` — ephemeral-Postgres lint runner
-- `scripts/` — operational SQL scripts (e.g., `relink_auth.sql`)
-- `sqlc.yaml` — sqlc v2 configuration
+- `sqlc.yaml` — sqlc v2 configuration; its `rename` overrides keep the Go names of the
+  `mod_users` tables unprefixed (`User`, not `ModUsersUser`)
 
 ## Prerequisites
 

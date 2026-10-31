@@ -1,0 +1,26 @@
+package auth
+
+// cognitoMapper handles JWT claims issued by AWS Cognito.
+//
+// Cognito places the user's Cognito group memberships in the "cognito:groups" claim.
+// These groups are treated directly as roles after lowercasing.
+type cognitoMapper struct {
+	opts MapperOptions
+}
+
+func (m *cognitoMapper) Map(rawClaims map[string]any) (ExternalIdentity, error) {
+	sub, iss, err := extractRequired(rawClaims)
+	if err != nil {
+		return ExternalIdentity{}, err
+	}
+
+	roles := lowercaseAll(getStringSlice(rawClaims, "cognito:groups"))
+
+	return ExternalIdentity{
+		Subject:       sub,
+		Issuer:        iss,
+		Email:         getString(rawClaims, "email"),
+		EmailVerified: coerceBoolClaim(rawClaims, "email_verified"),
+		Roles:         roles,
+	}, nil
+}

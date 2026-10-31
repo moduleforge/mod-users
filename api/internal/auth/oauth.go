@@ -128,7 +128,7 @@ type OAuth struct {
 	// ExchangeFn, when non-nil, replaces the real token-exchange logic.
 	// Used only in tests to simulate a successful provider exchange without
 	// a live IdP. Production code must leave this nil.
-	ExchangeFn func(ctx context.Context, providerID, code, rawState, cookieState string) (Principal, StatePayload, error)
+	ExchangeFn func(ctx context.Context, providerID, code, rawState, cookieState string) (ExternalIdentity, StatePayload, error)
 }
 
 // NewOAuth builds an OAuth for every provider in cfg.Providers. Unlike the
@@ -222,7 +222,7 @@ func initProvider(ctx context.Context, id string, p config.Provider, cfg *config
 		return state
 	}
 
-	mapper, err := NewClaimMapper(p.ClaimStyle, MapperOptions{AdminRole: cfg.Auth.AdminRole})
+	mapper, err := NewClaimMapper(p.ClaimStyle, MapperOptions{})
 	if err != nil {
 		state.Err = fmt.Errorf("provider %q claim mapper: %w", id, err)
 		return state
@@ -401,13 +401,37 @@ var ErrProviderNotAvailable = errors.New("oauth: provider not available")
 var ErrStateValidation = errors.New("oauth: state validation failed")
 
 // AuthorizeURL builds the OIDC authorization URL the browser should be
-// redirected to, along with the signed state token that must be stored in
-// the oidc_state cookie so the callback can verify it. testMode is
-// passed through to the StatePayload so the callback knows to skip
-// UserResolver + JWT issuance and redirect to a test-result URL; the
-// authorize URL itself is identical for test vs real (the IdP has no
-// notion of "test me").
-func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool) (authorizeURL, stateToken string, err error) {
+// redirected to for a plain sign-in, along with the signed state token that
+// must be stored in the oidc_state cookie so the callback can verify it.
+// testMode is passed through to the StatePayload so the callback knows to skip
+// the resolver and session creation and redirect to a test-result URL; the
+// authorize URL itself is identical for test vs real (the IdP has no notion of
+// "test me"). handoffChallenge is the browser's PKCE-style handoff challenge,
+// carried in the signed state; a real sign-in requires a valid one
+// (ErrInvalidHandoffChallenge otherwise), a test-mode flow creates no handoff
+// and ignores it.
+func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool, handoffChallenge string) (authorizeURL, stateToken string, err error) {
+	payload := StatePayload{TestMode: testMode}
+	if !testMode {
+		payload.HandoffChallenge = handoffChallenge
+	}
+	return o.authorize(providerID, returnPath, payload)
+}
+
+// SessionAuthorizeURL builds the authorization URL of a link or step-up flow
+// started by an authenticated session. The state carries the session and its
+// principal so the callback can re-verify both before it adds a credential or a
+// factor. flow must be FlowLink or FlowStepUp.
+func (o *OAuth) SessionAuthorizeURL(providerID string, flow Flow, sessionUUID, principalUUID, returnPath string) (authorizeURL, stateToken string, err error) {
+	if !flow.Authenticated() || sessionUUID == "" || principalUUID == "" {
+		return "", "", fmt.Errorf("oauth: invalid session flow %q", flow)
+	}
+	return o.authorize(providerID, returnPath, StatePayload{Flow: flow, SessionUUID: sessionUUID, PrincipalUUID: principalUUID})
+}
+
+// authorize completes payload (provider, return path, nonce, expiry), signs it
+// and builds the provider's authorization URL.
+func (o *OAuth) authorize(providerID, returnPath string, payload StatePayload) (authorizeURL, stateToken string, err error) {
 	s, err := o.stateByID(providerID)
 	if err != nil {
 		return "", "", err
@@ -418,18 +442,22 @@ func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool) (auth
 		return "", "", err
 	}
 
+	// A sign-in mints a handoff code, which must be bound to the browser's
+	// verifier. Checked after the provider and return path so those refusals
+	// keep their own answers.
+	if payload.Flow == FlowLogin && !payload.TestMode && !ValidHandoffChallenge(payload.HandoffChallenge) {
+		return "", "", ErrInvalidHandoffChallenge
+	}
+
 	nonce, err := randomBase64(32)
 	if err != nil {
 		return "", "", err
 	}
 
-	payload := StatePayload{
-		Provider:   providerID,
-		ReturnPath: returnPath,
-		Nonce:      nonce,
-		Expires:    time.Now().Add(stateTTL).Unix(),
-		TestMode:   testMode,
-	}
+	payload.Provider = providerID
+	payload.ReturnPath = returnPath
+	payload.Nonce = nonce
+	payload.Expires = time.Now().Add(stateTTL).Unix()
 	token, err := o.StateSigner.Sign(payload)
 	if err != nil {
 		return "", "", err
@@ -440,54 +468,31 @@ func (o *OAuth) AuthorizeURL(providerID, returnPath string, testMode bool) (auth
 	return authURL, token, nil
 }
 
-// LinkAuthorizeURL builds an OIDC authorization URL for a link-mode flow.
-// It is identical to AuthorizeURL but sets LinkMode=true and
-// LinkUserAccountID=userAccountUUID in the state payload so the callback can
-// insert a new identity row for the already-authenticated user rather than
-// resolving or creating an account.
-func (o *OAuth) LinkAuthorizeURL(providerID, userAccountUUID, returnPath string) (authorizeURL, stateToken string, err error) {
-	s, err := o.stateByID(providerID)
-	if err != nil {
-		return "", "", err
+// PolicyFor returns the account-creation policy of a registered provider (see
+// ProviderPolicy). NO_OIDC_ACCOUNTS caps a bring-your-own provider at no
+// account creation, so an enable-only DB row cannot re-open just-in-time
+// accounts the operator opted out of; a managed provider is unaffected (it
+// creates accounts of its party, not personal ones).
+func (o *OAuth) PolicyFor(providerID string) (ProviderPolicy, error) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	s, ok := o.States[providerID]
+	if !ok {
+		return ProviderPolicy{}, ErrUnknownProvider
 	}
-
-	returnPath, err = validateReturnPath(returnPath)
-	if err != nil {
-		return "", "", err
-	}
-
-	nonce, err := randomBase64(32)
-	if err != nil {
-		return "", "", err
-	}
-
-	payload := StatePayload{
-		Provider:          providerID,
-		ReturnPath:        returnPath,
-		Nonce:             nonce,
-		Expires:           time.Now().Add(stateTTL).Unix(),
-		LinkMode:          true,
-		LinkUserAccountID: userAccountUUID,
-	}
-	token, err := o.StateSigner.Sign(payload)
-	if err != nil {
-		return "", "", err
-	}
-
-	authURL := s.OAuthCfg.AuthCodeURL(token, oidc.Nonce(nonce))
-	return authURL, token, nil
+	return NewProviderPolicy(s.Provider, o.envNoOIDCAccounts), nil
 }
 
 // Exchange verifies the state parameter, trades the authorization code for
 // tokens at the provider's token endpoint, validates the resulting id_token,
-// and returns a normalized Principal plus the recovered state payload (so
+// and returns a normalized ExternalIdentity plus the recovered state payload (so
 // the caller can redirect to the return path).
-func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookieState string) (Principal, StatePayload, error) {
+func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookieState string) (ExternalIdentity, StatePayload, error) {
 	if o.ExchangeFn != nil {
 		return o.ExchangeFn(ctx, providerID, code, rawState, cookieState)
 	}
 
-	var empty Principal
+	var empty ExternalIdentity
 	var emptyPayload StatePayload
 
 	s, err := o.stateByID(providerID)
@@ -551,12 +556,12 @@ func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookie
 		return empty, emptyPayload, fmt.Errorf("oauth: parse id_token claims: %w", err)
 	}
 
-	principal, err := s.Mapper.Map(claims)
+	identity, err := s.Mapper.Map(claims)
 	if err != nil {
 		return empty, emptyPayload, fmt.Errorf("oauth: map claims: %w", err)
 	}
 
-	return principal, payload, nil
+	return enrichIdentity(identity, claims), payload, nil
 }
 
 // ErrInvalidReturnPath is wrapped by every validateReturnPath rejection, so

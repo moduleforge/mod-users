@@ -38,16 +38,20 @@ test.unit: ## Run unit tests
 	go test ./...
 
 .PHONY: test.integration
-# Scoped to ./internal/authz/... rather than ./... : running the tagged
-# suite across the whole module surfaces a pre-existing, unrelated flaky
-# failure in ./auth (TestNewStepUpConsumedCache_JanitorStopsOnCancel, a
+# Scoped to the three integration packages rather than ./... : running the
+# tagged suite across the whole module surfaces a pre-existing, unrelated
+# flaky failure in ./auth (TestNewStepUpConsumedCache_JanitorStopsOnCancel, a
 # goroutine-count race) that only reproduces when run as part of the full
-# `-p 1 ./...` sequence, not standalone — see follow-up filed for the
-# authz-single-row-own plan. Requires the shared users-module-postgres
-# Postgres container (make dev.start or equivalent) and goose on PATH;
+# `-p 1 ./...` sequence, not standalone. The packages are:
+#   ./internal/authz        database invariants and the Authorizer port
+#   ./internal/config       the persisted signing-key bootstrap
+#   ./internal/integration  session, credential, OIDC and route behavior over
+#                           the composed HTTP stack
+# Requires Postgres (a throwaway container: see AGENTS.md; the shared
+# users-module-postgres container with make dev.start) and goose on PATH;
 # skips cleanly (exit 0) when prerequisites are absent.
-test.integration: ## Run integration tests (requires docker; see internal/authz package doc)
-	go test -tags=integration -p 1 ./internal/authz/...
+test.integration: ## Run integration tests (requires docker; see AGENTS.md)
+	go test -tags=integration -p 1 ./internal/authz/... ./internal/config/... ./internal/integration/...
 
 .PHONY: lint
 lint: ## Run go vet, check gofmt, and check for server.Error literal-call drift

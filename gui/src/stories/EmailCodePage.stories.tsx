@@ -14,3 +14,15 @@ export const Default: Story = () => (
     </div>
   </AuthProvider>
 );
+
+export const WithAppAndSelectionRouting: Story = () => (
+  <AuthProvider>
+    <div className="w-full max-w-sm p-6">
+      <EmailCodePage
+        app="demo"
+        onSuccess={(returnPath) => console.log('signed in', returnPath)}
+        onSelectionRequired={(selectProfilePath) => console.log('select a profile at', selectProfilePath)}
+      />
+    </div>
+  </AuthProvider>
+);

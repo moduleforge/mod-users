@@ -6,7 +6,9 @@ import { ApiRequestError } from '../lib/api';
 import {
   createOIDCProvider,
   PROVIDER_ID_PATTERN,
+  validateJitPolicy,
   WELL_KNOWN_HINTS,
+  type OIDCJitMode,
   type OIDCProviderAuth,
   type OIDCProviderWriteBody,
   type WellKnownHint,
@@ -21,6 +23,7 @@ import {
 } from './ui/dialog';
 import { Switch } from './ui/switch';
 import { ErrorMessage } from './error-message';
+import { OidcProviderPolicyFields } from './oidc-provider-policy-fields';
 import { Button, Input, Label } from '@moduleforge/core-gui';
 
 interface OidcProviderAddModalProps {
@@ -40,6 +43,11 @@ interface FormState {
   claimStyle: string;
   scopes: string;
   enabled: boolean;
+  /** Party UUID text; blank means unbound. */
+  partyUuid: string;
+  /** A new provider defaults to `byo`, the server's default for a new row. */
+  jitMode: OIDCJitMode;
+  trustAcr: boolean;
 }
 
 function emptyForm(): FormState {
@@ -52,6 +60,9 @@ function emptyForm(): FormState {
     claimStyle: '',
     scopes: '',
     enabled: true,
+    partyUuid: '',
+    jitMode: 'byo',
+    trustAcr: false,
   };
 }
 
@@ -77,7 +88,13 @@ function buildCreateBody(form: FormState): OIDCProviderWriteBody {
     claim_style: form.claimStyle.trim() === '' ? null : form.claimStyle.trim(),
     scopes: parseScopes(form.scopes),
     enabled: form.enabled,
+    jit_mode: form.jitMode,
+    trust_acr: form.trustAcr,
   };
+  // Absent party_uuid means "unbound" on create; only a typed value is sent.
+  if (form.partyUuid.trim() !== '') {
+    body.party_uuid = form.partyUuid.trim();
+  }
   if (form.clientSecret !== '') {
     body.client_secret = form.clientSecret;
   }
@@ -93,6 +110,7 @@ export function OidcProviderAddModal({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [idError, setIdError] = useState<string | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
 
@@ -102,6 +120,7 @@ export function OidcProviderAddModal({
       setForm(emptyForm());
       setFormError(null);
       setIdError(null);
+      setPolicyError(null);
       setShowSecret(false);
     }
   }, [open]);
@@ -123,6 +142,11 @@ export function OidcProviderAddModal({
     }
     setIdError(null);
     setFormError(null);
+    // managed JIT needs a party: stop here rather than send a request the
+    // server would answer with 400 users.jit_managed_requires_party.
+    const policyProblem = validateJitPolicy(form.jitMode, form.partyUuid);
+    setPolicyError(policyProblem);
+    if (policyProblem !== null) return;
     setIsSaving(true);
     try {
       await createOIDCProvider(id, buildCreateBody(form), auth);
@@ -306,6 +330,22 @@ export function OidcProviderAddModal({
             }
             onChange={(v) => setForm((f) => ({ ...f, scopes: v }))}
             helpText="Comma-separated (e.g. openid, email, profile)."
+          />
+
+          <OidcProviderPolicyFields
+            idPrefix="add"
+            value={{
+              partyUuid: form.partyUuid,
+              jitMode: form.jitMode,
+              trustAcr: form.trustAcr,
+            }}
+            onChange={(next) => {
+              // Editing a policy field withdraws the stale local error: it is
+              // re-evaluated on the next save, so a fixed form is not blocked.
+              setForm((f) => ({ ...f, ...next }));
+              setPolicyError(null);
+            }}
+            policyError={policyError}
           />
 
           <div className="flex items-center justify-between gap-2 py-1">

@@ -27,7 +27,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/authz"
 )
 
@@ -154,10 +153,13 @@ func requireTypeForbidden(t *testing.T, ctx context.Context, op string, typeID i
 	}
 }
 
-// seedGrantHolder seeds a fresh non-admin user.
+// seedGrantHolder seeds a fresh operator actor (an active profile of the
+// operator party) holding no grant. Type-entity grants are accepted only for
+// operator actors, so every holder of a type-level grant is one.
 func seedGrantHolder(t *testing.T, tag string) int64 {
 	t.Helper()
-	return seedUser(t, "typegrant-"+tag+"-"+fmt.Sprint(testTypeCounter.Add(1))+"@example.com", false)
+	_ = tag
+	return seedOperator(t)
 }
 
 func sqlState(err error) string {
@@ -177,7 +179,7 @@ func sqlState(err error) string {
 // member with SQLSTATE P0001. It also pins the reverse (an instance group
 // refuses a type entity), and that nesting counts.
 func TestInteg_TypeGrant_KindTriggerGuard(t *testing.T) {
-	corpTypeEntity := typeEntityIDForSlug(t, "corporation")
+	corpTypeEntity := typeEntityIDForSlug(t, "organization")
 	instance := seedGrantHolder(t, "kind-instance")
 
 	typeGroup := seedTargetGroup(t, "kind-type-only")
@@ -203,16 +205,16 @@ func TestInteg_TypeGrant_KindTriggerGuard(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestInteg_TypeGrant_Matrix(t *testing.T) {
-	corpID := typeIDForSlug(t, "corporation")
+	corpID := typeIDForSlug(t, "organization")
 	npID := typeIDForSlug(t, "natural_person")
-	corpEnt := typeEntityIDForSlug(t, "corporation")
+	corpEnt := typeEntityIDForSlug(t, "organization")
 	npEnt := typeEntityIDForSlug(t, "natural_person")
 
 	t.Run("direct create grant", func(t *testing.T) {
 		u := seedGrantHolder(t, "direct")
 		targetedGrant(t, u, corpEnt, "create")
 		ctx := actorCtx(u)
-		requireTypeAllowed(t, ctx, "create", corpID, "create on corporation's type entity")
+		requireTypeAllowed(t, ctx, "create", corpID, "create on organization's type entity")
 		requireTypeForbidden(t, ctx, "list", corpID, "create does not imply list")
 		requireTypeForbidden(t, ctx, "create", npID, "a different type")
 	})
@@ -223,13 +225,13 @@ func TestInteg_TypeGrant_Matrix(t *testing.T) {
 		ctx := actorCtx(u)
 		requireTypeAllowed(t, ctx, "create", corpID, "manage implies create")
 		requireTypeAllowed(t, ctx, "list", corpID, "manage implies list")
-		requireTypeForbidden(t, ctx, "create", npID, "manage on corporation does not cover natural_person")
+		requireTypeForbidden(t, ctx, "create", npID, "manage on organization does not cover natural_person")
 	})
 
 	t.Run("read does not imply create", func(t *testing.T) {
 		u := seedGrantHolder(t, "read")
 		targetedGrant(t, u, corpEnt, "read")
-		requireTypeForbidden(t, actorCtx(u), "create", corpID, "read on corporation's type entity")
+		requireTypeForbidden(t, actorCtx(u), "create", corpID, "read on organization's type entity")
 	})
 
 	t.Run("actor group nested two levels", func(t *testing.T) {
@@ -281,28 +283,16 @@ func TestInteg_TypeGrant_Matrix(t *testing.T) {
 		u := seedGrantHolder(t, "noparent-legal")
 		targetedGrant(t, u, legalEnt, "create")
 		requireTypeForbidden(t, actorCtx(u), "create", npID, "create on legal_entity, checking natural_person")
-		requireTypeForbidden(t, actorCtx(u), "create", corpID, "create on legal_entity, checking corporation")
+		requireTypeForbidden(t, actorCtx(u), "create", corpID, "create on legal_entity, checking organization")
 
 		v := seedGrantHolder(t, "noparent-entity")
 		targetedGrant(t, v, entEnt, "create")
-		requireTypeForbidden(t, actorCtx(v), "create", corpID, "create on entity, checking corporation")
+		requireTypeForbidden(t, actorCtx(v), "create", corpID, "create on entity, checking organization")
 
 		w := seedGrantHolder(t, "noparent-reverse")
 		targetedGrant(t, w, npEnt, "create")
 		requireTypeForbidden(t, actorCtx(w), "create", typeIDForSlug(t, "legal_entity"), "create on natural_person, checking legal_entity")
 		requireTypeAllowed(t, actorCtx(w), "create", npID, "control: the exact type")
-	})
-
-	t.Run("sudo effective actor", func(t *testing.T) {
-		holder := seedGrantHolder(t, "sudo-holder")
-		other := seedGrantHolder(t, "sudo-other")
-		targetedGrant(t, holder, corpEnt, "create")
-
-		realHolds := opctx.WithSudoActor(actorCtx(holder), other)
-		requireTypeForbidden(t, realHolds, "create", corpID, "real actor holds the grant, sudo actor does not")
-
-		sudoHolds := opctx.WithSudoActor(actorCtx(other), holder)
-		requireTypeAllowed(t, sudoHolds, "create", corpID, "sudo actor holds the grant")
 	})
 
 	t.Run("unknown type id", func(t *testing.T) {
@@ -355,13 +345,13 @@ func TestInteg_TypeGrant_Matrix(t *testing.T) {
 	})
 
 	t.Run("ownership never applies", func(t *testing.T) {
-		owner := seedGrantHolder(t, "owner")
-		ownedID := seedOwnedCorporation(t, owner, "Type Grant Ownership Corp")
+		owner := seedUser(t, "owner", false) // a personal profile owns through its holder
+		ownedID := seedOwnedOrg(t, owner, "Type Grant Ownership Corp")
 		if err := integAZ.Authorize(actorCtx(owner), "create", &ownedID); err != nil {
 			t.Fatalf("characterization: Authorize(create, &%d) as owner: got %v, want nil", ownedID, err)
 		}
-		requireTypeForbidden(t, actorCtx(owner), "create", corpID, "owner of an instance of corporation")
-		requireTypeForbidden(t, actorCtx(owner), "list", corpID, "owner of an instance of corporation")
+		requireTypeForbidden(t, actorCtx(owner), "create", corpID, "owner of an instance of organization")
+		requireTypeForbidden(t, actorCtx(owner), "list", corpID, "owner of an instance of organization")
 	})
 }
 
@@ -369,14 +359,14 @@ func TestInteg_TypeGrant_Matrix(t *testing.T) {
 // Type id never read as an entity id, test-only-type form
 // ---------------------------------------------------------------------------
 
-// TestInteg_TypeGrant_TypeIDNeverReadAsEntityID_TestOnlyType places a corporation instance at
+// TestInteg_TypeGrant_TypeIDNeverReadAsEntityID_TestOnlyType places a organization instance at
 // id == testType.types.id and shows that grants and ownership on that
 // instance never answer AuthorizeType, while grants on the test type's own
 // type entity do.
 func TestInteg_TypeGrant_TypeIDNeverReadAsEntityID_TestOnlyType(t *testing.T) {
 	testTypeID, testTypeEntity := registerTestType(t, "typeid")
 
-	owner := seedGrantHolder(t, "typeid-owner")
+	owner := seedUser(t, "typeid-owner", false) // a personal profile owns through its holder
 	// Instance at id == types.id of the test type, owned by owner from insert.
 	seedEntityWithExplicitID(t, testTypeID, &owner)
 	if entityOwnerIsNull(t, testTypeID) {

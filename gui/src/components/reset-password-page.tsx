@@ -48,7 +48,7 @@ export function ResetPasswordPage({
     }
 
     // Mirrors the server-side rule enforced in
-    // api/internal/service/user_accounts.go (len(*in.Password) < 12) and
+    // api/internal/service/credential_service.go (len(in.Password) < passwordMinLength, 12) and
     // api/internal/handlers/auth/reset.go's PasswordResetConfirm handler.
     if (newPassword.length < 12) {
       setError('Password must be at least 12 characters.');

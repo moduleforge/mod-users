@@ -1,0 +1,1698 @@
+slug: identity-model-impl
+version: 1
+title: ""
+remediation:
+    rounds: 15
+    tasks_added: 73
+phases:
+    - number: 6
+      slug: users-identity-core
+      title: Users Identity Core
+      diff_base: 9ef551b8766f43d956fa4dd5fae9dccc2e7e61ec
+      tasks:
+        - number: 1
+          slug: rewrite-baseline-schema
+          title: Rewrite Baseline Schema
+          path: phase-06-users-identity-core/001-rewrite-baseline-schema.md
+          done: true
+          tier: opus-high
+          digest: 'Rewrote 0100_baseline.sql so everything in API surface sections 2 and 3 lives in the mod_users schema (tables, invariant triggers incl. two on public.profiles, availability, liveness and ACR functions, challenge cooldown). Folded and deleted 0101-0104; added sqlc renames. make verify + lint pass against mod-core, mod-authz (phase 13 merged), mod-audit plan worktrees; 84-check smoke suite passes. Judgment calls beyond the sketch: trigger-maintained active/principal mirrors on more subtables; session_factors.asserted_acr column; OUT-parameter liveness functions for sqlc. Obsolete query files deleted early and oidc queries schema-qualified; model/db left stale for task 002. Two findings filed (2yby identifier deletion vs bound credentials; tC3F sqlc schema scope).'
+          git:
+            branch: plan/identity-model-impl-06-001
+            commit:
+                - 5c342b0
+            merge: ef800f747da13d951185ff07012837e7de3ef297
+        - number: 2
+          slug: rewrite-queries-and-generated-code
+          title: Rewrite Queries And Generated Code
+          path: phase-06-users-identity-core/002-rewrite-queries-and-generated-code.md
+          done: true
+          tier: sonnet-med
+          digest: Replaced the query set (users, identifiers, credentials, challenges, sessions, party_policies, signing_keys; oidc queries updated) and regenerated usersdb with make gen; old generated files removed. Added SQLSTATE helpers (MF101-MF103, unique-violation mapping), tests, and usersservice re-exports. api packages stay red until task 008. No findings filed.
+          git:
+            branch: plan/identity-model-impl-06-002
+            commit:
+                - 461c891
+            merge: 5ba1530a419f3845b0d900c30f2507793ec833d2
+        - number: 3
+          slug: token-carrier-and-auth-middleware
+          title: Token Carrier And Auth Middleware
+          path: phase-06-users-identity-core/003-token-carrier-and-auth-middleware.md
+          done: true
+          tier: opus-med
+          digest: Replaced HS256 tokens and actor/sudo plumbing with an EdDSA-only carrier (signer and verifier pinned to EdDSA; carrier.go with session, client-credentials and audience-token issuers; auth.Identity; Authenticator with one-statement liveness check; NewRequireAuth, NewResolveOrAnonymous, NewRequireVerifiedEmail install Identity and opctx.AuthContext; persisted Ed25519 signing-key bootstrap; AUTH_* configuration; API surface 6.1 facade). authz.go uses opctx.ProfileID; own arm via profile_own_subject; wildcard and entity grants limited to scope='entity'. Resolver.go and its test deleted (task 006 rewrites). Scoped packages build, vet, and pass unit tests. Finding CLi0 filed (deploy manifests still require JWT_SECRET).
+          git:
+            branch: plan/identity-model-impl-06-003
+            commit:
+                - cb9176d
+            merge: 5126cdaf44027caee40b874f59dd6b521d6fc32c
+        - number: 4
+          slug: users-identifiers-credentials-challenges
+          title: Users Identifiers Credentials Challenges
+          path: phase-06-users-identity-core/004-users-identifiers-credentials-challenges.md
+          done: true
+          tier: sonnet-high
+          digest: 'Added service layer under api/internal/service: user_service (BYO, guest, managed creation; email identifier add/verify/set-primary/remove), credential_service (password, email_otp, ssh_key, anon, API key; LinkOIDCInTx as sole cred_oidc insert path; RevokeInTx; RemoveInTx with last-credential guard), challenge_service (numeric and opaque tokens, attempt-bounded VerifyCode), ssh_key_resolver rewritten. Deleted user_accounts.go, ssh_keys.go, identities.go. Build of service and sshkey packages passes; stale tests in service left for task 010; usersservice facade re-exports deferred to task 008. Finding oi9B filed (identifier delete vs RESTRICT FK).'
+          git:
+            branch: plan/identity-model-impl-06-004
+            commit:
+                - 2fd92b1
+            merge: ccb36c0d4d17fda005b64861e5949fb8a53e221b
+        - number: 5
+          slug: sessions-and-auth-routes
+          title: Sessions And Auth Routes
+          path: phase-06-users-identity-core/005-sessions-and-auth-routes.md
+          done: true
+          tier: opus-med
+          digest: Added SessionService (creation and landing, refresh lineages with reuse revocation, client credentials, handoff, switch, fork, step-up, logout, revocation helpers). Rewrote /v1/auth handlers on it; added handlers/session package for /v1/session. OIDC handler file fenced with build constraint oidc_resolver_pending until task 006.
+          git:
+            branch: plan/identity-model-impl-06-005
+            commit:
+                - 2d4025e
+            merge: 81b4af00862fa4694747bd1f086e40d716abc33c
+        - number: 6
+          slug: oidc-resolver
+          title: OIDC Resolver
+          path: phase-06-users-identity-core/006-oidc-resolver.md
+          done: true
+          tier: sonnet-high
+          digest: Added OIDC resolver decision table (auth/resolver.go), reworked oauth_state (Flow login/link/step_up), SessionAuthorizeURL, claim enrichment, provider party/jit_mode/trust_acr. Rewrote handlers/auth/oidc.go (Start, Callback, LinkStart, StepUpStart) and removed the oidc_resolver_pending fence. Providers CRUD gained party_uuid/jit_mode/trust_acr. Build and internal/auth and internal/config tests pass; handler tests deferred to task 010.
+          git:
+            branch: plan/identity-model-impl-06-006
+            commit:
+                - 2482d7f
+            merge: d6ba9ff4b14f37bd4fb91d72d102bf5465908fd0
+        - number: 7
+          slug: self-service-and-principals
+          title: Self Service And Principals
+          path: phase-06-users-identity-core/007-self-service-and-principals.md
+          done: true
+          tier: sonnet-high
+          digest: Added /v1/me and /v1/principals handlers with UserService self-service and principal-administration methods, DirectoryService, ReadPrincipalSummaries and user/profile display renderers. Authority derives from AuthContext; step-up gate cannot be skipped. Throwaway Postgres run exercised all new SQL and routes.
+          git:
+            branch: plan/identity-model-impl-06-007
+            commit:
+                - b7addc9
+            merge: bf4704575cff17caf3d7c2e382e6ab2a9b1c94f4
+        - number: 8
+          slug: server-wiring-and-surface-removal
+          title: Server Wiring And Surface Removal
+          path: phase-06-users-identity-core/008-server-wiring-and-surface-removal.md
+          done: true
+          tier: sonnet-med
+          digest: Deleted superseded self, identities, user_accounts, assume, apps, ssh_keys handlers and services, api/internal/users, api/users. Ported oidc_config.go. Facades in api/handlers/handlers.go and usersservice re-exports; cmd/server wired; moduleforge.module.yaml rewritten; api/openapi.yaml rewritten. make build.api passes; test-file vet errors remain for task 010.
+          git:
+            branch: plan/identity-model-impl-06-008
+            commit:
+                - c017fde
+            merge: 09c1f887873f99516e663a7d4d5450fd7c29e01e
+        - number: 9
+          slug: db-invariant-integration-tests
+          title: DB Invariant Integration Tests
+          path: phase-06-users-identity-core/009-db-invariant-integration-tests.md
+          done: true
+          tier: sonnet-med
+          digest: Rewrote and added DB invariant integration suites (MF101/MF102/MF103, availability, session_acr and liveness, cooldown concurrency) and adapted authz integration suites to the profile model. Shared fixtures in fixtures_integration_test.go. Authz integration suite passes against a throwaway Postgres; go vet and unit tests pass with and without the integration tag. jwtsecret_bootstrap integration test left for task 010.
+          git:
+            branch: plan/identity-model-impl-06-009
+            commit:
+                - cf2d7e2
+            merge: eb421b966a12f19d14592f435e8962a2afe6ec5e
+        - number: 10
+          slug: session-credential-route-tests
+          title: Session Credential Route Tests
+          path: phase-06-users-identity-core/010-session-credential-route-tests.md
+          done: true
+          tier: sonnet-high
+          digest: Cleared stale test packages in internal/service, internal/handlers and handlers/auth; rewrote OIDC handler tests for the new API; added HTTP-level integration suite in api/internal/integration covering requirements 2 to 8, plus U27 and U23/U24 tests. Integration suite green against throwaway Postgres 16; make build/lint/test pass for model and api. No implementation defects found.
+          git:
+            branch: plan/identity-model-impl-06-010
+            commit:
+                - 6ef9004
+            merge: f24fa926bf03fb55ccbc59906014e98833bb0c5b
+    - number: 7
+      slug: parties-profiles-and-bootstrap
+      title: Parties, Profiles and Bootstrap
+      diff_base: 2462d0057781d0c0dbde4725a4b871983107653c
+      tasks:
+        - number: 1
+          slug: profile-lifecycle-and-invitations
+          title: Profile Lifecycle and Invitations
+          path: phase-07-parties-profiles-and-bootstrap/001-profile-lifecycle-and-invitations.md
+          done: true
+          tier: sonnet-high
+          digest: Implemented ProfileService and its routes. Invite, accept, decline, leave, admin suspend/resume/end with step-up, departure cleanup, managed-user provisioning and lifecycle observers are in place, with the checkInvitePolicyMismatch seam for task 003. Wired through the manifest, main.go, the facades, api/openapi.yaml, AGENTS.md and README. Unit, integration and route-order tests pass, as do make build, make test and make lint. One latent test bug in session_integration_test.go that the new fixtures exposed was fixed.
+          git:
+            branch: plan/identity-model-impl-07-001
+            commit:
+                - 796d296
+            merge: 27fa2896ce3a6930978cb11265b8b013f4680e69
+        - number: 2
+          slug: party-gating-administration
+          title: Party Gating Administration
+          path: phase-07-parties-profiles-and-bootstrap/002-party-gating-administration.md
+          done: true
+          tier: sonnet-med
+          digest: Added PartyPolicyService and seven routes under /v1/parties/{party_uuid} (authn-policy GET/PUT, credential-authorizations GET, PUT/DELETE per credential, confinements PUT/DELETE). New SQL function mod_users.profile_availability_excluding; session_acr delegates to session_acr_excluding. Edited 0100_baseline.sql in place. Fixed byo JIT sign-up from a party-bound provider so it confines its credential; test added.
+          git:
+            branch: plan/identity-model-impl-07-002
+            commit:
+                - 3abab2b
+            merge: d01cdf7e931d7a17893c9f008e3c5129710a8a81
+        - number: 3
+          slug: outside-collaborators-and-compliance
+          title: Outside Collaborators and Continuous Compliance
+          path: phase-07-parties-profiles-and-bootstrap/003-outside-collaborators-and-compliance.md
+          done: true
+          tier: sonnet-high
+          digest: Filled the invite seam and added the outside-collaborator CollaboratorGate. Mismatch rule is one SQL function mod_users.holder_policy_mismatch in the 0100 baseline (rewritten in place), shared by invite and gate. Gate wired as trailing argument of authzservice.NewFromArgs in main.go; manifest provides collaboratorGate. Tests cover compliance behaviors and the HTTP flow through mod-authz's real route.
+          git:
+            branch: plan/identity-model-impl-07-003
+            commit:
+                - 01fade3
+            merge: 7b79af9ac19aee1954cd6a215b34c9d4fd3c352d
+        - number: 4
+          slug: setup-token-bootstrap
+          title: Setup-Token Bootstrap
+          path: phase-07-parties-profiles-and-bootstrap/004-setup-token-bootstrap.md
+          done: true
+          tier: opus-med
+          digest: BootstrapService.Bootstrap runs the requirement 1 steps in one transaction, locking platform_settings FOR UPDATE, claiming via core_claim_operator_party (409 users.already_bootstrapped on loss). Admin profile via createInTx so lifecycle observers fire. Wildcard manage grant via authzdb.CreateGrant. BootstrapHandler serves GET /v1/bootstrap/status and POST /v1/bootstrap (public). Setup-token lifecycle (U9) in OIDCConfigHandler; IsOperatorAdmin replaces the manage-only admin check. Docs updated.
+          git:
+            branch: plan/identity-model-impl-07-004
+            commit:
+                - 768bb8f
+            merge: 390093d3ef1510f9eca9f35b7fff368921599c0a
+        - number: 5
+          slug: party-aware-ssh-profile-derivation
+          title: Party-Aware SSH Profile Derivation
+          path: phase-07-parties-profiles-and-bootstrap/005-party-aware-ssh-profile-derivation.md
+          done: true
+          tier: sonnet-med
+          digest: 'SSHKeyResolver.AuthContextForOwner implements the ADR derivation: owner party with active principal profile and credential_profile_availability available gives that profile; otherwise ErrSSHKeyNotAuthorized carrying the party uuid; confined keys refused for their confining party. Exported ErrSSHKeyNotAuthorized, SSHKeyNotAuthorizedError and SSHKeyNotAuthorizedParty(err). Two round trips via coredb.ListProfilesByHolder then CredentialProfileAvailability.'
+          git:
+            branch: plan/identity-model-impl-07-005
+            commit:
+                - 4aa0ac5
+            merge: d1f7d44e64e5e8478507f2cc015e10c2ff52ab11
+        - number: 6
+          slug: party-flows-integration-tests
+          title: Party Flows Integration Tests
+          path: phase-07-parties-profiles-and-bootstrap/006-party-flows-integration-tests.md
+          done: true
+          tier: sonnet-high
+          digest: 'Added api/internal/integration/party_flows_integration_test.go with 11 tests: the ADR worked example (steps 1-6) and its confined variant, token behavior across suspend and resume, holder vs admin authority, route-created managed user not invitable, provider-policy remedy, min_acr lock and step-up unlock, confined factor, outside collaborator via routes, trusted admission via routes. No defects found in 001-005 or 007; no fixes made.'
+          git:
+            branch: plan/identity-model-impl-07-006
+            commit:
+                - 3a115f7
+            merge: bb8dce9f127eb42b15bdafb2838beb3a0708aba0
+        - number: 7
+          slug: trusted-profile-admission
+          title: Trusted Profile Admission
+          path: phase-07-parties-profiles-and-bootstrap/007-trusted-profile-admission.md
+          done: true
+          tier: sonnet-med
+          digest: Added ProfileService.AdmitInTx and AdmitInput in api/internal/service/profile_admit.go. ErrProfileSuspended (409 users.profile_suspended) is new; all three are re-exported from api/usersservice. Locks the users row via GetUserByEntityIDForUpdate, then locks and re-reads the holder's open profile; reuses checkAdmissible, createInTx and transitionLocked. AGENTS.md and README.md updated.
+          git:
+            branch: plan/identity-model-impl-07-007
+            commit:
+                - a60cf76
+            merge: 78aca5ad65cdadca255b68b90b8884cbd359a309
+    - number: 8
+      slug: users-authorization-engine
+      title: Users Authorization Engine
+      diff_base: 5d8a61652739fde471acab8bc2354222fa5c0e66
+      tasks:
+        - number: 1
+          slug: rewrite-authorization-engine
+          title: Rewrite Authorization Engine
+          path: phase-08-users-authorization-engine/001-rewrite-authorization-engine.md
+          done: true
+          tier: opus-high
+          digest: 'Production engine rewritten (api/internal/authz/authz.go). Prelude per check: assurance gate (409 users.step_up_required), owning-party gate (403), then wildcard arm, entity/type-entity arm, owned-scope arm with include_subtypes, own arm gated on ownership_confers, plus AuthorizeTypeIn. Requirement 13 literal reading holds operator profiles to customer-party policies, which broke 14 phase-7 HTTP scenarios; these were narrowly skipped and raised for a decision. Two mod-core gaps filed (Ddx9, qvSR).'
+          git:
+            branch: plan/identity-model-impl-08-001
+            commit:
+                - b81ed0a
+            merge: 3955f4d6fc9d30a6b87367db0e32e36bc11f1482
+        - number: 2
+          slug: authorization-engine-tests
+          title: Authorization Engine Tests
+          path: phase-08-users-authorization-engine/002-authorization-engine-tests.md
+          done: true
+          tier: sonnet-high
+          digest: 'Authorization engine test suite added (requirements 2-6): own-arm, owned-scope, AuthorizeTypeIn, assurance gate, parity matrix, client-credentials gate. Test code only; no production change. Mutation check confirmed new tests catch removed owner and ownership_confers predicates. Integration run: 132 passing, no skips.'
+          git:
+            branch: plan/identity-model-impl-08-002
+            commit:
+                - c44b3e5
+            merge: 4386907a9a770235605018caa4617b2579109785
+        - number: 3
+          slug: impersonation-sessions
+          title: Impersonation Sessions
+          path: phase-08-users-authorization-engine/003-impersonation-sessions.md
+          done: true
+          tier: sonnet-high
+          digest: 'Impersonation is now a child session: ImpersonationService (start, renew, end) and ImpersonationHandler on /v1/impersonations, wired through facades, main.go, manifest and openapi. Switch and fork refuse inside an impersonation (Fork returns ErrImpersonationNotAllowed). Start order 400, 403, authorize impersonate, 404, 409. Operators reach restrictive-policy party members per Decision D; no skip helper. Filed followups 0chQ (renew does not re-authorize administrator impersonate authority) and Q1lB (stale docs for removed /assume route).'
+          git:
+            branch: plan/identity-model-impl-08-003
+            commit:
+                - 5ffa05b
+            merge: cd10cc4d1abaeaa55fc9c5248161dc4dc25aedac
+        - number: 4
+          slug: credentials-operation-and-app-login-gate
+          title: Credentials Operation and App Login Gate
+          path: phase-08-users-authorization-engine/004-credentials-operation-and-app-login-gate.md
+          done: true
+          tier: sonnet-med
+          digest: 'Added four /v1/principals/{uuid}/credentials routes under the credentials operation (owner rotation, party-admin owned-scope, operator wildcard). Replaced the invite_only stub with a real Authorize(login, app) check in session availability and in the per-request authentication middleware. NewAuthenticatorWithAppGate and SetAppGate added; NewAuthenticator signature unchanged. SSH-key administration no longer authorizes assume. Tests: unit and integration, including ordertest route-order cases.'
+          git:
+            branch: plan/identity-model-impl-08-004
+            commit:
+                - 974157a
+            merge: 3d8cd9db69540c98514aef48d383fc93d6bd26d8
+        - number: 5
+          slug: personal-party
+          title: Personal Party
+          path: phase-08-users-authorization-engine/005-personal-party.md
+          done: true
+          tier: sonnet-med
+          digest: Added EnsurePersonalParty (user-row lock for idempotency, owned-scope manage grant, three audit ops) with facade, manifest entry and unit and integration tests, including the B6 sequence and the U28 limitation. Re-ran phase 7 party flows, the ADR worked example and remediation tests with non-operator owned-scope administrators, plus a refusal case per flow. All suites pass against a real Postgres.
+          git:
+            branch: plan/identity-model-impl-08-005
+            commit:
+                - ca1ae46
+            merge: b8afa14489472a31c39a102a802ed05e75d09468
+    - number: 9
+      slug: users-gui-and-frontend-contract
+      title: Users GUI and Frontend Contract
+      diff_base: 264d8e63f03bde530184591770593a73ac2ec9d5
+      tasks:
+        - number: 1
+          slug: rebuild-api-client-and-auth-context
+          title: Rebuild API Client and Auth Context
+          path: phase-09-users-gui-and-frontend-contract/001-rebuild-api-client-and-auth-context.md
+          done: true
+          tier: sonnet-high
+          digest: Rebuilt gui/src/lib on final API; lib tests pass 223/0; component-level failures deferred to tasks 002-005 by design; jRXp filed as type:conflict.
+          git:
+            branch: plan/identity-model-impl-09-001
+            commit:
+                - dd54577
+            merge: 2f1332083240238e7e6cefdf182bffcc40095ef0
+        - number: 2
+          slug: build-profile-chrome
+          title: Build Profile Chrome
+          path: phase-09-users-gui-and-frontend-contract/002-build-profile-chrome.md
+          done: true
+          tier: sonnet-med
+          digest: Built profile chrome (switcher, lock notice, selection page, invitations view, impersonation banner); updated SidebarNav, RequireAuth, ClientLayout with no isAdmin; 28 new tests, stories, README. Remaining failures belong to tasks 003-005.
+          git:
+            branch: plan/identity-model-impl-09-002
+            commit:
+                - cbdeee5
+            merge: 1ac49188f0fa2d05fa0ad4a1ba9fbfbfb72748c5
+        - number: 3
+          slug: port-auth-pages-to-session-api
+          title: Port Auth Pages to Session API
+          path: phase-09-users-gui-and-frontend-contract/003-port-auth-pages-to-session-api.md
+          done: true
+          tier: sonnet-med
+          digest: 'Ported public sign-in pages to the final session API and the #handoff flow; selection_required routing; users.* error mapping; OIDC start via api.auth.oidcStart; VerifyEmailPage via /v1/me/identifiers; tests, stories, README updated. Finding AReg filed (selection page loses return path on reload).'
+          git:
+            branch: plan/identity-model-impl-09-003
+            commit:
+                - a250ccb
+            merge: 76a062c83bfcb859bc835be03429caa363524bce
+        - number: 4
+          slug: build-self-service-panels
+          title: Build Self Service Panels
+          path: phase-09-users-gui-and-frontend-contract/004-build-self-service-panels.md
+          done: true
+          tier: sonnet-med
+          digest: 'Built self-service panels (StepUpDialog, CredentialsPanel, IdentifiersPanel, SessionsPanel, GuestUpgradeForm) on the rebuilt client; SSHKeysPanel removed; step-up, last-credential, sign-out and guest-upgrade paths tested. Known out-of-scope: docs/mod-users-spec.md line 188 still describes old X-Step-Up-Token semantics.'
+          git:
+            branch: plan/identity-model-impl-09-004
+            commit:
+                - e311879
+            merge: 02349fca64ff8e4f79a9cfd0d471e0c5c0c8ebd8
+        - number: 5
+          slug: build-bootstrap-and-oidc-config-pages
+          title: Build Bootstrap and OIDC Config Pages
+          path: phase-09-users-gui-and-frontend-contract/005-build-bootstrap-and-oidc-config-pages.md
+          done: true
+          tier: sonnet-med
+          digest: Built bootstrap page, setup gate routing across bootstrap and OIDC state, OIDC config page without isAdmin, JIT-mode and trust-ACR provider fields, README first-run section. 421 tests pass; lint and build pass.
+          git:
+            branch: plan/identity-model-impl-09-005
+            commit:
+                - 564a7c5
+            merge: 42e8c441372cc5e87f5489aee584fda6da6edd36
+        - number: 6
+          slug: review-gui-exports-and-contract-docs
+          title: Review GUI Exports and Contract Docs
+          path: phase-09-users-gui-and-frontend-contract/006-review-gui-exports-and-contract-docs.md
+          done: true
+          tier: sonnet-low
+          digest: 'Verification pass over merged GUI work: exports, stories and contract docs consistent. README Other exports table added. Manager to remove followups HPJi and PRvD as resolved.'
+          git:
+            branch: plan/identity-model-impl-09-006
+            commit:
+                - "2588970"
+            merge: 73845c51f150715396f9deae0cc187183c17b9b4
+    - number: 10
+      slug: doc-updates
+      title: Documentation Updates
+      diff_base: 6ffd38919c7a2818e2cda835cc30679e9527d6f8
+      tasks:
+        - number: 1
+          slug: update-architecture-docs
+          title: Update Architecture Docs
+          path: phase-10-doc-updates/001-update-architecture-docs.md
+          done: true
+          tier: sonnet-high
+          digest: Rewrote architecture, spec, ssh-keys and jwt-eddsa docs against merged code; added sessions-and-tokens.md; reflected OIDC credentials:include exception, step-up correction, impersonation rules and planned data-protection-class design. Docs only.
+          git:
+            branch: plan/identity-model-impl-10-001
+            commit:
+                - 62648fd8
+            merge: 9d8a5be031da5904c161440ac76c643d295f384e
+        - number: 2
+          slug: write-consumer-upgrade-notes
+          title: Write Consumer Upgrade Notes
+          path: phase-10-doc-updates/002-write-consumer-upgrade-notes.md
+          done: true
+          tier: sonnet-med
+          digest: Added Identity model rewrite section to consumer-upgrade-notes.md (Go packages, routes, config, tokens, database, manifest, bootstrap, impersonation, per-consumer migration); rewrote EdDSA, GUI, cookie, error-precedence and authorization sections against merged code; fixed hPqK anchor. Filed findings ndUS (CORS X-Step-Up-Token) and iZ3E (usersservice facade aliases). Docs only.
+          git:
+            branch: plan/identity-model-impl-10-002
+            commit:
+                - 24f6ef32
+            merge: 6030f9691fa43f994017fe33304e675aea4adb02
+        - number: 3
+          slug: review-repository-docs
+          title: Review Repository Docs
+          path: phase-10-doc-updates/003-review-repository-docs.md
+          done: true
+          tier: sonnet-low
+          digest: 'Repository docs reviewed and corrected: removed stale step-up, account-merge and plan-phase references; documented config variables in .env.example; rewrote model/README.md baseline section; removed completed or obsolete next-steps items. Code issues (CORS headers, credentials) recorded as findings. Docs only.'
+          git:
+            branch: plan/identity-model-impl-10-003
+            commit:
+                - 23ceca5f
+            merge: 1795184ae2d27d4ba9b1b9af0ac75c2106101e62
+    - number: 11
+      slug: users-identity-final
+      title: Users Identity Final
+      diff_base: 08c9b9c2777e74c27554590d23aadd97130db9ff
+      tasks:
+        - number: 1
+          slug: mod-users-drift-scan
+          title: Mod-Users Documentation Drift Scan
+          path: phase-11-users-identity-final/001-mod-users-drift-scan.md
+          done: true
+          tier: sonnet-low
+          digest: Scanned mod-users for old-model terms; docs already clean. Fixed 10 stale code comments, left legitimate history matches, reported 3 followups. All build, test, lint and verify checks pass.
+          git:
+            branch: plan/identity-model-impl-11-001
+            commit:
+                - f52c194a
+            merge: a8d222d786044af3fda8c05510281af6d58456d8
+        - number: 2
+          slug: reconcile-superseded-followups
+          title: Reconcile Superseded Mod-Users Followups
+          path: phase-11-users-identity-final/002-reconcile-superseded-followups.md
+          done: true
+          tier: haiku-med
+          digest: 'Reconciled 21 mod-users followups read-only: 13 confirmed superseded with proposed removals, 2 closed cross-project, 6 retained for manager decision. No followups mutation made.'
+          git:
+            branch: plan/identity-model-impl-11-002
+            commit:
+                - 4fc8ace6
+            merge: 296305fa9c431996c281d22bfcea11259f3dfc18
+    - number: 12
+      slug: remediation-01
+      title: Remediation Round 1
+      diff_base: 44873b49e52e0a3bcc1afb1356b38ac02e94a682
+      kind: remediation
+      security_review: required
+      tasks_added: 14
+      remediates_phase: 6
+      tasks:
+        - number: 1
+          slug: enforce-byo-identity-on-guest-paths
+          title: Enforce Allow BYO Identity on Guest Sign-In and Guest Upgrade
+          path: phase-12-remediation-01/001-enforce-byo-identity-on-guest-paths.md
+          done: true
+          tier: sonnet-med
+          digest: Added the allow_byo_identity check to POST /v1/auth/anonymous (create and device_token sign-in) and to SelfUpgradeGuest. Both return 403 users.byo_identity_disabled, with an integration test and openapi.yaml docs.
+          findings:
+            - TrRi
+          git:
+            branch: plan/identity-model-impl-12-001
+            commit:
+                - 050fd51
+            merge: 1af9df6
+        - number: 2
+          slug: exclude-revoked-factors-from-availability
+          title: Exclude Revoked Factors From Profile Availability
+          path: phase-12-remediation-01/002-exclude-revoked-factors-from-availability.md
+          done: true
+          tier: sonnet-med
+          digest: profile_availability now joins session_factors to credentials with revoked_at IS NULL. RevokeCredentialsOfPrincipal and RevokeCredentialsConfinedToParty were removed as uncalled; sqlc regenerated. Integration test TestInteg_Availability_RevokedFactorDoesNotCount added.
+          findings:
+            - WpsB
+          git:
+            branch: plan/identity-model-impl-12-002
+            commit:
+                - 476468a
+            merge: 1d45242
+        - number: 3
+          slug: bind-oidc-login-to-provider
+          title: Bind OIDC Sign-In To The Credential Provider
+          path: phase-12-remediation-01/003-bind-oidc-login-to-provider.md
+          done: true
+          tier: sonnet-med
+          digest: Added a provider_id comparison to OIDCResolver.Resolve so a credential presented through a different provider with the same issuer and subject is refused with RedirectErrAuthFailed. Unit test covers it.
+          findings:
+            - VxMT
+          git:
+            branch: plan/identity-model-impl-12-003
+            commit:
+                - baa0176
+            merge: d343508
+        - number: 4
+          slug: harden-audience-token-claims
+          title: Harden Audience Token Claims
+          path: phase-12-remediation-01/004-harden-audience-token-claims.md
+          done: true
+          tier: sonnet-low
+          digest: Audience tokens can no longer be given acr, amr or auth_time through extra. They now carry the aud+jwt typ header, and the access-token verifier rejects that header. Tests and docs note included.
+          findings:
+            - UT68
+          git:
+            branch: plan/identity-model-impl-12-004
+            commit:
+                - 327645a
+            merge: d4b89a3
+        - number: 5
+          slug: compose-mod-audit-migrations
+          title: Compose Mod-Audit Migrations Into The Model Schema
+          path: phase-12-remediation-01/005-compose-mod-audit-migrations.md
+          done: true
+          tier: sonnet-low
+          digest: Compose now includes the mod-audit migrations, and the integration harness uses the composed directory directly. Integration suite passes.
+          findings:
+            - LPl2
+          git:
+            branch: plan/identity-model-impl-12-005
+            commit:
+                - 5e56852
+            merge: fc07a3a
+        - number: 6
+          slug: register-display-renderers-in-manifest
+          title: Register Display Renderers Through The Manifest
+          path: phase-12-remediation-01/006-register-display-renderers-in-manifest.md
+          done: true
+          tier: sonnet-med
+          digest: Manifest now registers the user and profile display renderers via NewUserServiceWithSelfService taking a trailing display.Registry; main.go uses the facade. Unit test added.
+          findings:
+            - xgGT
+          git:
+            branch: plan/identity-model-impl-12-006
+            commit:
+                - 7ffcc83
+            merge: b9d20b3
+        - number: 7
+          slug: index-credential-and-challenge-lookups
+          title: Add Missing Password And Challenge Indexes
+          path: phase-12-remediation-01/007-index-credential-and-challenge-lookups.md
+          done: true
+          tier: sonnet-low
+          digest: Added five missing indexes to the baseline migration and rewrote NULL-equal subject predicates in the two challenge queries to the COALESCE form so the cooldown index serves them. Verify, integration and EXPLAIN pass.
+          findings:
+            - 86kP
+            - Pjuz
+          git:
+            branch: plan/identity-model-impl-12-007
+            commit:
+                - eb61cb6
+            merge: 891392e
+        - number: 8
+          slug: update-deploy-manifests-signing-key
+          title: Update Deploy Manifests For EdDSA Signing Key
+          path: phase-12-remediation-01/008-update-deploy-manifests-signing-key.md
+          done: true
+          tier: sonnet-low
+          digest: Updated both deploy manifests to the EdDSA signing-key configuration, with JWT_SECRET optional and comments on the DB fallback and AUTH_* variables; manifests parse.
+          findings:
+            - CLi0
+          git:
+            branch: plan/identity-model-impl-12-008
+            commit:
+                - 603c765
+            merge: 0cfa2ab
+        - number: 9
+          slug: link-unreachable-readmes
+          title: Link Deploy And Model READMEs From Root README
+          path: phase-12-remediation-01/009-link-unreachable-readmes.md
+          done: true
+          tier: sonnet-low
+          digest: Added four README links from the root README to model, deploy/local, deploy/k8s and deploy/serverless. Docs-only.
+          findings:
+            - W55I
+            - Kkmz
+            - fWsd
+            - xqMm
+          git:
+            branch: plan/identity-model-impl-12-009
+            commit:
+                - ab8ccb6
+            merge: 7daac3e
+        - number: 10
+          slug: confine-party-bound-oidc-link
+          title: Confine Linked OIDC Credentials To The Provider Party
+          path: phase-12-remediation-01/010-confine-party-bound-oidc-link.md
+          done: true
+          tier: sonnet-med
+          digest: Linked OIDC credentials from a party-bound provider are now confined to that party. Party-less providers unchanged. Both cases have integration route tests and a docs note.
+          findings:
+            - wZsk
+            - Nobq
+          git:
+            branch: plan/identity-model-impl-12-010
+            commit:
+                - eb6bdea
+            merge: 8dff09f
+        - number: 11
+          slug: identifier-removal-set-null-fks
+          title: Make Identifier Removal Work With Nullable Credential FKs
+          path: phase-12-remediation-01/011-identifier-removal-set-null-fks.md
+          done: true
+          tier: sonnet-high
+          digest: cred_password and cred_email_otp identifier_id now nullable with ON DELETE SET NULL, plus CHECK cred_email_otp_active_needs_identifier. RemoveIdentifierInTx unchanged (revoke-first). Integration tests added and existing 409 test updated to 204.
+          findings:
+            - aA5K
+          git:
+            branch: plan/identity-model-impl-12-011
+            commit:
+                - 3d38718
+            merge: 2729fe4
+        - number: 12
+          slug: copy-party-authorizations-on-supersede
+          title: Copy Party Authorizations When A Password Is Superseded
+          path: phase-12-remediation-01/012-copy-party-authorizations-on-supersede.md
+          done: true
+          tier: sonnet-med
+          digest: Added CopyCredentialPartyAuthorizations query and CredentialService.SupersedePasswordInTx; password reset now revokes old credential, creates replacement, and copies party authorizations atomically. Integration tests added.
+          findings:
+            - 1xmT
+          git:
+            branch: plan/identity-model-impl-12-012
+            commit:
+                - ff07d2c
+            merge: 398050f
+        - number: 13
+          slug: bind-handoff-code-to-verifier
+          title: Bind The OIDC Handoff Code To A Browser Verifier
+          path: phase-12-remediation-01/013-bind-handoff-code-to-verifier.md
+          done: true
+          tier: sonnet-high
+          digest: Bound the OIDC handoff code to a browser-held S256 verifier. Challenge travels in signed state and is stored on the login_handoff challenge. Exchange verifies verifier in constant time inside the consuming transaction. Schema, API, openapi and docs updated; unit and integration tests pass.
+          findings:
+            - z443
+          git:
+            branch: plan/identity-model-impl-12-013
+            commit:
+                - 5bd0bba
+            merge: fb0fab1
+        - number: 14
+          slug: exclude-archived-apps-from-audience
+          title: Exclude Archived Apps From Token Audience Checks
+          path: phase-12-remediation-01/014-exclude-archived-apps-from-audience.md
+          done: true
+          tier: sonnet-low
+          digest: Both audience-liveness queries now exclude apps whose entity row is archived. Integration test covers active-accepted and archived-rejected cases; spec notes the policy.
+          findings:
+            - nD8J
+          git:
+            branch: plan/identity-model-impl-12-014
+            commit:
+                - 042c198
+            merge: 640b50f
+    - number: 13
+      slug: remediation-02
+      title: Remediation Round 2
+      diff_base: fdb6d0f1e970b988261be0a86777f9a191d23ea5
+      kind: remediation
+      security_review: required
+      tasks_added: 1
+      remediates_phase: 6
+      tasks:
+        - number: 1
+          slug: guard-active-password-identifier-unbind
+          title: Guard Active Passwords Against Identifier Unbinding
+          path: phase-13-remediation-02/001-guard-active-password-identifier-unbind.md
+          done: true
+          tier: sonnet-high
+          digest: Added DB-level guard so an active password cannot be unbound from its identifier (SET NULL cascade fails 23503, mapped to 409 identifier_in_use). removeIdentifier row-locks the identifier first. Covered by new integration and unit tests; suites green.
+          findings:
+            - fDFi
+          git:
+            branch: plan/identity-model-impl-13-001
+            commit:
+                - fa061be
+            merge: de9ae2ff2ebafbc9523f4aaceea11ec27bc03e90
+    - number: 14
+      slug: remediation-03
+      title: Remediation Round 3
+      diff_base: 3bd0f1e3dfabae2fe9e38745ac01bf3d43df5854
+      kind: remediation
+      security_review: required
+      tasks_added: 8
+      remediates_phase: 7
+      tasks:
+        - number: 1
+          slug: require-verified-invitee-and-authorize-managed-password
+          title: Require Verified Email For Invitations And Authorize Managed-User Passwords
+          path: phase-14-remediation-03/001-require-verified-invitee-and-authorize-managed-password.md
+          done: true
+          tier: sonnet-high
+          digest: Unverified email identifiers now resolve as not-found for invitations (profile_service.go resolveInvitee); managed-user provisioning under an authorized credential rule authorizes the new password in the same transaction; integration and unit tests added; full integration suite passed.
+          findings:
+            - T1E6
+            - 4ZP1
+            - 2mUw
+          git:
+            branch: plan/identity-model-impl-14-001
+            commit:
+                - d8eef20
+            merge: c9014c5
+        - number: 2
+          slug: gate-holder-leave-on-profile-availability
+          title: Gate Holder Leave On Profile Availability
+          path: phase-14-remediation-03/002-gate-holder-leave-on-profile-availability.md
+          done: true
+          tier: sonnet-high
+          digest: LeaveProfile now requires profile_availability to be available for the caller's session, checked in the leave transaction. LeaveProfile and the administrator's PATCH to ended also refuse with 409 users.last_operator_admin to end the last active wildcard-manage operator admin. The last-admin check serializes on the platform_settings row. Suspended-profile gap filed as finding twos.
+          findings:
+            - aNYW
+          git:
+            branch: plan/identity-model-impl-14-002
+            commit:
+                - d977d63
+            merge: 2164583219c3cda8243a5dea85d12926c15d2972
+        - number: 3
+          slug: scope-setup-token-on-oidc-routes
+          title: Scope The Setup Token On OIDC Configuration Routes
+          path: phase-14-remediation-03/003-scope-setup-token-on-oidc-routes.md
+          done: true
+          tier: sonnet-high
+          digest: Narrowed the setup token on the OIDC config routes to the unconfirmed-OIDC window using a fresh DB-backed check. Bootstrap behaviour is unchanged, and docs and tests are updated.
+          findings:
+            - cvMO
+          git:
+            branch: plan/identity-model-impl-14-003
+            commit:
+                - 16678b8
+            merge: b2a026a1ff33abc3d82afdba7d20769b3e38a46f
+        - number: 4
+          slug: serialize-profile-writers-with-endings
+          title: Serialize Credential Gate And Invitations With Profile Writers
+          path: phase-14-remediation-03/004-serialize-profile-writers-with-endings.md
+          done: true
+          tier: sonnet-high
+          digest: gateCredentialWrite locks the credential then takes FOR SHARE on the holder's open profile; resolveInvitee takes the same holder lock as AdmitInTx. Two concurrency integration tests added. Lock order credential-then-profile differs from EndInTx; a deadlock is theoretically possible, flagged for review.
+          findings:
+            - oO0S
+            - 5iFg
+          git:
+            branch: plan/identity-model-impl-14-004
+            commit:
+                - dba63b9
+            merge: e210c0902bbcbdc86c351ace00fb89f579d64bd6
+        - number: 5
+          slug: fix-policy-sql-null-handling
+          title: Fix NULL Handling In Policy SQL Functions
+          path: phase-14-remediation-03/005-fix-policy-sql-null-handling.md
+          done: true
+          tier: sonnet-med
+          digest: Fixed both NULL-handling defects in 0100_baseline.sql, added one integration test for each, and tweaked the 409 message for a zero holder acr. Verified on a throwaway Postgres.
+          findings:
+            - 4w6W
+            - iaJb
+          git:
+            branch: plan/identity-model-impl-14-005
+            commit:
+                - 7b08d96
+            merge: 366a81406d146a5235918daecf018cd69232307a
+        - number: 6
+          slug: correct-openapi-and-architecture-doc-drift
+          title: Correct Step-Up Order And Bootstrap Exception Docs
+          path: phase-14-remediation-03/006-correct-openapi-and-architecture-doc-drift.md
+          done: true
+          tier: sonnet-low
+          digest: Corrected the OpenAPI step-up ordering for principal disable and enable and added POST /v1/bootstrap to the two documented-exception lists in docs/architecture.md. openapi.validate could not run (python3 yaml module and spectral missing); Ruby YAML parse only.
+          findings:
+            - qvpE
+            - kimI
+          git:
+            branch: plan/identity-model-impl-14-006
+            commit:
+                - 5ade1e4
+            merge: 81ed4fcec679f3f8baffda8d0634743827439ad0
+        - number: 7
+          slug: restrict-admin-confinement-to-party-controlled-credentials
+          title: Restrict Administrator Confinement To Party-Controlled Credentials
+          path: phase-14-remediation-03/007-restrict-admin-confinement-to-party-controlled-credentials.md
+          done: true
+          tier: sonnet-high
+          digest: The administrator door of ConfineCredential now confines only party-controlled credentials (managed-user, and OIDC from a party-bound provider) and otherwise returns 404. The holder door of UnconfineCredential is refused for party-controlled credentials. The held-profile check requires active. No schema change. Four existing tests adapted. OpenAPI, README, AGENTS.md and doc comments updated.
+          findings:
+            - Pxlw
+          git:
+            branch: plan/identity-model-impl-14-007
+            commit:
+                - 843012c
+            merge: d9a8e781381f51fa7cee9b012918291a323e91ba
+        - number: 8
+          slug: authorized-rule-invite-time-semantics
+          title: Treat Authorized Credential Rule As Satisfied At Invite Time
+          path: phase-14-remediation-03/008-authorized-rule-invite-time-semantics.md
+          done: true
+          tier: sonnet-high
+          digest: Implemented decision B. The authorized rule is met at invite time by any usable interactive credential, so no confirmation row is written for that case. A confirmed mismatch now needs update on the party, else 403, and a credential_rule change clears the party's confirmations. Four integration tests added and four existing tests migrated to the provider rule. Docs and openapi updated.
+          findings:
+            - xhLc
+          git:
+            branch: plan/identity-model-impl-14-008
+            commit:
+                - f3014ca
+            merge: 488b807967f7c28d45cb66956666eede212c41b7
+    - number: 15
+      slug: remediation-04
+      title: Remediation Round 4
+      diff_base: bade40ba55cbd3e9523fcf3db31871a8c456fbd3
+      kind: remediation
+      security_review: required
+      tasks_added: 8
+      remediates_phase: 7
+      tasks:
+        - number: 1
+          slug: order-credential-gate-locks-profile-first
+          title: Take The Holder Profile Lock Before The Credential Lock In The Credential Write Gate
+          path: phase-15-remediation-04/001-order-credential-gate-locks-profile-first.md
+          done: true
+          tier: sonnet-high
+          digest: Swapped the lock order in the credential write gate to profile (FOR SHARE) then credential (FOR UPDATE), commented the order, and added deterministic and looped race integration tests. The deterministic test reproduces 40P01 on the old order and passes on the new one.
+          findings:
+            - 9Mvf
+            - PL6d
+            - zwbM
+          git:
+            branch: plan/identity-model-impl-15-001
+            commit:
+                - dccd764
+            merge: 4d61b975ff55c66a26d116c6e795a66b86997918
+        - number: 2
+          slug: gate-suspended-profile-leave
+          title: Evaluate The Party Gate When A Holder Leaves A Suspended Profile
+          path: phase-15-remediation-04/002-gate-suspended-profile-leave.md
+          done: true
+          tier: sonnet-high
+          digest: LeaveProfile now decides on a status-agnostic party-gate evaluation for both active and suspended profiles. A locked-out session leaving a suspended profile gets 401 users.profile_unavailable and nothing changes. The departure cleanup runs only when the gate is met. Edited the baseline migration in place, as earlier tasks did.
+          findings:
+            - twos
+            - nA1G
+          git:
+            branch: plan/identity-model-impl-15-002
+            commit:
+                - 804fcdc
+            merge: fd62b6610d477f5914aae157050b700a5328471b
+        - number: 3
+          slug: extend-last-operator-admin-guard
+          title: Extend The Last Operator Admin Guard To Suspension And EndInTx
+          path: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
+          done: true
+          tier: sonnet-med
+          digest: The last-operator-admin guard now runs inside transitionLocked for every transition out of active, so suspension, EndInTx, admin ending and holder leave inherit it. The explicit guard calls in profile_admin.go and profile_holder.go were removed. The guard takes the platform_settings lock first (operator-party profiles only), then runs one count query.
+          findings:
+            - Kfjo
+            - kPpy
+            - Ts9r
+            - Xqat
+          git:
+            branch: plan/identity-model-impl-15-003
+            commit:
+                - "4724343"
+            merge: 1284830528a10d3ac66a7c518df37535c2a3638e
+        - number: 4
+          slug: verify-setup-token-without-cache-writes
+          title: Verify The Setup Token From A Local Fresh Read Without Rewriting The Shared Cache
+          path: phase-15-remediation-04/004-verify-setup-token-without-cache-writes.md
+          done: true
+          tier: sonnet-med
+          digest: 'verifySetupToken now short-circuits on cached state, does a local fresh read, and never touches the shared cache. Docs and unit tests are updated. The integration test compiles but did NOT run: no usable Postgres (no users superuser reachable; the shared localhost:5432 instance is refused without AUTHZ_DEV_PG_CONFIRM_SHARED=1, which was not set).'
+          findings:
+            - 77AP
+            - HOWM
+            - ICke
+          git:
+            branch: plan/identity-model-impl-15-004
+            commit:
+                - 2dc69b9
+            merge: e7fcb652ea6b5cd441d6135cddfdde1fec58a7d2
+        - number: 5
+          slug: purge-confirmations-on-provider-change
+          title: Purge Policy Confirmations On Provider Change And Serialize Them With Policy Writes
+          path: phase-15-remediation-04/005-purge-confirmations-on-provider-change.md
+          done: true
+          tier: sonnet-med
+          digest: PutAuthnPolicy purges confirmations on a change to credential_rule or required_oidc_provider_id, under a per-party advisory lock plus policy-row lock. Invite and collaborator-gate paths take the shared lock before policy or confirmation access. Integration suite ran for real against a throwaway postgres:16 container (not the shared 5432 instance).
+          findings:
+            - iFeg
+          git:
+            branch: plan/identity-model-impl-15-005
+            commit:
+                - c20e828
+            merge: 2fe2cf9045669e20c31cfd3f2a89b7a170dbdaf2
+        - number: 6
+          slug: require-party-update-for-managed-password-authorization
+          title: Require Party Update Before Auto-Authorizing A Managed User Password
+          path: phase-15-remediation-04/006-require-party-update-for-managed-password-authorization.md
+          done: true
+          tier: sonnet-med
+          digest: ProvisionManagedUserInTx writes the credential_party_authorizations row under an authorized party only when the caller holds update on the party. Without update the user is still provisioned and the password stays unauthorized. New integration test covers the no-update case; all validation passed.
+          findings:
+            - 1cWY
+          git:
+            branch: plan/identity-model-impl-15-006
+            commit:
+                - ab51ada
+            merge: c6eca2494481fe3ac4d07487df50f367f31944c2
+        - number: 7
+          slug: exclude-disabled-principals-from-admin-count
+          title: Exclude Disabled Principals From The Last Operator Admin Count
+          path: phase-15-remediation-04/007-exclude-disabled-principals-from-admin-count.md
+          done: true
+          tier: sonnet-med
+          digest: operatorAdminProfileSQL joins principals on holder_id with disabled_at IS NULL, so disabled-principal admins are not counted as remaining. New integration test covers the disabled second admin. Remaining gaps (mod-authz grant revocation, gate-locked admins, group-inherited admins) are documented as the guard boundary.
+          findings:
+            - DO7p
+          git:
+            branch: plan/identity-model-impl-15-007
+            commit:
+                - b6b6a51
+            merge: 27752c73fe1d0e3361d00a8691cc04c1a5bb5ee7
+        - number: 8
+          slug: serialize-managed-user-provisioning-with-policy
+          title: Serialize Managed User Provisioning With Authn Policy Writes
+          path: phase-15-remediation-04/008-serialize-managed-user-provisioning-with-policy.md
+          done: true
+          tier: sonnet-med
+          digest: ProvisionManagedUserInTx calls lockPartyPolicyShared before GetPartyAuthnPolicy (FOR SHARE on the policy row, or shared advisory lock with no row), serializing provisioning against PutAuthnPolicy. Two deterministic lock-ordering integration tests added; both fail with the lock removed and pass with it. Integration suite ran in full against a throwaway postgres:16-alpine container.
+          findings:
+            - vHBJ
+          git:
+            branch: plan/identity-model-impl-15-008
+            commit:
+                - b6e9f7c
+            merge: 8cdf04a2d788728c3cbefc0f1f282f52d8ef9767
+    - number: 16
+      slug: remediation-05
+      title: Remediation Round 5
+      diff_base: cd1fa11875e7a7fb1662963e91f1b9ebf739ef63
+      kind: remediation
+      security_review: required
+      tasks_added: 4
+      remediates_phase: 7
+      tasks:
+        - number: 1
+          slug: strict-collaborator-policy-mismatch
+          title: Keep Collaborator Policy Mismatch Strict Under Authorized Rule
+          path: phase-16-remediation-05/001-strict-collaborator-policy-mismatch.md
+          done: true
+          tier: sonnet-high
+          findings:
+            - ggb7
+          git:
+            branch: plan/identity-model-impl-16-001
+            commit:
+                - 64b4de5
+            merge: c59b436ff64b0727e4dc388cefa64b8d08ae9da2
+        - number: 2
+          slug: close-admin-disable-race-and-fail-closed-policy-lock
+          title: Serialize Principal Disable With Last-Admin Guard And Fail Closed On Nil Policy Lock Tx
+          path: phase-16-remediation-05/002-close-admin-disable-race-and-fail-closed-policy-lock.md
+          done: true
+          tier: sonnet-med
+          findings:
+            - 6dyh
+            - 8bH2
+          git:
+            branch: plan/identity-model-impl-16-002
+            commit:
+                - e69d2cd
+            merge: e7fc44e5fb938373df38b6ed09a6e475a09e154a
+        - number: 3
+          slug: document-lock-order-and-phase-15-contracts
+          title: Document Lock Order And Correct Phase 15 Contract Drift
+          path: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+          done: true
+          tier: sonnet-med
+          findings:
+            - A202
+            - J6jP
+            - u2bW
+            - jBbn
+            - EvkR
+            - xWC3
+            - yPFO
+            - 8mcq
+            - VXFQ
+          git:
+            branch: plan/identity-model-impl-16-003
+            commit:
+                - 8512aca
+            merge: 669aeb893894822d9112bf21ede0e2a6cf1c54ee
+        - number: 4
+          slug: run-bootstrap-token-lifecycle-integration
+          title: Run Bootstrap Token Lifecycle Integration Test And Confirm RefreshState Wiring
+          path: phase-16-remediation-05/004-run-bootstrap-token-lifecycle-integration.md
+          done: true
+          tier: sonnet-med
+          findings:
+            - PlQx
+            - hyek
+          git:
+            branch: plan/identity-model-impl-16-004
+            commit:
+                - 11be668
+            merge: 46baa372332f16d5aca4e10b26bda20c777fc19a
+    - number: 17
+      slug: remediation-06
+      title: Remediation Round 6
+      diff_base: f83b7494035e434de75dad3747fe63692c1f4c59
+      kind: remediation
+      tasks_added: 2
+      remediates_phase: 7
+      tasks:
+        - number: 1
+          slug: last-operator-admin-disable-contract
+          title: Align Last Operator Admin Error And Contract With Principal Disable
+          path: phase-17-remediation-06/001-last-operator-admin-disable-contract.md
+          done: true
+          tier: sonnet-low
+          digest: Widened the shared last-operator-admin 409 (field and message) to cover the disable path. Updated godoc, OpenAPI disable description and AGENTS.md row. Build, unit and integration tests pass.
+          findings:
+            - sDO1
+          git:
+            branch: plan/identity-model-impl-17-001
+            commit:
+                - 7d76b18
+            merge: a4ca8c626583d60fbbbf0794bd3ceaa1abe38e26
+        - number: 2
+          slug: scope-policy-lock-test-seam-and-assert-invite-time
+          title: Scope The Policy Lock Test Seam Per Test And Assert InviteTime Mode
+          path: phase-17-remediation-06/002-scope-policy-lock-test-seam-and-assert-invite-time.md
+          done: true
+          tier: sonnet-med
+          digest: Replaced the package-level locker var and test init() with a per-instance nil-defaulting policyLock seam on CollaboratorGate and ProfileService. Non-opted-in tests run the fail-closed production locker. HolderPolicyMismatch fake captures params; InviteTime asserted for both paths; flips confirmed to fail their tests.
+          findings:
+            - Eqyx
+            - inY7
+          git:
+            branch: plan/identity-model-impl-17-002
+            commit:
+                - 1eebe71
+            merge: c0760b505052bc570a5868f0c9b3a1e64112abf0
+    - number: 18
+      slug: remediation-07
+      title: Remediation Round 7
+      diff_base: a6ffcaf58725c82d82142c9a06dd55ed205c1640
+      kind: remediation
+      security_review: required
+      tasks_added: 6
+      remediates_phase: 8
+      tasks:
+        - number: 1
+          slug: party-is-own-owning-party
+          title: Gate The Party Record By Its Own Policy And Document One-Level Ownership
+          path: phase-18-remediation-07/001-party-is-own-owning-party.md
+          done: true
+          tier: opus-med
+          digest: Authorize treats a legal_entity target as its own owning party (Decision F); checkPartyPolicy requires both target party policy and direct owner policy. Closes bYK4 and N4y2. One-level ownership documented. Owner gate kept (confirm reading). Integration suites pass on throwaway postgres:16.
+          findings:
+            - bYK4
+            - N4y2
+            - iacw
+          git:
+            branch: plan/identity-model-impl-18-001
+            commit:
+                - 51d7959
+            merge: 9f9539e734a30ce291f225b55def83eac8b4c87f
+        - number: 2
+          slug: impersonated-actor-rules-apply
+          title: Apply The Impersonated Actor's Party Rules During Impersonation
+          path: phase-18-remediation-07/002-impersonated-actor-rules-apply.md
+          done: true
+          tier: opus-med
+          digest: Removed the blanket impersonation skip of credential_rule. New SQL helper mod_users.session_policy_factors makes impersonation sessions face the impersonated profile's own party gate and every owning-party gate using the administrator's parent-session factors and acr. Only a platform-operator administrator skips credential_rule; min_acr always applies. Operator status approximated at principal level until task 004 records the acting profile (finding crQE); confinement of parent factors left as before (finding bFGy). Integration tests ran and passed against throwaway postgres:16.
+          findings:
+            - Y3B8
+          git:
+            branch: plan/identity-model-impl-18-002
+            commit:
+                - d143bca
+            merge: 11e3902c3a82efdb59e66cf59f9fe7c3dc455fe3
+        - number: 3
+          slug: credentials-refuse-impersonation
+          title: Refuse Credential Administration And Personal-Party Creation While Impersonating
+          path: phase-18-remediation-07/003-credentials-refuse-impersonation.md
+          done: true
+          tier: sonnet-high
+          digest: Credential administration (list, issue, install, revoke) and EnsurePersonalParty refuse an impersonating context with users.impersonation_not_allowed. Credential routes also refuse the caller's own principal with 403, closing the last-credential and max-auth-age bypass. Child impersonation session inherits the parent's auth_time. Unit and integration tests cover each; all suites pass. Integration tests ran.
+          findings:
+            - ejk3
+            - Mdgf
+            - Vj21
+          git:
+            branch: plan/identity-model-impl-18-003
+            commit:
+                - bfd3919
+            merge: d1d7eaaf80f6bf73ec97c46a4135795b0af98ab3
+        - number: 4
+          slug: impersonation-renew-recheck
+          title: Re-Check Impersonate Authority From The Parent Session On Renew
+          path: phase-18-remediation-07/004-impersonation-renew-recheck.md
+          done: true
+          tier: opus-med
+          digest: 'Added mod_users.sessions.impersonator_profile_id (baseline edited in place, check and trigger extended, sqlc regenerated), set in Start. Renew re-authorizes impersonate from the parent session as the recorded acting profile, after checking that profile is still available. A refusal revokes the child (impersonation_ended) and returns 403. max_auth_age deliberately not re-applied. Integration tests ran and passed (authz, config, integration). Validation check 3 (API surface 2.9 amendment) not done: plan note is manager-owned.'
+          findings:
+            - 0chQ
+            - LAgn
+          git:
+            branch: plan/identity-model-impl-18-004
+            commit:
+                - 0b4d07e
+            merge: 9f3f777fde366ba6cbe0f6b6da7362f3c126fd47
+        - number: 5
+          slug: pin-sessionless-contexts
+          title: Pin Sessionless Contexts Away From Authorize
+          path: phase-18-remediation-07/005-pin-sessionless-contexts.md
+          done: true
+          tier: sonnet-high
+          digest: 'Added sessionless-context pinning tests: behavioral test that the sessionless write paths never reach Authorize; AST audit pinning the set of 11 functions that build or call sessionless-context helpers and asserting none calls an Authorize entry point. Comment on authz gated documents that sessionless trust is inferred from absent fields pending a mod-core system-actor marker. No gate logic or SQL changed. Integration tests ran and passed (authz, config, integration). The mod-core system-actor marker (j75L real fix) remains to be filed separately.'
+          findings:
+            - j75L
+          git:
+            branch: plan/identity-model-impl-18-005
+            commit:
+                - 56213b5
+            merge: c3bf76474fc65f9150b8624331787abf60bbed5c
+        - number: 6
+          slug: app-gate-step-up-mapping
+          title: Map Step-Up Refusals In The Invite-Only App Gates
+          path: phase-18-remediation-07/006-app-gate-step-up-mapping.md
+          done: true
+          tier: sonnet-high
+          findings:
+            - QKwM
+          git:
+            branch: plan/identity-model-impl-18-006
+            commit:
+                - 5c96e4c
+            merge: 57b94b1d6b72a828243cce230d93b9ae3f7ed278
+    - number: 19
+      slug: remediation-08
+      title: Remediation Round 8
+      diff_base: b6561b026b06aa38a5e3864c4791c41096d53991
+      kind: remediation
+      security_review: required
+      tasks_added: 5
+      remediates_phase: 8
+      tasks:
+        - number: 1
+          slug: impersonator-profile-credential-exemption
+          title: Key The Impersonation Credential-Rule Exemption On The Recorded Acting Profile
+          path: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
+          done: true
+          tier: opus-med
+          digest: 'Fixed DChD, crQE, bKBt: credential-rule exemption depends on the recorded impersonator_profile_id (active, core_is_operator_profile). Baseline edited in place; new HTTP-level dual-profile integration test; green on throwaway postgres:16.'
+          findings:
+            - DChD
+            - crQE
+            - bKBt
+          git:
+            branch: plan/identity-model-impl-19-001
+            commit:
+                - b721fcc
+            merge: 20d83de
+        - number: 2
+          slug: confine-impersonator-parent-factors
+          title: Apply Credential Confinement To Non-Operator Impersonators
+          path: phase-19-remediation-08/002-confine-impersonator-parent-factors.md
+          done: true
+          tier: opus-med
+          digest: 'Applied Decision L in 0100_baseline.sql: profile_gate_for and session_meets_party_policy confine non-operator impersonations (keyed on impersonator_profile_id); operators stay exempt. New integration and SQL-level tests; mutation-checked; green on throwaway postgres:16.'
+          findings:
+            - KkGF
+            - bFGy
+          git:
+            branch: plan/identity-model-impl-19-002
+            commit:
+                - 042f83d
+            merge: 51822c3
+        - number: 3
+          slug: refuse-managed-user-creation-impersonating
+          title: Refuse Managed-User Creation And Credential Writes While Impersonating
+          path: phase-19-remediation-08/003-refuse-managed-user-creation-impersonating.md
+          done: true
+          tier: opus-med
+          digest: Managed-user creation refuses impersonating context with 403 users.impersonation_not_allowed in CreateManagedUser and ProvisionManagedUserInTx; integration test shows no rows written; fails without fix. Profile-ending departure cleanup under impersonation raised as a decision.
+          findings:
+            - YqJd
+          git:
+            branch: plan/identity-model-impl-19-003
+            commit:
+                - 927252d
+            merge: b99e5fc
+        - number: 4
+          slug: test-precision-nesting-and-static-audit
+          title: Tighten Nesting, Party-Record Gate And Sessionless Audit Tests
+          path: phase-19-remediation-08/004-test-precision-nesting-and-static-audit.md
+          done: true
+          tier: sonnet-high
+          digest: 'Tightened three test suites with no production changes: nesting SQL check isolates no-nesting invariant; party-record gate pins 404 with positive control; static audit ignores literal-zero SessionID/CredentialID. Mutation and literal demonstrations failed as expected and were reverted.'
+          findings:
+            - gxvu
+            - ehkS
+            - FvL1
+          git:
+            branch: plan/identity-model-impl-19-004
+            commit:
+                - 71d8c39
+            merge: 2b21a71
+        - number: 5
+          slug: docs-impersonation-reauth-and-decisions
+          title: Document Impersonation Re-Auth, Refusals And Decisions G J K L M
+          path: phase-19-remediation-08/005-docs-impersonation-reauth-and-decisions.md
+          done: true
+          tier: sonnet-high
+          digest: Brought api/openapi.yaml, AGENTS.md, the credentialsTarget comment and docs/architecture.md in line with merged behavior of tasks 001-004 (Decisions G/J/K/L, impersonation lifecycle, app-gate step-up, sessionless limitation). Verified against Go code.
+          findings:
+            - IDjP
+            - 7TSm
+            - SO3A
+            - HGTD
+            - 33w3
+            - MGUW
+            - MkEx
+          git:
+            branch: plan/identity-model-impl-19-005
+            commit:
+                - 89c1c01
+            merge: a45d13a
+    - number: 20
+      slug: remediation-09
+      title: Remediation Round 9
+      diff_base: 55189e1a36846b56cf10bf51b751ece4165926e2
+      kind: remediation
+      security_review: required
+      tasks_added: 2
+      remediates_phase: 8
+      tasks:
+        - number: 1
+          slug: refuse-impersonated-profile-end
+          title: Refuse Ending A Profile Under Impersonation
+          path: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
+          done: true
+          tier: sonnet-med
+          digest: Added a 403 refusal for ending a profile under impersonation in UpdateProfileStatus, ordered after validation and before the profile lookup. An integration test confirms the profile, the holder's party authorizations and the confined credentials are unchanged, and it fails when the refusal is removed. The openapi description and the Decision K doc bullet were updated.
+          findings:
+            - uBfI
+            - zzo0
+          git:
+            branch: plan/identity-model-impl-20-001
+            commit:
+                - ee6dae3
+            merge: 576ea98
+        - number: 2
+          slug: precision-sql-comments-openapi-order-liveness-test
+          title: Align SQL Exemption Comments, Credential Route Error Order And Decision L Liveness Assertion
+          path: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
+          done: true
+          tier: sonnet-low
+          digest: Comment-only SQL rewording, corrected refusal-order text on the four OpenAPI credential operations, and a tightened liveness assertion in the test. No behavior change.
+          findings:
+            - u1NG
+            - lGXo
+            - wRQn
+          git:
+            branch: plan/identity-model-impl-20-002
+            commit:
+                - bda3e54
+            merge: 691e7d7
+    - number: 21
+      slug: adopt-core-engine-remediation
+      title: Adopt Mod-Core Identity Engine Remediation
+      diff_base: 2b182a710b58b21b47f9bdcf4fe57a9e5395decc
+      tasks:
+        - number: 1
+          slug: key-gates-on-system-actor-marker
+          title: Key The Engine Gates On The Explicit System-Actor Marker
+          path: phase-21-adopt-core-engine-remediation/001-key-gates-on-system-actor-marker.md
+          done: true
+          tier: opus-high
+          digest: 'gated() now skips the engine''s assurance and owning-party gates only for opctx.IsSystemActor and the anonymous context. An unmarked sessionless context is gated and fails closed. Every AuthContext builder in api/ reviewed and commented; no class (b) producer. Findings filed: J86E (mod-authz stepUpStale), c6Dh (stale SQL comment).'
+          git:
+            branch: plan/identity-model-impl-21-001
+            commit:
+                - f8cfc04
+            merge: 230a32d803cc66fec69f367a91a4f0092d1a933d
+        - number: 2
+          slug: adopt-list-row-filter-hook
+          title: Adopt The List-Side Row Filter Hook For The Owning-Party Gate
+          path: phase-21-adopt-core-engine-remediation/002-adopt-list-row-filter-hook.md
+          done: true
+          tier: opus-high
+          digest: Added mod_users.owning_party_gate as the one SQL owning-party decision, used by checkPartyPolicy and the new list predicate mod_users.access_row_permitted. ListPrincipals runs in a read-only transaction bound with setup.BindAuthInputs. mod-users installs mod-core's row-filter hook via localAuthz.AccessFuncGenerator in the dev server and test harnesses. Mutation checks confirm the tests catch an always-true predicate and a missing binding. Integration tests ran against a throwaway postgres:16 (removed).
+          git:
+            branch: plan/identity-model-impl-21-002
+            commit:
+                - 9cd73dc
+            merge: 57e945943ddb5ecb003078190bb5dd6b3ea160f2
+        - number: 3
+          slug: adopt-profile-lock-and-org-create-in-tx
+          title: Adopt The Profile Row Lock Query And Organization CreateInTx
+          path: phase-21-adopt-core-engine-remediation/003-adopt-profile-lock-and-org-create-in-tx.md
+          done: true
+          tier: sonnet-med
+          digest: Moved lockProfile onto mod-core's generated dblock.GetProfileByEntityIDForUpdate row lock and made the bootstrap create the operator organization through OrganizationService.CreateInTx with WithoutOwner(). NewBootstrapService gains a trailing orgs parameter; main.go, the harness and the manifest (new bootstrapOrganizationService entry via usersservice.OrganizationFromServices) are wired. Integration suites passed against a throwaway postgres:16 (removed); mutation check confirmed the new tests fail when the raw inserts are restored.
+          git:
+            branch: plan/identity-model-impl-21-003
+            commit:
+                - e65c520
+            merge: 1a6568222ee5fcc79dd2f744f4af245ef2bbc002
+        - number: 4
+          slug: align-docs-with-adopted-core-apis
+          title: Align Docs With The Six-Argument Predicate And The System-Actor Marker
+          path: phase-21-adopt-core-engine-remediation/004-align-docs-with-adopted-core-apis.md
+          done: true
+          tier: sonnet-med
+          digest: Rewrote the superseded sessionless-trust and list-gate statements across AGENTS.md, the architecture doc, the spec, the upgrade notes, model/README.md and the OpenAPI principals description. All claims were checked against the merged code. One stale code comment was filed as a finding (wkvN).
+          git:
+            branch: plan/identity-model-impl-21-004
+            commit:
+                - 255e343
+            merge: 95ff9fa81b5850e7e328c00354e4c9c9526b7f3e
+    - number: 22
+      slug: remediation-10
+      title: Remediation Round 10
+      diff_base: 75c187191ba29cf85c7a3781d95cfa1ddbd2a73f
+      kind: remediation
+      security_review: required
+      tasks_added: 3
+      remediates_phase: 21
+      tasks:
+        - number: 1
+          slug: require-sessionless-system-actor
+          title: Gate System-Actor Contexts That Carry A Session Or Credential
+          path: phase-22-remediation-10/001-require-sessionless-system-actor.md
+          done: true
+          tier: sonnet-med
+          digest: Marked system-actor contexts carrying a session or credential are now gated in gated() and access_row_permitted; stale session_meets_party_policy comment fixed; tests added and both mutation directions verified.
+          findings:
+            - tpls
+          git:
+            branch: plan/identity-model-impl-22-001
+            commit:
+                - f6e8dc9
+            merge: 64d83d7ec053869ebbc7b1b4e073874c2444bc9e
+        - number: 2
+          slug: apply-assurance-gate-on-principal-list
+          title: Apply The Operation Assurance Gate To The Principal List
+          path: phase-22-remediation-10/002-apply-assurance-gate-on-principal-list.md
+          done: true
+          tier: sonnet-med
+          digest: ListPrincipals now runs the operation assurance gate via new Authorizer.CheckAssurance before the transaction; fails closed when the authorizer lacks the capability; OpenAPI 409 added.
+          findings:
+            - P0yG
+          git:
+            branch: plan/identity-model-impl-22-002
+            commit:
+                - 260aa65
+            merge: 9f70bf3d54751adbdb3d59fc1ab3bcb3ae22b0fd
+        - number: 3
+          slug: dispatch-after-commit-observations
+          title: Dispatch After-Commit Observations For CreateInTx Creations
+          path: phase-22-remediation-10/003-dispatch-after-commit-observations.md
+          done: true
+          tier: sonnet-med
+          digest: After-commit create observations now dispatched post-commit at Bootstrap, Register, OIDC just-in-time creation, and guest upgrade; no dispatch on rollback; payloads carry no ssn or tax_id.
+          findings:
+            - DDfb
+            - bwMq
+            - 06rd
+          git:
+            branch: plan/identity-model-impl-22-003
+            commit:
+                - e4bea51
+            merge: 68c6cb9483db169e9601347ca2b3f42fd20bc148
+    - number: 23
+      slug: remediation-11
+      title: Remediation Round 11
+      diff_base: a65acd48707a95298d939739b9d80ec048e3ea71
+      kind: remediation
+      tasks_added: 6
+      remediates_phase: 9
+      tasks:
+        - number: 1
+          slug: fix-auth-context-session-lifecycle
+          title: Fix Auth Context User Loading, Hydrate Failures and Logout Revocation
+          path: phase-23-remediation-11/001-fix-auth-context-session-lifecycle.md
+          done: true
+          tier: sonnet-med
+          digest: 'Fixed all three auth-context lifecycle defects: pending user load counts as loading; hydrate keeps tokens and exposes sessionError and retrySession on status 0 and 5xx; logout refreshes once after 401 and retries revoke, with documented local-only fallback. Tests added for each.'
+          findings:
+            - zwCX
+            - oFfM
+            - A6aq
+          git:
+            branch: plan/identity-model-impl-23-001
+            commit:
+                - 18ee982
+            merge: a2ebcf6b82bd0d7fda26f798e407a748e3be8075
+        - number: 2
+          slug: handle-oidc-link-and-step-up-returns
+          title: Handle OIDC Link and Step-Up Return Fragments
+          path: phase-23-remediation-11/002-handle-oidc-link-and-step-up-returns.md
+          done: true
+          tier: sonnet-med
+          digest: 'OIDC return page handles linked=1 and stepped_up=1 without a handoff: validates return path with isSafeReturnPath falling back to default; stepped_up runs a refresh grant before returning; refresh failure surfaces via onError. Five tests added in oidc-callback-page.test.tsx.'
+          findings:
+            - 4ohc
+          git:
+            branch: plan/identity-model-impl-23-002
+            commit:
+                - 5525f60
+            merge: 3e1c1cc79d0754c0b00c5b63e695ea2519dd4a1f
+        - number: 3
+          slug: stop-impersonation-refresh-replay
+          title: Stop Refresh-and-Replay of Impersonated Requests as the Administrator
+          path: phase-23-remediation-11/003-stop-impersonation-refresh-replay.md
+          done: true
+          tier: sonnet-med
+          digest: 'Stopped refresh-and-replay of impersonated requests: per-tab impersonation marker; non-revocation 401 on impersonated token clears the dead impersonation token and emits impersonation_ended with no refresh and no replay; End handles impersonation_ended without replaying DELETE and restores the administrator via refresh grant with dedup; reload with expired impersonation token restores the administrator. Tests added in api.test.ts and impersonation-banner.test.tsx.'
+          findings:
+            - 4EHb
+          git:
+            branch: plan/identity-model-impl-23-003
+            commit:
+                - 177f169
+            merge: 9c74ec8e3c66b57b2ac301950254b7f21ef6b0e0
+        - number: 4
+          slug: persist-pending-profile-selection
+          title: Persist Pending Profile Selection and Return Path Across Reload
+          path: phase-23-remediation-11/004-persist-pending-profile-selection.md
+          done: true
+          tier: sonnet-med
+          digest: Persisted pending profile selection list and safe return path per tab (config keys selection and selection_return); doRefresh without profile uuid publishes selection_required and throws 401 instead of signing out when a stored selection exists; establishSession restores selection state on reload; finishSignIn stores the return path; SelectProfilePage reads prop or stored path and passes resumePath to onSelected.
+          findings:
+            - b1HZ
+            - AReg
+          git:
+            branch: plan/identity-model-impl-23-004
+            commit:
+                - 9658c06
+            merge: 3d80ff28b19ddb17856c77bb9cc37c905723a045
+        - number: 5
+          slug: route-first-verify-send-error-to-dialog
+          title: Route First Verification-Code Send Failure to the Dialog
+          path: phase-23-remediation-11/005-route-first-verify-send-error-to-dialog.md
+          done: true
+          tier: sonnet-low
+          digest: sendCode now routes its failure by an explicit inDialog flag instead of the render-time verifyTarget; a first-send failure on opening the verify dialog shows in the dialog, not the page banner. One test added in identifiers-panel.test.tsx.
+          findings:
+            - Qo20
+          git:
+            branch: plan/identity-model-impl-23-005
+            commit:
+                - ad47372
+            merge: ac2e7c4bb25c6c6c28eece595b4d4d7a205d1e19
+        - number: 6
+          slug: document-app-option-as-uuid
+          title: Document the App Option as a UUID
+          path: phase-23-remediation-11/006-document-app-option-as-uuid.md
+          done: true
+          tier: haiku-med
+          digest: Switched five required app-option doc comments plus one story doc comment from slug to uuid, matching api/openapi.yaml and api.ts. Both validation checks pass.
+          findings:
+            - paQk
+          git:
+            branch: plan/identity-model-impl-23-006
+            commit:
+                - c4a6ecf
+            merge: 399279c2a49331c53813b026a90d9b6f5200e838
+    - number: 24
+      slug: remediation-12
+      title: Remediation Round 12
+      diff_base: f686e6f0589a6cd9136164fb1b118ee6651ea430
+      kind: remediation
+      security_review: required
+      tasks_added: 3
+      remediates_phase: 9
+      tasks:
+        - number: 1
+          slug: route-step-up-refresh-through-single-flight
+          title: Route the OIDC Step-Up Refresh Through the Single-Flight Refresh
+          path: phase-24-remediation-12/001-route-step-up-refresh-through-single-flight.md
+          done: true
+          tier: sonnet-med
+          digest: Routed post-step-up rotation through shared per-tab single-flight via new client method; concurrent hydrate test added.
+          findings:
+            - 6qD2
+          git:
+            branch: plan/identity-model-impl-24-001
+            commit:
+                - dc7c836
+            merge: d87369b247d12473bfb1d37b9289942b4be4b4c9
+        - number: 2
+          slug: fail-closed-impersonation-detection
+          title: Make Impersonated-Request Detection Fail Closed
+          path: phase-24-remediation-12/002-fail-closed-impersonation-detection.md
+          done: true
+          tier: sonnet-med
+          digest: Impersonation detection checks marker and token's unverified act claim; step-up token-store path keeps marker consistent; two tests added; suite green.
+          findings:
+            - vAo0
+          git:
+            branch: plan/identity-model-impl-24-002
+            commit:
+                - 1d6c29f
+            merge: 4caaf219270959cd296e9035214e47f68b06297b
+        - number: 3
+          slug: revoke-admin-session-on-impersonated-logout
+          title: Revoke the Administrator Session When Logging Out While Impersonating
+          path: phase-24-remediation-12/003-revoke-admin-session-on-impersonated-logout.md
+          done: true
+          tier: sonnet-med
+          digest: Logout restores the administrator session on users.impersonation_ended and revokes it; local state cleared in every case; one test added; all gui checks pass.
+          findings:
+            - Bq75
+          git:
+            branch: plan/identity-model-impl-24-003
+            commit:
+                - d4a2648
+            merge: 7224fe14de70d598b1e20512bcd29d5a0e5f40e4
+    - number: 25
+      slug: remediation-13
+      title: Remediation Round 13
+      diff_base: b72017304f0094d2ff78f10c093946faf8609109
+      kind: remediation
+      security_review: required
+      tasks_added: 3
+      remediates_phase: 9
+      tasks:
+        - number: 1
+          slug: harden-logout-while-impersonating
+          title: Revoke the Administrator Session on Every Impersonated Logout and Guard Late State Commits
+          path: phase-25-remediation-13/001-harden-logout-while-impersonating.md
+          done: true
+          tier: sonnet-med
+          findings:
+            - H5Po
+            - NfAS
+            - D3Q9
+          git:
+            branch: plan/identity-model-impl-25-001
+            commit:
+                - 89fe62a
+            merge: d6af915a9e575c53dab643865899a3e3cf026100
+        - number: 2
+          slug: tighten-impersonation-marker-fail-closed
+          title: Make the Impersonation Marker Fail Closed for Undecodable Tokens and Handler-Supplied Step-Up Tokens
+          path: phase-25-remediation-13/002-tighten-impersonation-marker-fail-closed.md
+          done: true
+          tier: sonnet-med
+          digest: Tightened the impersonation marker so undecodable stored tokens are treated as impersonating, and made the step-up path set-only. Migrated the GUI test fixtures to JWT-shaped tokens and added tests for both scenarios.
+          findings:
+            - moDM
+            - m3Jr
+          git:
+            branch: plan/identity-model-impl-25-002
+            commit:
+                - 91a3006
+            merge: c316182af02cc71bf117086dee32ed946d81c047
+        - number: 3
+          slug: signal-step-up-refresh-skip-while-impersonating
+          title: Signal and Test the Impersonating No-Op in refreshAfterStepUp
+          path: phase-25-remediation-13/003-signal-step-up-refresh-skip-while-impersonating.md
+          done: true
+          tier: sonnet-low
+          digest: Made refreshAfterStepUp return false when skipped while impersonating. OidcCallbackPage now reports an error instead of completing, and both behaviours are covered by tests.
+          findings:
+            - LJFE
+            - Wstk
+          git:
+            branch: plan/identity-model-impl-25-003
+            commit:
+                - 9709ad7
+            merge: 70e85ee4a26e40a1402704c1e81e5760245a5527
+    - number: 26
+      slug: remediation-14
+      title: Remediation Round 14
+      diff_base: 79e5edd797e075d1495a7dfdcdd9dd83ba355f79
+      kind: remediation
+      security_review: required
+      tasks_added: 6
+      remediates_phase: 10
+      tasks:
+        - number: 1
+          slug: document-persisted-signing-key-risk
+          title: Document Persisted Signing Key Exposure
+          path: phase-26-remediation-14/001-document-persisted-signing-key-risk.md
+          done: true
+          tier: sonnet-low
+          digest: Documented in the Persisted signing key section that the key is stored unencrypted, that access to the table or a backup allows forging tokens, and that production should set JWT_SIGNING_KEY from a secret store. Doc-only change.
+          findings:
+            - e4f6
+          git:
+            branch: plan/identity-model-impl-26-001
+            commit:
+                - 8f0c9652
+            merge: 0efd1dc53b60e5ca197763fb0b8053876ea6921c
+        - number: 2
+          slug: alias-facade-api-key-and-profile-summary
+          title: Re-Export API Key And Profile Summary Types From Facade
+          path: phase-26-remediation-14/002-alias-facade-api-key-and-profile-summary.md
+          done: true
+          tier: sonnet-low
+          digest: Added three facade type aliases in api/usersservice/service.go next to their services, plus a compile-only external-package test. No surprises.
+          findings:
+            - iZ3E
+          git:
+            branch: plan/identity-model-impl-26-002
+            commit:
+                - 961ec79a
+            merge: af8fee69059be5fcba8297fe252f43e015080381
+        - number: 3
+          slug: align-cors-options-and-docs
+          title: Align CORS Methods Headers And Docs With Routes
+          path: phase-26-remediation-14/003-align-cors-options-and-docs.md
+          done: true
+          tier: sonnet-med
+          digest: Aligned CORS AllowedMethods and AllowedHeaders with the routes, added a test, and documented the OIDC start POST credentials exception in docs/cors.md. No surprises.
+          findings:
+            - BNNN
+            - ndUS
+            - fb9H
+          git:
+            branch: plan/identity-model-impl-26-003
+            commit:
+                - 179d2ec3
+            merge: b070bf1690265d433cfcb40171f56cbbd2fbde14
+        - number: 4
+          slug: fix-api-layer-route-docs
+          title: Correct Route Mounting And OpenAPI Coverage Notes
+          path: phase-26-remediation-14/004-fix-api-layer-route-docs.md
+          done: true
+          tier: sonnet-low
+          digest: Reworded the AGENTS.md error-precedence bullet to match docs/architecture.md and added the /v1/oidc-config OpenAPI omission note to the architecture OIDC row. Nothing else was touched.
+          findings:
+            - N2lP
+            - kmxU
+          git:
+            branch: plan/identity-model-impl-26-004
+            commit:
+                - 55c2b891
+            merge: a20465fd4abd3968503cbb5571bbd1d81d8996c8
+        - number: 5
+          slug: fix-oidc-redirect-error-code
+          title: Use Authentication Failed Code In OIDC Troubleshooting
+          path: phase-26-remediation-14/005-fix-oidc-redirect-error-code.md
+          done: true
+          tier: haiku-med
+          digest: Replaced auth_failed with authentication_failed in the refusals table of docs/oidc-troubleshooting.md and in the resolver decision-table comment. Both validation checks pass.
+          findings:
+            - cRuN
+          git:
+            branch: plan/identity-model-impl-26-005
+            commit:
+                - 8de549bf
+            merge: 826e63510bcd6f182b56dc4fe932d63e04c228db
+        - number: 6
+          slug: document-core-field-key-env
+          title: Document CORE_FIELD_KEY_HEX Ownership In Env Example
+          path: phase-26-remediation-14/006-document-core-field-key-env.md
+          done: true
+          tier: haiku-med
+          digest: Moved CORE_FIELD_KEY_HEX out from under the Authelia/Timezone heading in .env.example into its own mod-core-owned comment block stating first-boot-only seed semantics and pointing rotation at POST /v1/field-crypto-keys/rotations. Value unchanged. No code changed.
+          findings:
+            - RVUM
+          git:
+            branch: plan/identity-model-impl-26-006
+            commit:
+                - eb5a8a31
+            merge: 7627f1ebb7733fd1d6cae43e49221546c60e26da
+    - number: 27
+      slug: remediation-15
+      title: Remediation Round 15
+      diff_base: 37fbeb7e7a3f445bf1ebd23502eb46cd00b154b4
+      kind: remediation
+      security_review: required
+      tasks_added: 2
+      remediates_phase: 10
+      tasks:
+        - number: 1
+          slug: align-cors-setup-token-and-docs
+          title: Allow X-Setup-Token In CORS And Correct CORS Docs
+          path: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
+          done: true
+          tier: sonnet-med
+          digest: Added X-Setup-Token to CORS allowed headers with a test, corrected docs/cors.md, removed two stale Known limits lines.
+          findings:
+            - gz8M
+            - EqWE
+            - Yo85
+            - 7Yab
+          git:
+            branch: plan/identity-model-impl-27-001
+            commit:
+                - badf8c15
+            merge: ce9fcdbd
+        - number: 2
+          slug: mark-field-key-seed-dev-only
+          title: Mark Committed Field-Encryption Seed As Development Only
+          path: phase-27-remediation-15/002-mark-field-key-seed-dev-only.md
+          done: true
+          tier: sonnet-low
+          digest: Added a development-only / generate-fresh comment to the field-encryption seed block in .env.example. The CORE_FIELD_KEY_HEX value is unchanged.
+          findings:
+            - CubF
+          git:
+            branch: plan/identity-model-impl-27-002
+            commit:
+                - 6617e64e
+            merge: 07d788b5

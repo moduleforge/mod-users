@@ -7,13 +7,14 @@ import { getApiBaseUrl } from './config';
  * `oidc-config.ts` (which hosts the status/confirm/saved helpers) so the
  * onboarding flow and the per-provider edit flow evolve independently.
  *
- * Auth: every method accepts `auth` — either an admin bearer token (sent
- * as Authorization: Bearer) or a setup token. The setup token is sent
- * via the `X-Setup-Token` header on every method (covers GET and DELETE
- * which have no body). PUT and POST additionally echo it into the body
- * under `setup_token` for back-compat with the original shape, but the
- * header alone is sufficient. Mirrors the dual-auth pattern used by
- * {@link postOIDCConfirm}.
+ * Auth: every method accepts `auth` — either an operator-admin Bearer token
+ * (session mode) or a setup token (token mode, accepted by the server only
+ * while OIDC is unconfirmed). The setup token travels only in the
+ * `X-Setup-Token` header, on every method; it is never echoed into a body.
+ * Mirrors the dual-auth pattern used by {@link postOIDCConfirm}.
+ *
+ * Every request sends `credentials: 'omit'`: the credential is always an
+ * explicit header, never an ambient cookie.
  */
 
 export interface OIDCProviderView {
@@ -36,10 +37,52 @@ export interface OIDCProviderView {
   scopes_default: string[];
   scopes_source: OIDCFieldSource;
   enabled: boolean;
+  /** The party this provider is bound to, or null for a deployment-wide provider. */
+  party_uuid: string | null;
+  /** The effective account-creation policy for an unknown identity. */
+  jit_mode: OIDCJitMode;
+  /** Whether the IdP's asserted `acr` counts toward the session's assurance. */
+  trust_acr: boolean;
   init_ok: boolean;
   error?: string;
   callback_url: string;
   well_known: boolean;
+}
+
+/**
+ * What a first sign-in by an unknown identity creates:
+ *   - `byo`: a personal account the person owns (the default for a new row).
+ *   - `managed`: an account managed by the provider's party; requires a party.
+ *   - `none`: nothing; unknown identities are refused.
+ */
+export type OIDCJitMode = 'byo' | 'managed' | 'none';
+
+export const OIDC_JIT_MODES: readonly OIDCJitMode[] = ['byo', 'managed', 'none'];
+
+/** Short operator-facing explanation of each `jit_mode`. */
+export const OIDC_JIT_MODE_HELP: Record<OIDCJitMode, string> = {
+  byo: 'byo: an unknown identity gets a personal account of its own.',
+  managed:
+    'managed: an unknown identity gets an account managed by the party below; a party is required.',
+  none: 'none: unknown identities are refused; only existing accounts can sign in.',
+};
+
+/**
+ * Client-side mirror of the server rule "jit_mode managed requires a party".
+ * Returns the message to show, or null when the policy is acceptable. The
+ * server stays the authority (it answers `400 users.jit_managed_requires_party`
+ * and the modals surface that message too); this only saves a round trip.
+ */
+export function validateJitPolicy(
+  jitMode: OIDCJitMode,
+  partyUuid: string,
+): string | null {
+  // Only `managed` depends on a party: it creates accounts on the party's
+  // behalf. byo and none are valid unbound, so they pass without a party.
+  if (jitMode === 'managed' && partyUuid.trim() === '') {
+    return 'jit_mode managed requires a party UUID.';
+  }
+  return null;
 }
 
 /**
@@ -66,6 +109,15 @@ export interface OIDCProviderWriteBody {
   claim_style?: string | null;
   scopes?: string[] | null;
   enabled?: boolean;
+  /**
+   * Party binding. Absent keeps the stored value; `null` unbinds; a uuid binds
+   * (the server answers `400 users.party_unknown` for an unknown party).
+   */
+  party_uuid?: string | null;
+  /** Absent keeps the stored value; `null` resets to `byo`. */
+  jit_mode?: OIDCJitMode | null;
+  /** Absent keeps the stored value. */
+  trust_acr?: boolean;
 }
 
 export type OIDCProviderAuth =
@@ -75,16 +127,20 @@ export type OIDCProviderAuth =
 async function parseError(response: Response): Promise<ApiRequestError> {
   let code = 'unknown_error';
   let message = `Request failed with status ${response.status}`;
+  let details: ApiErrorResponse['error']['details'];
   try {
     const body = (await response.json()) as ApiErrorResponse;
     if (body.error) {
       code = body.error.code;
       message = body.error.message;
+      // Per-field details (for example users.party_unknown on party_uuid)
+      // let the modals show the specific reason instead of a generic line.
+      details = body.error.details;
     }
   } catch {
     // ignore JSON parse errors — keep defaults
   }
-  return new ApiRequestError(code, message, response.status);
+  return new ApiRequestError(code, message, response.status, details);
 }
 
 function authHeaders(auth: OIDCProviderAuth): Record<string, string> {
@@ -92,26 +148,11 @@ function authHeaders(auth: OIDCProviderAuth): Record<string, string> {
   if ('adminBearer' in auth && auth.adminBearer) {
     headers.Authorization = `Bearer ${auth.adminBearer}`;
   } else if ('setupToken' in auth && auth.setupToken) {
-    // PUT/POST also put the token in the JSON body, but sending it in
-    // the header covers GET/DELETE (which have no body) with the same
-    // auth surface. The API accepts either.
+    // Header only: it covers GET/DELETE (no body) and PUT/POST alike, and
+    // keeps the secret out of any body a proxy or log might capture.
     headers['X-Setup-Token'] = auth.setupToken;
   }
   return headers;
-}
-
-/**
- * Attaches the setup_token to the body when not using admin-bearer auth.
- * Returns a new object so callers don't have to mutate their input.
- */
-function bodyWithAuth(
-  body: Record<string, unknown>,
-  auth: OIDCProviderAuth,
-): Record<string, unknown> {
-  if ('setupToken' in auth && auth.setupToken) {
-    return { ...body, setup_token: auth.setupToken };
-  }
-  return body;
 }
 
 /**
@@ -129,6 +170,7 @@ export async function fetchOIDCProvider(
       {
         method: 'GET',
         headers: authHeaders(auth),
+        credentials: 'omit',
       },
     );
   } catch (err) {
@@ -160,7 +202,8 @@ export async function updateOIDCProvider(
       {
         method: 'PUT',
         headers: authHeaders(auth),
-        body: JSON.stringify(bodyWithAuth(body as Record<string, unknown>, auth)),
+        body: JSON.stringify(body),
+        credentials: 'omit',
       },
     );
   } catch (err) {
@@ -191,9 +234,8 @@ export async function createOIDCProvider(
     response = await fetch(`${getApiBaseUrl()}/v1/oidc-config/providers`, {
       method: 'POST',
       headers: authHeaders(auth),
-      body: JSON.stringify(
-        bodyWithAuth({ ...body, id } as Record<string, unknown>, auth),
-      ),
+      body: JSON.stringify({ ...body, id }),
+      credentials: 'omit',
     });
   } catch (err) {
     console.error('[oidc-provider] createOIDCProvider network error', err);
@@ -225,6 +267,7 @@ export async function revertOIDCProvider(
       {
         method: 'DELETE',
         headers: authHeaders(auth),
+        credentials: 'omit',
       },
     );
   } catch (err) {

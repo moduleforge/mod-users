@@ -1,11 +1,16 @@
-// Package handlers — oidc_config endpoints cover the phase 9.9a
-// onboarding flow. The admin starts with an unconfirmed boot state,
-// retrieves a one-time setup token from the server logs (or, in
-// localhost mode, from the /setup-token endpoint), pastes it into the
-// GUI, and confirms a provider selection. Successful confirm clears
-// the setup-token hash in DB, recomputes BootState, and (via Rebuild)
-// refreshes the OAuth registry so /v1/auth/oidc/* starts serving real
-// traffic without a process restart.
+// Package handlers — oidc_config endpoints cover the onboarding flow.
+// The operator starts with an unconfirmed boot state and no operator
+// party, retrieves the one-time setup token from the server logs (or, in
+// localhost mode, from the /setup-token endpoint), and uses it both to
+// bootstrap the deployment (POST /v1/bootstrap) and to confirm a
+// provider selection here. The token stays active while either step is
+// pending (decision U9): whichever of the two completes last clears the
+// setup-token hash. The OIDC configuration routes accept the token only
+// while OIDC is unconfirmed; once confirmed they require an operator admin
+// session, even while the bootstrap is pending (POST /v1/bootstrap alone
+// keeps the token live then). A successful confirm recomputes BootState and (via
+// Rebuild) refreshes the OAuth registry so /v1/auth/oidc/* starts serving
+// real traffic without a process restart.
 package handlers
 
 import (
@@ -21,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/moduleforge/core-api/apiresp"
+	coredb "github.com/moduleforge/core-model/db"
 	"github.com/moduleforge/mod-users/api/internal/auth"
 	"github.com/moduleforge/mod-users/api/internal/config"
 	"github.com/moduleforge/mod-users/api/internal/server"
@@ -32,7 +38,7 @@ import (
 // in-memory fake without importing pgx; production wires *db.Queries,
 // which satisfies this interface by virtue of sqlc's emit_interface.
 type OIDCConfigQuerier interface {
-	GetOIDCConfig(ctx context.Context) (db.OidcConfig, error)
+	GetOIDCConfig(ctx context.Context) (db.GetOIDCConfigRow, error)
 	// UpdateOIDCConfig persists the singleton's opt-out flag. The
 	// per-provider enabled JSONB that used to live here was removed in
 	// 9.16 — see SetOIDCProviderEnabled on the providers querier.
@@ -49,7 +55,13 @@ type OIDCConfigQuerier interface {
 	// build the merged registry read by buildProviderViews and
 	// buildStatusProviders (since 9.16 the enabled flag lives on each
 	// row, so status needs per-row visibility).
-	ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error)
+	ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error)
+}
+
+// PlatformSettingsReader reads mod-core's platform_settings singleton.
+// *coredb.Queries satisfies it.
+type PlatformSettingsReader interface {
+	GetPlatformSettings(ctx context.Context) (coredb.PlatformSetting, error)
 }
 
 // OIDCConfigDeps is the set of collaborators the OIDC config handler
@@ -63,8 +75,10 @@ type OIDCConfigDeps struct {
 	EnvNoOIDCEnv bool
 	TokenDisplay config.TokenDisplay
 	// AdminChecker is an optional second authorization path for
-	// /confirm — when non-nil, a request arriving with a valid admin
-	// session is allowed to re-confirm without a setup token.
+	// /confirm and the provider routes — when non-nil, a request arriving
+	// with an operator administrator session (an operator profile holding
+	// wildcard manage; see BootstrapService.IsOperatorAdmin) is allowed
+	// to configure without a setup token.
 	// Returns:
 	//   (true, nil)  — caller is an authenticated admin; authorize.
 	//   (false, nil) — no session or not an admin; fall through to
@@ -72,6 +86,12 @@ type OIDCConfigDeps struct {
 	//   (_,     err) — internal fault validating the session; surface
 	//                  as 500 (do not silently degrade).
 	AdminChecker func(r *http.Request) (isAdmin bool, err error)
+	// Platform reads platform_settings.operator_party_id, which decides
+	// whether the bootstrap is still pending: the setup token is active
+	// while the operator party is unset or OIDC is unconfirmed (U9). nil
+	// treats the deployment as bootstrapped (the token then follows the
+	// OIDC state alone); production wiring always supplies it.
+	Platform PlatformSettingsReader
 }
 
 // OIDCConfigHandler groups the three endpoints (/status, /confirm,
@@ -82,17 +102,21 @@ type OIDCConfigHandler struct {
 	deps OIDCConfigDeps
 
 	mu           sync.RWMutex
-	cachedDB     db.OidcConfig
+	cachedDB     db.GetOIDCConfigRow
 	cachedBoot   config.BootStateResult
-	currentPlain string // plaintext setup token kept in-memory for /setup-token; cleared on confirm.
+	bootstrapped bool   // platform_settings.operator_party_id is set (cached by RefreshState).
+	currentPlain string // plaintext setup token kept in-memory for /setup-token; cleared once the token is.
 }
 
-// NewOIDCConfigHandler constructs the handler. Callers should run
-// RefreshState once at boot so the initial cached snapshot reflects
-// current DB + OAuth init outcomes; RequireOIDCConfirmed then reads
-// from the cache.
+// NewOIDCConfigHandler constructs the handler. Callers MUST call
+// RefreshState before serving: the cache starts unpopulated, and a handler
+// whose cache was never populated rejects every token. The refresh makes the
+// initial cached snapshot reflect current DB + OAuth init outcomes;
+// RequireOIDCConfirmed then reads from the cache. The only exception is a
+// handler that is switched to the externally-managed state with
+// MarkExternallyManaged, which needs no database read.
 func NewOIDCConfigHandler(deps OIDCConfigDeps) *OIDCConfigHandler {
-	return &OIDCConfigHandler{deps: deps}
+	return &OIDCConfigHandler{deps: deps, bootstrapped: deps.Platform == nil}
 }
 
 // RefreshState reads the oidc_config row, merges env + DB provider
@@ -103,21 +127,84 @@ func (h *OIDCConfigHandler) RefreshState(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	merged, err := config.LoadMergedProviders(ctx, h.deps.EnvRegistry, h.deps.Queries)
+	state, err := h.computeBootState(ctx, row)
 	if err != nil {
 		return err
 	}
-	dbView := config.DBConfigView{OptOut: row.OptOut}
-	state := config.DetermineBootState(
-		h.buildProviderViews(merged),
-		dbView,
-		h.deps.EnvNoOIDCEnv,
-	)
+	bootstrapped, err := h.readBootstrapped(ctx)
+	if err != nil {
+		return err
+	}
 	h.mu.Lock()
 	h.cachedDB = row
 	h.cachedBoot = state
+	h.bootstrapped = bootstrapped
 	h.mu.Unlock()
 	return nil
+}
+
+// computeBootState merges env + DB provider rows and derives the BootState
+// for row. It touches no handler state, so a caller can use the result as a
+// local value without writing the shared cache.
+func (h *OIDCConfigHandler) computeBootState(ctx context.Context, row db.GetOIDCConfigRow) (config.BootStateResult, error) {
+	merged, err := config.LoadMergedProviders(ctx, h.deps.EnvRegistry, h.deps.Queries)
+	if err != nil {
+		return config.BootStateResult{}, err
+	}
+	return config.DetermineBootState(
+		h.buildProviderViews(merged),
+		config.DBConfigView{OptOut: row.OptOut},
+		h.deps.EnvNoOIDCEnv,
+	), nil
+}
+
+// readBootstrapped reads whether the operator party is set; true when no
+// Platform reader is wired.
+func (h *OIDCConfigHandler) readBootstrapped(ctx context.Context) (bool, error) {
+	if h.deps.Platform == nil {
+		return true, nil
+	}
+	settings, err := h.deps.Platform.GetPlatformSettings(ctx)
+	if err != nil {
+		return false, fmt.Errorf("oidc config: load platform settings: %w", err)
+	}
+	return settings.OperatorPartyID.Valid, nil
+}
+
+// refreshBootstrapped re-reads the operator-party flag alone (no OIDC
+// state), for paths that may run before RefreshState or after another
+// process bootstrapped.
+func (h *OIDCConfigHandler) refreshBootstrapped(ctx context.Context) error {
+	bootstrapped, err := h.readBootstrapped(ctx)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	h.bootstrapped = bootstrapped
+	h.mu.Unlock()
+	return nil
+}
+
+// tokenActiveLocked reports whether the setup token should be live: the
+// bootstrap is pending or OIDC is unconfirmed (decision U9). Caller holds
+// h.mu.
+func (h *OIDCConfigHandler) tokenActiveLocked() bool {
+	return !h.bootstrapped || !h.cachedBoot.State.Confirmed()
+}
+
+// Bootstrapped reports the cached operator-party flag.
+func (h *OIDCConfigHandler) Bootstrapped() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.bootstrapped
+}
+
+// SetupTokenActive reports whether the setup token is live under the
+// cached state (bootstrap pending or OIDC unconfirmed).
+func (h *OIDCConfigHandler) SetupTokenActive() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.tokenActiveLocked()
 }
 
 // ApplyDBOverridesToOAuth re-runs OAuth.Rebuild using the merged
@@ -245,8 +332,8 @@ type setupTokenResponse struct {
 //	docker exec users-module-api wget -qO- http://localhost:8080/v1/oidc-config/setup-token
 //
 // which is the intended failure mode for remote access). Returns 404
-// once the state is confirmed so a rogue operator can't fish for a
-// stale hash.
+// once the token is no longer active (bootstrap done and OIDC confirmed)
+// so a rogue operator can't fish for a stale hash.
 func (h *OIDCConfigHandler) SetupToken(w http.ResponseWriter, r *http.Request) {
 	if !isLoopbackAddr(r.RemoteAddr) {
 		apiresp.WriteError(w, r, apiresp.ErrForbidden)
@@ -254,17 +341,10 @@ func (h *OIDCConfigHandler) SetupToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mu.RLock()
-	state := h.cachedBoot.State
-	h.mu.RUnlock()
-	if state.Confirmed() {
-		apiresp.WriteError(w, r, apiresp.ErrNotFound)
-		return
-	}
-
-	h.mu.RLock()
+	active := h.tokenActiveLocked()
 	tok := h.currentPlainTokenLocked()
 	h.mu.RUnlock()
-	if tok == "" {
+	if !active || tok == "" {
 		apiresp.WriteError(w, r, apiresp.ErrNotFound)
 		return
 	}
@@ -280,8 +360,8 @@ func (h *OIDCConfigHandler) currentPlainTokenLocked() string {
 }
 
 // setCurrentPlain atomically replaces the in-memory plaintext copy.
-// Cleared (empty string) once state flips to confirmed so a leaking
-// future read cannot surface a stale token.
+// Cleared (empty string) once the token is cleared so a leaking future
+// read cannot surface a stale token.
 func (h *OIDCConfigHandler) setCurrentPlain(plain string) {
 	h.mu.Lock()
 	h.currentPlain = plain
@@ -297,8 +377,9 @@ type confirmRequest struct {
 }
 
 // Confirm handles POST /v1/oidc-config/confirm. The caller must either
-// present a valid setup token (pre-confirmation) or be an authenticated
-// admin (post-confirmation reconfig).
+// present a valid setup token (accepted only while OIDC is unconfirmed) or be
+// an authenticated operator admin (required once OIDC is confirmed, even
+// while the bootstrap is pending).
 //
 // Error order (credential-in-body route): body-independent credentials (admin
 // bearer, then the X-Setup-Token header) are evaluated first (an AdminChecker
@@ -369,23 +450,59 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If the new state is confirmed, clear the active setup token: it
-	// has served its one-shot purpose. We do this after the state
-	// refresh so the middleware never sees a half-updated view.
-	if h.CurrentState().Confirmed() {
-		if err := h.deps.Queries.ClearSetupTokenHash(r.Context()); err != nil {
-			// Non-fatal: the token hash lingering in DB isn't a security
-			// issue (it's one-shot and will be reused only if the state
-			// flips back to unconfirmed), but worth logging.
-			slog.WarnContext(r.Context(), "oidc confirm: clear setup token", "error", err)
-		}
-		h.setCurrentPlain("")
-		if err := h.RefreshState(r.Context()); err != nil {
-			slog.WarnContext(r.Context(), "oidc confirm: post-clear refresh", "error", err)
-		}
-	}
+	// If the new state is confirmed and the bootstrap is done, clear the
+	// setup token: it has served both purposes. While the bootstrap is
+	// pending the token stays for POST /v1/bootstrap (decision U9). We do
+	// this after the state refresh so the middleware never sees a
+	// half-updated view.
+	h.clearTokenIfDone(r.Context(), "oidc confirm")
 
 	h.Status(w, r)
+}
+
+// clearTokenIfDone clears the setup-token hash and its in-memory
+// plaintext once the token is no longer active (bootstrap done and OIDC
+// confirmed). Failures are logged, not returned: a hash lingering in the
+// database is only ever accepted while the token would be active anyway
+// on the routes that still accept it, and the next boot clears it.
+func (h *OIDCConfigHandler) clearTokenIfDone(ctx context.Context, op string) {
+	if h.SetupTokenActive() {
+		return
+	}
+	if err := h.deps.Queries.ClearSetupTokenHash(ctx); err != nil {
+		slog.WarnContext(ctx, op+": clear setup token", "error", err)
+		return
+	}
+	h.setCurrentPlain("")
+	if err := h.RefreshState(ctx); err != nil {
+		slog.WarnContext(ctx, op+": post-clear refresh", "error", err)
+	}
+}
+
+// AfterBootstrap is called by the bootstrap route after a successful
+// bootstrap committed: it refreshes the cached state (the operator party
+// is now set) and clears the setup token when OIDC is already confirmed.
+// Otherwise the token stays for the OIDC confirm, which then clears it.
+func (h *OIDCConfigHandler) AfterBootstrap(ctx context.Context) error {
+	if err := h.RefreshState(ctx); err != nil {
+		return err
+	}
+	h.clearTokenIfDone(ctx, "bootstrap")
+	return nil
+}
+
+// VerifySetupTokenFresh reports whether token matches the setup-token hash
+// currently stored in the database (not the cached copy, so a token
+// cleared by another process is refused), with a constant-time compare.
+func (h *OIDCConfigHandler) VerifySetupTokenFresh(ctx context.Context, token string) (bool, error) {
+	if token == "" {
+		return false, nil
+	}
+	row, err := h.deps.Queries.GetOIDCConfig(ctx)
+	if err != nil {
+		return false, fmt.Errorf("setup token: load oidc config: %w", err)
+	}
+	return row.SetupTokenHash.Valid && auth.VerifySetupToken(token, row.SetupTokenHash.String), nil
 }
 
 // authorizeAmbient checks the credentials that do not depend on the request
@@ -395,7 +512,8 @@ func (h *OIDCConfigHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 //   - (true, nil)  - authenticated; proceed.
 //   - (false, nil) - neither credential authenticated; the caller may still
 //     present a body setup_token, otherwise 401.
-//   - (_,    err)  - AdminChecker had an internal fault; 500.
+//   - (_,    err)  - AdminChecker or the fresh token check had an internal
+//     fault; 500.
 func (h *OIDCConfigHandler) authorizeAmbient(r *http.Request) (bool, error) {
 	if h.deps.AdminChecker != nil {
 		isAdmin, err := h.deps.AdminChecker(r)
@@ -406,20 +524,48 @@ func (h *OIDCConfigHandler) authorizeAmbient(r *http.Request) (bool, error) {
 			return true, nil
 		}
 	}
-	return h.verifySetupToken(r.Header.Get("X-Setup-Token")), nil
+	return h.verifySetupToken(r.Context(), r.Header.Get("X-Setup-Token"))
 }
 
-// verifySetupToken reports whether token matches the stored setup-token hash.
-// An empty token, or an absent hash (already confirmed and cleared), never
-// matches.
-func (h *OIDCConfigHandler) verifySetupToken(token string) bool {
+// verifySetupToken reports whether token authorizes an OIDC configuration
+// route. On these routes the token is accepted only while OIDC is
+// unconfirmed: once OIDC is confirmed an operator administrator session is
+// required, even while the bootstrap is pending (POST /v1/bootstrap alone
+// keeps accepting the token then, decision U9).
+//
+// Unauthenticated callers reach this path, so it is cheap to refuse: an empty
+// token, a cached-invalid hash, or a cached confirmed state is rejected with
+// no database read (staleness only matters in the unconfirmed direction, and
+// a stale cache errs toward refusing). Otherwise the hash and the confirmed
+// state are read fresh into local variables and the decision is made from
+// those; the shared cache (cachedDB, cachedBoot, bootstrapped) is never
+// written here, so a request cannot overwrite a newer snapshot.
+func (h *OIDCConfigHandler) verifySetupToken(ctx context.Context, token string) (bool, error) {
 	if token == "" {
-		return false
+		return false, nil
 	}
 	h.mu.RLock()
-	hash := h.cachedDB.SetupTokenHash
+	cachedHash := h.cachedDB.SetupTokenHash
+	cachedConfirmed := h.cachedBoot.State.Confirmed()
 	h.mu.RUnlock()
-	return hash.Valid && auth.VerifySetupToken(token, hash.String)
+	if !cachedHash.Valid || cachedConfirmed {
+		return false, nil
+	}
+	row, err := h.deps.Queries.GetOIDCConfig(ctx)
+	if err != nil {
+		return false, fmt.Errorf("setup token: load oidc config: %w", err)
+	}
+	if !row.SetupTokenHash.Valid {
+		return false, nil
+	}
+	state, err := h.computeBootState(ctx, row)
+	if err != nil {
+		return false, fmt.Errorf("setup token: compute boot state: %w", err)
+	}
+	if state.State.Confirmed() {
+		return false, nil
+	}
+	return auth.VerifySetupToken(token, row.SetupTokenHash.String), nil
 }
 
 // authorizeBodyless authenticates a route that carries no body (GET/DELETE
@@ -466,7 +612,15 @@ func (h *OIDCConfigHandler) authenticateWithBody(w http.ResponseWriter, r *http.
 	if !decode() {
 		return false
 	}
-	if !ambient && !h.verifySetupToken(bodyToken()) {
+	if ambient {
+		return true
+	}
+	ok, err := h.verifySetupToken(r.Context(), bodyToken())
+	if err != nil {
+		apiresp.WriteError(w, r, fmt.Errorf("%s: authorize: %w", op, err))
+		return false
+	}
+	if !ok {
 		apiresp.WriteError(w, r, apiresp.ErrUnauthenticated)
 		return false
 	}
@@ -513,8 +667,10 @@ func (h *OIDCConfigHandler) Saved(w http.ResponseWriter, r *http.Request) {
 // ----- Setup token lifecycle helpers -----------------------------
 
 // EnsureSetupToken maintains the invariant "at most one live setup
-// token exists per unconfirmed state." It has three branches when the
-// state is unconfirmed:
+// token exists while the token is active" — the bootstrap is pending
+// (platform_settings.operator_party_id NULL) or OIDC is unconfirmed,
+// including the opt-out and externally-managed boot states (decision U9).
+// It has three branches while the token is active:
 //
 //  1. DB hash missing — first-boot path: generate a new token, persist
 //     its hash, stash the plaintext in memory, return the plaintext so
@@ -528,16 +684,19 @@ func (h *OIDCConfigHandler) Saved(w http.ResponseWriter, r *http.Request) {
 //     process called EnsureSetupToken twice. Return "" so the banner is
 //     not re-emitted for a no-op.
 //
-// When the state is confirmed the method idempotently ensures the DB
+// When the token is not active the method idempotently ensures the DB
 // hash is cleared and returns "".
 func (h *OIDCConfigHandler) EnsureSetupToken(ctx context.Context) (string, error) {
+	if err := h.refreshBootstrapped(ctx); err != nil {
+		return "", err
+	}
 	h.mu.RLock()
-	state := h.cachedBoot.State
+	active := h.tokenActiveLocked()
 	hash := h.cachedDB.SetupTokenHash
 	plainInMem := h.currentPlain
 	h.mu.RUnlock()
 
-	if state.Confirmed() {
+	if !active {
 		// Idempotently make sure the DB hash is cleared.
 		if hash.Valid {
 			if err := h.deps.Queries.ClearSetupTokenHash(ctx); err != nil {
@@ -550,7 +709,7 @@ func (h *OIDCConfigHandler) EnsureSetupToken(ctx context.Context) (string, error
 		return "", nil
 	}
 
-	// Unconfirmed & DB hash present & in-memory plaintext already held:
+	// Active & DB hash present & in-memory plaintext already held:
 	// same-process repeat call. Nothing to do, don't re-emit the banner.
 	if hash.Valid && plainInMem != "" {
 		return "", nil

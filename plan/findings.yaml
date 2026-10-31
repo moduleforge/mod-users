@@ -1,0 +1,2203 @@
+version: 2
+items: []
+closed:
+    - id: 2yby
+      title: Identifier delete vs bound credentials
+      disposition: dismissed
+      reason: |-
+        Duplicate of aA5K: the same conflict. DELETE /v1/me/identifiers/{uuid} cannot delete an
+        identifier once a password or email_otp credential was ever bound to it, because the
+        cred_password/cred_email_otp identifier_id ON DELETE RESTRICT foreign keys meet the
+        "credentials are revoked, never deleted" rule. aA5K carries the escalation.
+      date: "2026-10-24"
+    - id: tC3F
+      title: sqlc schema lacks mod-core tables
+      disposition: promoted
+      ref: tC3F
+      date: "2026-10-24"
+    - id: oi9B
+      title: Identifier delete blocked by cred FKs
+      disposition: dismissed
+      reason: |-
+        Duplicate of aA5K. It describes the same blocked identifier removal (RemoveIdentifierInTx,
+        api/internal/service/user_service.go:581-629, returns ErrIdentifierInUse on 23503) and asks
+        the same contract question. aA5K carries the escalation.
+      date: "2026-10-24"
+    - id: Fhun
+      title: 'Task 006: remove the build constraint from ap'
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/internal/handlers/auth/oidc.go has no build constraint (it starts with
+        "package auth"), OIDCHandler.Start (oidc.go:110) and Callback (oidc.go:156) exist, and
+        `go build ./...` and `go vet ./internal/handlers/...` pass in api/.
+      date: "2026-10-24"
+    - id: 1Nqm
+      title: 'Task 008: wire NewSessionService(pool, q, cor'
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/cmd/server/main.go:376 constructs NewSessionService. main.go:428 mounts
+        session.RegisterSessionRoutes and main.go:429 mounts the OIDC step-up start on /v1/session.
+        api/openapi.yaml documents device_token (lines 276 and 425), the lock remedy (351-360) and
+        users.app_login_not_granted (113 and 1078).
+      date: "2026-10-24"
+    - id: ApCx
+      title: Managed JIT user creation duplicates service
+      disposition: promoted
+      ref: ApCx
+      date: "2026-10-24"
+    - id: EyHp
+      title: Server-error literal check has stale count
+      disposition: dismissed
+      reason: |-
+        Already fixed. The header of api/scripts/check-server-error-literals.sh (lines 10-13) now
+        states an expected count of 0. Running the script exits 0 and reports "handlers/auth/: 0/0
+        documented carve-outs accounted for".
+      date: "2026-10-24"
+    - id: C1zt
+      title: 'Task 008 mounting: OIDCHandler.LinkStart on P'
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/cmd/server/main.go:439 mounts LinkStart on POST
+        /credentials/oidc/{provider}/start under /v1/me. main.go:429 mounts StepUpStart under
+        /v1/session. main.go:396 sets ProvidersDeps.Parties to coreQueries, and
+        api/internal/handlers/oidc_providers.go:77 consumes it.
+      date: "2026-10-24"
+    - id: Oczs
+      title: 'Task 010: rewrite handlers/auth/oidc_test.go'
+      disposition: dismissed
+      reason: |-
+        Already fixed. oidc_linkmode_test.go no longer exists under api/internal/handlers/auth/.
+        oidc_test.go compiles against the current OIDCHandler API: `go vet ./internal/handlers/...`
+        passes.
+      date: "2026-10-24"
+    - id: LKRp
+      title: Task 008 must call UserService.WithSelfServic
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/cmd/server/main.go:379 calls userSvc.WithSelfService(...), and
+        moduleforge.module.yaml:134 uses the constructor usersservice.NewUserServiceWithSelfService,
+        which wraps WithSelfService (api/usersservice/service.go:51-65).
+      date: "2026-10-24"
+    - id: nRoQ
+      title: Task 008 must call service.RegisterDisplayRen
+      disposition: dismissed
+      reason: |-
+        Already fixed for the dev server: api/cmd/server/main.go:247 calls
+        usersservice.RegisterDisplayRenderers(displayReg, pool). The separate gap for
+        mfgen-generated apps is xgGT.
+      date: "2026-10-24"
+    - id: bGov
+      title: Task 008 must re-export ReadPrincipalSummarie
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/usersservice/service.go re-exports DirectoryService (129-136) and
+        ReadPrincipalSummaries (139-143). main.go:438 mounts me.RegisterMeRoutes and main.go:445
+        mounts principals.RegisterPrincipalRoutes, each inside a route group that uses
+        requireAuth = auth.NewRequireAuth(authenticator) (main.go:416, 437, 444).
+      date: "2026-10-24"
+    - id: s2Tg
+      title: Task 008 must add api/openapi.yaml entries fo
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/openapi.yaml has 39 /v1/auth, /v1/session, /v1/me and /v1/principals
+        path entries, including /v1/me/identifiers/{uuid} (1889), /v1/session/switch (1608) and the
+        anonymous device_token route (1262).
+      date: "2026-10-24"
+    - id: 1uxT
+      title: internal/handlers/oidc_config.go (kept file)
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/internal/handlers/oidc_config.go compiles: `go build ./...` and
+        `go vet ./internal/handlers/...` pass. main.go:144 constructs handlers.NewOIDCConfigHandler
+        and main.go:406 mounts its routes.
+      date: "2026-10-24"
+    - id: WyI2
+      title: docs/architecture.md and docs/mod-users-spec.
+      disposition: dismissed
+      reason: |-
+        Already planned: 10/001 (update-architecture-docs). Its requirement 3 rewrites
+        docs/architecture.md and docs/mod-users-spec.md for the new model, and its validation greps
+        both files for /v1/self, X-Step-Up-Token and the other removed surfaces.
+      date: "2026-10-24"
+    - id: INrh
+      title: 'Confirm the mod-authz phase 13 merge: the age'
+      disposition: dismissed
+      reason: |-
+        Stale. mod-authz phase 13 is merged on its plan branch: mod-authz plan/identity-model-impl
+        has commit 17d8d37 "plan: record merge on
+        phase-13-authz-identity-schema/004-add-schema-invariant-tests.md", and the dispatch's owner
+        constraints state that O2, O3 and O4 are met. Nothing remains to confirm.
+      date: "2026-10-24"
+    - id: w9CQ
+      title: Remove the leftover throwaway Postgres contai
+      disposition: dismissed
+      reason: |-
+        Already fixed. `docker ps -a` on this host lists no container named
+        mod-users-authz-integ-t009, so the leftover container is gone.
+      date: "2026-10-24"
+    - id: CHws
+      title: Aggregate make build, make test and make lint
+      disposition: dismissed
+      reason: |-
+        Not actionable in mod-users. The failure was an environment precondition:
+        @moduleforge/core-gui did not resolve because the sibling mod-core/gui was unbuilt. No
+        mod-users change fixes it, and the agent noted that mod-core was not touched. The sibling
+        build output now exists (/Users/zane/playground/moduleforge/mod-core/gui/dist holds
+        index.css and index.d.ts). The aggregate gui build is re-run by 9/001's validation.
+      date: "2026-10-24"
+    - id: t7jz
+      title: Integration suite requires a Postgres whose c
+      disposition: dismissed
+      reason: |-
+        Not actionable. This is an operational note: the integration suite needs a Postgres whose
+        clock is within 10 s of the host. It describes no defect and no change could resolve it.
+        The manager can apply it when re-running the phase-close suite.
+      date: "2026-10-24"
+    - id: lfAN
+      title: DeleteExpired (challenges), DeleteExpiredRef…
+      disposition: promoted
+      ref: lfAN
+      date: "2026-10-24"
+    - id: JFFG
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive. The link target
+        ./docs/mf-standards/building-applications.md#first-time-setup is in the docs/mf-standards
+        git submodule (.gitmodules; gitlink c2dc98c in the index). That submodule is not
+        initialized in this plan worktree, so the checker saw an empty directory. In an initialized
+        checkout (/Users/zane/playground/moduleforge/mod-users/docs/mf-standards) the file exists
+        and has "## First-time setup". No document change resolves this.
+      date: "2026-10-24"
+    - id: Bj60
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG. ./mf-standards/architecture.md is in the
+        uninitialized docs/mf-standards submodule and exists in an initialized checkout.
+      date: "2026-10-24"
+    - id: ukbg
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG. ./mf-standards/architecture/entity-typing.md is
+        in the uninitialized docs/mf-standards submodule and exists in an initialized checkout.
+      date: "2026-10-24"
+    - id: RkWd
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG. ./mf-standards/architecture/db-considerations.md
+        is in the uninitialized docs/mf-standards submodule and exists in an initialized checkout.
+      date: "2026-10-24"
+    - id: 57rZ
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG. ./mf-standards/architecture.md is in the
+        uninitialized docs/mf-standards submodule and exists in an initialized checkout.
+      date: "2026-10-24"
+    - id: O1Ym
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG. ./mf-standards/architecture.md (from
+        docs/mod-users-spec.md) is in the uninitialized docs/mf-standards submodule and exists in an
+        initialized checkout.
+      date: "2026-10-24"
+    - id: bYyY
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG.
+        ./mf-standards/building-applications.md#first-time-setup is in the uninitialized
+        docs/mf-standards submodule, and the file and its anchor exist in an initialized checkout.
+      date: "2026-10-24"
+    - id: F6lw
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG.
+        ./mf-standards/architecture/api-response-design.md is in the uninitialized
+        docs/mf-standards submodule and exists in an initialized checkout.
+      date: "2026-10-24"
+    - id: Vows
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG.
+        ./mf-standards/architecture/authorization-design.md is in the uninitialized
+        docs/mf-standards submodule and exists in an initialized checkout.
+      date: "2026-10-24"
+    - id: tlux
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG.
+        ./docs/mf-standards/building-common.md#building-inside-a-task-worktree is in the
+        uninitialized docs/mf-standards submodule, and the file and its anchor ("## Building inside
+        a task worktree") exist in an initialized checkout.
+      date: "2026-10-24"
+    - id: io3Q
+      title: Dangling forward link; target does not exist…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive, like JFFG.
+        ./docs/mf-standards/architecture/http-error-precedence.md is in the uninitialized
+        docs/mf-standards submodule and exists in an initialized checkout.
+      date: "2026-10-24"
+    - id: 3s85
+      title: Verified (a). replacePassword supersedes the…
+      disposition: dismissed
+      reason: |-
+        Duplicate of 1xmT. It is the code-level description (reset.go:154-196 replacePassword does
+        not carry credential_party_authorizations to the new credential) of the decision 1xmT
+        escalates. 1xmT carries the escalation, and its context cites this finding's detail.
+      date: "2026-10-24"
+    - id: LUrz
+      title: Verified (b). callbackLink never calls h.oau…
+      disposition: dismissed
+      reason: |-
+        Duplicate of Nobq. It describes the same callbackLink gap
+        (oidc_flows.go:381-434, no PolicyFor and no ConfinedToPartyID) and asks the same
+        confine/refuse/allow decision. Nobq (security) and wZsk carry the escalation.
+      date: "2026-10-24"
+    - id: 2TCI
+      title: The package and Authorize doc comments still…
+      disposition: dismissed
+      reason: |-
+        Already planned: 8/001 (rewrite-authorization-engine). Its requirement 9 rewrites the
+        package documentation of api/internal/authz/authz.go and removes all assume, sudo and
+        "account holder" wording. Its validation greps for the stale terms.
+      date: "2026-10-24"
+    - id: mEJv
+      title: next-steps.md describes MERGE-V2 as implemen…
+      disposition: dismissed
+      reason: |-
+        Already planned: 10/003 (review-repository-docs). Its requirement 1 lists "next-steps.md:
+        remove items this plan completed; keep open ones", and its validation greps for /v1/self
+        and X-Step-Up-Token.
+      date: "2026-10-24"
+    - id: q3Ip
+      title: loadProfileViews calls profile_availability…
+      disposition: promoted
+      ref: q3Ip
+      date: "2026-10-24"
+    - id: CTF3
+      title: Project doc not reachable from README.md via…
+      disposition: dismissed
+      reason: |-
+        Not actionable. api/server/CLAUDE.md holds only an empty `<claude-mem-context>` block: it is
+        a tool-generated agent-memory stub, not a project document. A README link would add
+        nothing for readers. It predates this plan (added in 17bc64e).
+      date: "2026-10-24"
+    - id: yyDp
+      title: session_liveness (hot path) performs about t…
+      disposition: promoted
+      ref: yyDp
+      date: "2026-10-24"
+    - id: o7LL
+      title: ListPrincipals evaluates the accessible_*_id…
+      disposition: promoted
+      ref: o7LL
+      date: "2026-10-24"
+    - id: CLi0
+      title: 'Deploy manifests: signing key wiring'
+      disposition: dismissed
+      reason: 'Already fixed by phase 12 task 008 (merge 0cfa2ab). deploy/k8s/base/deployment.yaml:33-64 now wires JWT_SIGNING_KEY (with optional JWT_SIGNING_KID / JWT_VERIFY_PUBLIC_KEYS) from a secret and marks JWT_SECRET optional: true; deploy/cloudrun/service.yaml:64-84 wires JWT_SIGNING_KEY and leaves JWT_SECRET as a commented optional entry. A leftover comment in deploy/k8s/base/configmap.yaml is tracked separately as QTuI.'
+      date: "2026-10-25"
+    - id: 1xmT
+      title: 'Decision needed: password reset does not copy'
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 012 (merge 398050f), per the owner decision to copy authorizations. api/internal/service/credential_service.go:336-340 calls CopyCredentialPartyAuthorizations (model/queries/party_policies.sql:70) when a password is superseded. Reclassified from ambiguity to bug since the decision has been made.
+      date: "2026-10-25"
+    - id: xgGT
+      title: Manifest cannot register display renderers
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 006 (merge b9d20b3). moduleforge.module.yaml:128-150 builds userService through usersservice.NewUserServiceWithSelfService with a service:displayRegistry argument, and that constructor (api/usersservice/service.go:56-68) registers the user and profile display renderers, so mfgen-generated apps now register them.
+      date: "2026-10-25"
+    - id: LPl2
+      title: Compose omits mod-audit audit_log migration
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 005 (merge fc07a3a). model/Makefile:9 resolves AUDIT_DIR through go list -m github.com/moduleforge/audit-model with the sibling fallback, and the compose target (line 33) copies $(AUDIT_DIR)/migrations/*.sql into schema/migrations; the integration harness now applies the composed directory directly (harness_integration_test.go:350).
+      date: "2026-10-25"
+    - id: aA5K
+      title: RemoveIdentifierInTx (reached from SelfRemov…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 011 (merge 2729fe4), per the owner decision for nullable FK with SET NULL. model/migrations/sql/0100_baseline.sql:538 (cred_password.identifier_id) and :563 (cred_email_otp.identifier_id) now use ON DELETE SET NULL, and removeIdentifier (api/internal/service/user_service.go:605-637) revokes bound credentials and then deletes, so verified identifiers can be removed. The integrity gap this change opened for active passwords is tracked separately as fDFi, and the stale error message as JWO3.
+      date: "2026-10-25"
+    - id: 86kP
+      title: ListActivePasswordsByPrincipal filters cred_…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 007 (merge 891392e). model/migrations/sql/0100_baseline.sql:553-554 adds cred_password_principal_id_idx ON mod_users.cred_password (principal_id) WHERE active.
+      date: "2026-10-25"
+    - id: Pjuz
+      title: auth_challenges has FK columns credential_id…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 007 (merge 891392e). model/migrations/sql/0100_baseline.sql:987-994 adds partial indexes on auth_challenges principal_id, identifier_id, session_id and credential_id, and model/queries/challenges.sql:38-40 now uses COALESCE(col,0) = COALESCE(arg,0) predicates that match auth_challenges_cooldown_idx.
+      date: "2026-10-25"
+    - id: W55I
+      title: Project doc not reachable from README.md via…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 009 (merge 7daac3e). README.md:71 links deploy/k8s/README.md.
+      date: "2026-10-25"
+    - id: Kkmz
+      title: Project doc not reachable from README.md via…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 009 (merge 7daac3e). README.md:70 links deploy/local/README.md.
+      date: "2026-10-25"
+    - id: fWsd
+      title: Project doc not reachable from README.md via…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 009 (merge 7daac3e). README.md:72 links deploy/serverless/README.md.
+      date: "2026-10-25"
+    - id: xqMm
+      title: Project doc not reachable from README.md via…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 009 (merge 7daac3e). README.md:69 links model/README.md.
+      date: "2026-10-25"
+    - id: nD8J
+      title: The audience registration check (EXISTS SELE…
+      disposition: dismissed
+      reason: Already fixed by phase 12 task 014 (merge 640b50f), per the owner decision to exclude archived apps. Both audience liveness queries in api/internal/auth/authenticator.go now require AND ae.archived_at IS NULL (lines 246 and 269).
+      date: "2026-10-25"
+    - id: JWO3
+      title: ErrIdentifierInUse keeps the client-facing m…
+      disposition: promoted
+      ref: JWO3
+      date: "2026-10-25"
+    - id: 3rM6
+      title: profile_availability now joins session_facto…
+      disposition: dismissed
+      reason: 'Not actionable: the finding itself concludes "No change required". The per-factor primary-key join in profile_availability (model/migrations/sql/0100_baseline.sql:1237-1242) is the intended correctness fix from WpsB, and its cost is a small constant over a session''s few factors. No change is warranted.'
+      date: "2026-10-25"
+    - id: QTuI
+      title: The header comment still lists JWT_SECRET am…
+      disposition: promoted
+      ref: QTuI
+      date: "2026-10-25"
+    - id: z28C
+      title: The public constructor usersservice.NewUserS…
+      disposition: promoted
+      ref: z28C
+      date: "2026-10-25"
+    - id: dvet
+      title: The audience-token rejection compares the JW…
+      disposition: promoted
+      ref: dvet
+      date: "2026-10-25"
+    - id: Sr0s
+      title: Four new partial single-column indexes on au…
+      disposition: promoted
+      ref: Sr0s
+      date: "2026-10-25"
+    - id: IZTR
+      title: COALESCE-form predicates in GetLatestOpenCha…
+      disposition: dismissed
+      reason: 'Not actionable: the finding records an improvement and recommends "None". The COALESCE predicates at model/queries/challenges.sql:38-40 now match auth_challenges_cooldown_idx, as task 007 (merge 891392e) intended.'
+      date: "2026-10-25"
+    - id: nnGn
+      title: Dangling docs/mf-standards links; orphan doc
+      disposition: promoted
+      ref: nnGn
+      date: "2026-10-25"
+    - id: TrRi
+      title: platform_settings.allow_byo_identity is enfo…
+      disposition: fixed
+      ref: phase-12-remediation-01/001-enforce-byo-identity-on-guest-paths.md
+      date: "2026-10-25"
+    - id: wZsk
+      title: 'Decision needed: link does not confine the ne'
+      disposition: fixed
+      ref: phase-12-remediation-01/010-confine-party-bound-oidc-link.md
+      date: "2026-10-25"
+    - id: Nobq
+      title: callbackLink adds the verified external iden…
+      disposition: fixed
+      ref: phase-12-remediation-01/010-confine-party-bound-oidc-link.md
+      date: "2026-10-25"
+    - id: VxMT
+      title: OIDCResolver.Resolve returns ActionLogin for…
+      disposition: fixed
+      ref: phase-12-remediation-01/003-bind-oidc-login-to-provider.md
+      date: "2026-10-25"
+    - id: z443
+      title: The OIDC sign-in callback creates a session…
+      disposition: fixed
+      ref: phase-12-remediation-01/013-bind-handoff-code-to-verifier.md
+      date: "2026-10-25"
+    - id: WpsB
+      title: mod_users.profile_availability passes every…
+      disposition: fixed
+      ref: phase-12-remediation-01/002-exclude-revoked-factors-from-availability.md
+      date: "2026-10-25"
+    - id: UT68
+      title: IssueAudienceToken signs offline-verifier to…
+      disposition: fixed
+      ref: phase-12-remediation-01/004-harden-audience-token-claims.md
+      date: "2026-10-25"
+    - id: fDFi
+      title: mod_users.cred_password.identifier_id change…
+      disposition: fixed
+      ref: phase-13-remediation-02/001-guard-active-password-identifier-unbind.md
+      date: "2026-10-25"
+    - id: FAK8
+      title: Request mod-core profile row-lock query
+      disposition: promoted
+      ref: FAK8
+      date: "2026-10-26"
+    - id: 0b75
+      title: 'mod-core: in-tx org create'
+      disposition: promoted
+      ref: 0b75
+      date: "2026-10-26"
+    - id: Jwo8
+      title: Stale architecture service table
+      disposition: promoted
+      ref: Jwo8
+      date: "2026-10-26"
+    - id: k0Jt
+      title: departureCleanupInTx loads every credential…
+      disposition: promoted
+      ref: k0Jt
+      date: "2026-10-26"
+    - id: DOZW
+      title: ListCredentialAuthorizations returns every a…
+      disposition: promoted
+      ref: DOZW
+      date: "2026-10-26"
+    - id: HzgJ
+      title: Not reachable from README.md by any link cha…
+      disposition: dismissed
+      reason: |-
+        Not actionable: api/server/CLAUDE.md contains only an empty <claude-mem-context> block. It is a
+        tool-generated agent-memory stub, not a project document, so a README link would add nothing.
+        It predates this phase (the finding says "Pre-existing, not touched this phase"). The same
+        file was already dismissed on these grounds as CTF3 in this plan's closed findings.
+      date: "2026-10-26"
+    - id: Zmvl
+      title: Link ./docs/mf-standards/building-applicatio…
+      disposition: dismissed
+      reason: |-
+        Not actionable: a false positive from the environment. docs/mf-standards is a git submodule
+        (.gitmodules, url git@github.com:moduleforge/docs-mf-standards.git) left uninitialized in this
+        plan worktree. In the initialized main checkout,
+        /Users/zane/playground/moduleforge/mod-users/docs/mf-standards/building-applications.md
+        exists, so README.md:33's link resolves. No document change fixes it. This is the same
+        situation as the closed JFFG/bYyY, and the broader item is already in the durable backlog as
+        nnGn.
+      date: "2026-10-26"
+    - id: d6Rm
+      title: Links to docs/mf-standards/building-common.m…
+      disposition: dismissed
+      reason: |-
+        Not actionable: false positive from the uninitialized docs/mf-standards submodule.
+        docs/mf-standards/building-common.md and docs/mf-standards/architecture/http-error-precedence.md
+        both exist in the initialized checkout /Users/zane/playground/moduleforge/mod-users/docs/mf-standards/.
+        Same as the closed tlux and io3Q. Pre-existing, and the broader item is already promoted as nnGn.
+      date: "2026-10-26"
+    - id: XicG
+      title: Links into docs/mf-standards (architecture.m…
+      disposition: dismissed
+      reason: |-
+        Not actionable: false positive from the uninitialized docs/mf-standards submodule.
+        architecture.md, building-applications.md, architecture/api-response-design.md and
+        architecture/authorization-design.md all exist in the initialized checkout
+        /Users/zane/playground/moduleforge/mod-users/docs/mf-standards/. Same as the closed O1Ym, bYyY,
+        F6lw and Vows. Pre-existing.
+      date: "2026-10-26"
+    - id: CGcM
+      title: Link ../docs/mf-standards/architecture/db-co…
+      disposition: dismissed
+      reason: |-
+        Not actionable: false positive from the uninitialized docs/mf-standards submodule.
+        architecture/db-considerations.md exists in the initialized checkout
+        /Users/zane/playground/moduleforge/mod-users/docs/mf-standards/architecture/db-considerations.md.
+        Same as the closed RkWd. Pre-existing.
+      date: "2026-10-26"
+    - id: B4U1
+      title: activePartyProfile calls ListProfilesByHolde…
+      disposition: promoted
+      ref: B4U1
+      date: "2026-10-26"
+    - id: 7OY7
+      title: On the confirmed path CheckOutsideCollaborat…
+      disposition: promoted
+      ref: 7OY7
+      date: "2026-10-26"
+    - id: FGLX
+      title: partyProfilesCountSQL reuses the full FROM c…
+      disposition: promoted
+      ref: FGLX
+      date: "2026-10-26"
+    - id: ThVQ
+      title: 'Sections: API layer; Authentication flow; Ke…'
+      disposition: dismissed
+      reason: |-
+        Reclassified from conflict to documentation (architecture doc lags new integration points;
+        no contradiction to decide). Already planned: phase 10 task 001 (update-architecture-docs).
+        It passes every plan/phase-07-parties-profiles-and-bootstrap task document (including 003
+        collaborator gate and 007 AdmitInTx) as completed_task_docs to update docs/architecture.md.
+        Its requirements 3 and 4 explicitly cover SSHKeyResolver AuthContextForOwner (ssh-keys.md)
+        and the setup-token bootstrap lifecycle (sessions-and-tokens.md).
+      date: "2026-10-26"
+    - id: 255B
+      title: For a caller holding only AuthorizeTypeIn(cr…
+      disposition: promoted
+      ref: 255B
+      date: "2026-10-26"
+    - id: E3ly
+      title: Through the holder door, UnconfineCredential…
+      disposition: promoted
+      ref: E3ly
+      date: "2026-10-26"
+    - id: t2OR
+      title: An invitation with confirm_policy_mismatch w…
+      disposition: promoted
+      ref: t2OR
+      date: "2026-10-26"
+    - id: me7s
+      title: 'Location: /v1/parties and /v1/profiles entri…'
+      disposition: promoted
+      ref: me7s
+      date: "2026-10-26"
+    - id: RU9G
+      title: CheckOutsideCollaborator compares the owning…
+      disposition: dismissed
+      reason: 'Resolved by user decision (option 1): the owning party''s authn policy (credential_rule, min_acr) is enforced per request in mod-users'' engine for actors whose profile is outside that party, implemented by phase 8 task 001 (new requirement 13; amends resolution (a)/U5). mod-authz unchanged.'
+      ref: plan/phase-08-users-authorization-engine/001-rewrite-authorization-engine.md
+      date: "2026-10-26"
+    - id: qvpE
+      title: OpenAPI step-up order note is stale
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 006 (commit 5ade1e4). api/openapi.yaml:33-37 now says that
+        on principal disable and enable, step-up comes after authorization ("`read` (404
+        otherwise) then `update` (403), and only then is step-up freshness checked"). That matches
+        UserService.writablePrincipal in api/internal/service/principal_admin.go, which calls
+        Authorize update and then requireFresh.
+      date: "2026-10-26"
+    - id: oO0S
+      title: gateCredentialWrite checks that the credenti…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 004 (commit dba63b9). gateCredentialWrite now reads the
+        holder's profile with SELECT ... FOR SHARE (api/internal/service/party_policy.go:571-579)
+        instead of the bare EXISTS. The concurrency tests are in
+        api/internal/integration/profile_writers_integration_test.go. The lock-order inversion
+        this fix introduced is tracked as 9Mvf/PL6d/zwbM.
+      date: "2026-10-26"
+    - id: 2mUw
+      title: ProvisionManagedUserInTx creates the managed…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 001 (commit d8eef20). Under credential_rule 'authorized',
+        ProvisionManagedUserInTx (api/internal/service/profile_service.go:938-958) inserts the
+        credential_party_authorizations row for the new password and emits `create`
+        `credential_party_authorization`. The "an authorized party's managed user can sign in"
+        subtest covers it. The authority question this fix raises is tracked as 1cWY.
+      date: "2026-10-26"
+    - id: 4w6W
+      title: The function comment says holder_acr is NULL…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 005 (commit 7b08d96). holder_policy_mismatch in
+        model/migrations/sql/0100_baseline.sql (around lines 1303-1306) computes holder_acr with
+        CASE WHEN count(*) = 0 THEN NULL ELSE ... END. policy_mismatch.go:79-80 renders the
+        HolderACR 0 case as "the account has no usable credential".
+      date: "2026-10-26"
+    - id: 5iFg
+      title: AdmitInTx serializes per holder by locking t…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 004 (commit dba63b9). resolveInvitee takes
+        GetUserByEntityIDForUpdate on the holder (api/internal/service/profile_service.go:635)
+        before the duplicate check and insert, the same lock AdmitInTx takes. AdmitInTx's doc
+        comment (profile_admit.go) states the shared-lock guarantee. A concurrency test is in
+        profile_writers_integration_test.go.
+      date: "2026-10-26"
+    - id: iaJb
+      title: profile_availability_excluding filters facto…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 005 (commit 7b08d96). profile_availability_excluding in
+        model/migrations/sql/0100_baseline.sql:1401 filters with (p_exclude_credential_id IS NULL
+        OR c.id <> p_exclude_credential_id), which matches session_acr_excluding (:1116).
+      date: "2026-10-26"
+    - id: kimI
+      title: 'Location: /v1/bootstrap entry (431-438); als…'
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 14 task 006 (commit 5ade1e4). The API-layer exceptions in
+        docs/architecture.md:101 and D20(3) at docs/architecture.md:260 both list POST
+        /v1/bootstrap as a public route outside requireOIDCConfirmed that uses the X-Setup-Token
+        header, with the reason.
+      date: "2026-10-26"
+    - id: Fjaa
+      title: Sibling symlinks mod-core, mod-audit and mod-
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental). scripts/link-siblings.sh repoints the sibling symlinks
+        to the main checkouts by design, unless MODULEFORGE_SIBLINGS_DIR is set (see its header).
+        That is harness and workspace layout, not a defect in mod-users code. At evaluation time,
+        the mod-core, mod-audit and mod-authz links under both worktrees/plan/ and worktrees/ point
+        to /Users/zane/playground/.flow/siblings/mod-users/<sibling> (Flow-managed, 20:08). No
+        change to the plan's code would resolve it. The manager's verification request is
+        repeated in flagged_for_manager.
+      date: "2026-10-26"
+    - id: D0sv
+      title: profile_availability_for's authorized-rule a…
+      disposition: dismissed
+      reason: |-
+        Not actionable. The concern is moot under the plan's own hard constraint (plan/overview.md
+        "Hard constraints": "No production release: rewrite 0100_baseline.sql in place, fold 0101
+        to 0104 into it; no incremental migrations, no backward compatibility, no data
+        migration"). model/migrations/sql/ holds only 0100_baseline.sql, so a CREATE OR REPLACE
+        migration would contradict that constraint. The stale migration-history sentence in
+        docs/architecture.md:57 ("Migrations 0101 through 0104 have since been added") sits in the
+        data-model section that
+        phase-10-doc-updates/001-update-architecture-docs.md rewrites (its requirement 3: "docs/architecture.md
+        — data model ... baseline schema rewrite into mod_users").
+      date: "2026-10-26"
+    - id: VIcU
+      title: 'Orphan doc: api/server/CLAUDE.md is tracked…'
+      disposition: promoted
+      ref: VIcU
+      date: "2026-10-26"
+    - id: rAhy
+      title: 'Dangling forward-link: ./docs/mf-standards/b…'
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental). docs/mf-standards is a git submodule (.gitmodules) that
+        is uninitialized in the plan worktree. In the main checkout's initialized submodule
+        (/Users/zane/playground/moduleforge/mod-users/docs/mf-standards),
+        building-applications.md exists, so the link in README.md:33 is valid. No change to this
+        repo applies.
+      date: "2026-10-26"
+    - id: Pg5e
+      title: Dangling forward-links into the uninitialize…
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental, same as rAhy). The targets architecture.md,
+        architecture/entity-typing.md and architecture/db-considerations.md all exist in the main
+        checkout's initialized docs/mf-standards submodule. The links in docs/architecture.md
+        resolve once the submodule is initialized.
+      date: "2026-10-26"
+    - id: ZfaZ
+      title: Dangling forward-links into the uninitialize…
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental, same as rAhy). architecture.md, building-applications.md,
+        architecture/api-response-design.md and architecture/authorization-design.md all exist in
+        the main checkout's initialized docs/mf-standards submodule.
+      date: "2026-10-26"
+    - id: lUew
+      title: Dangling forward-link into the uninitialized…
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental, same as rAhy). building-common.md exists in the main
+        checkout's initialized submodule, and its heading "## Building inside a task worktree"
+        (line 21) supplies the #building-inside-a-task-worktree anchor that AGENTS.md:166
+        targets.
+      date: "2026-10-26"
+    - id: mBIH
+      title: Dangling forward-link into the uninitialized…
+      disposition: dismissed
+      reason: |-
+        Not actionable (environmental, same as rAhy). architecture/db-considerations.md exists in
+        the main checkout's initialized docs/mf-standards submodule, so the link in
+        model/README.md:6 is valid.
+      date: "2026-10-26"
+    - id: 8qpY
+      title: gateCredentialWrite now always calls holderS…
+      disposition: dismissed
+      reason: |-
+        Not actionable. The finding itself concludes that the extra holderSatisfiesGate queries
+        are purposeful (the admin/holder flags drive the confine/unconfine restriction of
+        decision A) and are "Not worth the complexity on this cold path". It recommends no
+        change.
+      date: "2026-10-26"
+    - id: jpDE
+      title: resolveInvitee now locks the invitee's mod_u…
+      disposition: promoted
+      ref: jpDE
+      date: "2026-10-26"
+    - id: 4ZP1
+      title: Invite by email matches unverified addresses
+      disposition: fixed
+      ref: phase-14-remediation-03/001-require-verified-invitee-and-authorize-managed-password.md
+      date: "2026-10-26"
+    - id: T1E6
+      title: resolveInvitee resolves holder_email through…
+      disposition: fixed
+      ref: phase-14-remediation-03/001-require-verified-invitee-and-authorize-managed-password.md
+      date: "2026-10-26"
+    - id: Pxlw
+      title: gateCredentialWrite lets a party administrat…
+      disposition: fixed
+      ref: phase-14-remediation-03/007-restrict-admin-confinement-to-party-controlled-credentials.md
+      date: "2026-10-26"
+    - id: xhLc
+      title: Under credential_rule 'authorized', holder_p…
+      disposition: fixed
+      ref: phase-14-remediation-03/008-authorized-rule-invite-time-semantics.md
+      date: "2026-10-26"
+    - id: aNYW
+      title: holderProfile authorizes POST /v1/me/profile…
+      disposition: fixed
+      ref: phase-14-remediation-03/002-gate-holder-leave-on-profile-availability.md
+      date: "2026-10-26"
+    - id: cvMO
+      title: tokenActiveLocked keeps the setup token acti…
+      disposition: fixed
+      ref: phase-14-remediation-03/003-scope-setup-token-on-oidc-routes.md
+      date: "2026-10-26"
+    - id: h0m8
+      title: dropPolicyConfirmations runs DELETE FROM pro…
+      disposition: promoted
+      ref: h0m8
+      date: "2026-10-26"
+    - id: Nj1F
+      title: Lock ordering between the credential write g…
+      disposition: dismissed
+      reason: |-
+        Already planned: phase-15-remediation-04/001-order-credential-gate-locks-profile-first. Its title
+        states the work this finding asks for (the credential write gate takes the holder profile lock
+        before the credential lock, matching EndInTx). It covers 9Mvf/PL6d/zwbM, which describe the same
+        credential-then-profile versus profile-then-credential cycle in gateCredentialWrite and
+        departureCleanupInTx, with the same 40P01-as-500 outcome. Stamped conflict; reclassified as a bug.
+      date: "2026-10-26"
+    - id: DuW4
+      title: Lock order inversion (task 004). gateCredent…
+      disposition: dismissed
+      reason: |-
+        Already planned: phase-15-remediation-04/001-order-credential-gate-locks-profile-first, which
+        reorders gateCredentialWrite to lock the holder profile before the credential. That is the same
+        lock-order inversion at party_policy.go:540-580 that PL6d (one of the findings the task covers)
+        describes, including the interleaved confine-versus-leave test.
+      date: "2026-10-26"
+    - id: WVBe
+      title: LeaveProfile gate bypass for suspended profi…
+      disposition: dismissed
+      reason: |-
+        Already planned: phase-15-remediation-04/002-gate-suspended-profile-leave, which evaluates the
+        party gate when a holder leaves a suspended profile. This is the same gap (profile_availability_for
+        returns 'inactive' before the gate, so LeaveProfile skips it for suspended profiles) recorded as
+        twos and nA1G, which that task covers.
+      date: "2026-10-26"
+    - id: w1dQ
+      title: verifySetupToken now calls RefreshState (Get…
+      disposition: dismissed
+      reason: |-
+        Already planned: phase-15-remediation-04/004-verify-setup-token-without-cache-writes. Reading the
+        token hash and confirmed state locally without writing the shared cache resolves both points
+        here (per-guess query cost, and concurrent refreshes overwriting the cache with an older
+        snapshot), as in 77AP, which the task covers.
+      date: "2026-10-26"
+    - id: gD2Y
+      title: gateCredentialWrite now always calls holderS…
+      disposition: promoted
+      ref: gD2Y
+      date: "2026-10-26"
+    - id: 59q6
+      title: verifySetupToken now does a DB RefreshState…
+      disposition: dismissed
+      reason: |-
+        Already planned: phase-15-remediation-04/004-verify-setup-token-without-cache-writes. It replaces
+        the per-attempt RefreshState with a local fresh read, which removes the cost this note describes.
+        It covers HOWM, the equivalent efficiency note. The finding itself also recommends no action.
+      date: "2026-10-26"
+    - id: dWRn
+      title: Dangling links into docs/mf-standards/ (an e…
+      disposition: dismissed
+      reason: |-
+        Not actionable: the links are not dangling in the repository. docs/mf-standards is a git
+        submodule (.gitmodules: path docs/mf-standards, gitlink c2dc98c). In the initialized main checkout
+        (/Users/zane/playground/moduleforge/mod-users/docs/mf-standards) every named target exists:
+        building-applications.md, building-common.md, architecture.md, and architecture/http-error-precedence.md,
+        db-considerations.md, entity-typing.md, api-response-design.md and authorization-design.md. Only
+        the plan worktree's copy is an uninitialized, empty submodule directory. This environment state
+        existed before this phase and was not caused by it, and no change to repository content would
+        resolve it.
+      date: "2026-10-26"
+    - id: 76Ma
+      title: api/server/CLAUDE.md is not reachable from R…
+      disposition: promoted
+      ref: 76Ma
+      date: "2026-10-26"
+    - id: R4R0
+      title: holder_policy_mismatch is shared with Collab…
+      disposition: dismissed
+      reason: 'Duplicate of ggb7 (same defect at holder_policy_mismatch/CollaboratorGate and README.md:84). Manager-approved by the user via interactive decision: ggb7 fixed with a remediation task (strict collaborator path).'
+      ref: ggb7
+      date: "2026-10-26"
+    - id: X56M
+      title: Lock-order inversion (availability, not an a…
+      disposition: dismissed
+      reason: Duplicate of 9Mvf, fixed by phase-15-remediation-04/001-order-credential-gate-locks-profile-first (profile lock before credential lock removes the deadlock). User-approved dismissal via interactive decision.
+      ref: 9Mvf
+      date: "2026-10-26"
+    - id: LlcR
+      title: Confirmations are dropped only when credenti…
+      disposition: dismissed
+      reason: Duplicate of iFeg, fixed by phase-15-remediation-04/005-purge-confirmations-on-provider-change (purge confirmations when required OIDC provider changes). User-approved dismissal via interactive decision.
+      ref: iFeg
+      date: "2026-10-26"
+    - id: nOsE
+      title: PutAuthnPolicy reads `before` without a lock…
+      disposition: dismissed
+      reason: Duplicate of iFeg, fixed by phase-15-remediation-04/005-purge-confirmations-on-provider-change (serialize with policy writes; same FOR UPDATE/FOR SHARE remedy). User-approved dismissal via interactive decision.
+      ref: iFeg
+      date: "2026-10-26"
+    - id: vPQI
+      title: verifySetupToken now calls RefreshState (Get…
+      disposition: dismissed
+      reason: Duplicate of 77AP/HOWM, fixed by phase-15-remediation-04/004-verify-setup-token-without-cache-writes (local fresh read, no shared cache rewrite). User-approved dismissal via interactive decision.
+      ref: 77AP
+      date: "2026-10-26"
+    - id: 9Mvf
+      title: gateCredentialWrite locks the credential fir…
+      disposition: fixed
+      ref: phase-15-remediation-04/001-order-credential-gate-locks-profile-first.md
+      date: "2026-10-26"
+    - id: PL6d
+      title: gateCredentialWrite locks the credential row…
+      disposition: fixed
+      ref: phase-15-remediation-04/001-order-credential-gate-locks-profile-first.md
+      date: "2026-10-26"
+    - id: zwbM
+      title: Lock-ordering inversion between the credenti…
+      disposition: fixed
+      ref: phase-15-remediation-04/001-order-credential-gate-locks-profile-first.md
+      date: "2026-10-26"
+    - id: twos
+      title: Party gate not evaluated for suspended leave
+      disposition: fixed
+      ref: phase-15-remediation-04/002-gate-suspended-profile-leave.md
+      date: "2026-10-26"
+    - id: nA1G
+      title: The leave guard accepts avail == 'inactive'…
+      disposition: fixed
+      ref: phase-15-remediation-04/002-gate-suspended-profile-leave.md
+      date: "2026-10-26"
+    - id: Kfjo
+      title: requireNotLastOperatorAdmin is called only o…
+      disposition: fixed
+      ref: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
+      date: "2026-10-26"
+    - id: kPpy
+      title: The exported EndInTx (in-process primitive f…
+      disposition: fixed
+      ref: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
+      date: "2026-10-26"
+    - id: Ts9r
+      title: requireNotLastOperatorAdmin runs one admin-c…
+      disposition: fixed
+      ref: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
+      date: "2026-10-26"
+    - id: Xqat
+      title: The last-operator-admin guard reads mod-auth…
+      disposition: fixed
+      ref: phase-15-remediation-04/003-extend-last-operator-admin-guard.md
+      date: "2026-10-26"
+    - id: 77AP
+      title: verifySetupToken now calls RefreshState for…
+      disposition: fixed
+      ref: phase-15-remediation-04/004-verify-setup-token-without-cache-writes.md
+      date: "2026-10-26"
+    - id: HOWM
+      title: verifySetupToken now calls RefreshState (a D…
+      disposition: fixed
+      ref: phase-15-remediation-04/004-verify-setup-token-without-cache-writes.md
+      date: "2026-10-26"
+    - id: ICke
+      title: 'The setup-token lifecycle changed: the OIDC…'
+      disposition: fixed
+      ref: phase-15-remediation-04/004-verify-setup-token-without-cache-writes.md
+      date: "2026-10-26"
+    - id: iFeg
+      title: PutAuthnPolicy drops a party's profile_polic…
+      disposition: fixed
+      ref: phase-15-remediation-04/005-purge-confirmations-on-provider-change.md
+      date: "2026-10-26"
+    - id: 1cWY
+      title: Under an `authorized` party, ProvisionManage…
+      disposition: fixed
+      ref: phase-15-remediation-04/006-require-party-update-for-managed-password-authorization.md
+      date: "2026-10-26"
+    - id: DO7p
+      title: The last-operator-admin guard covers only th…
+      disposition: fixed
+      ref: phase-15-remediation-04/007-exclude-disabled-principals-from-admin-count.md
+      date: "2026-10-26"
+    - id: vHBJ
+      title: ProvisionManagedUserInTx reads the party's a…
+      disposition: fixed
+      ref: phase-15-remediation-04/008-serialize-managed-user-provisioning-with-policy.md
+      date: "2026-10-26"
+    - id: TA9q
+      title: Sibling links under worktrees/plan/ (mod-core
+      disposition: dismissed
+      reason: |-
+        Not actionable: an unverified-observation note, not a defect. The sibling links under
+        worktrees/plan/ (mod-audit, mod-authz, mod-core) resolve to /Users/zane/playground/.flow/siblings/
+        mod-users/<sibling> (ls -la, 2026-10-26), and the caller independently verified them; there is
+        nothing to change.
+      date: "2026-10-26"
+    - id: nLkT
+      title: 'Manager action: no users-module-postgres cont'
+      disposition: dismissed
+      reason: |-
+        Not actionable as a code or doc change: it is a manager-facing environment note (the integration
+        suite needs a throwaway postgres:16 with a users superuser via AUTHZ_DEV_PG_HOST/PORT). Its
+        substance is carried into the PlQx validation task's requirements, which is where it acts.
+      date: "2026-10-26"
+    - id: 62Rc
+      title: 'Task 007 builds on this: operatorAdminProfile'
+      disposition: dismissed
+      reason: |-
+        Already fixed: task 007 put the disabled-principal exclusion in operatorAdminProfileSQL —
+        api/internal/service/profile_last_admin.go:33 joins public.principals with
+        pr.disabled_at IS NULL (doc comment at line 58).
+      date: "2026-10-26"
+    - id: sWRq
+      title: Finding line numbers (566-590, 388-400) cited
+      disposition: dismissed
+      reason: |-
+        Stale: it reports that line numbers cited in earlier (now-resolved) findings drifted against the
+        current file; those findings were handled by phase-15 tasks and line citations in closed findings
+        carry no remaining action.
+      date: "2026-10-26"
+    - id: oufL
+      title: 'Out of scope, existing behavior: whether PutA'
+      disposition: promoted
+      ref: oufL
+      date: "2026-10-26"
+    - id: oJhu
+      title: The platform_settings FOR UPDATE is now take…
+      disposition: promoted
+      ref: oJhu
+      date: "2026-10-26"
+    - id: ZrCC
+      title: Unreachable CLAUDE.md, dangling mf-standards
+      disposition: promoted
+      ref: ZrCC
+      date: "2026-10-26"
+    - id: CZcA
+      title: Lock contention in new guard/policy locks
+      disposition: promoted
+      ref: CZcA
+      date: "2026-10-26"
+    - id: YpJ6
+      title: verifySetupToken is reachable unauthenticate…
+      disposition: promoted
+      ref: YpJ6
+      date: "2026-10-26"
+    - id: ggb7
+      title: mod_users.holder_policy_mismatch now treats…
+      disposition: fixed
+      ref: phase-16-remediation-05/001-strict-collaborator-policy-mismatch.md
+      date: "2026-10-26"
+    - id: 6dyh
+      title: The guard now counts only admins whose princ…
+      disposition: fixed
+      ref: phase-16-remediation-05/002-close-admin-disable-race-and-fail-closed-policy-lock.md
+      date: "2026-10-26"
+    - id: 8bH2
+      title: lockPartyPolicyShared silently returns nil w…
+      disposition: fixed
+      ref: phase-16-remediation-05/002-close-admin-disable-race-and-fail-closed-policy-lock.md
+      date: "2026-10-26"
+    - id: PlQx
+      title: Integration subtest in TestBootstrap_TokenLif
+      disposition: fixed
+      ref: phase-16-remediation-05/004-run-bootstrap-token-lifecycle-integration.md
+      date: "2026-10-26"
+    - id: hyek
+      title: 'Behavioral consequence: a handler whose cache'
+      disposition: fixed
+      ref: phase-16-remediation-05/004-run-bootstrap-token-lifecycle-integration.md
+      date: "2026-10-26"
+    - id: A202
+      title: Lock-order contract undocumented
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: J6jP
+      title: The diff introduces several architectural de…
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: u2bW
+      title: requireNotLastOperatorAdmin takes the platfo…
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: jBbn
+      title: Decide whether to queue a docs task for the g
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: EvkR
+      title: The collaborator_gate.go row states that `Pu…
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: xWC3
+      title: The PUT authn-policy description says changi…
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: yPFO
+      title: The PATCH profile status description says 40…
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: 8mcq
+      title: POST managed-users is documented as authoriz…
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: VXFQ
+      title: After task 008 MismatchCredentialNotAuthoriz…
+      disposition: fixed
+      ref: phase-16-remediation-05/003-document-lock-order-and-phase-15-contracts.md
+      date: "2026-10-26"
+    - id: tmcn
+      title: Run TestLeaveGate_ConcurrentDisableAndSuspend
+      disposition: dismissed
+      reason: |-
+        Reclassified from the default ambiguity stamp: it is an unverified-test
+        deficiency (bug), not an open question. Already fixed: the test has now been
+        observed to execute and pass against a real postgres:16. Evidence under
+        project_root: .flow/validation-logs/leavegate-x5.log lines 1-12 (five
+        "=== RUN / --- PASS: TestLeaveGate_ConcurrentDisableAndSuspendLeaveAnEffectiveAdministrator",
+        "ok github.com/moduleforge/mod-users/api/internal/integration"),
+        .flow/validation-logs/leavegate-race.log lines 1-4 (the -race run, PASS), and
+        .flow/validation-logs/integration-full.log line 852 (the full integration
+        package "ok", no SKIP or FAIL lines).
+      date: "2026-10-26"
+    - id: cKK9
+      title: 'Optional: install pyyaml or spectral so make'
+      disposition: dismissed
+      reason: |-
+        Reclassified from the default ambiguity stamp: it is an optional tooling
+        suggestion, not an open question. Not actionable: installing pyyaml or
+        spectral on one agent's machine is a local environment step. No change to
+        this repository resolves it, and the Makefile target make openapi.validate
+        already exists. Task 003's status records that the OpenAPI YAML parses and
+        that the validator could not run for lack of tooling. The sDO1 spec below
+        asks for make openapi.validate where the tooling is available.
+      date: "2026-10-26"
+    - id: WA7h
+      title: The concurrency test only requires that not…
+      disposition: promoted
+      ref: WA7h
+      date: "2026-10-26"
+    - id: Faly
+      title: Project doc api/server/CLAUDE.md is not reac…
+      disposition: promoted
+      ref: Faly
+      date: "2026-10-26"
+    - id: jk9n
+      title: 'Dangling forward link: ./docs/mf-standards/b…'
+      disposition: dismissed
+      reason: |-
+        Not actionable: no change to this repository resolves it, because the link
+        is not broken at the pinned revision. docs/mf-standards is a git
+        submodule (.gitmodules) that is merely uninitialized in this worktree.
+        `git submodule status` in project_root shows
+        "-c2dc98c9a070abe5449b21bc7c67ae6b51b53086 docs/mf-standards". At that
+        exact commit (the initialized submodule in the main mod-users checkout,
+        HEAD c2dc98c9) building-applications.md exists and has
+        "## First-time setup" at line 175. The only remedy is the environment
+        step `git submodule update --init` in the worktree.
+      date: "2026-10-26"
+    - id: OSoT
+      title: Dangling forward links into the uninitialize…
+      disposition: dismissed
+      reason: |-
+        Not actionable: the targets exist at the pinned submodule revision, so no
+        repository change applies. The gitlink pins docs/mf-standards at
+        c2dc98c9a070abe5449b21bc7c67ae6b51b53086 (git submodule status in
+        project_root). At that commit building-common.md exists, with
+        "## Building inside a task worktree" at line 21, and
+        architecture/http-error-precedence.md exists. The submodule is only
+        uninitialized in this worktree, which is an environment step, not a
+        defect.
+      date: "2026-10-26"
+    - id: nrI1
+      title: Dangling forward links into the uninitialize…
+      disposition: dismissed
+      reason: |-
+        Not actionable: the targets exist at the pinned submodule revision, so no
+        repository change applies. At the gitlink commit
+        c2dc98c9a070abe5449b21bc7c67ae6b51b53086, architecture.md,
+        architecture/entity-typing.md and architecture/db-considerations.md all
+        exist. The submodule is only uninitialized in this worktree, which is an
+        environment step, not a defect.
+      date: "2026-10-26"
+    - id: fNoH
+      title: Dangling forward links into the uninitialize…
+      disposition: dismissed
+      reason: |-
+        Not actionable: the targets exist at the pinned submodule revision, so no
+        repository change applies. At the gitlink commit
+        c2dc98c9a070abe5449b21bc7c67ae6b51b53086, architecture.md,
+        building-applications.md (with "## First-time setup" at line 175),
+        architecture/api-response-design.md and
+        architecture/authorization-design.md all exist. The submodule is only
+        uninitialized in this worktree, which is an environment step, not a
+        defect.
+      date: "2026-10-26"
+    - id: FPKQ
+      title: 'Dangling forward link: ../docs/mf-standards/…'
+      disposition: dismissed
+      reason: |-
+        Not actionable: the target exists at the pinned submodule revision, so no
+        repository change applies. At the gitlink commit
+        c2dc98c9a070abe5449b21bc7c67ae6b51b53086,
+        architecture/db-considerations.md exists. The submodule is only
+        uninitialized in this worktree, which is an environment step, not a
+        defect.
+      date: "2026-10-26"
+    - id: sDO1
+      title: ErrLastOperatorAdmin is now also returned by…
+      disposition: fixed
+      ref: phase-17-remediation-06/001-last-operator-admin-disable-contract.md
+      date: "2026-10-26"
+    - id: Eqyx
+      title: The test seam is swapped by a package-level…
+      disposition: fixed
+      ref: phase-17-remediation-06/002-scope-policy-lock-test-seam-and-assert-invite-time.md
+      date: "2026-10-26"
+    - id: inY7
+      title: The fake HolderPolicyMismatch ignores its pa…
+      disposition: fixed
+      ref: phase-17-remediation-06/002-scope-policy-lock-test-seam-and-assert-invite-time.md
+      date: "2026-10-26"
+    - id: qvSR
+      title: Core Authorizer contract omits party gate
+      disposition: promoted
+      ref: qvSR
+      date: "2026-10-27"
+    - id: IIA3
+      title: Party gate adds a query per check
+      disposition: dismissed
+      reason: |-
+        Duplicate of MaQM: both describe the same extra round trip that
+        checkPartyPolicy adds before the wildcard and grant-or-own queries in
+        api/internal/authz/authz.go authorizePrelude, with the same remedy (fold the
+        gate and the wildcard arm into one statement). MaQM is promoted and carries
+        the issue.
+      date: "2026-10-27"
+    - id: Lt3W
+      title: Two ErrStepUpRequired sentinels
+      disposition: promoted
+      ref: Lt3W
+      date: "2026-10-27"
+    - id: JgvC
+      title: '[decision] Are operator profiles subject to t'
+      disposition: dismissed
+      reason: |-
+        Stale: the open question was settled by Decision D (plan/notes/
+        decisions-and-resolutions.md, Amendments 2026-10-26 phase 8): operator
+        profiles are exempt from the owning-party gate via a core_is_operator_profile
+        skip in session_meets_party_policy, and the skipOperatorUnderOwningPartyGate
+        helper is removed (grep -rn skipOperatorUnderOwningPartyGate api/ returns
+        nothing). Superseded by Decision D per the user.
+      date: "2026-10-27"
+    - id: pKAO
+      title: '[docs] Phase 10 task 001 source list names th'
+      disposition: dismissed
+      reason: |-
+        already planned: phase-10-doc-updates/001-update-architecture-docs.md is the
+        phase 10 architecture-doc rewrite, which is being amended to cover the
+        owning-party gate, the exact gap this item flags in its source list.
+      date: "2026-10-27"
+    - id: Q1lB
+      title: Spec still documents /assume
+      disposition: dismissed
+      reason: |-
+        already planned: phase-10-doc-updates/001-update-architecture-docs.md is the
+        phase 10 rewrite of the architecture docs, being amended to cover the /assume
+        removal, which is exactly the stale /assume wording in docs/mod-users-spec.md
+        and docs/architecture.md this item reports.
+      date: "2026-10-27"
+    - id: Hd71
+      title: Spec section 10 and related lines still desc…
+      disposition: dismissed
+      reason: |-
+        already planned: phase-10-doc-updates/001-update-architecture-docs.md is
+        being amended to cover the /assume removal, which covers rewriting spec
+        section 10 and the architecture.md lines this item cites (it is the same
+        issue as Q1lB, which it names).
+      date: "2026-10-27"
+    - id: EfE8
+      title: Decision D9 in docs/architecture.md, and the…
+      disposition: dismissed
+      reason: |-
+        Reclassified from bug to documentation (doc drift). already planned:
+        phase-10-doc-updates/001-update-architecture-docs.md is being amended to
+        cover D9 and docs/architecture/ssh-keys.md, which is exactly the stale D9
+        text in docs/architecture.md and ssh-keys.md this item reports.
+      date: "2026-10-27"
+    - id: MaQM
+      title: Every gated Authorize with a target issues u…
+      disposition: promoted
+      ref: MaQM
+      date: "2026-10-27"
+    - id: 6tQK
+      title: api/server/CLAUDE.md is a tracked project do…
+      disposition: dismissed
+      reason: |-
+        Duplicate of the durable project followup DPZi (plan/followups.yaml line
+        1004 in the main checkout), which already tracks the orphaned
+        api/server/CLAUDE.md; the item itself says so, and the orphan predates this
+        plan. Promoting it would create a second backlog entry for the same issue.
+      date: "2026-10-27"
+    - id: SjEH
+      title: For invite-only apps every request runs a fu…
+      disposition: promoted
+      ref: SjEH
+      date: "2026-10-27"
+    - id: Ddx9
+      title: List path skips owning-party gate
+      disposition: promoted
+      ref: Ddx9
+      date: "2026-10-27"
+    - id: J55x
+      title: ImpersonationService.Start only observes a s…
+      disposition: promoted
+      ref: J55x
+      date: "2026-10-27"
+    - id: l8jM
+      title: 'NEEDS USER DECISION (halt): choose option A ('
+      disposition: dismissed
+      reason: Resolved by user decision G (option A) recorded in plan/notes/decisions-and-resolutions.md.
+      ref: plan/notes/decisions-and-resolutions.md
+      date: "2026-10-29"
+    - id: u7Fd
+      title: Confirm decision F owner-gate reading
+      disposition: dismissed
+      reason: Resolved by user decision F (both gates apply, confirmed) in plan/notes/decisions-and-resolutions.md.
+      ref: plan/notes/decisions-and-resolutions.md
+      date: "2026-10-29"
+    - id: 4MjU
+      title: API surface 6.2 amendment for decision F
+      disposition: dismissed
+      reason: Done by manager amendment of API surface note (2.9, 6.1, 6.2), committed.
+      ref: plan/notes/mod-users-api-surface.md
+      date: "2026-10-29"
+    - id: FZVc
+      title: Sibling links repointed by make runs
+      disposition: promoted
+      ref: FZVc
+      date: "2026-10-29"
+    - id: bYK4
+      title: checkPartyPolicy resolves the owning party o…
+      disposition: fixed
+      ref: phase-18-remediation-07/001-party-is-own-owning-party.md
+      date: "2026-10-29"
+    - id: N4y2
+      title: The owning party is resolved only as the tar…
+      disposition: fixed
+      ref: phase-18-remediation-07/001-party-is-own-owning-party.md
+      date: "2026-10-29"
+    - id: iacw
+      title: The owning-party gate resolves the owner onl…
+      disposition: fixed
+      ref: phase-18-remediation-07/001-party-is-own-owning-party.md
+      date: "2026-10-29"
+    - id: Y3B8
+      title: mod_users.session_meets_party_policy passes…
+      disposition: fixed
+      ref: phase-18-remediation-07/002-impersonated-actor-rules-apply.md
+      date: "2026-10-29"
+    - id: ejk3
+      title: credentialsTarget and the IssuePrincipalAPIK…
+      disposition: fixed
+      ref: phase-18-remediation-07/003-credentials-refuse-impersonation.md
+      date: "2026-10-29"
+    - id: Mdgf
+      title: EnsurePersonalParty uses adminCaller, which…
+      disposition: fixed
+      ref: phase-18-remediation-07/003-credentials-refuse-impersonation.md
+      date: "2026-10-29"
+    - id: Vj21
+      title: Because users are self-owned and credentials…
+      disposition: fixed
+      ref: phase-18-remediation-07/003-credentials-refuse-impersonation.md
+      date: "2026-10-29"
+    - id: 0chQ
+      title: Renew skips impersonate re-check
+      disposition: fixed
+      ref: phase-18-remediation-07/004-impersonation-renew-recheck.md
+      date: "2026-10-29"
+    - id: LAgn
+      title: Renew extends the child session to now plus…
+      disposition: fixed
+      ref: phase-18-remediation-07/004-impersonation-renew-recheck.md
+      date: "2026-10-29"
+    - id: QKwM
+      title: checkAppGate maps only ErrForbidden and ErrU…
+      disposition: fixed
+      ref: phase-18-remediation-07/006-app-gate-step-up-mapping.md
+      date: "2026-10-29"
+    - id: 7KQz
+      title: 'Option A ordering note: if A is chosen, consi'
+      disposition: dismissed
+      reason: |-
+        Stale. This was an ordering note that applied only if Option A were chosen. The user chose
+        Option A (decisions-and-resolutions.md, Decision G resolution 2026-10-29). Phase 18 tasks
+        002 and 004 have since both completed (their Status sections say "succeeded 2026-10-29"),
+        so task order can no longer change. The substance of the note, keying the operator
+        exemption on the recorded acting profile, is now settled by Decision J. It is fixed by
+        remediation spec impersonator-profile-credential-exemption (DChD, crQE, bKBt).
+      date: "2026-10-29"
+    - id: HAsS
+      title: 'Conflict evidence: model/migrations/sql/0100_'
+      disposition: dismissed
+      reason: |-
+        Stale. This item recorded evidence for the Decision G versus Decision D conflict. The user
+        resolved that conflict on 2026-10-29 (Decision G resolution, option A):
+        operator impersonators are exempt from credential_rule, and
+        TestImpersonation_OperatorReachesMembersOfRestrictiveParties stays valid.
+        Task 002 implemented that resolution. Decision J (2026-10-29, phase 18 gate) then
+        narrowed the exemption to the recorded acting profile. No open decision remains.
+      date: "2026-10-29"
+    - id: Jj1G
+      title: Validation 3 for task 004 (manager-owned plan
+      disposition: dismissed
+      reason: |-
+        Already fixed. plan/notes/mod-users-api-surface.md lines 718-723, under "Amendments
+        (2026-10-29, phase 8 remediation)", now hold the Section 2.9 amendment for
+        sessions.impersonator_profile_id. It covers the administrator's acting profile, the
+        NULL-pairing check with the impersonation columns, MF101 coverage, and its use by Renew
+        to re-check impersonate from the parent session. That is the manager-owned validation 3
+        of task 004.
+      date: "2026-10-29"
+    - id: 5M3G
+      title: session_policy_factors is plpgsql (not inlin…
+      disposition: promoted
+      ref: 5M3G
+      date: "2026-10-29"
+    - id: 140Z
+      title: Renew now runs liveSession for the child and…
+      disposition: promoted
+      ref: 140Z
+      date: "2026-10-29"
+    - id: DuBq
+      title: Project doc not reachable from README.md via…
+      disposition: promoted
+      ref: DuBq
+      date: "2026-10-29"
+    - id: yfao
+      title: Dangling forward-links into docs/mf-standard…
+      disposition: dismissed
+      reason: |-
+        Not actionable, a false positive. The links point into the docs/mf-standards git submodule
+        (.gitmodules: path docs/mf-standards, url moduleforge/docs-mf-standards). That submodule is
+        not initialized in this checkout: `git submodule status` prints
+        "-c2dc98c9a070abe5449b21bc7c67ae6b51b53086 docs/mf-standards" (leading '-' = uninitialized),
+        and the directory is empty. The links only dangle because the submodule content is absent.
+        In an initialized checkout they resolve, so no change to the linking documents is needed.
+      date: "2026-10-29"
+    - id: IDjP
+      title: The listPrincipalCredentials description sti…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005 (docs-impersonation-reauth-and-decisions).
+        api/openapi.yaml:3096-3098 (listPrincipalCredentials) now places the 403 for an
+        impersonating caller before the 404. The issuePrincipalAPIKey, ssh-key and revoke
+        operations (openapi.yaml:3141-3146, 3183-3188, 3227-3232) each state the impersonation
+        and own-principal refusals. The finer misordering of the own-principal 403 against the
+        masked 404 is a separate issue, tracked as lGXo.
+      date: "2026-10-29"
+    - id: 7TSm
+      title: The renewImpersonation description lists onl…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. The renewImpersonation description
+        (api/openapi.yaml:2409-2416) now states:
+          - renewal re-authorizes impersonate as the recorded acting profile, from the
+            administrator's session;
+          - a refusal answers 403 and ends the impersonation;
+          - an ended parent answers 401 users.session_revoked;
+          - max_auth_age is not re-applied.
+      date: "2026-10-29"
+    - id: SO3A
+      title: The PersonalPartyService row lists the refus…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. The AGENTS.md:196 PersonalPartyService row now lists
+        "ErrImpersonationNotAllowed (403 users.impersonation_not_allowed: an impersonating
+        context)" among its Refusals.
+      date: "2026-10-29"
+    - id: gxvu
+      title: The "inserting a child of an impersonation s…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 004 (test-precision-nesting-and-static-audit). The SQL
+        nesting check in TestImpersonation_NoNesting (impersonation_integration_test.go:311-329)
+        now supplies impersonator_profile_id (m.profileID, held by the parent principal), so
+        only the nesting invariant can fire. It also asserts the "no nesting" message text.
+      date: "2026-10-29"
+    - id: HGTD
+      title: The credentialsTarget doc comment still desc…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. The credentialsTarget doc comment
+        (api/internal/service/principal_credentials.go:69-77) now lists the impersonation 403
+        (before the lookup) and the own-principal 403 (before the read check), in code order.
+      date: "2026-10-29"
+    - id: ehkS
+      title: TestPartyPolicy_PartyRecordGate_NonMemberUpd…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 004.
+        TestPartyPolicy_PartyRecordGate_NonMemberUpdateGrantCannotWeakenThePolicy
+        (api/internal/integration/party_policy_integration_test.go:~269) now pins a single
+        status (404) instead of accepting 403 or 404. It also adds a positive control at ~276-282:
+        once the party authorizes the outsider's password, the PUT succeeds.
+      date: "2026-10-29"
+    - id: FvL1
+      title: The static audit treats any opctx.AuthContex…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 004. In api/internal/service/sessionless_contexts_test.go,
+        a SessionID or CredentialID key with the literal value 0 now counts as absent
+        (isZeroLiteral, lines 451-460). The file comment (lines 32-36) now says a variable-valued
+        SessionID is out of scope and that the receiver walk covers the same package only.
+      date: "2026-10-29"
+    - id: 33w3
+      title: Phase 18 added behavior the architecture doc…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. docs/architecture.md:94-97 now records the
+        impersonation lifecycle:
+          - the credential refusals and own-principal 403 (Decisions K and M);
+          - the EnsurePersonalParty refusal;
+          - child auth_time inheritance;
+          - Renew re-authorization without re-applying max_auth_age (Decision I).
+      date: "2026-10-29"
+    - id: MGUW
+      title: The invite-only app gate (Authenticator.chec…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. The action-required section of docs/architecture.md
+        (line 101) now says the invite-only app gate's login operation (checkAppGate, gateFor)
+        surfaces 409 users.step_up_required, and that the operator-admin checker fails closed on
+        it.
+      date: "2026-10-29"
+    - id: MkEx
+      title: The doc states sessionless contexts are exem…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. docs/architecture.md:99 has a "Sessionless contexts
+        (known limitation)" paragraph. It records that trust is inferred from absent
+        SessionID/CredentialID until mod-core adds a system-actor marker, and that
+        sessionless_contexts_test.go pins these contexts so they never reach Authorize.
+      date: "2026-10-29"
+    - id: SV3I
+      title: Plan notes need no edit; phase-18 task doc St
+      disposition: dismissed
+      reason: |-
+        Not actionable. Its default ambiguity stamp is reclassified: this is an informational
+        note from a phase 19 task agent saying that the plan notes need no edit and that the
+        phase-18 task-doc Status text is historical. It states that no change is needed, raises
+        no open decision, and names no defect, so no change could resolve it.
+      date: "2026-10-29"
+    - id: ygAT
+      title: 'Plan-notes / docs: the docs/architecture.md s'
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 19 task 005. The Decision K bullet in docs/architecture.md:95 now
+        covers managed-user creation (POST /v1/parties/{party_uuid}/managed-users refused with
+        403 users.impersonation_not_allowed). The createManagedUser description in
+        api/openapi.yaml (~3355-3356) states the same refusal. The note itself says no plan-notes
+        edit is needed.
+      date: "2026-10-29"
+    - id: crQE
+      title: Operator impersonation test is principal-wide
+      disposition: fixed
+      ref: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
+      date: "2026-10-29"
+    - id: DChD
+      title: mod_users.session_policy_factors sets skip_c…
+      disposition: fixed
+      ref: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
+      date: "2026-10-29"
+    - id: bKBt
+      title: mod_users.session_policy_factors sets skip_c…
+      disposition: fixed
+      ref: phase-19-remediation-08/001-impersonator-profile-credential-exemption.md
+      date: "2026-10-29"
+    - id: bFGy
+      title: Confinement not applied to parent factors
+      disposition: fixed
+      ref: phase-19-remediation-08/002-confine-impersonator-parent-factors.md
+      date: "2026-10-29"
+    - id: KkGF
+      title: profile_gate_for now evaluates an impersonat…
+      disposition: fixed
+      ref: phase-19-remediation-08/002-confine-impersonator-parent-factors.md
+      date: "2026-10-29"
+    - id: YqJd
+      title: ProvisionManagedUserInTx (reached from Profi…
+      disposition: fixed
+      ref: phase-19-remediation-08/003-refuse-managed-user-creation-impersonating.md
+      date: "2026-10-29"
+    - id: AXFG
+      title: 'Informational: Decision K in plan/notes/decis'
+      disposition: dismissed
+      reason: Decision K wording aligned with the implemented plain 403 refusals in plan/notes/decisions-and-resolutions.md; docs follow the code.
+      date: "2026-10-29"
+    - id: uBfI
+      title: ProfileService.UpdateProfileStatus (PATCH /v…
+      disposition: fixed
+      ref: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
+      date: "2026-10-29"
+    - id: zzo0
+      title: 'Decision needed: when an impersonating caller'
+      disposition: fixed
+      ref: phase-20-remediation-09/001-refuse-impersonated-profile-end.md
+      date: "2026-10-29"
+    - id: u1NG
+      title: Two function header comments still describe…
+      disposition: fixed
+      ref: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
+      date: "2026-10-29"
+    - id: lGXo
+      title: The four principal-credential operations doc…
+      disposition: fixed
+      ref: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
+      date: "2026-10-29"
+    - id: wRQn
+      title: The Decision L liveness assertion for the im…
+      disposition: fixed
+      ref: phase-20-remediation-09/002-precision-sql-comments-openapi-order-liveness-test.md
+      date: "2026-10-29"
+    - id: j75L
+      title: gated treats every non-anonymous AuthContext…
+      disposition: promoted
+      ref: j75L
+      date: "2026-10-29"
+    - id: x0mv
+      title: The exported primitive EndInTx runs the full…
+      disposition: promoted
+      ref: x0mv
+      date: "2026-10-29"
+    - id: eIMh
+      title: Suspend of a profile under impersonation is…
+      disposition: promoted
+      ref: eIMh
+      date: "2026-10-29"
+    - id: c6Dh
+      title: Stale party-policy SQL comment
+      disposition: promoted
+      ref: c6Dh
+      date: "2026-10-31"
+    - id: owkI
+      title: mod-repos lists lack BindAuthInputs
+      disposition: promoted
+      ref: owkI
+      date: "2026-10-31"
+    - id: QbSc
+      title: mod-tasks list lacks BindAuthInputs
+      disposition: promoted
+      ref: QbSc
+      date: "2026-10-31"
+    - id: ZEu4
+      title: mod-workflows lists lack BindAuthInputs
+      disposition: promoted
+      ref: ZEu4
+      date: "2026-10-31"
+    - id: wyTd
+      title: 'needs-sibling: mod-core organizationService'
+      disposition: promoted
+      ref: wyTd
+      date: "2026-10-31"
+    - id: 7sEV
+      title: Manifest change in moduleforge.module.yaml (b
+      disposition: promoted
+      ref: 7sEV
+      date: "2026-10-31"
+    - id: QHzM
+      title: Agent used python3 once for a multi-edit patc
+      disposition: dismissed
+      reason: |-
+        Not actionable: a process note that a task agent used python3 once to patch two test
+        files; the result was verified by build and tests, and no code change could resolve a
+        past tool-use deviation.
+      date: "2026-10-31"
+    - id: Ysh7
+      title: 'Plan-note edit needed (manager-only): mod-use'
+      disposition: dismissed
+      reason: |-
+        Already fixed: plan/notes/mod-users-api-surface.md lines 741-743 (Amendments 2026-10-30,
+        phase 21, "Bootstrap") record the NewBootstrapService organization-service parameter and
+        OrganizationFromServices.
+      date: "2026-10-31"
+    - id: wkvN
+      title: Stale localAuthz package doc on step 1
+      disposition: promoted
+      ref: wkvN
+      date: "2026-10-31"
+    - id: GNRh
+      title: 'Plan-note edits (manager-only, plan/notes/):'
+      disposition: promoted
+      ref: GNRh
+      date: "2026-10-31"
+    - id: VZLf
+      title: Manager to grep plan/overview.md and plan/not
+      disposition: dismissed
+      reason: |-
+        Already fixed: grep for 'inferred', 'sessionless', 'five-argument' and 'raw
+        organization' in plan/overview.md and plan/notes/work-packages.md finds only
+        plan/overview.md line 161 (the phase-21 row, which describes the current behavior) and
+        nothing in work-packages.md.
+      date: "2026-10-31"
+    - id: j7Ym
+      title: Coordination note on link-siblings.sh in deci
+      disposition: promoted
+      ref: j7Ym
+      date: "2026-10-31"
+    - id: yZTA
+      title: Integration tests did not run (docs-only task
+      disposition: dismissed
+      reason: |-
+        Not actionable: a status note that task 004 (documentation only, no database needed) did
+        not run integration tests; tasks 001-003 ran the integration suites per their Status
+        sections. No change could resolve it.
+      date: "2026-10-31"
+    - id: 3JAO
+      title: The list-side row filter evaluates mod_users…
+      disposition: promoted
+      ref: 3JAO
+      date: "2026-10-31"
+    - id: Xyl5
+      title: ListPrincipals now opens a read-only transac…
+      disposition: promoted
+      ref: Xyl5
+      date: "2026-10-31"
+    - id: blvz
+      title: Project doc api/server/CLAUDE.md is not reac…
+      disposition: promoted
+      ref: blvz
+      date: "2026-10-31"
+    - id: knC0
+      title: 'Dangling relative link: ./docs/mf-standards/…'
+      disposition: promoted
+      ref: knC0
+      date: "2026-10-31"
+    - id: XNI4
+      title: 'Dangling relative link: ./docs/mf-standards/…'
+      disposition: promoted
+      ref: XNI4
+      date: "2026-10-31"
+    - id: SOih
+      title: 'Dangling relative link: ./docs/mf-standards/…'
+      disposition: promoted
+      ref: SOih
+      date: "2026-10-31"
+    - id: oAFR
+      title: 'Dangling relative link: ./mf-standards/archi…'
+      disposition: promoted
+      ref: oAFR
+      date: "2026-10-31"
+    - id: 4NOn
+      title: 'Dangling relative link: ./mf-standards/archi…'
+      disposition: promoted
+      ref: 4NOn
+      date: "2026-10-31"
+    - id: gpKq
+      title: 'Dangling relative link: ./mf-standards/archi…'
+      disposition: promoted
+      ref: gpKq
+      date: "2026-10-31"
+    - id: d4xh
+      title: 'Dangling relative link: ./mf-standards/archi…'
+      disposition: promoted
+      ref: d4xh
+      date: "2026-10-31"
+    - id: mj5E
+      title: 'Dangling relative link: ./mf-standards/archi…'
+      disposition: promoted
+      ref: mj5E
+      date: "2026-10-31"
+    - id: uE7e
+      title: 'Dangling relative link: ./mf-standards/build…'
+      disposition: promoted
+      ref: uE7e
+      date: "2026-10-31"
+    - id: lWS6
+      title: 'Dangling relative link: ./mf-standards/archi…'
+      disposition: promoted
+      ref: lWS6
+      date: "2026-10-31"
+    - id: IvGP
+      title: 'Dangling relative link: ./mf-standards/archi…'
+      disposition: promoted
+      ref: IvGP
+      date: "2026-10-31"
+    - id: U5ln
+      title: 'Dangling relative link: ../docs/mf-standards…'
+      disposition: promoted
+      ref: U5ln
+      date: "2026-10-31"
+    - id: J86E
+      title: mod-authz stepUpStale infers system trust
+      disposition: promoted
+      ref: J86E
+      date: "2026-10-31"
+    - id: ck8O
+      title: app-mftodo installs unfiltered access fns
+      disposition: promoted
+      ref: ck8O
+      date: "2026-10-31"
+    - id: yDll
+      title: app-mfgit installs unfiltered access fns
+      disposition: promoted
+      ref: yDll
+      date: "2026-10-31"
+    - id: tpls
+      title: gated() now exempts any context for which op…
+      disposition: fixed
+      ref: phase-22-remediation-10/001-require-sessionless-system-actor.md
+      date: "2026-10-31"
+    - id: P0yG
+      title: The new package documentation (and api/local…
+      disposition: fixed
+      ref: phase-22-remediation-10/002-apply-assurance-gate-on-principal-list.md
+      date: "2026-10-31"
+    - id: DDfb
+      title: createOrganization now creates the operator…
+      disposition: fixed
+      ref: phase-22-remediation-10/003-dispatch-after-commit-observations.md
+      date: "2026-10-31"
+    - id: bwMq
+      title: createOrganization uses OrganizationService.…
+      disposition: fixed
+      ref: phase-22-remediation-10/003-dispatch-after-commit-observations.md
+      date: "2026-10-31"
+    - id: 06rd
+      title: Missing ObserveAfterCommit for CreateInTx
+      disposition: fixed
+      ref: phase-22-remediation-10/003-dispatch-after-commit-observations.md
+      date: "2026-10-31"
+    - id: 8Wfo
+      title: Comments still say the unauthenticated setup…
+      disposition: dismissed
+      reason: |-
+        Already planned: 11/001 (mod-users-drift-scan). Its requirements scan code comments in gui/src
+        for the term `/v1/self` and name the rewrite "`/v1/self` to `/v1/me`", which is exactly the
+        change this item asks for in oidc-setup-gate.tsx and client-layout.tsx; its validation rg
+        includes /v1/self over gui/src. Reclassified from bug to documentation (stale comments).
+      date: "2026-10-31"
+    - id: hcdm
+      title: The panel calls api.auth.providers() on ever…
+      disposition: promoted
+      ref: hcdm
+      date: "2026-10-31"
+    - id: jRXp
+      title: OIDC state cookie vs credentials omit
+      disposition: promoted
+      ref: jRXp
+      date: "2026-10-31"
+    - id: AReg
+      title: Selection page loses return path on reload
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 004. The pending selection is persisted per tab
+        (gui/src/lib/config.ts:401-475, selection list under `<key>.selection` and return
+        path under `<key>.selection_return`; written in commitTokenResponse at
+        gui/src/lib/api.ts:744-749), a reload restores selectionRequired and the profile list
+        (gui/src/lib/auth-context.tsx:406-423), and SelectProfilePage takes a `returnPath`
+        prop, else the stored path, validated with isSafeReturnPath
+        (gui/src/components/select-profile-page.tsx:27, 53-61).
+      date: "2026-10-31"
+    - id: zwCX
+      title: Login, register, email-code verify, handoff…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 001. loadUser raises a counter-backed userLoading flag
+        synchronously with the token commit (gui/src/lib/auth-context.tsx:283-307), the
+        context's isLoading folds it in (`isLoading: isLoading || userLoading`, line 673),
+        and RequireAuth returns early while isLoading (gui/src/components/require-auth.tsx:39,
+        65). This covers login, register, email-code, handoff and the fork path, which all
+        reach loadUser through the token_response subscription (auth-context.tsx:360-368).
+      date: "2026-10-31"
+    - id: 4ohc
+      title: The API's OIDC callback redirects every outc…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 002. OidcCallbackPage now parses `linked=1` and
+        `stepped_up=1` (gui/src/components/oidc-callback-page.tsx:96-97), and the
+        `!handoff && (linked || steppedUp)` branch (lines 115-147) validates `return` with
+        isSafeReturnPath, refreshes on step-up, and calls onComplete without onError. The
+        residual concurrency defect in that step-up refresh is tracked separately as 6qD2.
+      date: "2026-10-31"
+    - id: b1HZ
+      title: After a sign-in that answers selection_requi…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 004. doRefresh with a refresh token and no profile
+        uuid now re-publishes the stored selection as selection_required and throws
+        `selection_required` instead of calling endTabSession (gui/src/lib/api.ts:843-869),
+        and hydrate restores the selection state without calling session.get when a pending
+        selection is stored (gui/src/lib/auth-context.tsx:406-423).
+      date: "2026-10-31"
+    - id: 4EHb
+      title: While impersonating, the tab holds the imper…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 003. execute captures `sentAsImpersonation` at send
+        time (gui/src/lib/api.ts:1002-1005) and, on a non-revocation 401, neither refreshes nor
+        replays: it drops the dead token and marker, emits impersonation_ended and throws
+        users.impersonation_ended (api.ts:1071-1094). impersonations.end treats that error as
+        already ended and restores the administrator without a replayed DELETE
+        (api.ts:1575-1608). The fail-open residual of the marker is tracked as vAo0.
+      date: "2026-10-31"
+    - id: oFfM
+      title: In hydrate, any failure of session.get other…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 001. Hydrate keeps the tokens on status 0 and 5xx and
+        sets a retryable sessionError (gui/src/lib/auth-context.tsx:460-470), exposed with
+        retrySession (lines 497-507, 673-675); RequireAuth does not call onUnauthenticated
+        while sessionError is set (gui/src/components/require-auth.tsx:51, 77).
+      date: "2026-10-31"
+    - id: A6aq
+      title: logout() calls api.session.logout(), which i…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 001. logout now retries once on a 401 when a refresh
+        token exists (session.get refreshes through the shared lineage, then logout again),
+        and the local-only fallback is documented in comments (gui/src/lib/auth-context.tsx:545-574).
+        The remaining impersonation-specific gap in that retry is tracked as Bq75.
+      date: "2026-10-31"
+    - id: Qo20
+      title: openVerify calls setVerifyTarget(identifier)…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 005. sendCode takes an explicit `inDialog` flag
+        (gui/src/components/identifiers-panel.tsx:174, 183-188) and openVerify calls
+        `sendCode(identifier, true)` (line 203), so a first-send failure is shown in the dialog.
+      date: "2026-10-31"
+    - id: paQk
+      title: The `app` option is documented as an app "sl…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 23 task 006. Every named doc comment now says "The app (uuid)":
+        gui/src/lib/auth-context.tsx:67, gui/src/components/login-form.tsx:87,
+        register-form.tsx:20, email-code-page.tsx:31 and auth-page.tsx:59. A grep for "slug"
+        in those files finds no remaining hit.
+      date: "2026-10-31"
+    - id: wafz
+      title: The stepped_up=1 branch calls api.auth.token…
+      disposition: dismissed
+      reason: |-
+        Duplicate of 6qD2. Both describe the same defect at the same place: the stepped_up=1
+        branch in gui/src/components/oidc-callback-page.tsx:124-136 calls api.auth.token with
+        the stored refresh token directly, bypassing the refreshTabToken single-flight
+        (gui/src/lib/api.ts:786-810), so a concurrent hydrate refresh can trip refresh_reuse.
+        6qD2, which carries the security classification, is kept and fixed.
+      date: "2026-10-31"
+    - id: LdOO
+      title: logout on a 401 retries via api.session.get(…
+      disposition: dismissed
+      reason: |-
+        Duplicate of Bq75. Both describe the same gap in logout's 401 retry
+        (gui/src/lib/auth-context.tsx:545-574) while an expired impersonation token is
+        stored. Bq75, which carries the security classification, is kept and fixed.
+      date: "2026-10-31"
+    - id: UmzX
+      title: api/server/CLAUDE.md unreachable from README
+      disposition: promoted
+      ref: UmzX
+      date: "2026-10-31"
+    - id: cLtT
+      title: getStoredImpersonating now base64-decodes an…
+      disposition: promoted
+      ref: cLtT
+      date: "2026-10-31"
+    - id: 6qD2
+      title: On "#stepped_up=1" the callback calls api.au…
+      disposition: fixed
+      ref: phase-24-remediation-12/001-route-step-up-refresh-through-single-flight.md
+      date: "2026-10-31"
+    - id: vAo0
+      title: 'The impersonation guard is fail-open: an abs…'
+      disposition: fixed
+      ref: phase-24-remediation-12/002-fail-closed-impersonation-detection.md
+      date: "2026-10-31"
+    - id: Bq75
+      title: logout while the tab holds an impersonation…
+      disposition: fixed
+      ref: phase-24-remediation-12/003-revoke-admin-session-on-impersonated-logout.md
+      date: "2026-10-31"
+    - id: FhDO
+      title: Routing the step-up rotation through the sha…
+      disposition: promoted
+      ref: FhDO
+      date: "2026-10-31"
+    - id: NfAS
+      title: On the impersonation_ended path, the session…
+      disposition: dismissed
+      reason: |-
+        Already fixed in phase 25 task 001 (commit 89fe62a). runLogout awaits any
+        in-flight restoreRef before its own restore/revoke (auth-context.tsx:579-580), and
+        logout sets loggingOutRef and bumps logoutGenRef (lines 679-680) so the session
+        event handler ignores non-signed_out events during logout (lines 355-362) and
+        late loadUser/hydration commits are dropped (lines 303-308, 453-458).
+      date: "2026-10-31"
+    - id: Wstk
+      title: refreshAfterStepUp silently returns while th…
+      disposition: dismissed
+      reason: |-
+        Already fixed in phase 25 task 003 (commit 9709ad7). The requested coverage
+        exists: gui/src/lib/api.test.ts:787 ("refreshAfterStepUp while impersonating
+        issues no token request, keeps the token and signals the skip") and
+        gui/src/components/oidc-callback-page.test.tsx:228 ("#stepped_up=1 while
+        impersonating issues no token request and does not report raised assurance").
+      date: "2026-10-31"
+    - id: BWVZ
+      title: loadUser's generation guard covers only the…
+      disposition: promoted
+      ref: BWVZ
+      date: "2026-10-31"
+    - id: H5Po
+      title: Intent (3) is that logout while impersonatin…
+      disposition: promoted
+      ref: H5Po
+      date: "2026-10-31"
+    - id: moDM
+      title: getStoredImpersonating is documented and fra…
+      disposition: promoted
+      ref: moDM
+      date: "2026-10-31"
+    - id: m3Jr
+      title: After a handler-supplied step-up token is st…
+      disposition: promoted
+      ref: m3Jr
+      date: "2026-10-31"
+    - id: LJFE
+      title: The refreshAfterStepUp no-op while impersona…
+      disposition: promoted
+      ref: LJFE
+      date: "2026-10-31"
+    - id: D3Q9
+      title: The impersonation_ended event starts restore…
+      disposition: promoted
+      ref: D3Q9
+      date: "2026-10-31"
+    - id: hPqK
+      title: consumer-upgrade-notes links a removed anchor
+      disposition: dismissed
+      reason: |-
+        Already fixed (task 002 repaired it). docs/consumer-upgrade-notes.md:31 now links
+        ./jwt-eddsa.md#derived-oauth-state-key, which matches the heading "## Derived OAuth state key"
+        at docs/jwt-eddsa.md:145. No link to #derived-state-and-step-up-keys remains in the file.
+        The "EdDSA verify-only key" and "Token hardening" sections were rewritten. :11 says HS256
+        and JWT_ALG are removed, :24 says WithHS256Secret is removed, :27 says auth.StepUpKey is
+        removed, and :38 says the step-up token is removed. The intro pointer at :5 now reads
+        "D14 to D31".
+      date: "2026-10-31"
+    - id: BpMF
+      title: api/server/CLAUDE.md unreachable from README
+      disposition: dismissed
+      reason: |-
+        Not actionable. api/server/CLAUDE.md contains only an empty <claude-mem-context> block,
+        which makes it a tool-generated agent-memory stub rather than a project document, so a
+        README link would add nothing. This plan's closed findings already dismissed the same
+        file on these grounds as CTF3 and HzgJ. The durable question of whether to keep, ignore
+        or exempt the file is already in the project backlog as VIcU and 76Ma (both promoted).
+        The phase did not change the file; it predates the plan (17bc64e, per CTF3).
+      date: "2026-10-31"
+    - id: x3It
+      title: CORS AllowCredentials on Bearer-only API
+      disposition: promoted
+      ref: x3It
+      date: "2026-10-31"
+    - id: N2lP
+      title: AGENTS.md misplaces RequireAuth mounting
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 004: AGENTS.md:228 now says the manifest
+        (moduleforge.module.yaml) mounts requireOIDCConfirmed then requireAuth on
+        every authenticated prefix, that registrars never mount
+        auth.NewRequireAuth themselves, and that handlers answer 500 when no
+        auth.Identity is present. The old "Registrars of authenticated routes
+        mount" wording is gone.
+      date: "2026-10-31"
+    - id: ndUS
+      title: Stale X-Step-Up-Token in CORS headers
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 003: api/internal/server/server.go:90
+        AllowedHeaders is now Accept, Authorization, Content-Type, X-App,
+        X-Request-ID (no X-Step-Up-Token), and
+        api/internal/server/cors_test.go:210-237 (TestCorsOptions_MethodsAndHeaders)
+        asserts the header is absent.
+      date: "2026-10-31"
+    - id: iZ3E
+      title: Facade lacks input/summary type aliases
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 002: api/usersservice/service.go:97
+        (IssueAPIKeyInput), :101 (IssuedAPIKey) and :366 (ProfileSummary) now
+        alias the inner types, with a compile-only test in
+        api/usersservice/facade_aliases_test.go.
+      date: "2026-10-31"
+    - id: RVUM
+      title: CORE_FIELD_KEY_HEX read by no code here
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 006: .env.example:207-215 now carries a
+        "Field-encryption seed (owned by mod-core)" block stating that mod-core's
+        fieldcrypto.NewFromEnvOrGenerate reads CORE_FIELD_KEY_HEX, that the
+        mod-users dev server calls it from api/cmd/server/main.go, its first-boot
+        seed semantics, and the rotation route.
+      date: "2026-10-31"
+    - id: cRuN
+      title: The refusals table lists the redirect error…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 005: docs/oidc-troubleshooting.md:121 now
+        lists `authentication_failed`, matching RedirectErrAuthFailed at
+        api/internal/auth/resolver.go:26; the resolver comment at :121 was updated
+        too.
+      date: "2026-10-31"
+    - id: fb9H
+      title: New paragraph says browser clients "do not n…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 003: docs/cors.md:11 now documents the
+        credentials 'include' exception for the two OIDC start POSTs, the
+        explicit CORS_ORIGINS requirement, and links
+        architecture/sessions-and-tokens.md#client-contract (heading exists at
+        sessions-and-tokens.md:231). The new sentence names the wrong two calls;
+        that error is tracked separately by EqWE and Yo85.
+      date: "2026-10-31"
+    - id: BNNN
+      title: CORS AllowedMethods is GET, POST, PUT, DELET…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 003: api/internal/server/server.go:86
+        AllowedMethods now includes PATCH, and cors_test.go:220-228 asserts it.
+      date: "2026-10-31"
+    - id: kmxU
+      title: architecture.md states the HTTP API is defin…
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 004: in docs/architecture.md:97 the OIDC
+        configuration row now states that these routes are served by the
+        manifest-mounted handlers but are not described in api/openapi.yaml.
+      date: "2026-10-31"
+    - id: AMeC
+      title: The main.go comment at api/cmd/server/main.go
+      disposition: promoted
+      ref: AMeC
+      date: "2026-10-31"
+    - id: GZNQ
+      title: AllowedHeaders still omits X-Setup-Token, wh…
+      disposition: dismissed
+      reason: |-
+        Duplicate of gz8M: the same missing X-Setup-Token entry in
+        api/internal/server/server.go AllowedHeaders, with the same cross-origin
+        preflight failure for the bootstrap and oidc-config routes. gz8M is
+        dispositioned fix, and its spec adds the header.
+      date: "2026-10-31"
+    - id: AQhb
+      title: api/server/CLAUDE.md unreachable from README
+      disposition: dismissed
+      reason: |-
+        Duplicate of open project-backlog items DPZi ("Orphan:
+        api/server/CLAUDE.md is not reachable", plan users-security-hardening)
+        and oti2 ("Orphan docs: k8s/serverless/CLAUDE stubs"). Both are still
+        open in plan/followups.yaml and report the same unreachable file.
+        api/server/CLAUDE.md is a pre-existing 2-line empty claude-mem-context
+        stub that is unrelated to the identity-model goals. Promoting it would
+        add a third copy to the backlog.
+      date: "2026-10-31"
+    - id: e4f6
+      title: The "Persisted signing key" section explains…
+      disposition: promoted
+      ref: e4f6
+      date: "2026-10-31"
+    - id: UuyR
+      title: 'Confirmed: the comment does not name CORE_FI…'
+      disposition: promoted
+      ref: UuyR
+      date: "2026-10-31"
+    - id: NqKT
+      title: Verified accurate against model/migrations/s…
+      disposition: promoted
+      ref: NqKT
+      date: "2026-10-31"
+    - id: gz8M
+      title: X-Setup-Token is not in CORS AllowedHeaders…
+      disposition: fixed
+      ref: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
+      date: "2026-10-31"
+    - id: EqWE
+      title: The new text says the two OIDC start POSTs a…
+      disposition: fixed
+      ref: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
+      date: "2026-10-31"
+    - id: Yo85
+      title: The new text says the exception covers "the…
+      disposition: fixed
+      ref: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
+      date: "2026-10-31"
+    - id: 7Yab
+      title: Still says the CORS middleware "still lists…
+      disposition: fixed
+      ref: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
+      date: "2026-10-31"
+    - id: CubF
+      title: A concrete 32-byte hex field-encryption seed…
+      disposition: fixed
+      ref: phase-27-remediation-15/002-mark-field-key-seed-dev-only.md
+      date: "2026-10-31"
+    - id: 7O8G
+      title: The new sentence links the X-Setup-Token sta…
+      disposition: promoted
+      ref: 7O8G
+      date: "2026-10-31"
+    - id: 7eEW
+      title: Update /v1/self paths in oidc_config_test (ty
+      disposition: promoted
+      ref: 7eEW
+      date: "2026-10-31"
+    - id: VtaW
+      title: Fix corporation wording in authz_test comment
+      disposition: promoted
+      ref: VtaW
+      date: "2026-10-31"
+    - id: 4HXk
+      title: Scan docs/mf-standards for old identity terms
+      disposition: promoted
+      ref: 4HXk
+      date: "2026-10-31"
+    - id: 1JCd
+      title: PROPOSED REMOVALS for manager to apply after
+      disposition: promoted
+      ref: 1JCd
+      date: "2026-10-31"
+    - id: usDr
+      title: PROPOSED CROSS-PROJECT REMOVALS (no resolved_
+      disposition: promoted
+      ref: usDr
+      date: "2026-10-31"
+    - id: A5PF
+      title: PROPOSED PATCHES, manager decision only if re
+      disposition: promoted
+      ref: A5PF
+      date: "2026-10-31"
+    - id: 8yRH
+      title: 'Note for manager: removals of VJg2 and PRvD c'
+      disposition: promoted
+      ref: 8yRH
+      date: "2026-10-31"

@@ -2,11 +2,18 @@ package authz_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	authzapi "github.com/moduleforge/authz-api/authz"
+	"github.com/moduleforge/core-api/apiresp"
+	coreAuthz "github.com/moduleforge/core-api/authz"
 	"github.com/moduleforge/core-api/opctx"
 	"github.com/moduleforge/mod-users/api/internal/authz"
 )
@@ -15,15 +22,30 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-// ctxWithActor returns a context with actor entity ID set.
-func ctxWithActor(entityID int64) context.Context {
-	return opctx.WithActor(context.Background(), entityID)
+// ctxAsProfile returns a context whose AuthContext acts as the profile with
+// entity id profileID in an ordinary session. The principal id deliberately
+// differs from the profile id, so a test that sees the profile id proves the
+// Authorizer reads opctx.ProfileID, never the principal.
+func ctxAsProfile(profileID int64) context.Context {
+	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID: profileID + 1000,
+		ProfileID:   profileID,
+		SessionID:   1,
+		ACR:         1,
+	})
 }
 
-// ctxWithSudoActor returns a context with both actor and sudo actor set.
-func ctxWithSudoActor(actorID, sudoID int64) context.Context {
-	ctx := opctx.WithActor(context.Background(), actorID)
-	return opctx.WithSudoActor(ctx, sudoID)
+// ctxImpersonating returns a context whose AuthContext is an impersonation
+// session: the administrator (principal impersonatorPrincipalID) acts as the
+// target profile profileID.
+func ctxImpersonating(impersonatorPrincipalID, profileID int64) context.Context {
+	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID:             profileID + 1000,
+		ProfileID:               profileID,
+		ImpersonatorPrincipalID: impersonatorPrincipalID,
+		SessionID:               2,
+		ACR:                     1,
+	})
 }
 
 // newTestAuthorizer builds an Authorizer suitable for unit tests.
@@ -115,7 +137,7 @@ func TestAuthorize_WildcardAdmin_AllowsAnything(t *testing.T) {
 	// So we cannot test wildcard without opReg. Use a stub opReg.
 	az := authz.NewWithStubOpReg(wildcardAllowFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	tests := []struct {
 		name      string
@@ -143,7 +165,7 @@ func TestAuthorize_WildcardAdmin_AllowsAnything(t *testing.T) {
 func TestAuthorize_NonWildcard_NilTargetDenied(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 
-	ctx := ctxWithActor(7)
+	ctx := ctxAsProfile(7)
 
 	for _, op := range []string{"create", "list", "manage"} {
 		t.Run(op, func(t *testing.T) {
@@ -160,7 +182,7 @@ func TestAuthorize_WildcardDBError(t *testing.T) {
 	dbErr := errors.New("pool connection lost")
 	az := authz.NewWithStubOpReg(wildcardErrFn(dbErr))
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected DB error to propagate, got: %v", err)
@@ -173,7 +195,7 @@ func TestAuthorize_UnknownOperation_NonAdmin(t *testing.T) {
 	// wildcardDenyFn: actor has no wildcard grant. Unknown op → fallback to
 	// manage opIDs wildcard check → also denied → ErrForbidden.
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	err := az.Authorize(ctx, "unknown_op", ptr(int64(1)))
 	if !errors.Is(err, authz.ErrForbidden) {
@@ -185,7 +207,7 @@ func TestAuthorize_UnknownOperation_NonAdmin(t *testing.T) {
 // actor can perform unknown operation slugs (the manage fallback allows it).
 func TestAuthorize_UnknownOperation_WildcardAdmin(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardAllowFn)
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	// Wildcard admin: unknown op → fallback to manage opIDs → wildcard check → allowed.
 	err := az.Authorize(ctx, "unknown_op", ptr(int64(1)))
@@ -194,42 +216,71 @@ func TestAuthorize_UnknownOperation_WildcardAdmin(t *testing.T) {
 	}
 }
 
-// TestAuthorize_SudoActor verifies that when an actor assumes another user's
-// identity, the sudo user's permissions apply (not the real actor's).
+// TestAuthorize_Impersonation_WildcardDoesNotEscalate verifies that under
+// impersonation the impersonated profile's permissions apply, never the
+// administrator's.
 //
-// Scenario: real actor (entity 1) is a wildcard admin. Sudo user (entity 50)
-// is NOT a wildcard admin. When real actor assumes entity 50, the effective
-// actor is entity 50, so wildcard admin privileges do NOT apply.
-func TestAuthorize_SudoActor_WildcardDoesNotEscalate(t *testing.T) {
-	// wildcardGrantFn returns true only for actor entity 1 (the real admin),
-	// false for entity 50 (the sudo user). Since the effective actor is the
-	// sudo user, no wildcard grant should be found.
+// Scenario: the administrator (principal 1) is a wildcard admin. The
+// impersonated profile (entity 50) is not. The effective actor is profile 50,
+// so wildcard admin privileges do NOT apply.
+func TestAuthorize_Impersonation_WildcardDoesNotEscalate(t *testing.T) {
+	// wildcardGrantFn returns true only for id 1 (the administrator), false
+	// for profile 50. Since the effective actor is the impersonated profile,
+	// no wildcard grant should be found.
 	az := authz.NewWithStubOpReg(func(_ context.Context, actor int64, _ []int32) (bool, error) {
-		return actor == 1, nil // only entity 1 is wildcard admin
+		return actor == 1, nil // only id 1 is wildcard admin
 	})
 
-	// Real actor (1) assumes sudo user (50).
-	ctx := ctxWithSudoActor(1, 50)
+	ctx := ctxImpersonating(1, 50)
 
-	// The effective actor is 50 (sudo user). Sudo user is NOT wildcard admin,
-	// so nil-target operations must be denied.
 	err := az.Authorize(ctx, "create", nil)
 	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("sudo non-admin user should be forbidden from create: got %v", err)
+		t.Errorf("impersonated non-admin profile should be forbidden from create: got %v", err)
 	}
 }
 
-// TestAuthorize_OwnEntity_Allowed verifies that an actor who owns the target
-// entity (entities.owner_id = actor, reported here via the grantOrOwnFn
-// seam) is allowed, for every operation on that entity — not just reads.
-// This proves the own predicate is operation-agnostic: read, update, and
-// delete are CRUD verbs; "grant" is a non-CRUD verb included specifically to
-// prove the predicate is not gated on the operation or on opIDs.
+// TestAuthorize_ProfileIsTheActor verifies the grant-or-own arm receives the
+// acting profile id from the AuthContext, not the principal id.
+func TestAuthorize_ProfileIsTheActor(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardDenyFn)
+	var gotActor int64
+	az.SetGrantOrOwnFn(func(_ context.Context, actor, _ int64, _ []int32) (bool, error) {
+		gotActor = actor
+		return true, nil
+	})
+
+	if err := az.Authorize(ctxAsProfile(7), "read", ptr(int64(99))); err != nil {
+		t.Fatalf("Authorize: %v", err)
+	}
+	if gotActor != 7 {
+		t.Errorf("grant-or-own actor: got %d, want the profile id 7", gotActor)
+	}
+}
+
+// TestAuthorize_ZeroProfile_Unauthenticated verifies an AuthContext without a
+// profile id is treated as no actor.
+func TestAuthorize_ZeroProfile_Unauthenticated(t *testing.T) {
+	az := newTestAuthorizer(wildcardAllowFn)
+	ctx := opctx.WithAuthContext(context.Background(), opctx.AuthContext{PrincipalID: 3})
+
+	if err := az.Authorize(ctx, "read", ptr(int64(1))); !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Errorf("expected ErrUnauthenticated, got %v", err)
+	}
+	if err := az.AuthorizeType(ctx, "create", 7); !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Errorf("AuthorizeType: expected ErrUnauthenticated, got %v", err)
+	}
+}
+
+// TestAuthorize_OwnEntity_Allowed verifies that when the single-row arms
+// (stubbed through grantOrOwnFn) report the target owned, Authorize allows it
+// for conferring operations, CRUD and non-CRUD alike. The own arm's
+// ownership_confers gate lives in the SQL and is proved by the integration
+// suite.
 func TestAuthorize_OwnEntity_Allowed(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnAllowFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	for _, op := range []string{"read", "update", "delete", "grant"} {
 		t.Run(op, func(t *testing.T) {
@@ -246,7 +297,7 @@ func TestAuthorize_NonOwner_NoGrant_Denied(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for non-owner with no grant, got: %v", err)
@@ -265,7 +316,7 @@ func TestAuthorize_NullOwnerTarget_Denied(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(100)))
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden for NULL-owner target, got: %v", err)
@@ -282,7 +333,7 @@ func TestAuthorize_GrantOrOwnDBError(t *testing.T) {
 	az := authz.NewWithStubOpReg(wildcardDenyFn)
 	az.SetGrantOrOwnFn(grantOrOwnErrFn(dbErr))
 
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 	err := az.Authorize(ctx, "read", ptr(int64(99)))
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected DB error to propagate, got: %v", err)
@@ -352,7 +403,7 @@ func TestAuthorize_WildcardAdmin_Create_InspectsOpIDs(t *testing.T) {
 	}
 
 	az := authz.NewWithStubOpReg(wildcardGrantFn)
-	ctx := ctxWithActor(1)
+	ctx := ctxAsProfile(1)
 
 	if err := az.Authorize(ctx, "create", nil); err != nil {
 		t.Errorf(`expected wildcard-manage actor to be allowed "create", got: %v`, err)
@@ -412,7 +463,7 @@ func TestAuthorizeType_EntityOwnerOfIDEqualToTypeID_Denied(t *testing.T) {
 			var typeCalls []typeGrantCall
 			az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-			err := az.AuthorizeType(ctxWithActor(1), op, typeID)
+			err := az.AuthorizeType(ctxAsProfile(1), op, typeID)
 			if !errors.Is(err, authz.ErrForbidden) {
 				t.Errorf("expected ErrForbidden for entity-N owner with typeID==N, got: %v", err)
 			}
@@ -437,7 +488,7 @@ func TestAuthorizeType_WildcardHolder_Allowed(t *testing.T) {
 			var typeCalls []typeGrantCall
 			az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-			if err := az.AuthorizeType(ctxWithActor(1), op, 7); err != nil {
+			if err := az.AuthorizeType(ctxAsProfile(1), op, 7); err != nil {
 				t.Errorf("wildcard holder should be allowed %q, got: %v", op, err)
 			}
 			if calls != 0 {
@@ -462,9 +513,9 @@ func TestAuthorizeType_TypeGrant_Allowed(t *testing.T) {
 		op   string
 		want int64 // effective actor
 	}{
-		{"actor/create", ctxWithActor(1), "create", 1},
-		{"actor/list", ctxWithActor(1), "list", 1},
-		{"sudo-actor", ctxWithSudoActor(1, 50), "create", 50},
+		{"actor/create", ctxAsProfile(1), "create", 1},
+		{"actor/list", ctxAsProfile(1), "list", 1},
+		{"impersonating", ctxImpersonating(1, 50), "create", 50},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -505,7 +556,7 @@ func TestAuthorizeType_TypeGrantMiss_Forbidden(t *testing.T) {
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	err := az.AuthorizeType(ctxAsProfile(1), "create", 7)
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Errorf("expected ErrForbidden, got: %v", err)
 	}
@@ -522,7 +573,7 @@ func TestAuthorizeType_TypeGrantDBError(t *testing.T) {
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, dbErr))
 
-	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	err := az.AuthorizeType(ctxAsProfile(1), "create", 7)
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected type-grant DB error to propagate, got: %v", err)
 	}
@@ -547,25 +598,25 @@ func TestAuthorizeType_NoActor(t *testing.T) {
 	}
 }
 
-// TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor verifies the
-// wildcard check receives the effective (sudo) actor id, so a wildcard-holding
-// real actor does not escalate a non-admin sudo identity.
-func TestAuthorizeType_SudoActor_WildcardCheckedAgainstSudoActor(t *testing.T) {
+// TestAuthorizeType_Impersonation_WildcardCheckedAgainstProfile verifies the
+// wildcard check receives the impersonated profile id, so a wildcard-holding
+// administrator does not escalate a non-admin impersonated profile.
+func TestAuthorizeType_Impersonation_WildcardCheckedAgainstProfile(t *testing.T) {
 	var seen []int64
 	az := authz.NewWithStubOpReg(func(_ context.Context, actor int64, _ []int32) (bool, error) {
 		seen = append(seen, actor)
-		return actor == 1, nil // only the real actor (1) is a wildcard admin
+		return actor == 1, nil // only the administrator (1) is a wildcard admin
 	})
 	az.SetGrantOrOwnFn(grantOrOwnDenyFn)
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
 
-	err := az.AuthorizeType(ctxWithSudoActor(1, 50), "create", 7)
+	err := az.AuthorizeType(ctxImpersonating(1, 50), "create", 7)
 	if !errors.Is(err, authz.ErrForbidden) {
-		t.Errorf("sudo non-admin user should be forbidden from type-level create: got %v", err)
+		t.Errorf("impersonated non-admin profile should be forbidden from type-level create: got %v", err)
 	}
 	if len(seen) != 1 || seen[0] != 50 {
-		t.Errorf("wildcard check should receive the sudo actor id 50, got %v", seen)
+		t.Errorf("wildcard check should receive the impersonated profile id 50, got %v", seen)
 	}
 }
 
@@ -577,7 +628,7 @@ func TestAuthorizeType_UnknownOperation(t *testing.T) {
 		az := authz.NewWithStubOpReg(wildcardDenyFn)
 		var typeCalls []typeGrantCall
 		az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
-		err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7)
+		err := az.AuthorizeType(ctxAsProfile(1), "unknown_op", 7)
 		if !errors.Is(err, authz.ErrForbidden) {
 			t.Errorf("non-admin with unknown operation should return ErrForbidden, got: %v", err)
 		}
@@ -589,7 +640,7 @@ func TestAuthorizeType_UnknownOperation(t *testing.T) {
 		az := authz.NewWithStubOpReg(wildcardAllowFn)
 		var typeCalls []typeGrantCall
 		az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, false, nil))
-		if err := az.AuthorizeType(ctxWithActor(1), "unknown_op", 7); err != nil {
+		if err := az.AuthorizeType(ctxAsProfile(1), "unknown_op", 7); err != nil {
 			t.Errorf("wildcard-manage holder with unknown operation should be allowed, got: %v", err)
 		}
 		if len(typeCalls) != 0 {
@@ -606,7 +657,7 @@ func TestAuthorizeType_BadTypeID(t *testing.T) {
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 
 	for _, typeID := range []int64{0, -1} {
-		err := az.AuthorizeType(ctxWithActor(1), "create", typeID)
+		err := az.AuthorizeType(ctxAsProfile(1), "create", typeID)
 		if !errors.Is(err, authz.ErrForbidden) {
 			t.Errorf("typeID=%d should return ErrForbidden even for a wildcard holder, got: %v", typeID, err)
 		}
@@ -625,11 +676,685 @@ func TestAuthorizeType_WildcardDBError(t *testing.T) {
 	var typeCalls []typeGrantCall
 	az.SetTypeGrantFn(recordingTypeGrantFn(&typeCalls, true, nil))
 
-	err := az.AuthorizeType(ctxWithActor(1), "create", 7)
+	err := az.AuthorizeType(ctxAsProfile(1), "create", 7)
 	if !errors.Is(err, dbErr) {
 		t.Errorf("expected DB error to propagate, got: %v", err)
 	}
 	if len(typeCalls) != 0 {
 		t.Errorf("type-grant arm must not run after a wildcard-check error, got %d call(s)", len(typeCalls))
+	}
+}
+
+// --- Prelude: assurance gate (U14) ---
+
+// recordingWildcardFn returns a wildcard stub that reports result and counts
+// its invocations, so a test can prove a gate refused before the wildcard arm.
+func recordingWildcardFn(calls *int, result bool) func(context.Context, int64, []int32) (bool, error) {
+	return func(context.Context, int64, []int32) (bool, error) {
+		*calls++
+		return result, nil
+	}
+}
+
+// requireStepUp asserts err is the shared action-required step-up refusal.
+func requireStepUp(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, authz.ErrStepUpRequired) {
+		t.Fatalf("expected ErrStepUpRequired, got: %v", err)
+	}
+	var ae *apiresp.ActionRequiredError
+	if !errors.As(err, &ae) || ae.Action().Code != "users.step_up_required" || ae.Action().Status != http.StatusConflict {
+		t.Fatalf("expected the 409 users.step_up_required action, got: %v", err)
+	}
+	if errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("a step-up refusal must not be a plain 403, got: %v", err)
+	}
+}
+
+func TestAuthorize_AssuranceGate(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	session := func(acr int16, authAge time.Duration) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, SessionID: 9, ACR: acr, AuthTime: now.Add(-authAge),
+		})
+	}
+	credential := func(acr int16) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, CredentialID: 4, ACR: acr, AuthTime: now,
+		})
+	}
+	impersonating := func(authAge time.Duration) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, ImpersonatorPrincipalID: 7, SessionID: 9, ACR: 1, AuthTime: now.Add(-authAge),
+		})
+	}
+
+	cases := []struct {
+		name     string
+		ctx      context.Context
+		op       string
+		wantStep bool
+	}{
+		{"session meets min_acr", session(1, time.Hour), "read", false},
+		{"session below min_acr", session(0, 0), "read", true},
+		{"credential below min_acr", credential(0), "update", true},
+		{"fresh session on max_auth_age op", session(1, 9*time.Minute), "impersonate", false},
+		{"stale session on max_auth_age op", session(1, 11*time.Minute), "impersonate", true},
+		{"stale session on credentials", session(2, time.Hour), "credentials", true},
+		{"no auth_time on max_auth_age op", opctx.WithAuthContext(context.Background(), opctx.AuthContext{ProfileID: 1, SessionID: 9, ACR: 1}), "credentials", true},
+		{"impersonation is never exempt", impersonating(time.Hour), "impersonate", true},
+		{"system actor skips the gate", opctx.WithSystemActor(context.Background(), 5, 6), "impersonate", false},
+		{"anonymous context skips the gate", opctx.WithAuthContext(context.Background(), opctx.AuthContext{PrincipalID: 2, ProfileID: 3, SessionID: 9, Anonymous: true}), "credentials", false},
+		{"unknown slug is gated as manage", session(0, 0), "unknown_op", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+			az.SetNow(func() time.Time { return now })
+
+			err := az.Authorize(tc.ctx, tc.op, ptr(int64(99)))
+			if tc.wantStep {
+				requireStepUp(t, err)
+				if calls != 0 {
+					t.Errorf("the assurance gate must run before the wildcard arm, got %d wildcard call(s)", calls)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected the wildcard holder to pass, got: %v", err)
+			}
+		})
+	}
+}
+
+// TestAuthorizeType_AssuranceGate verifies AuthorizeType and AuthorizeTypeIn
+// share the gate.
+func TestAuthorizeType_AssuranceGate(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
+	ctx := opctx.WithAuthContext(context.Background(), opctx.AuthContext{ProfileID: 1, SessionID: 9, ACR: 0})
+
+	requireStepUp(t, az.AuthorizeType(ctx, "create", 7))
+	requireStepUp(t, az.AuthorizeTypeIn(ctx, "create", 7, 40))
+}
+
+// TestAuthorize_AssuranceGate_ClientCredentials covers a client-credentials
+// context (CredentialID != 0, SessionID == 0): it is gated like a session, by
+// ACR against min_acr and by AuthTime against max_auth_age, on every entry
+// point, and a refusal comes before any grant arm.
+func TestAuthorize_AssuranceGate_ClientCredentials(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	credential := func(acr int16, authAge time.Duration) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, CredentialID: 4, SessionID: 0, ACR: acr, AuthTime: now.Add(-authAge),
+		})
+	}
+
+	cases := []struct {
+		name     string
+		ctx      context.Context
+		op       string
+		wantStep bool
+	}{
+		{"meets min_acr, op without max_auth_age", credential(1, 24*time.Hour), "read", false},
+		{"below min_acr", credential(0, 0), "read", true},
+		{"fresh on impersonate", credential(1, time.Minute), "impersonate", false},
+		{"fresh on credentials", credential(1, time.Minute), "credentials", false},
+		{"exactly max_auth_age old is still fresh", credential(1, 10*time.Minute), "credentials", false},
+		{"one nanosecond past max_auth_age on credentials", credential(1, 10*time.Minute+time.Nanosecond), "credentials", true},
+		{"stale on impersonate", credential(1, time.Hour), "impersonate", true},
+		{"zero AuthTime on credentials", opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 1001, ProfileID: 1, CredentialID: 4, ACR: 1}), "credentials", true},
+	}
+	entryPoints := []struct {
+		name string
+		call func(az *authz.Authorizer, ctx context.Context, op string) error
+	}{
+		{"Authorize", func(az *authz.Authorizer, ctx context.Context, op string) error {
+			return az.Authorize(ctx, op, ptr(int64(99)))
+		}},
+		{"AuthorizeType", func(az *authz.Authorizer, ctx context.Context, op string) error {
+			return az.AuthorizeType(ctx, op, 7)
+		}},
+		{"AuthorizeTypeIn", func(az *authz.Authorizer, ctx context.Context, op string) error {
+			return az.AuthorizeTypeIn(ctx, op, 7, 40)
+		}},
+	}
+	for _, ep := range entryPoints {
+		for _, tc := range cases {
+			t.Run(ep.name+"/"+tc.name, func(t *testing.T) {
+				calls := 0
+				az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+				az.SetNow(func() time.Time { return now })
+
+				err := ep.call(az, tc.ctx, tc.op)
+				if tc.wantStep {
+					requireStepUp(t, err)
+					if calls != 0 {
+						t.Errorf("the assurance gate must run before the wildcard arm, got %d wildcard call(s)", calls)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("expected the wildcard holder to pass, got: %v", err)
+				}
+			})
+		}
+	}
+}
+
+// TestAuthorize_AssuranceGate_SkippedContexts verifies the system-actor and
+// anonymous contexts skip the gate on every entry point, even for the
+// operations with a max_auth_age and with no AuthTime at all.
+func TestAuthorize_AssuranceGate_SkippedContexts(t *testing.T) {
+	contexts := map[string]context.Context{
+		"system actor": opctx.WithSystemActor(context.Background(), 5, 6),
+		"anonymous": opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 2, ProfileID: 3, Anonymous: true}),
+		"anonymous with a stale session id": opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 2, ProfileID: 3, SessionID: 9, ACR: 0, Anonymous: true}),
+	}
+	for name, ctx := range contexts {
+		for _, op := range []string{"read", "impersonate", "credentials", "manage"} {
+			t.Run(name+"/"+op, func(t *testing.T) {
+				az := authz.NewWithStubOpReg(wildcardAllowFn)
+				if err := az.Authorize(ctx, op, ptr(int64(99))); err != nil {
+					t.Errorf("Authorize: %v, want the gate skipped", err)
+				}
+				if err := az.AuthorizeType(ctx, op, 7); err != nil {
+					t.Errorf("AuthorizeType: %v, want the gate skipped", err)
+				}
+				if err := az.AuthorizeTypeIn(ctx, op, 7, 40); err != nil {
+					t.Errorf("AuthorizeTypeIn: %v, want the gate skipped", err)
+				}
+			})
+		}
+	}
+}
+
+// TestAuthorize_StepUp_IsTheSharedActionRequiredError verifies the refusal
+// satisfies mod-core's apiresp action-required type with errors.As, including
+// when another layer wraps it, and that apiresp.WriteError renders it as a 409
+// users.step_up_required action from every entry point.
+func TestAuthorize_StepUp_IsTheSharedActionRequiredError(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
+	ctx := opctx.WithAuthContext(context.Background(), opctx.AuthContext{ProfileID: 1, SessionID: 9, ACR: 0})
+
+	refusals := map[string]error{
+		"Authorize":       az.Authorize(ctx, "read", ptr(int64(99))),
+		"AuthorizeType":   az.AuthorizeType(ctx, "create", 7),
+		"AuthorizeTypeIn": az.AuthorizeTypeIn(ctx, "create", 7, 40),
+	}
+	for name, err := range refusals {
+		for form, e := range map[string]error{
+			"direct":         err,
+			"wrapped":        fmt.Errorf("remove login method: %w", err),
+			"double-wrapped": fmt.Errorf("service: %w", fmt.Errorf("authorize: %w", err)),
+		} {
+			t.Run(name+"/"+form, func(t *testing.T) {
+				requireStepUp(t, e)
+
+				rec := httptest.NewRecorder()
+				apiresp.WriteError(rec, httptest.NewRequest(http.MethodPost, "/", nil), e)
+				if rec.Code != http.StatusConflict {
+					t.Fatalf("WriteError status = %d, want %d", rec.Code, http.StatusConflict)
+				}
+				var body struct {
+					Action struct {
+						Code string `json:"code"`
+					} `json:"action"`
+					Error json.RawMessage `json:"error"`
+				}
+				if jerr := json.Unmarshal(rec.Body.Bytes(), &body); jerr != nil {
+					t.Fatalf("decode body %q: %v", rec.Body.String(), jerr)
+				}
+				if body.Action.Code != "users.step_up_required" {
+					t.Errorf("rendered action code = %q, want users.step_up_required (body %s)", body.Action.Code, rec.Body.String())
+				}
+				if len(body.Error) != 0 {
+					t.Errorf("a step-up is an action, not an error envelope: %s", rec.Body.String())
+				}
+			})
+		}
+	}
+}
+
+// --- Prelude: owning-party gate (decision C) ---
+
+func TestAuthorize_PartyGate(t *testing.T) {
+	t.Run("refusal is a plain 403 before the wildcard arm", func(t *testing.T) {
+		calls := 0
+		az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+		var got []authz.PartyPolicyQuery
+		az.SetPartyPolicyFn(func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+			got = append(got, q)
+			return false, nil
+		})
+
+		err := az.Authorize(ctxAsProfile(7), "read", ptr(int64(99)))
+		if !errors.Is(err, authz.ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got: %v", err)
+		}
+		if errors.Is(err, authz.ErrStepUpRequired) {
+			t.Fatalf("an owning-party refusal is not an action, got: %v", err)
+		}
+		if calls != 0 {
+			t.Errorf("the owning-party gate must run before the wildcard arm, got %d wildcard call(s)", calls)
+		}
+		want := authz.PartyPolicyQuery{ProfileID: 7, SessionID: 1, TargetEntityID: 99}
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("party gate query: got %+v, want [%+v]", got, want)
+		}
+	})
+
+	t.Run("credential context passes the credential", func(t *testing.T) {
+		az := authz.NewWithStubOpReg(wildcardAllowFn)
+		var got authz.PartyPolicyQuery
+		az.SetPartyPolicyFn(func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+			got = q
+			return false, nil
+		})
+		ctx := opctx.WithAuthContext(context.Background(), opctx.AuthContext{PrincipalID: 3, ProfileID: 8, CredentialID: 4, ACR: 1})
+
+		if err := az.Authorize(ctx, "read", ptr(int64(99))); !errors.Is(err, authz.ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got: %v", err)
+		}
+		if want := (authz.PartyPolicyQuery{ProfileID: 8, CredentialID: 4, TargetEntityID: 99}); got != want {
+			t.Errorf("party gate query: got %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("met gate continues to the arms", func(t *testing.T) {
+		az := authz.NewWithStubOpReg(wildcardDenyFn)
+		az.SetPartyPolicyFn(func(context.Context, authz.PartyPolicyQuery) (bool, error) { return true, nil })
+		az.SetGrantOrOwnFn(grantOrOwnAllowFn)
+		if err := az.Authorize(ctxAsProfile(7), "read", ptr(int64(99))); err != nil {
+			t.Fatalf("expected allow, got: %v", err)
+		}
+	})
+
+	t.Run("DB error propagates", func(t *testing.T) {
+		dbErr := errors.New("party policy query failed")
+		az := authz.NewWithStubOpReg(wildcardAllowFn)
+		az.SetPartyPolicyFn(func(context.Context, authz.PartyPolicyQuery) (bool, error) { return false, dbErr })
+		if err := az.Authorize(ctxAsProfile(7), "read", ptr(int64(99))); !errors.Is(err, dbErr) {
+			t.Fatalf("expected the DB error, got: %v", err)
+		}
+	})
+
+	t.Run("skipped without an owner, for a system actor and for the anonymous context", func(t *testing.T) {
+		az := authz.NewWithStubOpReg(wildcardAllowFn)
+		calls := 0
+		az.SetPartyPolicyFn(func(context.Context, authz.PartyPolicyQuery) (bool, error) {
+			calls++
+			return false, nil
+		})
+		az.SetTypeGrantFn(func(context.Context, int64, int64, []int32) (bool, error) { return false, nil })
+
+		if err := az.Authorize(ctxAsProfile(7), "list", nil); err != nil {
+			t.Errorf("nil target: %v", err)
+		}
+		if err := az.AuthorizeType(ctxAsProfile(7), "create", 3); err != nil {
+			t.Errorf("AuthorizeType: %v", err)
+		}
+		if err := az.Authorize(opctx.WithSystemActor(context.Background(), 5, 6), "read", ptr(int64(99))); err != nil {
+			t.Errorf("system actor: %v", err)
+		}
+		anon := opctx.WithAuthContext(context.Background(), opctx.AuthContext{PrincipalID: 2, ProfileID: 3, Anonymous: true})
+		if err := az.Authorize(anon, "read", ptr(int64(99))); err != nil {
+			t.Errorf("anonymous: %v", err)
+		}
+		if calls != 0 {
+			t.Errorf("party gate consulted %d time(s), want 0", calls)
+		}
+	})
+}
+
+// --- Prelude: the gates key on the system-actor marker ---
+
+// sessionlessUser is a non-anonymous context for a real user with no session,
+// no credential and no system-actor marker: the shape mod-users builds for
+// its unauthenticated flows (withActingProfile). acr and authTime let a test
+// pass the assurance gate on purpose to reach the owning-party gate.
+func sessionlessUser(acr int16, authTime time.Time) context.Context {
+	return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+		PrincipalID: 1001, ProfileID: 1, ACR: acr, AuthTime: authTime,
+	})
+}
+
+// restrictivePartyStub stands in for mod_users.session_meets_party_policy on a
+// restrictive third party the acting profile is outside of: the policy is met
+// only with a session or a credential whose factors could satisfy it, so a
+// context carrying neither is refused, exactly as the SQL's last branch does.
+// Every query is recorded.
+func restrictivePartyStub(got *[]authz.PartyPolicyQuery) func(context.Context, authz.PartyPolicyQuery) (bool, error) {
+	return func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+		*got = append(*got, q)
+		return q.SessionID != 0 || q.CredentialID != 0, nil
+	}
+}
+
+// gateEntryPoints runs the same check through Authorize (a cross-party target),
+// AuthorizeType and AuthorizeTypeIn (a cross-party owner).
+var gateEntryPoints = []struct {
+	name     string
+	hasOwner bool
+	call     func(az *authz.Authorizer, ctx context.Context, op string) error
+}{
+	{"Authorize", true, func(az *authz.Authorizer, ctx context.Context, op string) error {
+		return az.Authorize(ctx, op, ptr(int64(99)))
+	}},
+	{"AuthorizeType", false, func(az *authz.Authorizer, ctx context.Context, op string) error {
+		return az.AuthorizeType(ctx, op, 7)
+	}},
+	{"AuthorizeTypeIn", true, func(az *authz.Authorizer, ctx context.Context, op string) error {
+		return az.AuthorizeTypeIn(ctx, op, 7, 40)
+	}},
+}
+
+// TestGates_SessionlessUnmarkedContext_IsGated pins the fail-closed rule: a
+// non-anonymous context with no session, no credential and no system-actor
+// marker is gated like any session. It is refused with the step-up error when
+// the operation's min_acr exceeds its ACR (or max_auth_age is set and AuthTime
+// is zero), and with ErrForbidden by the owning-party gate on a restrictive
+// third party's target, before any grant arm runs, even for a wildcard holder.
+func TestGates_SessionlessUnmarkedContext_IsGated(t *testing.T) {
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+
+	for _, ep := range gateEntryPoints {
+		t.Run(ep.name+"/min_acr above the context's ACR", func(t *testing.T) {
+			calls := 0
+			az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+			az.SetNow(func() time.Time { return now })
+			requireStepUp(t, ep.call(az, sessionlessUser(0, time.Time{}), "read"))
+			if calls != 0 {
+				t.Errorf("the assurance gate must refuse before the wildcard arm, got %d wildcard call(s)", calls)
+			}
+		})
+
+		t.Run(ep.name+"/max_auth_age with a zero AuthTime", func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardAllowFn)
+			az.SetNow(func() time.Time { return now })
+			requireStepUp(t, ep.call(az, sessionlessUser(3, time.Time{}), "credentials"))
+		})
+
+		if !ep.hasOwner {
+			continue
+		}
+		t.Run(ep.name+"/restrictive third party", func(t *testing.T) {
+			calls := 0
+			az := authz.NewWithStubOpReg(recordingWildcardFn(&calls, true))
+			az.SetNow(func() time.Time { return now })
+			var got []authz.PartyPolicyQuery
+			az.SetPartyPolicyFn(restrictivePartyStub(&got))
+
+			// ACR and AuthTime meet read's policy, so only the owning-party
+			// gate can refuse.
+			err := ep.call(az, sessionlessUser(1, now), "read")
+			requirePlainForbidden(t, err)
+			if len(got) != 1 || got[0].SessionID != 0 || got[0].CredentialID != 0 || got[0].ProfileID != 1 {
+				t.Errorf("party gate queries = %+v, want one for profile 1 with no session and no credential", got)
+			}
+			if calls != 0 {
+				t.Errorf("the owning-party gate must refuse before the wildcard arm, got %d wildcard call(s)", calls)
+			}
+		})
+	}
+}
+
+// requirePlainForbidden asserts err is the plain 403, not a step-up action.
+func requirePlainForbidden(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, authz.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got: %v", err)
+	}
+	if errors.Is(err, authz.ErrStepUpRequired) {
+		t.Fatalf("an owning-party refusal is not a step-up action, got: %v", err)
+	}
+}
+
+// TestGates_SkippedOnlyForSystemActorAndAnonymous runs the refusing calls of
+// TestGates_SessionlessUnmarkedContext_IsGated with an opctx.WithSystemActor
+// context and with the anonymous context: both skip the assurance gate and
+// the owning-party gate (the party stub is never consulted), so a wildcard
+// holder passes.
+func TestGates_SkippedOnlyForSystemActorAndAnonymous(t *testing.T) {
+	contexts := map[string]context.Context{
+		"system actor": opctx.WithSystemActor(context.Background(), 1001, 1),
+		"anonymous": opctx.WithAuthContext(context.Background(),
+			opctx.AuthContext{PrincipalID: 2, ProfileID: 3, Anonymous: true}),
+	}
+	for name, ctx := range contexts {
+		for _, ep := range gateEntryPoints {
+			for _, op := range []string{"read", "credentials"} {
+				t.Run(name+"/"+ep.name+"/"+op, func(t *testing.T) {
+					az := authz.NewWithStubOpReg(wildcardAllowFn)
+					var got []authz.PartyPolicyQuery
+					az.SetPartyPolicyFn(restrictivePartyStub(&got))
+					if err := ep.call(az, ctx, op); err != nil {
+						t.Errorf("err = %v, want both gates skipped", err)
+					}
+					if len(got) != 0 {
+						t.Errorf("party gate consulted %d time(s), want 0", len(got))
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestGates_MarkedContextWithSessionOrCredential_IsGated pins the fail-closed
+// rule for a context that carries the SystemActor marker together with a
+// session or a credential. SystemActor is an exported field, so such a context
+// can be built by mistake or on purpose; opctx.IsSystemActor alone would trust
+// it. A genuine system actor is sessionless and credential-less, so the
+// engine gates the marked context like any user context: the assurance gate and
+// the party-policy stub both refuse it. A sessionless marked context (the
+// control, see TestGates_SkippedOnlyForSystemActorAndAnonymous) still skips both.
+func TestGates_MarkedContextWithSessionOrCredential_IsGated(t *testing.T) {
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	marked := func(sessionID, credentialID int64, acr int16) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, SessionID: sessionID, CredentialID: credentialID,
+			ACR: acr, AuthTime: now, SystemActor: true,
+		})
+	}
+	cases := []struct {
+		name         string
+		sessionID    int64
+		credentialID int64
+	}{
+		{"session", 9, 0},
+		{"credential", 0, 11},
+		{"session and credential", 9, 11},
+	}
+	for _, tc := range cases {
+		// Precondition: the marker is honored by opctx, so only the added
+		// session/credential condition can make gated() refuse.
+		if !opctx.IsSystemActor(marked(tc.sessionID, tc.credentialID, 1)) {
+			t.Fatalf("%s: precondition: opctx.IsSystemActor must be true for the marked context", tc.name)
+		}
+		for _, ep := range gateEntryPoints {
+			t.Run(tc.name+"/"+ep.name+"/assurance gate", func(t *testing.T) {
+				az := authz.NewWithStubOpReg(wildcardAllowFn)
+				az.SetNow(func() time.Time { return now })
+				// ACR 0 is below read's min_acr: only the assurance gate can refuse.
+				requireStepUp(t, ep.call(az, marked(tc.sessionID, tc.credentialID, 0), "read"))
+			})
+			if !ep.hasOwner {
+				continue
+			}
+			t.Run(tc.name+"/"+ep.name+"/party policy", func(t *testing.T) {
+				az := authz.NewWithStubOpReg(wildcardAllowFn)
+				az.SetNow(func() time.Time { return now })
+				var got []authz.PartyPolicyQuery
+				// The policy is not met by this session or credential (a restrictive
+				// party whose factors the marked context does not satisfy), so a
+				// context that is actually gated is refused and the query is recorded.
+				az.SetPartyPolicyFn(func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+					got = append(got, q)
+					return false, nil
+				})
+				// ACR and AuthTime meet read's policy, so only the party gate refuses.
+				requirePlainForbidden(t, ep.call(az, marked(tc.sessionID, tc.credentialID, 1), "read"))
+				if len(got) != 1 || got[0].SessionID != tc.sessionID || got[0].CredentialID != tc.credentialID {
+					t.Errorf("party gate queries = %+v, want one carrying session %d and credential %d", got, tc.sessionID, tc.credentialID)
+				}
+			})
+		}
+	}
+}
+
+// TestGates_ImpersonatingContextWithMarker_IsGated pins fail-closed behavior
+// for an impersonating context that also carries SystemActor: true, set by a
+// struct literal (the field is exported). opctx.IsSystemActor is false
+// whenever ImpersonatorPrincipalID is set, so both gates still apply and the
+// marker never exempts an impersonation (decisions G, J and L stay in force).
+func TestGates_ImpersonatingContextWithMarker_IsGated(t *testing.T) {
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	marked := func(acr int16) context.Context {
+		return opctx.WithAuthContext(context.Background(), opctx.AuthContext{
+			PrincipalID: 1001, ProfileID: 1, ImpersonatorPrincipalID: 7, SessionID: 9,
+			ACR: acr, AuthTime: now, SystemActor: true,
+		})
+	}
+	if opctx.IsSystemActor(marked(1)) {
+		t.Fatal("precondition: an impersonating context must never be a system actor")
+	}
+
+	for _, ep := range gateEntryPoints {
+		t.Run(ep.name+"/assurance gate", func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardAllowFn)
+			az.SetNow(func() time.Time { return now })
+			requireStepUp(t, ep.call(az, marked(0), "read"))
+		})
+		if !ep.hasOwner {
+			continue
+		}
+		t.Run(ep.name+"/owning-party gate", func(t *testing.T) {
+			az := authz.NewWithStubOpReg(wildcardAllowFn)
+			az.SetNow(func() time.Time { return now })
+			var got []authz.PartyPolicyQuery
+			az.SetPartyPolicyFn(func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+				got = append(got, q)
+				return false, nil // the impersonation's parent factors do not meet the policy
+			})
+			requirePlainForbidden(t, ep.call(az, marked(1), "read"))
+			if len(got) != 1 || got[0].SessionID != 9 {
+				t.Errorf("party gate queries = %+v, want one with the impersonation session 9", got)
+			}
+		})
+	}
+}
+
+// --- AuthorizeTypeIn ---
+
+func TestAuthorizeTypeIn(t *testing.T) {
+	const typeID, ownerID = int64(7), int64(40)
+
+	type outcome struct{ wildcard, typeGrant, ownedScope bool }
+	cases := []struct {
+		name      string
+		arms      outcome
+		wantAllow bool
+		wantCalls []string
+	}{
+		{"wildcard", outcome{wildcard: true}, true, []string{"wildcard"}},
+		{"type-entity grant", outcome{typeGrant: true}, true, []string{"wildcard", "type"}},
+		{"owned scope or own", outcome{ownedScope: true}, true, []string{"wildcard", "type", "owned"}},
+		{"nothing", outcome{}, false, []string{"wildcard", "type", "owned"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls []string
+			az := authz.NewWithStubOpReg(func(context.Context, int64, []int32) (bool, error) {
+				calls = append(calls, "wildcard")
+				return tc.arms.wildcard, nil
+			})
+			az.SetGrantOrOwnFn(func(context.Context, int64, int64, []int32) (bool, error) {
+				t.Error("AuthorizeTypeIn must never run Authorize's entity-level arms")
+				return true, nil
+			})
+			az.SetTypeGrantFn(func(_ context.Context, _, gotType int64, _ []int32) (bool, error) {
+				calls = append(calls, "type")
+				if gotType != typeID {
+					t.Errorf("type arm typeID: got %d, want %d", gotType, typeID)
+				}
+				return tc.arms.typeGrant, nil
+			})
+			az.SetOwnedScopeFn(func(_ context.Context, actor, gotType, gotOwner int64, _ []int32) (bool, error) {
+				calls = append(calls, "owned")
+				if actor != 1 || gotType != typeID || gotOwner != ownerID {
+					t.Errorf("owned-scope arm: got (actor %d, type %d, owner %d), want (1, %d, %d)", actor, gotType, gotOwner, typeID, ownerID)
+				}
+				return tc.arms.ownedScope, nil
+			})
+			var gate []authz.PartyPolicyQuery
+			az.SetPartyPolicyFn(func(_ context.Context, q authz.PartyPolicyQuery) (bool, error) {
+				gate = append(gate, q)
+				return true, nil
+			})
+
+			// Through mod-core's helper, which must find the capability.
+			err := coreAuthz.AuthorizeTypeIn(ctxAsProfile(1), az, "create", typeID, ptr(ownerID))
+			if tc.wantAllow && err != nil {
+				t.Fatalf("expected allow, got: %v", err)
+			}
+			if !tc.wantAllow && !errors.Is(err, authz.ErrForbidden) {
+				t.Fatalf("expected ErrForbidden, got: %v", err)
+			}
+			if !reflect.DeepEqual(calls, tc.wantCalls) {
+				t.Errorf("arm order: got %v, want %v", calls, tc.wantCalls)
+			}
+			if want := (authz.PartyPolicyQuery{ProfileID: 1, SessionID: 1, OwnerID: ownerID}); len(gate) != 1 || gate[0] != want {
+				t.Errorf("party gate query: got %+v, want [%+v]", gate, want)
+			}
+		})
+	}
+}
+
+func TestAuthorizeTypeIn_Refusals(t *testing.T) {
+	az := authz.NewWithStubOpReg(wildcardAllowFn)
+
+	if err := az.AuthorizeTypeIn(context.Background(), "create", 7, 40); !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Errorf("no actor: expected ErrUnauthenticated, got %v", err)
+	}
+	for _, ids := range [][2]int64{{0, 40}, {7, 0}, {-1, 40}, {7, -1}} {
+		if err := az.AuthorizeTypeIn(ctxAsProfile(1), "create", ids[0], ids[1]); !errors.Is(err, authz.ErrForbidden) {
+			t.Errorf("typeID %d ownerID %d: expected ErrForbidden even for a wildcard holder, got %v", ids[0], ids[1], err)
+		}
+	}
+
+	az.SetPartyPolicyFn(func(context.Context, authz.PartyPolicyQuery) (bool, error) { return false, nil })
+	if err := az.AuthorizeTypeIn(ctxAsProfile(1), "create", 7, 40); !errors.Is(err, authz.ErrForbidden) {
+		t.Errorf("owning-party refusal: expected ErrForbidden, got %v", err)
+	}
+
+	dbErr := errors.New("owned scope query failed")
+	az = authz.NewWithStubOpReg(wildcardDenyFn)
+	az.SetTypeGrantFn(func(context.Context, int64, int64, []int32) (bool, error) { return false, nil })
+	az.SetOwnedScopeFn(func(context.Context, int64, int64, int64, []int32) (bool, error) { return false, dbErr })
+	if err := az.AuthorizeTypeIn(ctxAsProfile(1), "create", 7, 40); !errors.Is(err, dbErr) {
+		t.Errorf("owned-scope DB error: expected it to propagate, got %v", err)
+	}
+}
+
+// TestStandardOpRegistry_Policies pins the policy columns the gate reads.
+func TestStandardOpRegistry_Policies(t *testing.T) {
+	reg := authz.StandardOpRegistry()
+	for slug, want := range map[string]authzapi.OperationPolicy{
+		"read":        {ID: 1, OwnershipConfers: true, MinACR: 1},
+		"manage":      {ID: 7, OwnershipConfers: false, MinACR: 1},
+		"impersonate": {ID: 8, OwnershipConfers: false, MinACR: 1, MaxAuthAge: 10 * time.Minute},
+		"login":       {ID: 9, OwnershipConfers: false, MinACR: 1},
+		"credentials": {ID: 17, OwnershipConfers: true, MinACR: 1, MaxAuthAge: 10 * time.Minute},
+	} {
+		got, err := reg.Policy(slug)
+		if err != nil {
+			t.Fatalf("Policy(%q): %v", slug, err)
+		}
+		if got != want {
+			t.Errorf("Policy(%q) = %+v, want %+v", slug, got, want)
+		}
 	}
 }

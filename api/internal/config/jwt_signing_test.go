@@ -7,9 +7,14 @@ import (
 	"encoding/pem"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moduleforge/mod-users/api/internal/config"
 )
+
+// unreachableDB refuses connections, so a signing-key bootstrap attempt fails
+// fast and visibly.
+const unreachableDB = "postgres://u:p@127.0.0.1:1/none?connect_timeout=2"
 
 // genEd25519PEM generates a throwaway Ed25519 key and returns it with its
 // PKCS#8 PEM encoding. No key material is checked in.
@@ -26,11 +31,19 @@ func genEd25519PEM(t *testing.T) (ed25519.PrivateKey, string) {
 	return priv, string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
 }
 
+// loadWith loads the config from requiredEnv (which carries a valid
+// JWT_SIGNING_KEY) overlaid with extra, after clearing the optional signing
+// variables and every AUTH_* lifetime and audience variable.
 func loadWith(t *testing.T, extra map[string]string) (*config.Config, error) {
 	t.Helper()
 	clearProviderEnv(t)
 	setEnv(t, requiredEnv)
-	for _, k := range []string{"JWT_ALG", "JWT_SIGNING_KEY", "JWT_SIGNING_KID", "JWT_VERIFY_PUBLIC_KEYS"} {
+	for _, k := range []string{
+		"JWT_SIGNING_KID", "JWT_VERIFY_PUBLIC_KEYS", "MFAPP_DATABASE_URL",
+		"AUTH_ACCESS_TOKEN_TTL", "AUTH_SESSION_MAX_AGE", "AUTH_SESSION_IDLE_TIMEOUT",
+		"AUTH_CLIENT_CREDENTIALS_TTL", "AUTH_IMPERSONATION_TTL", "AUTH_IMPERSONATION_MAX",
+		"AUTH_SELF_SERVICE_MAX_AUTH_AGE", "AUTH_DEFAULT_AUDIENCE", "AUTH_ACCEPTED_AUDIENCES",
+	} {
 		t.Setenv(k, "")
 	}
 	setEnv(t, extra)
@@ -40,29 +53,19 @@ func loadWith(t *testing.T, extra map[string]string) (*config.Config, error) {
 func TestLoadJWTSigning(t *testing.T) {
 	priv, pemStr := genEd25519PEM(t)
 
-	t.Run("default is HS256 with no key or kid", func(t *testing.T) {
-		cfg, err := loadWith(t, nil)
+	t.Run("PEM key and kid", func(t *testing.T) {
+		cfg, err := loadWith(t, map[string]string{"JWT_SIGNING_KEY": pemStr, "JWT_SIGNING_KID": "k1"})
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if cfg.LocalAuth.JWTAlg != "HS256" || cfg.LocalAuth.JWTSigningKey != nil || cfg.LocalAuth.JWTSigningKID != "" {
-			t.Errorf("unexpected defaults: alg=%q key=%v kid=%q", cfg.LocalAuth.JWTAlg, cfg.LocalAuth.JWTSigningKey, cfg.LocalAuth.JWTSigningKID)
+		if cfg.LocalAuth.JWTSigningKID != "k1" || !priv.Equal(cfg.LocalAuth.JWTSigningKey) {
+			t.Errorf("signing config not applied: kid=%q", cfg.LocalAuth.JWTSigningKID)
 		}
 	})
 
-	t.Run("EdDSA with PEM key and kid", func(t *testing.T) {
-		cfg, err := loadWith(t, map[string]string{"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": pemStr, "JWT_SIGNING_KID": "k1"})
-		if err != nil {
-			t.Fatalf("Load: %v", err)
-		}
-		if cfg.LocalAuth.JWTAlg != "EdDSA" || cfg.LocalAuth.JWTSigningKID != "k1" || !priv.Equal(cfg.LocalAuth.JWTSigningKey) {
-			t.Errorf("EdDSA config not applied: alg=%q kid=%q", cfg.LocalAuth.JWTAlg, cfg.LocalAuth.JWTSigningKID)
-		}
-	})
-
-	t.Run("EdDSA accepts escaped newlines in the PEM", func(t *testing.T) {
+	t.Run("escaped newlines in the PEM", func(t *testing.T) {
 		escaped := strings.ReplaceAll(strings.TrimSpace(pemStr), "\n", `\n`)
-		cfg, err := loadWith(t, map[string]string{"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": escaped})
+		cfg, err := loadWith(t, map[string]string{"JWT_SIGNING_KEY": escaped})
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
@@ -71,15 +74,17 @@ func TestLoadJWTSigning(t *testing.T) {
 		}
 	})
 
-	t.Run("HS256 still requires JWT_SECRET", func(t *testing.T) {
-		clearProviderEnv(t)
-		setEnv(t, requiredEnv)
-		t.Setenv("JWT_SECRET", "")
-		t.Setenv("DB_URL", "")
-		t.Setenv("MFAPP_DATABASE_URL", "")
-		_, err := config.Load()
-		if err == nil || !strings.Contains(err.Error(), "JWT_SECRET") {
-			t.Fatalf("expected JWT_SECRET error, got %v", err)
+	t.Run("no key and no DB URL reports the missing key", func(t *testing.T) {
+		_, err := loadWith(t, map[string]string{"JWT_SIGNING_KEY": "", "DB_URL": ""})
+		if err == nil || !strings.Contains(err.Error(), "JWT_SIGNING_KEY") {
+			t.Fatalf("expected JWT_SIGNING_KEY error, got %v", err)
+		}
+	})
+
+	t.Run("no key bootstraps from the database", func(t *testing.T) {
+		_, err := loadWith(t, map[string]string{"JWT_SIGNING_KEY": "", "DB_URL": unreachableDB})
+		if err == nil || !strings.Contains(err.Error(), "JWT_SIGNING_KEY: bootstrap from database failed") {
+			t.Fatalf("expected a bootstrap failure, got %v", err)
 		}
 	})
 
@@ -88,9 +93,7 @@ func TestLoadJWTSigning(t *testing.T) {
 		env     map[string]string
 		wantSub string
 	}{
-		{"EdDSA without key", map[string]string{"JWT_ALG": "EdDSA"}, "JWT_SIGNING_KEY: required"},
-		{"EdDSA with garbage key", map[string]string{"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": "not-a-pem-SECRETMARKER"}, "JWT_SIGNING_KEY"},
-		{"unknown alg", map[string]string{"JWT_ALG": "RS256"}, "JWT_ALG"},
+		{"garbage key", map[string]string{"JWT_SIGNING_KEY": "not-a-pem-SECRETMARKER", "DB_URL": unreachableDB}, "JWT_SIGNING_KEY"},
 		{"kid with whitespace", map[string]string{"JWT_SIGNING_KID": "a b"}, "JWT_SIGNING_KID"},
 		{"kid too long", map[string]string{"JWT_SIGNING_KID": strings.Repeat("k", 129)}, "JWT_SIGNING_KID"},
 	}
@@ -106,94 +109,95 @@ func TestLoadJWTSigning(t *testing.T) {
 			if strings.Contains(err.Error(), "SECRETMARKER") {
 				t.Errorf("error leaks key input: %v", err)
 			}
+			if strings.Contains(err.Error(), "bootstrap from database") {
+				t.Errorf("an invalid JWT_SIGNING_KEY must not fall back to the persisted key: %v", err)
+			}
 		})
 	}
 
 	t.Run("PEM block with malformed DER rejected", func(t *testing.T) {
 		bad := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte("garbage")}))
-		_, err := loadWith(t, map[string]string{"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": bad})
+		_, err := loadWith(t, map[string]string{"JWT_SIGNING_KEY": bad})
 		if err == nil || !strings.Contains(err.Error(), "JWT_SIGNING_KEY") {
 			t.Fatalf("expected JWT_SIGNING_KEY error, got %v", err)
 		}
 	})
 }
 
-// TestLoadJWTSecretOptionalUnderEdDSA covers the EdDSA JWT_SECRET contract:
-// optional, never DB-bootstrapped, and an explicit value kept as-is.
-func TestLoadJWTSecretOptionalUnderEdDSA(t *testing.T) {
-	_, pemStr := genEd25519PEM(t)
-
-	t.Run("no secret with a DB URL loads without bootstrapping", func(t *testing.T) {
-		// 127.0.0.1:1 refuses connections: a bootstrap attempt would add a
-		// "bootstrap from database failed" problem and fail Load.
-		_, err := loadWith(t, map[string]string{
-			"JWT_ALG":            "EdDSA",
-			"JWT_SIGNING_KEY":    pemStr,
-			"JWT_SECRET":         "",
-			"MFAPP_DATABASE_URL": "",
-			"DB_URL":             "postgres://u:p@127.0.0.1:1/none?connect_timeout=2",
+// TestLoadJWTSecretOptional covers the JWT_SECRET contract: optional (only
+// the OAuth state key), whitespace treated as unset, an explicit value kept.
+func TestLoadJWTSecretOptional(t *testing.T) {
+	for name, tc := range map[string]struct{ in, want string }{
+		"unset":           {"", ""},
+		"whitespace only": {"   ", ""},
+		"explicit":        {"short", "short"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg, err := loadWith(t, map[string]string{"JWT_SECRET": tc.in})
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.LocalAuth.JWTSecret != tc.want {
+				t.Errorf("JWTSecret = %q, want %q", cfg.LocalAuth.JWTSecret, tc.want)
+			}
 		})
+	}
+}
+
+func TestLoadAuthLifetimesAndAudiences(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		cfg, err := loadWith(t, nil)
 		if err != nil {
-			t.Fatalf("Load: %v (bootstrap must not run under EdDSA)", err)
+			t.Fatalf("Load: %v", err)
+		}
+		a := cfg.Auth
+		got := []time.Duration{a.AccessTokenTTL, a.SessionMaxAge, a.SessionIdleTimeout, a.ClientCredentialsTTL,
+			a.ImpersonationTTL, a.ImpersonationMax, a.SelfServiceMaxAuthAge}
+		want := []time.Duration{time.Hour, 720 * time.Hour, 168 * time.Hour, 15 * time.Minute,
+			30 * time.Minute, 60 * time.Minute, 10 * time.Minute}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("lifetime %d = %v, want %v", i, got[i], want[i])
+			}
+		}
+		if a.DefaultAudience != config.DefaultAudience || a.AcceptedAudiences != nil {
+			t.Errorf("audiences = %q / %v", a.DefaultAudience, a.AcceptedAudiences)
 		}
 	})
 
-	t.Run("no secret leaves JWTSecret empty", func(t *testing.T) {
+	t.Run("overrides", func(t *testing.T) {
 		cfg, err := loadWith(t, map[string]string{
-			"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": pemStr, "JWT_SECRET": "",
-			"MFAPP_DATABASE_URL": "", "DB_URL": "postgres://u:p@127.0.0.1:1/none?connect_timeout=2",
+			"AUTH_ACCESS_TOKEN_TTL":   "20m",
+			"AUTH_DEFAULT_AUDIENCE":   "portal",
+			"AUTH_ACCEPTED_AUDIENCES": " portal, billing ,,",
 		})
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if cfg.LocalAuth.JWTSecret != "" {
-			t.Error("JWTSecret should stay empty under EdDSA (derive)")
+		if cfg.Auth.AccessTokenTTL != 20*time.Minute || cfg.Auth.DefaultAudience != "portal" {
+			t.Errorf("overrides not applied: %+v", cfg.Auth)
+		}
+		if strings.Join(cfg.Auth.AcceptedAudiences, "|") != "portal|billing" {
+			t.Errorf("AcceptedAudiences = %v", cfg.Auth.AcceptedAudiences)
 		}
 	})
 
-	t.Run("whitespace-only secret is normalized to empty without bootstrap", func(t *testing.T) {
-		cfg, err := loadWith(t, map[string]string{
-			"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": pemStr, "JWT_SECRET": "   ",
-			"MFAPP_DATABASE_URL": "", "DB_URL": "postgres://u:p@127.0.0.1:1/none?connect_timeout=2",
+	for name, tc := range map[string]struct {
+		env     map[string]string
+		wantSub string
+	}{
+		"access ttl above 1h":     {map[string]string{"AUTH_ACCESS_TOKEN_TTL": "2h"}, "AUTH_ACCESS_TOKEN_TTL"},
+		"zero duration":           {map[string]string{"AUTH_SESSION_MAX_AGE": "0s"}, "AUTH_SESSION_MAX_AGE"},
+		"negative duration":       {map[string]string{"AUTH_CLIENT_CREDENTIALS_TTL": "-1m"}, "AUTH_CLIENT_CREDENTIALS_TTL"},
+		"unparseable":             {map[string]string{"AUTH_SELF_SERVICE_MAX_AUTH_AGE": "soon"}, "AUTH_SELF_SERVICE_MAX_AUTH_AGE"},
+		"impersonation max < ttl": {map[string]string{"AUTH_IMPERSONATION_TTL": "40m", "AUTH_IMPERSONATION_MAX": "30m"}, "AUTH_IMPERSONATION_MAX"},
+		"blank default audience":  {map[string]string{"AUTH_DEFAULT_AUDIENCE": "   "}, "AUTH_DEFAULT_AUDIENCE"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := loadWith(t, tc.env)
+			if err == nil || !strings.Contains(err.Error(), tc.wantSub) {
+				t.Fatalf("expected %s error, got %v", tc.wantSub, err)
+			}
 		})
-		if err != nil {
-			t.Fatalf("Load: %v", err)
-		}
-		if cfg.LocalAuth.JWTSecret != "" {
-			t.Errorf("JWTSecret = %q, want empty (derive)", cfg.LocalAuth.JWTSecret)
-		}
-	})
-
-	t.Run("HS256 whitespace-only secret still reports JWT_SECRET", func(t *testing.T) {
-		_, err := loadWith(t, map[string]string{"JWT_SECRET": "   ", "DB_URL": "", "MFAPP_DATABASE_URL": ""})
-		if err == nil || !strings.Contains(err.Error(), "JWT_SECRET") {
-			t.Fatalf("expected JWT_SECRET error, got %v", err)
-		}
-	})
-
-	t.Run("explicit secret is kept unchanged", func(t *testing.T) {
-		cfg, err := loadWith(t, map[string]string{
-			"JWT_ALG": "EdDSA", "JWT_SIGNING_KEY": pemStr, "JWT_SECRET": "short",
-		})
-		if err != nil {
-			t.Fatalf("Load: %v", err)
-		}
-		if cfg.LocalAuth.JWTSecret != "short" {
-			t.Errorf("JWTSecret = %q, want unchanged", cfg.LocalAuth.JWTSecret)
-		}
-	})
-
-	t.Run("EdDSA still requires the signing key", func(t *testing.T) {
-		_, err := loadWith(t, map[string]string{"JWT_ALG": "EdDSA", "JWT_SECRET": ""})
-		if err == nil || !strings.Contains(err.Error(), "JWT_SIGNING_KEY") {
-			t.Fatalf("expected JWT_SIGNING_KEY error, got %v", err)
-		}
-	})
-
-	t.Run("HS256 with no secret and no DB URL still reports JWT_SECRET", func(t *testing.T) {
-		_, err := loadWith(t, map[string]string{"JWT_SECRET": "", "DB_URL": "", "MFAPP_DATABASE_URL": ""})
-		if err == nil || !strings.Contains(err.Error(), "JWT_SECRET") {
-			t.Fatalf("expected JWT_SECRET error, got %v", err)
-		}
-	})
+	}
 }

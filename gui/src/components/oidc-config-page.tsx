@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Pencil, Plus } from 'lucide-react';
-import { ApiRequestError } from '../lib/api';
+import { api, ApiRequestError } from '../lib/api';
+import { USERS_GUI_ROUTES } from '../lib/routes';
 import { useOptionalAuth } from '../lib/auth-context';
 import {
   fetchOIDCSaved,
@@ -22,16 +23,27 @@ const REDIRECT_DELAY_MS = 2000;
 
 export interface OidcConfigPageProps {
   /**
-   * Called after a successful **setup-token** confirmation, once
-   * `redirectDelayMs` has elapsed. Not called in admin mode (the page stays
-   * put and refreshes status). Apps SHOULD perform a full-page navigation to
+   * Called after a successful **setup-token** confirmation that finishes
+   * first-run setup (the deployment is already bootstrapped), once
+   * `redirectDelayMs` has elapsed. Not called in session mode (the page stays
+   * put and refreshes status), nor when the bootstrap is still pending (see
+   * `onBootstrapPending`). Apps SHOULD perform a full-page navigation to
    * their login route here (for example by assigning
    * `USERS_GUI_ROUTES.login` to `window.location`): `OidcSetupGate` and
-   * `ClientLayout` probe OIDC status only on mount, so a soft client-side
+   * `ClientLayout` probe status only on mount, so a soft client-side
    * navigation would leave them in the stale "needs setup" state. The
    * pending call is cancelled if the page unmounts first.
    */
   onComplete?: () => void;
+  /**
+   * Called, after `redirectDelayMs`, once a **setup-token** confirmation has
+   * saved the configuration but the bootstrap is still pending (or its status
+   * could not be read). The setup token is not spent then: it still
+   * authorizes `POST /v1/bootstrap`. Apps SHOULD perform a full-page
+   * navigation to `USERS_GUI_ROUTES.bootstrap` here, for the same reason as
+   * `onComplete`. The page also renders a link to that route.
+   */
+  onBootstrapPending?: () => void;
   /**
    * Delay in milliseconds between the success state and `onComplete`.
    * Defaults to `2000`; `0` calls `onComplete` on the next tick.
@@ -77,13 +89,20 @@ function extractTestResultFromLocation(): TestResult | null {
  *
  * Always renders the provider list + toggles + per-provider OK/Failed
  * status badges. Two authorization paths:
- *   - **Token mode**: no admin session. User pastes the setup token from
- *     the server logs. On successful confirm → `onComplete` after
- *     `redirectDelayMs` (the app navigates to its login route).
- *   - **Admin mode**: AuthProvider is mounted and the user is an admin.
- *     Token input is hidden; submit sends Authorization: Bearer <jwt>.
- *     Success stays on the page and refreshes status — admin can tweak
- *     and re-confirm without another round trip.
+ *   - **Token mode**: no session in this tab, OIDC unconfirmed. User pastes
+ *     the setup token from the server logs (sent as `X-Setup-Token`). On
+ *     successful confirm → `onComplete` after `redirectDelayMs` (the app
+ *     navigates to its login route), or `onBootstrapPending` when the
+ *     bootstrap is still pending: the token is then not spent and the
+ *     operator continues on the bootstrap page.
+ *   - **Session mode**: AuthProvider is mounted and the tab is signed in.
+ *     Token input is hidden; submit sends the tab's Bearer token. The server
+ *     decides whether the profile is an operator admin; a `403` is shown as
+ *     "requires an operator admin profile". Success stays on the page and
+ *     refreshes status — the admin can tweak and re-confirm without another
+ *     round trip.
+ *   - Neither (no session and OIDC already confirmed): the setup token is no
+ *     longer accepted here, so the page says what to do instead.
  *
  * Partial-failure / strict confirmation: if the submitted config still
  * has a broken provider, the API returns 200 with `confirmed: false`. We
@@ -92,13 +111,20 @@ function extractTestResultFromLocation(): TestResult | null {
  */
 export function OidcConfigPage({
   onComplete,
+  onBootstrapPending,
   redirectDelayMs = REDIRECT_DELAY_MS,
 }: OidcConfigPageProps = {}) {
   const auth = useOptionalAuth();
-  const isAdminMode = auth?.isAdmin === true && auth.token !== null;
+  // Session mode is "this tab holds an access token"; whether that profile
+  // is an operator admin is the server's call (it answers 403 otherwise),
+  // so the client does not guess from a role flag.
+  const isSessionMode = auth?.token != null;
 
   const [status, setStatus] = useState<OIDCStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  // Bootstrap status, read best-effort: null means "unknown" (not yet read,
+  // or the read failed), which the page treats as "bootstrap may be pending".
+  const [bootstrapped, setBootstrapped] = useState<boolean | null>(null);
 
   const [setupToken, setSetupToken] = useState('');
   const [toggles, setToggles] = useState<Record<string, boolean>>({});
@@ -116,6 +142,9 @@ export function OidcConfigPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isReverting, setIsReverting] = useState(false);
   const [isTokenSuccess, setIsTokenSuccess] = useState(false);
+  // Set with isTokenSuccess: true when the token-mode confirmation left the
+  // bootstrap pending, so the success card points at the bootstrap page.
+  const [bootstrapPending, setBootstrapPending] = useState(false);
   // Per-provider edit modal + add modal state. We keep them at the page
   // level so a successful save can trigger the shared status refresh.
   const [editingProviderId, setEditingProviderId] = useState<string | null>(
@@ -134,6 +163,10 @@ export function OidcConfigPage({
   useEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
+  const onBootstrapPendingRef = useRef(onBootstrapPending);
+  useEffect(() => {
+    onBootstrapPendingRef.current = onBootstrapPending;
+  }, [onBootstrapPending]);
 
   useEffect(
     () => () => {
@@ -169,16 +202,16 @@ export function OidcConfigPage({
     return false;
   }, [toggles, baselineToggles]);
 
-  // Build the auth object the per-provider helpers expect. Admin mode
-  // wins when both paths are technically available (admin can still paste
-  // a setup token but we prefer the session). Null means "no auth" and
-  // must disable the modal triggers.
+  // Build the auth object the per-provider helpers expect. Session mode
+  // wins when both paths are technically available (a signed-in tab can
+  // still paste a setup token but we prefer the session). Null means "no
+  // auth" and must disable the modal triggers.
   const providerAuth: OIDCProviderAuth | null = useMemo(() => {
-    if (isAdminMode && auth?.token) return { adminBearer: auth.token };
+    if (isSessionMode && auth?.token) return { adminBearer: auth.token };
     const trimmed = setupToken.trim();
     if (trimmed !== '') return { setupToken: trimmed };
     return null;
-  }, [isAdminMode, auth?.token, setupToken]);
+  }, [isSessionMode, auth?.token, setupToken]);
 
   // Reload status after a modal save so the OK/Failed badges and the
   // current enabled set match the newly-persisted DB state.
@@ -201,6 +234,25 @@ export function OidcConfigPage({
   useEffect(() => {
     const tr = extractTestResultFromLocation();
     if (tr) setTestResult(tr);
+  }, []);
+
+  // Bootstrap status, best effort. It only decides where the operator goes
+  // after a token-mode confirmation and which hint a credential-less visit
+  // gets, so a failure is not an error state of this page.
+  useEffect(() => {
+    let cancelled = false;
+    api.bootstrap
+      .status()
+      .then((b) => {
+        if (!cancelled) setBootstrapped(b.bootstrapped);
+      })
+      .catch(() => {
+        // Leave `bootstrapped` unknown (null): the page then assumes the
+        // bootstrap may be pending rather than claiming the token is spent.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Initial status fetch.
@@ -277,7 +329,7 @@ export function OidcConfigPage({
     const optOut = enabledProviders.length === 0;
 
     try {
-      const updated = isAdminMode
+      const updated = isSessionMode
         ? await postOIDCConfirm({
             adminBearer: auth!.token!,
             enabled_providers: enabledProviders,
@@ -312,25 +364,43 @@ export function OidcConfigPage({
         return;
       }
 
-      if (isAdminMode) {
-        // Admin session stays valid; keep them on the page with an
+      if (isSessionMode) {
+        // The session stays valid; keep the admin on the page with an
         // inline success + refreshed status so they can see the new
         // badges and re-toggle if needed.
         applyStatus(updated);
         setSuccessMessage('Configuration saved.');
       } else {
-        // Token flow: clear single-use token and hand off to the app's
-        // onComplete (which should hard-navigate to login so the OIDC gate
-        // remounts and re-fetches status).
+        // Token flow. Re-read the bootstrap status now: confirming OIDC does
+        // not spend the setup token while the bootstrap is pending (U9), and
+        // another tab may have bootstrapped since this page loaded. An
+        // unreadable status is treated as pending, because wrongly telling
+        // the operator the token is spent is worse than one extra page.
+        let pending = true;
+        try {
+          pending = !(await api.bootstrap.status()).bootstrapped;
+        } catch {
+          // keep pending = true
+        }
+        setBootstrapped(!pending);
+        setBootstrapPending(pending);
         setSetupToken('');
         setIsTokenSuccess(true);
+        // Hand off to the app after the delay: login when setup is finished
+        // (hard navigation, so the gate re-probes), the bootstrap page when
+        // it is not. Implies exactly one of the two callbacks fires.
         completeTimerRef.current = setTimeout(() => {
           completeTimerRef.current = null;
-          onCompleteRef.current?.();
+          if (pending) onBootstrapPendingRef.current?.();
+          else onCompleteRef.current?.();
         }, redirectDelayMs);
       }
     } catch (err) {
-      if (err instanceof ApiRequestError) {
+      if (isSessionMode && err instanceof ApiRequestError && err.status === 403) {
+        // A session was sent, so the server judged this profile: 403 means
+        // it is not an operator admin (not that the session expired).
+        setFormError('Changing the OIDC configuration requires an operator admin profile.');
+      } else if (err instanceof ApiRequestError) {
         setFormError(err.message);
       } else {
         console.error('[oidc-config]', err);
@@ -376,10 +446,59 @@ export function OidcConfigPage({
               <CheckCircle2 className="size-5 text-primary" />
               <CardTitle>Configuration saved</CardTitle>
             </div>
+            {bootstrapPending ? (
+              <CardDescription>
+                Setup is not finished: the first administrator still has to be
+                created. The setup token stays valid for the bootstrap page.
+              </CardDescription>
+            ) : (
+              <CardDescription>
+                Redirecting to the login page...
+              </CardDescription>
+            )}
+          </CardHeader>
+          {bootstrapPending && (
+            <CardFooter>
+              <a
+                href={USERS_GUI_ROUTES.bootstrap}
+                className="text-sm font-medium underline underline-offset-4"
+              >
+                Continue to bootstrap
+              </a>
+            </CardFooter>
+          )}
+        </Card>
+      </PageShell>
+    );
+  }
+
+  // No session and OIDC already confirmed: the OIDC routes refuse the setup
+  // token from now on (even while the bootstrap is pending), so there is no
+  // credential this page could use. Say what the operator can do instead.
+  if (!isSessionMode && status.confirmed) {
+    return (
+      <PageShell>
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>OIDC configuration</CardTitle>
             <CardDescription>
-              Redirecting to the login page...
+              {bootstrapped === false
+                ? 'OIDC is configured, but setup is not finished. The setup token now works only on the bootstrap page.'
+                : 'Sign in with an operator admin profile to change the OIDC configuration.'}
             </CardDescription>
           </CardHeader>
+          <CardFooter>
+            <a
+              href={
+                bootstrapped === false
+                  ? USERS_GUI_ROUTES.bootstrap
+                  : USERS_GUI_ROUTES.login
+              }
+              className="text-sm font-medium underline underline-offset-4"
+            >
+              {bootstrapped === false ? 'Go to bootstrap' : 'Go to sign in'}
+            </a>
+          </CardFooter>
         </Card>
       </PageShell>
     );
@@ -391,7 +510,7 @@ export function OidcConfigPage({
         <CardHeader>
           <CardTitle>OIDC configuration</CardTitle>
           <CardDescription>
-            {isAdminMode
+            {isSessionMode
               ? 'Toggle providers and confirm. Changes take effect immediately.'
               : 'Paste the setup token from the server logs and choose which providers to enable.'}
           </CardDescription>
@@ -412,7 +531,7 @@ export function OidcConfigPage({
               </div>
             )}
 
-            {!isAdminMode && (
+            {!isSessionMode && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="setup-token">Setup token</Label>
                 <Input
@@ -474,7 +593,7 @@ export function OidcConfigPage({
                 disabled={
                   isSubmitting ||
                   !isDirty ||
-                  (!isAdminMode && setupToken.trim() === '')
+                  (!isSessionMode && setupToken.trim() === '')
                 }
               >
                 {isSubmitting ? 'Saving...' : 'Save'}

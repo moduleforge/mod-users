@@ -7,12 +7,13 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const clearSetupTokenHash = `-- name: ClearSetupTokenHash :exec
-UPDATE oidc_config
+UPDATE mod_users.oidc_config
 SET setup_token_hash = NULL,
     setup_token_created_at = NULL
 WHERE id = 1
@@ -27,13 +28,21 @@ func (q *Queries) ClearSetupTokenHash(ctx context.Context) error {
 
 const getOIDCConfig = `-- name: GetOIDCConfig :one
 SELECT id, opt_out, setup_token_hash, setup_token_created_at, saved_at
-FROM oidc_config
+FROM mod_users.oidc_config
 WHERE id = 1
 `
 
-func (q *Queries) GetOIDCConfig(ctx context.Context) (OidcConfig, error) {
+type GetOIDCConfigRow struct {
+	ID                  int32              `json:"id"`
+	OptOut              bool               `json:"opt_out"`
+	SetupTokenHash      pgtype.Text        `json:"setup_token_hash"`
+	SetupTokenCreatedAt *time.Time         `json:"setup_token_created_at"`
+	SavedAt             pgtype.Timestamptz `json:"saved_at"`
+}
+
+func (q *Queries) GetOIDCConfig(ctx context.Context) (GetOIDCConfigRow, error) {
 	row := q.db.QueryRow(ctx, getOIDCConfig)
-	var i OidcConfig
+	var i GetOIDCConfigRow
 	err := row.Scan(
 		&i.ID,
 		&i.OptOut,
@@ -45,7 +54,7 @@ func (q *Queries) GetOIDCConfig(ctx context.Context) (OidcConfig, error) {
 }
 
 const setSetupTokenHash = `-- name: SetSetupTokenHash :exec
-UPDATE oidc_config
+UPDATE mod_users.oidc_config
 SET setup_token_hash = $1,
     setup_token_created_at = now()
 WHERE id = 1
@@ -59,7 +68,7 @@ func (q *Queries) SetSetupTokenHash(ctx context.Context, setupTokenHash pgtype.T
 }
 
 const updateOIDCConfig = `-- name: UpdateOIDCConfig :exec
-UPDATE oidc_config
+UPDATE mod_users.oidc_config
 SET opt_out = $1,
     saved_at = now()
 WHERE id = 1

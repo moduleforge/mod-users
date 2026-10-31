@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AuthProvider } from '../lib/auth-context';
 import { configureUsersApi, resetUsersApiConfig } from '../lib/config';
+import { tokenResponse } from '../test-support/users-fixtures';
 import { AuthPage } from './auth-page';
 import { LoginForm } from './login-form';
 
@@ -24,9 +25,10 @@ beforeEach(() => {
     if (url.endsWith('/v1/auth/providers')) {
       return json([{ id: 'google', display_name: 'Google' }]);
     }
-    if (url.endsWith('/v1/auth/login')) {
-      return json({ token: 't', user: { id: 'u1', email: 'a@b.test' } });
+    if (url.endsWith('/v1/auth/login') || url.endsWith('/v1/auth/register')) {
+      return json(tokenResponse());
     }
+    // Session hydration after sign-in and any other read: nothing to add.
     return json({});
   }) as unknown as typeof fetch;
 });
@@ -38,6 +40,7 @@ afterEach(() => {
     Object.defineProperty(window, 'location', realLocationDescriptor);
   }
   localStorage.clear();
+  sessionStorage.clear();
   resetUsersApiConfig();
 });
 
@@ -79,6 +82,8 @@ async function loginAndCapture(
   );
   const provider = await screen.findByRole('button', { name: /Sign in with Google/ });
   fireEvent.click(provider);
+  // The start URL is built after the tab's handoff challenge is computed.
+  await waitFor(() => expect(assigned.length).toBe(1));
   fireEvent.change(document.getElementById('login-email')!, {
     target: { value: 'a@b.test' },
   });
@@ -89,6 +94,14 @@ async function loginAndCapture(
   fireEvent.submit(form);
   await waitFor(() => expect(callbackArgs.length).toBe(1));
   return { callbackArgs, startUrl: assigned[0] };
+}
+
+/** The query params of an OIDC start URL, with the challenge checked to be well formed. */
+function startParams(startUrl: string): { path: string; returnPath: string | null } {
+  const url = new URL(startUrl, 'http://app.test');
+  // PKCE-style binding: every start carries a 43 character base64url challenge.
+  expect(url.searchParams.get('handoff_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  return { path: url.pathname, returnPath: url.searchParams.get('return') };
 }
 
 // AuthPage additionally passes the mode as a second callback argument.
@@ -102,7 +115,10 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
   test('ignores ?return= when unauthenticatedReturnParam is not configured', async () => {
     setSearch('?return=/x');
     const { callbackArgs, startUrl } = await loginAndCapture(surface);
-    expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2F');
+    expect(startParams(startUrl)).toEqual({
+      path: '/v1/auth/oidc/google/start',
+      returnPath: '/',
+    });
     expect(callbackArgs[0]).toEqual(expected(surface, null));
   });
 
@@ -110,7 +126,10 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
     configureUsersApi({ unauthenticatedReturnParam: 'return' });
     setSearch('?return=/open/3');
     const { callbackArgs, startUrl } = await loginAndCapture(surface);
-    expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2Fopen%2F3');
+    expect(startParams(startUrl)).toEqual({
+      path: '/v1/auth/oidc/google/start',
+      returnPath: '/open/3',
+    });
     expect(callbackArgs[0]).toEqual(expected(surface, '/open/3'));
   });
 
@@ -120,7 +139,10 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
       configureUsersApi({ unauthenticatedReturnParam: 'return' });
       setSearch(`?return=${encodeURIComponent(bad)}`);
       const { callbackArgs, startUrl } = await loginAndCapture(surface);
-      expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2F');
+      expect(startParams(startUrl)).toEqual({
+      path: '/v1/auth/oidc/google/start',
+      returnPath: '/',
+    });
       expect(callbackArgs[0]).toEqual(expected(surface, null));
     },
   );
@@ -131,7 +153,10 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
     const { callbackArgs, startUrl } = await loginAndCapture(surface, {
       returnPath: '/explicit',
     });
-    expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2Fexplicit');
+    expect(startParams(startUrl)).toEqual({
+      path: '/v1/auth/oidc/google/start',
+      returnPath: '/explicit',
+    });
     expect(callbackArgs[0]).toEqual(expected(surface, '/explicit'));
   });
 
@@ -139,7 +164,10 @@ describe.each(SURFACES)('%s return-path handling', (surface) => {
     configureUsersApi({ unauthenticatedReturnParam: 'next' });
     setSearch('?next=/dash&return=/ignored');
     const { callbackArgs, startUrl } = await loginAndCapture(surface);
-    expect(startUrl).toBe('/v1/auth/oidc/google/start?return=%2Fdash');
+    expect(startParams(startUrl)).toEqual({
+      path: '/v1/auth/oidc/google/start',
+      returnPath: '/dash',
+    });
     expect(callbackArgs[0]).toEqual(expected(surface, '/dash'));
   });
 });

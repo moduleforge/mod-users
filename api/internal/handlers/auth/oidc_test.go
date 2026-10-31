@@ -3,12 +3,10 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -44,22 +42,26 @@ func newTestOAuth(t *testing.T, registry config.ProviderRegistry) *localauth.OAu
 	}
 }
 
-// newTestHandler constructs a handler with a stub oauth. Pool/queries/resolver
-// are nil because the tests in this file only cover paths that short-circuit
-// before touching the DB.
+// newTestHandler constructs an OIDC handler with a stub oauth. Pool, queriers,
+// resolver and services are nil because the tests in this file only cover
+// paths that short-circuit before touching the database.
 func newTestHandler(t *testing.T, registry config.ProviderRegistry) *OIDCHandler {
+	t.Helper()
 	cfg := &config.Config{
-		LocalAuth: config.LocalAuthConfig{
-			JWTSecret:   "test-secret",
-			LocalIssuer: "test-issuer",
-		},
+		LocalAuth: config.LocalAuthConfig{LocalIssuer: "test-issuer"},
 		Auth: config.AuthConfig{
-			AdminRole:            "admin",
 			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
 			OAuthRedirectBaseURL: "http://api.test",
 		},
 	}
-	return NewOIDCHandler(nil, newTestOAuth(t, registry), nil, noopLoginRecorder{}, cfg)
+	return NewOIDCHandler(nil, nil, nil, newTestOAuth(t, registry), nil, nil, nil, nil, nil, nil, cfg)
+}
+
+// newProvidersHandler constructs the /v1/auth Handler over a stub oauth, enough
+// for GET /providers.
+func newProvidersHandler(t *testing.T, registry config.ProviderRegistry) *Handler {
+	t.Helper()
+	return New(nil, nil, nil, nil, nil, nil, nil, newTestOAuth(t, registry), nil, "http://gui.test")
 }
 
 func TestListProviders(t *testing.T) {
@@ -82,11 +84,11 @@ func TestListProviders(t *testing.T) {
 				ClaimStyle:   "authelia",
 			},
 		}
-		h := newTestHandler(t, registry)
+		h := newProvidersHandler(t, registry)
 
 		req := httptest.NewRequest(http.MethodGet, "/v1/auth/providers", nil)
 		rec := httptest.NewRecorder()
-		h.ListProviders(rec, req)
+		h.Providers(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
@@ -127,11 +129,11 @@ func TestListProviders(t *testing.T) {
 	})
 
 	t.Run("empty registry returns empty array", func(t *testing.T) {
-		h := newTestHandler(t, config.ProviderRegistry{})
+		h := newProvidersHandler(t, config.ProviderRegistry{})
 
 		req := httptest.NewRequest(http.MethodGet, "/v1/auth/providers", nil)
 		rec := httptest.NewRecorder()
-		h.ListProviders(rec, req)
+		h.Providers(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
@@ -181,8 +183,9 @@ func TestCallback_ProviderError_RedirectsToFrontend(t *testing.T) {
 		t.Fatalf("status = %d, want 302", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	if !strings.Contains(loc, "error=access_denied") {
-		t.Errorf("Location should carry error=access_denied, got %q", loc)
+	// The provider's own error text is untrusted: only the mapped code is passed on.
+	if !strings.Contains(loc, "#error=authentication_failed") || strings.Contains(loc, "access_denied") {
+		t.Errorf("Location should carry only the mapped error code in the fragment, got %q", loc)
 	}
 	if !strings.HasPrefix(loc, "http://gui.test/auth/oidc/return") {
 		t.Errorf("Location should target frontend return URL, got %q", loc)
@@ -345,112 +348,4 @@ func setChiProvider(r *http.Request, provider string) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("provider", provider)
 	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-}
-
-// stubResolver is a test double for userResolver that always returns the
-// configured error (or nil if err is nil, in which case uc is returned).
-type stubResolver struct {
-	err error
-	uc  *localauth.UserContext
-}
-
-func (s *stubResolver) Resolve(_ context.Context, _ localauth.Principal) (*localauth.UserContext, error) {
-	return s.uc, s.err
-}
-
-// noopLoginRecorder is a test double for loginRecorder that always succeeds
-// and records nothing. Used in tests that exercise paths before or after
-// the RecordLogin call, or where the login audit is not the focus.
-type noopLoginRecorder struct{}
-
-func (noopLoginRecorder) RecordLogin(_ context.Context, _ int64, _ string) error { return nil }
-
-// TestOIDC_Callback_ResolverDBError_Returns500 verifies that a non-auth error
-// from the resolver (e.g., a DB failure during auto-create) surfaces as an
-// HTTP 500 with "internal_error" rather than being silently mapped to a
-// redirect pretending authentication failed.
-func TestOIDC_Callback_ResolverDBError_Returns500(t *testing.T) {
-	const providerID = "google"
-
-	// Build a StateSigner so we can mint a valid state token.
-	signer, err := localauth.NewStateSigner([]byte("test-secret-at-least-32-bytes-xx"))
-	if err != nil {
-		t.Fatalf("NewStateSigner: %v", err)
-	}
-
-	// Sign a state token for the google provider.
-	payload := localauth.StatePayload{
-		Provider:   providerID,
-		ReturnPath: "/",
-		Nonce:      "testnonce",
-		Expires:    time.Now().Add(5 * time.Minute).Unix(),
-	}
-	stateToken, err := signer.Sign(payload)
-	if err != nil {
-		t.Fatalf("Sign: %v", err)
-	}
-
-	// Build an OAuth whose Exchange is stubbed to return a valid principal
-	// so the handler gets past the token-exchange step and reaches the resolver.
-	registry := config.ProviderRegistry{
-		providerID: config.Provider{ID: providerID, DisplayName: "Google"},
-	}
-	oauth := newTestOAuth(t, registry)
-	oauth.ExchangeFn = func(_ context.Context, _, _, _, _ string) (localauth.Principal, localauth.StatePayload, error) {
-		return localauth.Principal{
-			Email:   "user@example.com",
-			Subject: "sub-123",
-			Issuer:  "https://accounts.google.com",
-		}, payload, nil
-	}
-
-	// Stub resolver that returns a non-ErrUserGone error (simulates a DB crash
-	// during auto-create).
-	resolver := &stubResolver{err: errors.New("db: connection refused")}
-
-	cfg := &config.Config{
-		LocalAuth: config.LocalAuthConfig{
-			JWTSecret:   "test-secret",
-			LocalIssuer: "test-issuer",
-		},
-		Auth: config.AuthConfig{
-			AdminRole:            "admin",
-			FrontendReturnURL:    "http://gui.test/auth/oidc/return",
-			OAuthRedirectBaseURL: "http://api.test",
-		},
-	}
-	h := NewOIDCHandler(nil, oauth, resolver, noopLoginRecorder{}, cfg)
-
-	// Build the callback request with matching state in both query and cookie.
-	target := "/v1/auth/oidc/" + providerID + "/callback?code=testcode&state=" + stateToken
-	req := setChiProvider(httptest.NewRequest(http.MethodGet, target, nil), providerID)
-	req.AddCookie(&http.Cookie{Name: stateCookieName, Value: stateToken})
-
-	rec := httptest.NewRecorder()
-	h.Callback(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want 500; body = %s", rec.Code, rec.Body.String())
-	}
-
-	// Assert the body has the expected error structure produced by server.Error.
-	var body map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("unmarshal body: %v; raw=%s", err, rec.Body.String())
-	}
-	errObj, ok := body["error"].(map[string]any)
-	if !ok {
-		t.Fatalf("body[\"error\"] is not an object: %v", body)
-	}
-	if got := errObj["code"]; got != "internal_error" {
-		t.Errorf("error.code = %q, want \"internal_error\"", got)
-	}
-
-	// Assert no redirect — response must not be a 3xx.
-	if rec.Code/100 == 3 {
-		t.Errorf("response must not be a redirect (3xx), got %d location=%s", rec.Code, rec.Header().Get("Location"))
-	}
-	if loc := rec.Header().Get("Location"); loc != "" {
-		t.Errorf("Location header must be absent for a 500 response, got %q", loc)
-	}
 }

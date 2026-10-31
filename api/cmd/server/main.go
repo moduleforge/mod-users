@@ -2,18 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	audithttpapi "github.com/moduleforge/audit-api/httpapi"
@@ -29,7 +25,6 @@ import (
 	"github.com/moduleforge/core-api/fieldcrypto"
 	corehttpapi "github.com/moduleforge/core-api/httpapi"
 	"github.com/moduleforge/core-api/observer"
-	"github.com/moduleforge/core-api/opctx"
 	coreservice "github.com/moduleforge/core-api/service"
 	"github.com/moduleforge/core-api/types"
 	coredb "github.com/moduleforge/core-model/db"
@@ -41,10 +36,13 @@ import (
 	"github.com/moduleforge/mod-users/api/internal/email"
 	"github.com/moduleforge/mod-users/api/internal/handlers"
 	authhandlers "github.com/moduleforge/mod-users/api/internal/handlers/auth"
+	"github.com/moduleforge/mod-users/api/internal/handlers/me"
+	"github.com/moduleforge/mod-users/api/internal/handlers/parties"
+	"github.com/moduleforge/mod-users/api/internal/handlers/principals"
+	"github.com/moduleforge/mod-users/api/internal/handlers/session"
 	"github.com/moduleforge/mod-users/api/internal/observability"
 	"github.com/moduleforge/mod-users/api/internal/server"
-	usersservice "github.com/moduleforge/mod-users/api/internal/service"
-	"github.com/moduleforge/mod-users/api/internal/users"
+	"github.com/moduleforge/mod-users/api/usersservice"
 	db "github.com/moduleforge/mod-users/model/db"
 )
 
@@ -83,39 +81,26 @@ func main() {
 	// incoming Bearer tokens — post-Phase 9 those are always the local JWTs
 	// minted by /v1/auth/login or the OIDC callback, never a raw provider
 	// id_token. So the verifier is local-only. NewLocalVerifier pins the
-	// accepted algorithm to JWT_ALG: EdDSA-signed local tokens (verified
+	// accepted algorithm: only EdDSA-signed local tokens are accepted (verified
 	// against the public half of JWT_SIGNING_KEY plus any
-	// JWT_VERIFY_PUBLIC_KEYS) when JWT_ALG=EdDSA, HS256 otherwise.
+	// JWT_VERIFY_PUBLIC_KEYS); HS256 and JWT_ALG are removed.
 	verifier, err := auth.NewLocalVerifier(ctx, cfg.LocalAuth)
 	if err != nil {
 		slog.ErrorContext(ctx, "auth verifier init failed", "error", err)
 		os.Exit(1)
 	}
 
-	// RequireAuth needs a ClaimMapper to turn the local JWT's claims into a
-	// Principal. The local JWT uses flat "email" + "roles" claims, which the
-	// generic mapper handles with the pass-through paths below. After Phase 9,
-	// inbound Bearer tokens are always these locally-minted JWTs — provider
-	// id_tokens are traded for a local JWT by the OIDC callback, not presented
-	// directly to API endpoints.
-	localMapper, err := auth.NewClaimMapper("generic", auth.MapperOptions{
-		AdminRole: cfg.Auth.AdminRole,
-		EmailPath: "email",
-		RolesPath: "roles",
-	})
-	if err != nil {
-		slog.ErrorContext(ctx, "local claim mapper init failed", "error", err)
-		os.Exit(1)
-	}
+	// Authenticator: verifies the bearer access token and re-checks the
+	// session or credential and the acting profile on every request.
+	authenticator := pubauth.NewAuthenticator(pool, verifier, cfg.Auth)
 
-	// Anonymous system actor — the shared, zero-authority actor
-	// resolveActorOrAnonymous (below) falls through to for a request that
-	// presents no Authorization header at all. Resolved once at startup by
-	// slug; NewAnonymousActor asserts at boot that the actor holds zero
-	// grants and refuses to start if it finds any (mirrors
-	// moduleforge.module.yaml's anonymousActor provides.services entry).
-	anonActor, err := pubauth.NewAnonymousActor(ctx, pool)
-	if err != nil {
+	// Anonymous system actor. Resolved once at startup by slug;
+	// NewAnonymousActor asserts at boot that the actor holds zero grants and
+	// refuses to start if it finds any. This hand-written dev server mounts no
+	// anonymous route, so only the boot-time assertion is used
+	// (moduleforge.module.yaml's anonymousActor and resolveOrAnonymous entries
+	// serve generated apps).
+	if _, err := pubauth.NewAnonymousActor(ctx, pool); err != nil {
 		slog.ErrorContext(ctx, "anonymous actor init failed", "error", err)
 		os.Exit(1)
 	}
@@ -147,29 +132,14 @@ func main() {
 		"total_providers", len(oauth.AllProviders()),
 	)
 
-	// Build the UserResolver up-front — both the onboarding
-	// AdminChecker and the post-auth /v1/* handlers need it.
-	// Build the UserResolver up-front. The observer group is wired in after
-	// it is constructed (see resolver.SetObserverGroup below). The resolver
-	// only fires events during request handling, which starts after all
-	// initialization completes, so the deferred wiring is safe.
-	resolver := auth.NewUserResolver(pool, queries, coreQueries, cfg.Auth.AdminRole, cfg.LocalAuth.LocalIssuer, nil)
-
-	// resolveActorOrAnonymous mirrors moduleforge.module.yaml's
-	// resolveActorOrAnonymous provides.middleware entry (constructor:
-	// auth.NewResolveActorOrAnonymous, args: [service:verifier,
-	// service:claimMapper, service:userResolver, service:anonymousActor]).
-	// This dev server is hand-written and not regenerated by mfgen (see the
-	// note near requireConfirmed below), so the equivalent construction is
-	// added here by hand. Not used by any existing route — see the
-	// dev-server-only demonstration mount below.
-	resolveActorOrAnonymous := pubauth.NewResolveActorOrAnonymous(verifier, localMapper, resolver, anonActor)
-
-	// az is declared here so the AdminChecker closure can close over it. It is
-	// assigned after opReg is built (further below). The closure only runs at
-	// HTTP request time, well after all initialization completes, so az is
-	// always non-nil when the closure executes.
-	var az *localAuthz.Authorizer
+	// az is assigned after opReg is built (further below), and adminCheck
+	// after the bootstrap service. The AdminChecker closure only runs at
+	// HTTP request time, well after all initialization completes, so
+	// adminCheck is always non-nil when the closure executes.
+	var (
+		az         *localAuthz.Authorizer
+		adminCheck func(r *http.Request) (bool, error)
+	)
 
 	// Build the onboarding handler + state cache. The handler owns the
 	// oidc_config row and the derived BootState; RequireOIDCConfirmed
@@ -180,31 +150,20 @@ func main() {
 		EnvRegistry:  cfg.Providers,
 		EnvNoOIDCEnv: oauth.EnvNoOIDCAccounts(),
 		TokenDisplay: cfg.Onboarding.TokenDisplay,
-		// AdminChecker lets an authenticated admin re-confirm without
-		// fetching a fresh setup token (Phase 9.10a). Returns
-		// (false, nil) on missing/invalid auth so /confirm falls
-		// through to the setup-token check; surfaces internal faults
-		// as errors so they become 500 instead of being masked.
-		//
-		// Admin status is now determined by a wildcard manage grant in the
-		// grants table rather than the removed is_admin column.
+		// AdminChecker lets an operator administrator configure OIDC without
+		// a setup token: a session whose acting profile is an operator
+		// profile holding wildcard manage (handlers.NewOperatorAdminChecker).
+		// Returns (false, nil) on missing/invalid auth so /confirm falls
+		// through to the setup-token check (accepted only while the
+		// bootstrap or the OIDC confirmation is pending, decision U9);
+		// surfaces internal faults as errors so they become 500 instead of
+		// being masked.
 		AdminChecker: func(r *http.Request) (bool, error) {
-			uc, err := auth.AuthenticateRequest(r, verifier, localMapper, resolver)
-			if err != nil {
-				if errors.Is(err, auth.ErrNoAuthHeader) ||
-					errors.Is(err, auth.ErrInvalidToken) ||
-					errors.Is(err, auth.ErrUserGone) {
-					return false, nil
-				}
-				return false, err
-			}
-			// Check wildcard manage grant — this is the sole admin gate now
-			// that is_admin has been removed. az is always non-nil here
-			// because HTTP serving starts after all initialization completes.
-			adminCtx := opctx.WithActor(r.Context(), uc.EntityID)
-			authErr := az.Authorize(adminCtx, "manage", nil)
-			return authErr == nil, nil
+			return adminCheck(r)
 		},
+		// Platform decides whether the bootstrap is pending: the setup token
+		// stays active until the operator party is set and OIDC is confirmed.
+		Platform: coreQueries,
 	})
 	if err := onboarding.RefreshState(ctx); err != nil {
 		slog.ErrorContext(ctx, "oidc_config: initial state load failed", "error", err)
@@ -217,10 +176,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup-token + state-display lifecycle. TOKEN_DISPLAY=none is the
-	// production-strict escape hatch — revert to Phase 9.1's fail-fast
-	// if state is unconfirmed; onboarding endpoints are NOT mounted
-	// regardless of whether this exits.
+	// Setup-token + state-display lifecycle. The one setup token serves the
+	// bootstrap and the OIDC configuration and is active while either is
+	// pending (decision U9). TOKEN_DISPLAY=none is the production-strict
+	// escape hatch — revert to Phase 9.1's fail-fast if the OIDC state is
+	// unconfirmed; onboarding endpoints are NOT mounted regardless of
+	// whether this exits.
 	if cfg.Onboarding.TokenDisplay == config.TokenDisplayNone {
 		if !onboarding.CurrentState().Confirmed() {
 			slog.ErrorContext(ctx, "TOKEN_DISPLAY=none and OIDC state is unconfirmed — exiting per fail-fast policy",
@@ -236,10 +197,15 @@ func main() {
 			}
 			os.Exit(1)
 		}
+		if !onboarding.Bootstrapped() {
+			slog.WarnContext(ctx, "bootstrap pending but TOKEN_DISPLAY=none: no setup token is shown, so POST /v1/bootstrap cannot succeed",
+				"bootstrap_pending", true,
+			)
+		}
 	} else {
 		// Ensure the setup token is active iff the state calls for
 		// it. EnsureSetupToken returns a non-empty plaintext in two
-		// cases: first-boot (no prior hash) and restart-with-unconfirmed
+		// cases: first-boot (no prior hash) and restart-while-active
 		// (prior hash present but the plaintext was unrecoverable, so
 		// the token is rotated to give ops a fresh recoverable value).
 		// Both cases should trigger a fresh banner.
@@ -255,8 +221,9 @@ func main() {
 			}
 			if cfg.Onboarding.TokenDisplay == config.TokenDisplayLocalhost {
 				// Structured log only; the banner is stderr-exclusive.
-				slog.ErrorContext(ctx, "oidc onboarding required: setup token ready (use /v1/oidc-config/setup-token from loopback)",
+				slog.ErrorContext(ctx, "first-run setup required: setup token ready for the bootstrap and OIDC configuration (use /v1/oidc-config/setup-token from loopback)",
 					"setup_token_required", true,
+					"bootstrap_route", "/v1/bootstrap",
 				)
 			}
 		}
@@ -302,36 +269,56 @@ func main() {
 
 	// Apply access-function bodies for row-level scoping. Each peer module
 	// ships stub functions in its migrations; here we replace those stubs
-	// with the policy bodies from the GrantTableGenerator (Phase 2.2).
+	// with the policy bodies from the GrantTableGenerator (Phase 2.2),
+	// filtered through mod-users' owning-party row filter.
 	// The DDL is idempotent; safe to run on every startup.
 	//
 	// The slug list must match all resources that have a list query JOINing
-	// an access function. legal_entity composes natural_person + corporation;
+	// an access function. legal_entity composes natural_person + organization;
 	// contacts list queries JOIN accessible_legal_entity_ids_for_actor.
 	//
 	// See core-module/docs/architecture/authorization-design.md "Row-level
 	// scoping" for the architectural rationale.
 	authzSlugs := []string{
 		"natural_person",
-		"corporation",
+		"organization",
+		"user",
+		"profile",
 		"service_account",
 		"legal_entity",
 		"tag",
 		"authz_actor_group",
 		"authz_target_group",
 	}
-	if err := setup.ApplyFuncs(ctx, pool, setup.NewGrantTableGenerator(), authzSlugs); err != nil {
+	// WHY the hooked generator: single-row Authorize applies the owning-party
+	// gate to every target with an owner, so every slug's list function must
+	// drop the same rows. AccessFuncGenerator is setup.NewRowFilterGenerator(
+	// setup.NewGrantTableGenerator(), "mod_users.access_row_permitted"), the
+	// same constructor host composition roots use, so the dev server and the
+	// hosts install one definition. IMPLIES: every list query that joins one
+	// of these functions must run in a transaction bound with
+	// setup.BindAuthInputs, or it silently drops the gated rows; a constructor
+	// error (an invalid predicate name) fails startup rather than installing
+	// unfiltered functions.
+	accessGen, err := localAuthz.AccessFuncGenerator()
+	if err != nil {
+		slog.ErrorContext(ctx, "authz access-function generator failed", "error", err)
+		os.Exit(1)
+	}
+	if err := setup.ApplyFuncs(ctx, pool, accessGen, authzSlugs); err != nil {
 		slog.ErrorContext(ctx, "authz access-function setup failed", "error", err)
 		os.Exit(1)
 	}
 
 	// Build the Authorizer. The grants-driven Authorizer uses the OperationRegistry,
-	// a wildcard-grant check (checkWildcardGrant, replacing the old is_admin column
-	// short-circuit), and a recursive-CTE grant check for targeted grants. Wildcard
-	// grants (target_id IS NULL in the grants table) allow an actor to pass any
-	// authorization check. The first user's wildcard grant is bootstrapped below
-	// after first-account creation.
+	// a wildcard-grant check, and a recursive-CTE grant check for targeted grants.
+	// Wildcard grants (target_id IS NULL in the grants table) allow an actor to
+	// pass any authorization check.
 	az = localAuthz.New(authzdb.New(pool), opReg, pool)
+
+	// The per-request liveness check evaluates the invite-only app gate through
+	// the same Authorizer (decision U15).
+	authenticator.SetAppGate(az)
 
 	// Build the audit-module Observer and compose it into an ObserverGroup.
 	// The audit Observer writes one audit_log row inside the operation's transaction,
@@ -342,10 +329,6 @@ func main() {
 	})
 	observerGroup := observer.NewObserverGroup(auditObserver)
 
-	// Wire the observer group into the resolver now that it's available.
-	// Events (identity link, email verify) will be recorded in the audit log.
-	resolver.SetObserverGroup(observerGroup)
-
 	// Build audit-module's read service and HTTP handler. These serve
 	// GET /v1/audit, /v1/audit/by-actor/{uuid}, /v1/audit/by-entity/{entity_uuid}.
 	auditSvcs := auditservice.NewServices(auditdb.New(pool), coredb.New(pool), az)
@@ -354,15 +337,21 @@ func main() {
 	// Build authz-module services. These serve the admin authz management API
 	// under /v1/authz: operations, actor groups, target groups, and grants.
 	// typeResolver must be fully loaded before this point (it is, see above).
-	authzSvcs := authzservice.New(authzservice.Deps{
-		DB:           pool,
-		AuthzQ:       authzdb.New(pool),
-		CoreQ:        coredb.New(pool),
-		Az:           az,
-		Obs:          observerGroup,
-		TypeResolver: typeResolver,
-		OpReg:        opReg,
-	})
+	// The outside-collaborator gate is the trailing argument: a profile outside
+	// a party's own can join the party's actor groups or be named as a grant
+	// actor over its content only when its holder's credentials meet the
+	// party's authentication policy or the caller confirms the mismatch.
+	collaboratorGate := usersservice.NewCollaboratorGate()
+	authzSvcs := authzservice.NewFromArgs(
+		pool,
+		authzdb.New(pool),
+		coredb.New(pool),
+		az,
+		observerGroup,
+		typeResolver,
+		opReg,
+		collaboratorGate,
+	)
 
 	// Build core services and router. coreSvcs delegates entity CRUD to the
 	// service layer; coreRouter mounts /entities/* routes (including /self).
@@ -397,170 +386,87 @@ func main() {
 	r.Get("/healthz", handlers.Live)
 	r.Get("/readyz", handlers.Ready(pool))
 
-	// Select the JWT signer (HS256 default, or EdDSA when JWT_ALG=EdDSA) and
-	// hand it to every handler that mints local tokens. The OIDC handler builds
-	// its own from cfg once at construction.
+	// The signer for the EdDSA access tokens every sign-in mints.
 	jwtSigner, err := auth.NewSigner(cfg.LocalAuth)
 	if err != nil {
 		slog.ErrorContext(ctx, "jwt signer init failed", "error", err)
 		os.Exit(1)
 	}
 
-	// Local auth handlers (unauthenticated).
-	authHandler, err := authhandlers.NewWithSigner(
-		pool,
-		queries,
-		coreQueries,
-		jwtSigner,
-		cfg.LocalAuth.LocalIssuer,
-		emailSender,
-		cfg.Server.GUIBaseURL,
+	// Identity services. Credentials and challenges first; sessions need both;
+	// the user service is wired for self-service last because it needs the
+	// session and challenge services.
+	challengeSvc := usersservice.NewChallengeService(queries, emailSender)
+	credSvc := usersservice.NewCredentialService(queries, coreQueries, az, observerGroup, auth.HashPassword)
+	sessionSvc := usersservice.NewSessionService(
+		pool, queries, coreQueries, az, observerGroup, jwtSigner, challengeSvc, usersservice.SessionConfigFrom(cfg),
 	)
-	if err != nil {
-		slog.ErrorContext(ctx, "auth handler init failed", "error", err)
-		os.Exit(1)
-	}
-
-	// Wire the first-user wildcard-grant bootstrap hook into both account-creation
-	// paths (local register and OIDC auto-create). When the very first user account
-	// is created, this hook issues a wildcard manage grant for that entity, making
-	// them a super-user via the grants table (replacing the old is_admin bootstrap).
-	//
-	// The hook runs after the account transaction commits, so the entity row is
-	// visible to the hook's own transaction. Failure is logged and non-fatal: the
-	// account already exists and an operator can create the grant manually via
-	// POST /v1/authz/grants.
-	// TODO(generated): first-user hook constructed and wired by mfgen — see phase-3 codegen-main
-	firstUserHook := users.NewFirstUserHook(pool, authzSvcs.Grant)
-	authHandler.SetFirstUserHook(firstUserHook)
-	resolver.SetFirstUserHook(firstUserHook)
-
-	// Build UserAccountService (service-layer logic extracted from handler in Phase F).
-	uaSvc := usersservice.NewUserAccountService(
-		pool,
-		db.New(pool),
-		coredb.New(pool),
-		az,
-		observerGroup,
-		coreSvcs.NaturalPerson,
-		typeResolver,
-		auth.HashPassword,
+	// The constructor also registers the user and profile display renderers on
+	// displayReg, the same path the generated composition root takes.
+	userSvc := usersservice.NewUserServiceWithSelfService(
+		pool, queries, coreQueries, az, observerGroup, coreSvcs.NaturalPerson, credSvc,
+		sessionSvc, challengeSvc, opReg, cfg.Auth.SelfServiceMaxAuthAge, displayReg,
 	)
 
-	// Wire the anonymous-user service into the auth handler now that uaSvc is available.
-	authHandler.SetUserSvc(uaSvc)
+	// impersonationService: impersonation as a child session of the
+	// administrator's own (POST /v1/impersonations); its lifetimes ride on the
+	// session configuration.
+	impersonationSvc := usersservice.NewImpersonationService(pool, queries, az, observerGroup, sessionSvc)
 
-	oidcHandler := authhandlers.NewOIDCHandlerWithPool(pool, queries, oauth, resolver, uaSvc, cfg, observerGroup)
-	if err := oidcHandler.SignerErr(); err != nil {
-		slog.ErrorContext(ctx, "oidc handler jwt signer init failed", "error", err)
-		os.Exit(1)
-	}
-	_ = oidcHandler // referenced by TODO comment above; wired via RegisterRoutes in generated main.go
+	// The party profile lifecycle: invitations, managed users, departure
+	// cleanup. Other modules (mod-billing seats) subscribe with
+	// profileSvc.AddLifecycleObserver.
+	profileSvc := usersservice.NewProfileService(pool, queries, coreQueries, az, observerGroup, userSvc, credSvc, sessionSvc)
+	// partyPolicyService: the party authentication policy, credential
+	// authorizations and confinements behind /v1/parties/{party_uuid}.
+	partyPolicySvc := usersservice.NewPartyPolicyService(pool, coreQueries, az, observerGroup, userSvc)
+	// personalPartyService: EnsurePersonalParty, a Go API for mod-billing's
+	// personal team plans. It has no HTTP route, so the dev server only
+	// constructs it to keep the wiring identical to the manifest's.
+	_ = usersservice.NewPersonalPartyService(observerGroup)
+	// bootstrapService: the first-run bootstrap (POST /v1/bootstrap) and the
+	// operator-administrator check behind the OIDC configuration routes.
+	bootstrapSvc := usersservice.NewBootstrapService(pool, az, observerGroup, userSvc, credSvc, sessionSvc, profileSvc, coreSvcs.Organization)
+	adminCheck = handlers.NewOperatorAdminChecker(authenticator, bootstrapSvc)
 
-	// grantAdmin creates a wildcard manage grant for a user account, checked and
-	// issued at the composition root to avoid a direct peer dependency in handlers/.
-	// Authorization (actor must have wildcard manage grant) is enforced before the
-	// grant write. If the user account UUID is unknown, ErrNotFound is returned.
-	grantAdminFn := handlers.GrantAdminFn(func(ctx context.Context, userAccountUUID uuid.UUID) error {
-		if err := az.Authorize(ctx, "manage", nil); err != nil {
-			return err
-		}
-		ua, err := db.New(pool).GetUserAccountByUUID(ctx, userAccountUUID)
-		if err != nil {
-			return coreservice.ErrNotFound
-		}
-		ent, err := coredb.New(pool).GetEntityByID(ctx, ua.AccountHolder)
-		if err != nil {
-			return fmt.Errorf("grant-admin: resolve entity: %w", err)
-		}
-		_, err = authzSvcs.Grant.CreateWildcardGrant(ctx, ent.Uuid, "manage")
-		return err
-	})
-
-	// revokeAdmin removes the wildcard manage grant for a user account.
-	// Authorization is enforced before the revocation. ErrNotFound is returned
-	// if the user account UUID is unknown.
-	revokeAdminFn := handlers.GrantAdminFn(func(ctx context.Context, userAccountUUID uuid.UUID) error {
-		if err := az.Authorize(ctx, "manage", nil); err != nil {
-			return err
-		}
-		ua, err := db.New(pool).GetUserAccountByUUID(ctx, userAccountUUID)
-		if err != nil {
-			return coreservice.ErrNotFound
-		}
-		ent, err := coredb.New(pool).GetEntityByID(ctx, ua.AccountHolder)
-		if err != nil {
-			return fmt.Errorf("revoke-admin: resolve entity: %w", err)
-		}
-		return authzSvcs.Grant.DeleteWildcardGrant(ctx, ent.Uuid, "manage")
-	})
-
-	// The step-up key is the explicit JWT_SECRET when set, otherwise derived
-	// from the EdDSA signing key. Resolution failure is fatal; the error never
-	// carries key material.
-	stepUpKey, err := auth.StepUpKey(cfg.LocalAuth)
-	if err != nil {
-		slog.ErrorContext(ctx, "step-up key resolution failed", "error", err)
-		os.Exit(1)
-	}
-	stepUpSecret := string(stepUpKey)
-	// The consumed-JTI cache and its janitor goroutine are started here and
-	// live for the process lifetime.
-	stepUpConsumed := new(sync.Map)
-	auth.StartStepUpJanitor(stepUpConsumed, ctx.Done())
-
-	// Identities handler — identity-management self-service (Phase 4).
-	// When AUTH_REQUIRE_STEP_UP is enabled, the handler is wired with email
-	// sending and JWT signing so it can issue step-up tokens.
-	identitiesHandler := handlers.NewIdentitiesHandlerWithDeps(handlers.IdentitiesHandlerDeps{
-		Pool:           pool,
-		Queries:        queries,
-		OAuth:          oauth,
-		Obs:            observerGroup,
-		Sender:         emailSender,
-		JWTSecret:      stepUpSecret,
-		Consumed:       stepUpConsumed,
-		StepUpRequired: cfg.Auth.RequireStepUpForCredentialChange,
-		CookiePath:     cfg.Auth.CookiePath,
-	})
-
-	// SSH public-key handler — self-service and operator register/list/
-	// revoke (see docs/architecture/ssh-keys.md for the design rationale).
-	// Reuses the same step-up deps (JWT secret, consumed-JTI cache, flag)
-	// as identitiesHandler.
-	sshKeySvc := usersservice.NewSSHKeyService(pool, db.New(pool), coredb.New(pool), az, observerGroup)
-	sshKeysHandler := handlers.NewSSHKeysHandler(sshKeySvc, stepUpSecret, stepUpConsumed, cfg.Auth.RequireStepUpForCredentialChange)
-
-	// Handlers for authenticated routes.
-	selfHandler := handlers.NewSelfHandler(queries, coreQueries, coreSvcs)
-	usersHandler := handlers.NewUserAccountsHandler(uaSvc, grantAdminFn, revokeAdminFn)
-	_ = usersHandler // wired via RegisterAccountRoutes in generated main.go
-	assumeHandler, err := handlers.NewAssumeHandlerWithSigner(uaSvc, jwtSigner, cfg.LocalAuth.LocalIssuer)
-	if err != nil {
-		slog.ErrorContext(ctx, "assume handler init failed", "error", err)
-		os.Exit(1)
-	}
-	appsHandler := handlers.NewAppsHandler(pool, queries, az, observerGroup, entityResolver, coreQueries)
-	_ = appsHandler // wired via RegisterAccountRoutes in generated main.go
-
+	// Handlers.
+	authHandler := authhandlers.New(
+		pool, queries, coreQueries, userSvc, credSvc, challengeSvc, sessionSvc, oauth, emailSender, cfg.Server.GUIBaseURL,
+	)
+	oidcHandler := authhandlers.NewOIDCHandler(
+		pool, queries, coreQueries, oauth, auth.NewOIDCResolver(queries),
+		userSvc, credSvc, challengeSvc, sessionSvc, observerGroup, cfg,
+	)
+	meHandler := me.NewMeHandler(userSvc, profileSvc)
+	sessionHandler := session.NewSessionHandler(sessionSvc)
+	impersonationHandler := handlers.NewImpersonationHandler(impersonationSvc)
+	principalsHandler := principals.NewPrincipalsHandler(userSvc)
+	partiesHandler := parties.NewPartiesHandler(profileSvc, partyPolicySvc)
+	bootstrapHandler := handlers.NewBootstrapHandler(bootstrapSvc, onboarding)
 	providersHandler := handlers.NewProvidersHandler(handlers.ProvidersDeps{
 		Queries:      queries,
 		EnvRegistry:  cfg.Providers,
 		OAuth:        oauth,
 		RedirectBase: cfg.Auth.OAuthRedirectBaseURL,
+		Parties:      coreQueries,
 		Confirmer:    onboarding,
 	})
-	_ = providersHandler // used by generated routing; suppressed until mfgen wires RegisterOIDCConfigRoutes
 
 	// Onboarding endpoints. Mounted only when TOKEN_DISPLAY != none.
 	// They must be reachable even when state is unconfirmed (the whole
 	// point), so they sit OUTSIDE the RequireOIDCConfirmed gate.
 	if cfg.Onboarding.TokenDisplay != config.TokenDisplayNone {
 		r.Route("/v1/oidc-config", func(r chi.Router) {
-			// TODO(generated): oidc-config routes wired here by mfgen — see phase-3 codegen-main
-			// handlers.RegisterOIDCConfigRoutes(r, onboarding, providersHandler)
+			handlers.RegisterOIDCConfigRoutes(r, onboarding, providersHandler)
 		})
 	}
+
+	// First-run bootstrap: public, outside RequireOIDCConfirmed (the bootstrap
+	// may precede the OIDC configuration) and outside RequireAuth (the
+	// X-Setup-Token header is the credential).
+	r.Route("/v1/bootstrap", func(r chi.Router) {
+		handlers.RegisterBootstrapRoutes(r, bootstrapHandler)
+	})
 
 	// Everything else on /v1 — including local + OIDC auth — is gated
 	// by RequireOIDCConfirmed. When TOKEN_DISPLAY=none the middleware
@@ -568,104 +474,74 @@ func main() {
 	// but attaching it unconditionally keeps behavior consistent and
 	// cheap (a CurrentState() read is a single atomic pointer load).
 	requireConfirmed := auth.RequireOIDCConfirmed(onboarding.CurrentState)
+	requireAuth := auth.NewRequireAuth(authenticator)
 
+	// Public auth routes: no authentication middleware.
 	r.Route("/v1/auth", func(r chi.Router) {
 		r.Use(requireConfirmed)
-
-		// TODO(generated): auth routes wired here by mfgen — see phase-3 codegen-main
-		// authhandlers.RegisterRoutes(r, authHandler, oidcHandler)
+		authhandlers.RegisterRoutes(r, authHandler, oidcHandler)
 	})
 
-	// Dev-server-only demonstration mount for resolveActorOrAnonymous (plan/
-	// phase-01-anonymous-actor/005-facade-and-manifest-wiring.md). Mirrors
-	// the shape mfgen would emit for a route entry declaring
-	// scope: public with middleware: [requireOIDCConfirmed,
-	// resolveActorOrAnonymous] — no such route entry exists in
-	// moduleforge.module.yaml today; this block exists only to exercise the
-	// middleware locally. It does not change any existing route's behavior.
-	r.Route("/v1/anonymous-demo", func(r chi.Router) {
+	// Session routes: bearer-authenticated, including the OIDC step-up start.
+	r.Route("/v1/session", func(r chi.Router) {
 		r.Use(requireConfirmed)
-		r.Use(resolveActorOrAnonymous)
+		r.Use(requireAuth)
+		session.RegisterSessionRoutes(r, sessionHandler)
+		r.Post("/step-up/oidc/{provider}/start", oidcHandler.StepUpStart)
+	})
 
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			actorID, _ := opctx.ActorEntityID(r.Context())
-			fmt.Fprintf(w, "anonymous=%v actor_entity_id=%d\n", pubauth.IsAnonymousActor(r.Context()), actorID)
-		})
+	// Impersonation: start (POST /), renew and end the caller's impersonation
+	// session. Authorization is enforced at the service layer.
+	r.Route("/v1/impersonations", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		handlers.RegisterImpersonationRoutes(r, impersonationHandler)
+	})
+
+	// Self-service routes, including the OIDC credential-link start. Reachable
+	// to accounts with an unverified email (the GUI renders the "verify your
+	// email" page from them).
+	r.Route("/v1/me", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		me.RegisterMeRoutes(r, meHandler)
+		r.Post("/credentials/oidc/{provider}/start", oidcHandler.LinkStart)
+	})
+
+	r.Route("/v1/principals", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		principals.RegisterPrincipalRoutes(r, principalsHandler)
+	})
+
+	// Party administration: a party's profiles and managed users, and the
+	// status of a party profile. Authorization is enforced at the service
+	// layer.
+	r.Route("/v1/parties", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		parties.RegisterPartyRoutes(r, partiesHandler)
+	})
+	r.Route("/v1/profiles", func(r chi.Router) {
+		r.Use(requireConfirmed)
+		r.Use(requireAuth)
+		parties.RegisterProfileRoutes(r, partiesHandler)
 	})
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(requireConfirmed)
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireAuth(verifier, localMapper, resolver))
-
-			// GET /v1/self and GET /v1/self/identities both bypass the
-			// email-verification gate. The GUI uses GET /self to render the
-			// "verify your email" page, and an unverified account must still be
-			// able to see its own identities/credentials while working through
-			// that flow.
-			//
-			// TODO(generated): this hand-written block mirrors the manifest-driven
-			// wiring — see phase-1 self-route-wiring and phase-1 route-wiring
-			// (identities-manifest-wiring). GET/PUT /self and the identities/
-			// credential endpoints are now also expressed via four separate
-			// moduleforge.module.yaml /v1 route entries: handlers.RegisterSelfGetRoute
-			// and handlers.RegisterSelfIdentitiesReadRoute each register under a
-			// middleware group of requireOIDCConfirmed + requireAuth (no
-			// verified-email gate); handlers.RegisterSelfPutRoute and
-			// handlers.RegisterSelfIdentitiesWriteRoutes each register under those
-			// same two plus requireVerifiedEmail. This file is a non-generated
-			// standalone dev server that mfgen does not regenerate, so the
-			// hand-written block below stays.
-			r.Get("/self", selfHandler.Get)
-
-			// GET /self/identities — list own identities (one optional local
-			// credential + zero-or-more OIDC identities). Reachable to
-			// unverified accounts; see the comment above r.Get("/self", ...).
-			r.Get("/self/identities", identitiesHandler.List)
-
-			// GET /self/ssh-keys — list own active SSH public keys
-			// (docs/architecture/ssh-keys.md D9). Reachable to unverified
-			// accounts and not step-up-gated, matching GET
-			// /self/identities above.
-			r.Get("/self/ssh-keys", sshKeysHandler.ListSelf)
+			r.Use(requireAuth)
 
 			// Everything else requires a verified email address.
 			r.Group(func(r chi.Router) {
-				r.Use(auth.RequireVerifiedEmail)
+				r.Use(auth.NewRequireVerifiedEmail())
 
-				// PUT /v1/self — update own profile (verified accounts only).
-				r.Put("/self", selfHandler.Put)
-
-				// Identity-management self-service (Phase 4). Credential-mutating
-				// endpoints only -- GET /self/identities is mounted above, outside
-				// this verified-email group.
-				r.Post("/self/identities/oidc/{provider}/start", identitiesHandler.StartLink)
-				r.Delete("/self/identities/{identity_uuid}", identitiesHandler.Unlink)
-				r.Post("/self/credential/password", identitiesHandler.SetPassword)
-				r.Delete("/self/credential/password", identitiesHandler.RemovePassword)
-
-				// Step-up challenge (Phase 4, Task 5). Mounted regardless of whether
-				// AUTH_REQUIRE_STEP_UP is on — the endpoint must be reachable so the
-				// GUI can drive the flow after receiving a 409 step_up_required.
-				r.Post("/self/credential/step-up", identitiesHandler.StepUpRequest)
-				r.Post("/self/credential/step-up/verify", identitiesHandler.StepUpVerify)
-
-				// Register/revoke own SSH public key
-				// (docs/architecture/ssh-keys.md D9). Requires a verified
-				// email; the handler additionally enforces step-up when
-				// AUTH_REQUIRE_STEP_UP is on.
-				r.Post("/self/ssh-keys", sshKeysHandler.RegisterSelf)
-				r.Delete("/self/ssh-keys/{key_uuid}", sshKeysHandler.RevokeSelf)
-
-				// Core entity CRUD: /v1/entities/natural-persons, /corporations, etc.
+				// Core entity CRUD: /v1/entities/natural-persons, /organizations, etc.
 				r.Mount("/", coreRouter)
 
-				// Assume identity (admin).
-				r.Delete("/assume", assumeHandler.EndAssume)
-
 				// Audit log endpoints (admin-only). Authorization is enforced at the
-				// service layer by the Authorizer. URL change from the deprecated
-				// /v1/user-accounts/{uuid}/audit to audit-module's canonical shape:
+				// service layer by the Authorizer:
 				//   GET /v1/audit                        — ListRecent (admin)
 				//   GET /v1/audit/by-actor/{uuid}        — entries where uuid is the actor
 				//   GET /v1/audit/by-entity/{entity_uuid} — entries where uuid is the target
@@ -682,23 +558,6 @@ func main() {
 				r.Route("/authz", func(r chi.Router) {
 					authzhttpapi.RegisterRoutes(r, authzSvcs)
 				})
-
-				// TODO(generated): account routes wired here by mfgen — see phase-3 codegen-main
-				// handlers.RegisterAccountRoutes(r, usersHandler, assumeHandler, appsHandler)
-				//
-				// This registers the /user-accounts, assume-identity, and
-				// apps/user-accounts membership routes. Top-level /apps CRUD is not
-				// part of this group — it now lives in mod-core.
-
-				// Operator: list/register/revoke a user's SSH public keys
-				// (docs/architecture/ssh-keys.md D9), same middleware group as
-				// the /user-accounts entries above. Register/revoke are
-				// step-up-gated when the path UUID is the caller's own
-				// account (task-006 fix); a genuine operator-on-behalf-of-
-				// another-account call is not gated.
-				r.Get("/user-accounts/{uuid}/ssh-keys", sshKeysHandler.ListForAccount)
-				r.Post("/user-accounts/{uuid}/ssh-keys", sshKeysHandler.RegisterForAccount)
-				r.Delete("/user-accounts/{uuid}/ssh-keys/{key_uuid}", sshKeysHandler.RevokeForAccount)
 			})
 		})
 	})

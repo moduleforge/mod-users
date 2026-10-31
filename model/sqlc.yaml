@@ -11,6 +11,30 @@ sql:
         emit_interface: true
         emit_json_tags: true
         omit_unused_structs: true
+        # Every mod-users table lives in the mod_users schema, for which sqlc
+        # prefixes struct names with the schema (mod_users.users -> ModUsersUser).
+        # These renames keep the Go names unprefixed. Keys are the schema-
+        # prefixed, singularized table names sqlc derives.
+        rename:
+          mod_users_auth_challenge: AuthChallenge
+          mod_users_auth_signing_key: AuthSigningKey
+          mod_users_cred_anon: CredAnon
+          mod_users_cred_api_key: CredApiKey
+          mod_users_cred_email_otp: CredEmailOtp
+          mod_users_cred_oidc: CredOidc
+          mod_users_cred_password: CredPassword
+          mod_users_cred_ssh_key: CredSshKey
+          mod_users_credential: Credential
+          mod_users_credential_kind: CredentialKind
+          mod_users_credential_party_authorization: CredentialPartyAuthorization
+          mod_users_oidc_config: OidcConfig
+          mod_users_oidc_provider: OidcProvider
+          mod_users_party_authn_policy: PartyAuthnPolicy
+          mod_users_session: Session
+          mod_users_session_factor: SessionFactor
+          mod_users_session_refresh_token: SessionRefreshToken
+          mod_users_user: User
+          mod_users_user_identifier: UserIdentifier
         overrides:
           - db_type: "uuid"
             go_type:

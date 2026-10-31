@@ -162,7 +162,6 @@ services:
       # let env_file deliver the value unmodified.
       AUTH_OAUTH_REDIRECT_BASE_URL: http://localhost:8080
       AUTH_FRONTEND_RETURN_URL: http://localhost:3000/auth/oidc/return
-      AUTH_ADMIN_ROLE: admin
     ports:
       - "8080:8080"
     volumes:

@@ -59,7 +59,7 @@ type oidccfgFixture struct {
 // (or fails with adminErr when set) and a freshly minted setup token.
 func oidccfgNewFixture(t *testing.T, adminErr error) *oidccfgFixture {
 	t.Helper()
-	fq := newFakeQuerier(db.OidcConfig{ID: 1})
+	fq := newFakeQuerier(db.GetOIDCConfigRow{ID: 1})
 	fp := newFakeProvidersQuerier()
 	confirmer := NewOIDCConfigHandler(OIDCConfigDeps{
 		Queries:      fq,
@@ -475,7 +475,7 @@ func TestOidccfg_Update_EmptyBodyAccepted(t *testing.T) {
 // TestOidccfg_Create_Existing_409 pins the 409 and its new detail.
 func TestOidccfg_Create_Existing_409(t *testing.T) {
 	f := oidccfgNewFixture(t, nil)
-	f.fp.rows["keycloak"] = db.OidcProvider{ID: "keycloak", Enabled: true}
+	f.fp.rows["keycloak"] = db.ListOIDCProvidersRow{ID: "keycloak", Enabled: true}
 	rr := f.do(oidccfgAdmin, http.MethodPost, "/v1/oidc-config/providers", `{"id":"keycloak"}`)
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("got %d, want 409, body=%s", rr.Code, rr.Body.String())

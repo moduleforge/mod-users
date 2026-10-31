@@ -11,11 +11,11 @@ import (
 
 // stubProviderQuerier returns a canned list of DB rows.
 type stubProviderQuerier struct {
-	rows []db.OidcProvider
+	rows []db.ListOIDCProvidersRow
 	err  error
 }
 
-func (s stubProviderQuerier) ListOIDCProviders(ctx context.Context) ([]db.OidcProvider, error) {
+func (s stubProviderQuerier) ListOIDCProviders(ctx context.Context) ([]db.ListOIDCProvidersRow, error) {
 	return s.rows, s.err
 }
 
@@ -76,7 +76,7 @@ func TestLoadMergedProviders_DBOverridesEnv(t *testing.T) {
 			Scopes:       []string{"openid", "email", "profile"},
 		},
 	}
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "google",
 			ClientID:     validText("db-gid"),
@@ -106,7 +106,7 @@ func TestLoadMergedProviders_DBOverridesEnv(t *testing.T) {
 }
 
 func TestLoadMergedProviders_DBOnlyWellKnown(t *testing.T) {
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "google",
 			ClientID:     validText("db-only-gid"),
@@ -138,7 +138,7 @@ func TestLoadMergedProviders_DBOnlyWellKnown(t *testing.T) {
 }
 
 func TestLoadMergedProviders_UnknownProviderFullyFromDB(t *testing.T) {
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "keycloak",
 			DisplayName:  validText("My Keycloak"),
@@ -171,7 +171,7 @@ func TestLoadMergedProviders_UnknownProviderFullyFromDB(t *testing.T) {
 }
 
 func TestLoadMergedProviders_MicrosoftMultiTenant(t *testing.T) {
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:           "microsoft",
 			ClientID:     validText("mid"),
@@ -244,7 +244,7 @@ func TestLoadMergedProviders_EmptyScopesInDBFallsThrough(t *testing.T) {
 			Scopes:       []string{"openid", "email"},
 		},
 	}
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:      "google",
 			Scopes:  []string{}, // explicit empty array
@@ -274,7 +274,7 @@ func TestLoadMergedProviders_DisabledDBOverride(t *testing.T) {
 			Scopes:       []string{"openid", "email", "profile"},
 		},
 	}
-	rows := []db.OidcProvider{
+	rows := []db.ListOIDCProvidersRow{
 		{
 			ID:      "google",
 			Enabled: false,
@@ -306,7 +306,7 @@ func TestLoadMergedProviders_HasClientSecretAttribution(t *testing.T) {
 		},
 	}
 	// DB row with client_secret NULL — secret should still be true from env.
-	rows := []db.OidcProvider{{ID: "google", Enabled: true}}
+	rows := []db.ListOIDCProvidersRow{{ID: "google", Enabled: true}}
 	merged, err := LoadMergedProviders(context.Background(), env, stubProviderQuerier{rows: rows})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -314,4 +314,63 @@ func TestLoadMergedProviders_HasClientSecretAttribution(t *testing.T) {
 	if !merged["google"].HasClientSecret {
 		t.Errorf("HasClientSecret should be true when env provides secret")
 	}
+}
+
+func TestLoadMergedProviders_Policy(t *testing.T) {
+	envGoogle := Provider{ID: "google", ClientID: "gid", ClientSecret: "s", IssuerURL: "https://accounts.google.com", ClaimStyle: "google", JITMode: JITModeNone}
+
+	t.Run("env-only keeps the env policy", func(t *testing.T) {
+		merged, err := LoadMergedProviders(context.Background(), ProviderRegistry{"google": envGoogle}, stubProviderQuerier{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e := merged["google"].Effective
+		if e.PartyID != 0 || e.JITMode != JITModeNone || e.TrustACR {
+			t.Fatalf("policy = party %d mode %q trust %v", e.PartyID, e.JITMode, e.TrustACR)
+		}
+	})
+
+	t.Run("env without a mode defaults to byo", func(t *testing.T) {
+		env := envGoogle
+		env.JITMode = ""
+		merged, err := LoadMergedProviders(context.Background(), ProviderRegistry{"google": env}, stubProviderQuerier{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := merged["google"].Effective.JITMode; got != JITModeBYO {
+			t.Fatalf("JITMode = %q, want byo", got)
+		}
+	})
+
+	t.Run("db row is authoritative", func(t *testing.T) {
+		rows := []db.ListOIDCProvidersRow{{
+			ID: "google", Enabled: true,
+			PartyID: pgtype.Int8{Int64: 77, Valid: true}, JitMode: JITModeManaged, TrustAcr: true,
+		}}
+		merged, err := LoadMergedProviders(context.Background(), ProviderRegistry{"google": envGoogle}, stubProviderQuerier{rows: rows})
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := merged["google"]
+		if e := m.Effective; e.PartyID != 77 || e.JITMode != JITModeManaged || !e.TrustACR {
+			t.Fatalf("policy = party %d mode %q trust %v", e.PartyID, e.JITMode, e.TrustACR)
+		}
+		if m.DBOverride == nil || m.DBOverride.JITMode != JITModeManaged || !m.DBOverride.TrustACR || m.DBOverride.PartyID.Int64 != 77 {
+			t.Fatalf("DBOverride = %+v", m.DBOverride)
+		}
+		if reg := MergedRegistry(merged); reg["google"].JITMode != JITModeManaged {
+			t.Fatalf("registry lost the policy: %+v", reg["google"])
+		}
+	})
+
+	t.Run("db-only provider", func(t *testing.T) {
+		rows := []db.ListOIDCProvidersRow{{ID: "acme", Enabled: true, JitMode: JITModeBYO}}
+		merged, err := LoadMergedProviders(context.Background(), ProviderRegistry{}, stubProviderQuerier{rows: rows})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := merged["acme"].Effective.JITMode; got != JITModeBYO {
+			t.Fatalf("JITMode = %q", got)
+		}
+	})
 }

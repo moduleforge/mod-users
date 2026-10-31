@@ -1,12 +1,23 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { api, fetchProviders } from './api';
 import {
+  clearStoredHandoffVerifier,
+  clearStoredSession,
   clearStoredToken,
   configureUsersApi,
+  DEFAULT_FORK_TIMEOUT_MS,
   getApiBaseUrl,
+  getForkTimeoutMs,
+  getStoredHandoffVerifier,
+  getStoredProfileUuid,
+  getStoredRefreshToken,
   getStoredToken,
   getTokenStorageKey,
   resetUsersApiConfig,
+  setStoredHandoffVerifier,
+  setStoredProfileUuid,
+  setStoredRefreshToken,
+  setStoredToken,
   USERS_TOKEN_KEY,
 } from './config';
 
@@ -16,7 +27,7 @@ type W = { __USERS_API_URL__?: string };
 
 afterEach(() => {
   resetUsersApiConfig();
-  localStorage.clear();
+  sessionStorage.clear();
   globalThis.fetch = originalFetch;
   delete (window as W).__USERS_API_URL__;
   if (originalEnv === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -149,31 +160,31 @@ describe('validation', () => {
 describe('token key', () => {
   test('default key is auth_token', () => {
     expect(getTokenStorageKey()).toBe(USERS_TOKEN_KEY);
-    localStorage.setItem('auth_token', 'd');
+    sessionStorage.setItem('auth_token', 'd');
     expect(getStoredToken()).toBe('d');
   });
 
   test('requests send the Bearer from the custom key only', async () => {
     const seen = captureFetch({});
-    localStorage.setItem('auth_token', 'default-token');
-    localStorage.setItem('custom_key', 'custom-token');
+    sessionStorage.setItem('auth_token', 'default-token');
+    sessionStorage.setItem('custom_key', 'custom-token');
     configureUsersApi({ tokenStorageKey: 'custom_key' });
-    await api.self.get();
+    await api.me.get();
     expect(seen.headers[0]!['Authorization']).toBe('Bearer custom-token');
 
-    localStorage.removeItem('custom_key');
-    await api.self.get();
+    sessionStorage.removeItem('custom_key');
+    await api.me.get();
     expect(seen.headers[1]!['Authorization']).toBeUndefined();
   });
 
   test('getStoredToken and clearStoredToken honor the key', () => {
     configureUsersApi({ tokenStorageKey: 'custom_key' });
-    localStorage.setItem('custom_key', 'c');
-    localStorage.setItem('auth_token', 'd');
+    sessionStorage.setItem('custom_key', 'c');
+    sessionStorage.setItem('auth_token', 'd');
     expect(getStoredToken()).toBe('c');
     clearStoredToken();
-    expect(localStorage.getItem('custom_key')).toBeNull();
-    expect(localStorage.getItem('auth_token')).toBe('d');
+    expect(sessionStorage.getItem('custom_key')).toBeNull();
+    expect(sessionStorage.getItem('auth_token')).toBe('d');
   });
 
   test('a 401 clears only the custom key', async () => {
@@ -183,10 +194,127 @@ describe('token key', () => {
         headers: { 'Content-Type': 'application/json' },
       })) as unknown as typeof fetch;
     configureUsersApi({ tokenStorageKey: 'custom_key' });
-    localStorage.setItem('custom_key', 'c');
-    localStorage.setItem('auth_token', 'd');
-    await api.self.get().catch(() => {});
-    expect(localStorage.getItem('custom_key')).toBeNull();
-    expect(localStorage.getItem('auth_token')).toBe('d');
+    sessionStorage.setItem('custom_key', 'c');
+    sessionStorage.setItem('auth_token', 'd');
+    await api.me.get().catch(() => {});
+    expect(sessionStorage.getItem('custom_key')).toBeNull();
+    expect(sessionStorage.getItem('auth_token')).toBe('d');
   });
+});
+
+describe('per-tab storage', () => {
+  test('access, refresh and profile live in sessionStorage under suffixed keys, never localStorage', () => {
+    setStoredToken('a');
+    setStoredRefreshToken('r');
+    setStoredProfileUuid('p');
+    setStoredHandoffVerifier('v');
+    expect(sessionStorage.getItem('auth_token')).toBe('a');
+    expect(sessionStorage.getItem('auth_token.refresh')).toBe('r');
+    expect(sessionStorage.getItem('auth_token.profile')).toBe('p');
+    expect(sessionStorage.getItem('auth_token.handoff_verifier')).toBe('v');
+    // Assertion that the persistent store is unused.
+    expect(localStorage.length).toBe(0);
+    expect(getStoredToken()).toBe('a');
+    expect(getStoredRefreshToken()).toBe('r');
+    expect(getStoredProfileUuid()).toBe('p');
+    expect(getStoredHandoffVerifier()).toBe('v');
+  });
+
+  test('the suffixed keys follow a configured tokenStorageKey', () => {
+    configureUsersApi({ tokenStorageKey: 'custom_key' });
+    setStoredToken('a');
+    setStoredRefreshToken('r');
+    setStoredProfileUuid('p');
+    expect(sessionStorage.getItem('custom_key')).toBe('a');
+    expect(sessionStorage.getItem('custom_key.refresh')).toBe('r');
+    expect(sessionStorage.getItem('custom_key.profile')).toBe('p');
+    expect(sessionStorage.getItem('auth_token')).toBeNull();
+  });
+
+  test('clearStoredSession removes access, refresh and profile but not the handoff verifier', () => {
+    setStoredToken('a');
+    setStoredRefreshToken('r');
+    setStoredProfileUuid('p');
+    setStoredHandoffVerifier('v');
+    clearStoredSession();
+    expect(getStoredToken()).toBeNull();
+    expect(getStoredRefreshToken()).toBeNull();
+    expect(getStoredProfileUuid()).toBeNull();
+    expect(getStoredHandoffVerifier()).toBe('v');
+    clearStoredHandoffVerifier();
+    expect(getStoredHandoffVerifier()).toBeNull();
+  });
+
+  test('falls back to memory when sessionStorage throws, and reads, overwrites and clears there', () => {
+    const real = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new Error('storage blocked');
+      },
+    });
+    try {
+      setStoredToken('mem-a');
+      expect(getStoredToken()).toBe('mem-a');
+      setStoredToken('mem-b');
+      expect(getStoredToken()).toBe('mem-b');
+      clearStoredSession();
+      expect(getStoredToken()).toBeNull();
+    } finally {
+      if (real) Object.defineProperty(window, 'sessionStorage', real);
+    }
+    // The blocked-storage session never leaked into the real store.
+    expect(sessionStorage.getItem('auth_token')).toBeNull();
+  });
+
+  test('a storage write that throws (quota) keeps the value in memory', () => {
+    const realSet = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    try {
+      setStoredToken('quota-token');
+      expect(getStoredToken()).toBe('quota-token');
+    } finally {
+      Storage.prototype.setItem = realSet;
+    }
+    // A later successful write supersedes the memory copy.
+    setStoredToken('stored-token');
+    expect(getStoredToken()).toBe('stored-token');
+    clearStoredToken();
+    expect(getStoredToken()).toBeNull();
+  });
+
+  test('requests send Bearer plus credentials omit', async () => {
+    const calls: RequestInit[] = [];
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      calls.push(init ?? {});
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    setStoredToken('tab-token');
+    await api.me.get();
+    expect(calls[0]!.credentials).toBe('omit');
+    expect((calls[0]!.headers as Record<string, string>)['Authorization']).toBe('Bearer tab-token');
+  });
+});
+
+describe('forkTimeoutMs', () => {
+  test('defaults, accepts a positive integer, and resets', () => {
+    expect(getForkTimeoutMs()).toBe(DEFAULT_FORK_TIMEOUT_MS);
+    configureUsersApi({ forkTimeoutMs: 250 });
+    expect(getForkTimeoutMs()).toBe(250);
+    resetUsersApiConfig();
+    expect(getForkTimeoutMs()).toBe(DEFAULT_FORK_TIMEOUT_MS);
+  });
+
+  for (const bad of [0, -1, 1.5, 30001, Number.NaN, '5' as unknown as number]) {
+    test(`rejects ${String(bad)} and leaves other fields unapplied`, () => {
+      configureUsersApi({ baseUrl: 'https://prior.test' });
+      expect(() =>
+        configureUsersApi({ baseUrl: 'https://new.test', forkTimeoutMs: bad }),
+      ).toThrow(TypeError);
+      expect(getApiBaseUrl()).toBe('https://prior.test');
+      expect(getForkTimeoutMs()).toBe(DEFAULT_FORK_TIMEOUT_MS);
+    });
+  }
 });

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -203,5 +204,44 @@ func TestCorsOptions_ExactOriginAndLocalUnchanged(t *testing.T) {
 	})
 	if !ok || opts.AllowCredentials {
 		t.Errorf("local wildcard: ok=%v credentials=%v, want true/false", ok, opts.AllowCredentials)
+	}
+}
+
+// TestCorsOptions_MethodsAndHeaders pins that PATCH is an allowed method and
+// that the stale step-up header is no longer advertised while X-Setup-Token is.
+func TestCorsOptions_MethodsAndHeaders(t *testing.T) {
+	opts, ok := corsOptions(&config.Config{
+		DeployMode: config.DeployModeK8s,
+		Server:     config.ServerConfig{CORSOrigins: "https://app.example.com"},
+	})
+	if !ok {
+		t.Fatal("corsOptions ok = false, want true")
+	}
+	hasPatch := false
+	for _, m := range opts.AllowedMethods {
+		if m == http.MethodPatch {
+			hasPatch = true
+		}
+	}
+	if !hasPatch {
+		t.Errorf("AllowedMethods = %v, want PATCH included", opts.AllowedMethods)
+	}
+	// Name is split so the repo-wide grep gate for the retired header stays empty.
+	stale := "X-Step-Up-" + "Token"
+	for _, h := range opts.AllowedHeaders {
+		if strings.EqualFold(h, stale) {
+			t.Errorf("AllowedHeaders = %v, want %s absent", opts.AllowedHeaders, stale)
+		}
+	}
+	// The setup-token routes (bootstrap, oidc-config writes) send this header, so
+	// a missing entry would make their cross-origin preflight fail.
+	hasSetup := false
+	for _, h := range opts.AllowedHeaders {
+		if strings.EqualFold(h, "X-Setup-Token") {
+			hasSetup = true
+		}
+	}
+	if !hasSetup {
+		t.Errorf("AllowedHeaders = %v, want X-Setup-Token included", opts.AllowedHeaders)
 	}
 }

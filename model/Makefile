@@ -6,6 +6,7 @@ DATABASE_URL ?= postgresql://users:users@localhost:5432/users?sslmode=disable
 # for fresh clones before go work sync has run.
 CORE_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/core-model 2>/dev/null || echo ../../mod-core/model)
 AUTHZ_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/authz-model 2>/dev/null || echo ../../mod-authz/model)
+AUDIT_DIR := $(shell go list -m -f '{{.Dir}}' github.com/moduleforge/audit-model 2>/dev/null || echo ../../mod-audit/model)
 
 # Aggregate directory holding the sibling repos. Same convention as
 # ../scripts/link-siblings.sh: MODULEFORGE_SIBLINGS_DIR overrides; otherwise
@@ -24,11 +25,12 @@ SHADOW_DB_PREREQ_DIRS ?= $(SIBLINGS_DIR)/mod-core/model/migrations $(SIBLINGS_DI
 # ---------------------------------------------------------------------------
 
 .PHONY: compose
-compose: ## Assemble composed migrations dir from core-model + authz-model + users-module
+compose: ## Assemble composed migrations dir from core-model + authz-model + audit-model + users-module
 	@rm -rf schema/migrations
 	@mkdir -p schema/migrations
 	@cp $(CORE_DIR)/migrations/*.sql schema/migrations/
 	@cp $(AUTHZ_DIR)/migrations/*.sql schema/migrations/
+	@cp $(AUDIT_DIR)/migrations/*.sql schema/migrations/
 	@cp migrations/sql/*.sql schema/migrations/
 
 build: compose

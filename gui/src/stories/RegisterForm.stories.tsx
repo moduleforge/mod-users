@@ -14,3 +14,18 @@ export const Default: Story = () => (
     </div>
   </AuthProvider>
 );
+
+export const WithAppAndSelectionRouting: Story = () => (
+  <AuthProvider>
+    <div className="w-full max-w-sm p-6">
+      <RegisterForm
+        app="demo"
+        returnPath="/welcome"
+        onSuccess={(returnPath) => console.log('registered', returnPath)}
+        onSelectionRequired={(selectProfilePath, returnPath) =>
+          console.log('select a profile at', selectProfilePath, 'then resume', returnPath)
+        }
+      />
+    </div>
+  </AuthProvider>
+);

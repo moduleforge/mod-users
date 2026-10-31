@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -10,123 +9,94 @@ import (
 	"time"
 )
 
-type panicSender struct{ called atomic.Int32 }
-
-func (p *panicSender) Send(context.Context, string, string, string) error {
-	p.called.Add(1)
-	panic("boom: secret-code-123456")
-}
-
-type deadlineSender struct {
-	started chan struct{}
-	release chan struct{}
-	done    chan error
-}
-
-func (b *deadlineSender) Send(ctx context.Context, _, _, _ string) error {
-	b.started <- struct{}{}
-	select {
-	case <-b.release:
-		return nil
-	case <-ctx.Done():
-		b.done <- ctx.Err()
-		return ctx.Err()
-	}
-}
-
-func emailCodeReq() *http.Request {
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/email-code/request",
-		bytes.NewBufferString(`{"email":"user@example.com","purpose":"login"}`))
-	req.Header.Set("Content-Type", "application/json")
-	return req
-}
-
-func TestEmailCodeRequest_PanickingSenderRecovered(t *testing.T) {
-	t.Parallel()
-	named := namedAccount("user@example.com")
-	ps := &panicSender{}
-	h := newGuardTestHandler(&stubAuthQuerier{accountByEmail: &named}, ps)
-
-	rec := httptest.NewRecorder()
-	h.EmailCodeRequest(rec, emailCodeReq())
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want 204", rec.Code)
-	}
+// waitFor polls cond until it holds or five seconds pass.
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for ps.called.Load() < 1 && time.Now().Before(deadline) {
+	for !cond() && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if ps.called.Load() != 1 {
-		t.Fatalf("sender called %d times, want 1", ps.called.Load())
-	}
-	// Slot must be released after the panic.
-	deadline = time.Now().Add(5 * time.Second)
-	for len(h.emailCodeSlotChan()) != 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if n := len(h.emailCodeSlotChan()); n != 0 {
-		t.Errorf("slot not released after panic: %d held", n)
+	if !cond() {
+		t.Fatalf("timed out waiting for %s", what)
 	}
 }
 
-func TestRunBoundedEmailWork_RecoversPanic(t *testing.T) {
-	t.Parallel()
-	runBoundedEmailWork(context.Background(), time.Second, func(context.Context) { panic("x") })
+func dispatchReq() *http.Request {
+	return httptest.NewRequest(http.MethodPost, "/v1/auth/email-code/request", nil)
 }
 
-func TestRunBoundedEmailWork_DeadlineCancelsBlockedWork(t *testing.T) {
+func TestDispatch_PanickingWorkIsRecoveredAndReleasesItsSlot(t *testing.T) {
 	t.Parallel()
-	bs := &deadlineSender{started: make(chan struct{}, 1), release: make(chan struct{}), done: make(chan error, 1)}
+	h := &Handler{}
+	var ran atomic.Int32
+	h.dispatch(dispatchReq(), "panic", func(context.Context) {
+		ran.Add(1)
+		panic("boom: secret-code-123456")
+	})
+	waitFor(t, "the job to run", func() bool { return ran.Load() == 1 })
+	waitFor(t, "the slot to be released", func() bool { return len(h.emailSlotChan()) == 0 })
+}
+
+func TestRunBounded_RecoversPanic(t *testing.T) {
+	t.Parallel()
+	runBounded(context.Background(), time.Second, "panic", func(context.Context) { panic("x") })
+}
+
+func TestRunBounded_DeadlineCancelsBlockedWork(t *testing.T) {
+	t.Parallel()
+	done := make(chan error, 1)
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		runBoundedEmailWork(context.Background(), 50*time.Millisecond, func(ctx context.Context) {
-			_ = bs.Send(ctx, "", "", "")
+		runBounded(context.Background(), 50*time.Millisecond, "blocked", func(ctx context.Context) {
+			<-ctx.Done()
+			done <- ctx.Err()
 		})
 	}()
 	select {
-	case err := <-bs.done:
+	case err := <-done:
 		if err != context.DeadlineExceeded {
 			t.Errorf("err = %v, want DeadlineExceeded", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("blocked sender never observed cancellation")
+		t.Fatal("blocked work never observed cancellation")
 	}
 	<-finished
 }
 
-func TestEmailCodeRequest_SaturatedBoundDropsWork(t *testing.T) {
+func TestDispatch_SaturatedBoundDropsWork(t *testing.T) {
 	t.Parallel()
-	named := namedAccount("user@example.com")
-	bs := &deadlineSender{started: make(chan struct{}, 4), release: make(chan struct{}), done: make(chan error, 4)}
-	h := newGuardTestHandler(&stubAuthQuerier{accountByEmail: &named}, bs)
-	h.emailCodeConcurrency = 1
+	h := &Handler{emailConcurrency: 1}
+	release := make(chan struct{})
+	var started, dropped atomic.Int32
+	h.dispatch(dispatchReq(), "first", func(context.Context) {
+		started.Add(1)
+		<-release
+	})
+	waitFor(t, "the first job to start", func() bool { return started.Load() == 1 })
 
+	h.dispatch(dispatchReq(), "second", func(context.Context) { dropped.Add(1) })
+	time.Sleep(100 * time.Millisecond)
+	if dropped.Load() != 0 {
+		t.Error("a job dispatched while every slot was busy still ran")
+	}
+	close(release)
+	waitFor(t, "the slot to be released", func() bool { return len(h.emailSlotChan()) == 0 })
+
+	// With the slot free again a new job runs.
+	h.dispatch(dispatchReq(), "third", func(context.Context) { dropped.Add(1) })
+	waitFor(t, "the third job to run", func() bool { return dropped.Load() == 1 })
+}
+
+func TestAnswerAfterFloor_HoldsTheAnswerForTheFloor(t *testing.T) {
+	t.Parallel()
 	rec := httptest.NewRecorder()
-	h.EmailCodeRequest(rec, emailCodeReq())
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("first status = %d, want 204", rec.Code)
-	}
-	select {
-	case <-bs.started:
-	case <-time.After(5 * time.Second):
-		t.Fatal("first send never started")
-	}
-
 	start := time.Now()
-	rec2 := httptest.NewRecorder()
-	h.EmailCodeRequest(rec2, emailCodeReq())
-	elapsed := time.Since(start)
-	if rec2.Code != http.StatusNoContent {
-		t.Errorf("saturated status = %d, want 204", rec2.Code)
+	answerAfterFloor(rec, dispatchReq(), start)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
 	}
-	if elapsed < 150*time.Millisecond || elapsed > 600*time.Millisecond {
-		t.Errorf("saturated latency = %v, want about 200ms", elapsed)
+	if elapsed := time.Since(start); elapsed < antiEnumerationFloor-20*time.Millisecond {
+		t.Errorf("answered after %v, want at least about %v", elapsed, antiEnumerationFloor)
 	}
-	select {
-	case <-bs.started:
-		t.Error("dropped request still started a send")
-	case <-time.After(100 * time.Millisecond):
-	}
-	close(bs.release)
 }

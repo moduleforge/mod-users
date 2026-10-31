@@ -38,33 +38,43 @@ provides:
         - context                # context.Context — startup-time OIDC discovery I/O
         - infra:cfg              # *config.Config
 
-    # JWT token verifier — validates locally-minted Bearer tokens on every request.
+    # verifier — validates locally-minted EdDSA Bearer tokens (the public half
+    # of the signing key plus any JWT_VERIFY_PUBLIC_KEYS).
     - name: verifier
       type: "*auth.Verifier"
-      constructor: auth.NewVerifier
+      constructor: auth.NewLocalVerifier
       returnsError: true
       args:
         - context
-        - expr:""                     # issuerURL — empty for local-only mode
-        - expr:""                     # clientID — empty for local-only mode
-        - field:cfg.LocalAuth.JWTSecret
-        - field:cfg.LocalAuth.LocalIssuer
+        - field:cfg.LocalAuth
 
-    # claimMapper turns JWT claims into a Principal for RequireAuth middleware.
-    # The public auth.NewClaimMapper wrapper converts config.AuthConfig to MapperOptions.
-    - name: claimMapper
-      type: "auth.ClaimMapper"
-      constructor: auth.NewClaimMapper
+    # authenticator — authenticates a bearer access token with per-request
+    # liveness: one database round trip re-checks the session or credential
+    # and the acting profile. Consumed by requireAuth and resolveOrAnonymous.
+    # The authorizer evaluates the invite-only app gate (login on the app) in
+    # the same check.
+    - name: authenticator
+      type: "*auth.Authenticator"
+      constructor: auth.NewAuthenticatorWithAppGate
+      args:
+        - infra:pool
+        - service:verifier
+        - field:cfg.Auth
+        - service:authorizer
+
+    # signer — signs this module's EdDSA access tokens.
+    - name: signer
+      type: "*auth.Signer"
+      constructor: auth.NewSigner
       returnsError: true
       args:
-        - expr:"generic"         # mapperStyle hardcoded for demo deployment
-        - field:cfg.Auth         # config.AuthConfig — public wrapper maps to MapperOptions
+        - field:cfg.LocalAuth
 
     # anonymousActor — the shared, zero-authority anonymous system actor.
     # Resolved once at startup by slug (system_actors.slug = 'anonymous',
     # seeded by migration 0100_baseline.sql); NewAnonymousActor asserts
     # at boot that the actor holds zero grants and refuses to start if it
-    # finds any. Consumed only by resolveActorOrAnonymous below — this
+    # finds any. Consumed only by resolveOrAnonymous below — this
     # service entry has no other consumer.
     #
     # provides.middleware nodes are unconditional reachability roots in
@@ -83,40 +93,201 @@ provides:
         - context
         - infra:pool
 
-    # userResolver resolves a JWT Principal to an internal UserAccount / entity.
-    # Receives observerGroup directly (it is declared before non-observer services).
-    - name: userResolver
-      type: "*auth.UserResolver"
-      constructor: auth.NewUserResolver
+    # challengeService — issues and verifies the emailed one-time codes and the
+    # one-time login handoffs. infra:smtp satisfies the email.Sender interface.
+    - name: challengeService
+      type: "*usersservice.ChallengeService"
+      constructor: usersservice.NewChallengeService
       args:
-        - infra:pool
-        - queries:usersdb  # *db.Queries (users-module model)
-        - queries:coredb   # *coredb.Queries
-        - field:cfg.Auth.AdminRole
-        - field:cfg.LocalAuth.LocalIssuer
-        - service:observerGroup  # *observer.ObserverGroup — declared before non-observer services
+        - queries:usersdb
+        - infra:smtp
 
-    # UserAccountService — manages user account CRUD and delegates mutation events
-    # to the observer group.
-    - name: userAccountService
-      type: "*usersservice.UserAccountService"
-      constructor: usersservice.NewUserAccountService
+    # credentialService — password, SSH key, OIDC, API key, email code and
+    # anonymous credentials.
+    - name: credentialService
+      type: "*usersservice.CredentialService"
+      constructor: usersservice.NewCredentialService
       args:
-        - infra:pool
-        - queries:usersdb            # db.Querier
-        - queries:coredb             # coredb.Querier
-        - service:authorizer         # coreAuthz.Authorizer
-        - service:observerGroup      # *observer.ObserverGroup (reserved — assembled by compiler)
-        - service:naturalPersonService  # coreservice.NaturalPersonServicer from core-module
-        - service:typeResolver       # *types.Resolver from core-module
+        - queries:usersdb
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
         - symbol:auth.HashPassword   # func(plain string)(string, error) — passed as value
 
-    # onboardingHandler — OIDCConfigHandler; owns the oidc_config row and BootState.
-    # Consumed by requireOIDCConfirmed middleware and the /v1/oidc-config route group.
-    # The public handlers.NewOIDCConfigHandler wrapper constructs OIDCConfigDeps internally.
-    # envNoOIDCEnv/adminChecker are the two trailing args added by the Phase 02
-    # onboarding-boot-helpers task; neither app has an admin-checker concept yet,
-    # so adminChecker is always expr:nil here.
+    # sessionService — sessions, refresh tokens, sign-in flows and step-up.
+    - name: sessionService
+      type: "*usersservice.SessionService"
+      constructor: usersservice.NewSessionService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+        - service:signer
+        - service:challengeService
+        - expr:usersservice.SessionConfigFrom(cfg)
+
+    # impersonationService — impersonation as a child session of the
+    # administrator's own (/v1/impersonations): a recorded reason, a lifetime
+    # capped by AUTH_IMPERSONATION_TTL and AUTH_IMPERSONATION_MAX (carried by
+    # sessionService's SessionConfig), a fresh-authentication requirement (the
+    # authorizer's `impersonate` gate), no nesting, and the real administrator
+    # always recorded. Observations: `impersonate`, `update` and `revoke` on
+    # resource `impersonation`.
+    - name: impersonationService
+      type: "*usersservice.ImpersonationService"
+      constructor: usersservice.NewImpersonationService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - service:authorizer
+        - service:observerGroup
+        - service:sessionService
+
+    # userService — user creation and the /v1/me and /v1/principals operations.
+    # NewUserServiceWithSelfService is NewUserService followed by
+    # UserService.WithSelfService (pool, sessions, challenges, op resolver and
+    # AUTH_SELF_SERVICE_MAX_AUTH_AGE). It also registers the user and profile
+    # display renderers (U19) on the shared displayRegistry from core-module;
+    # this is the manifest's only path to RegisterDisplayRenderers, and
+    # userService is reachable through the /v1/me and /v1/principals handlers.
+    - name: userService
+      type: "*usersservice.UserService"
+      constructor: usersservice.NewUserServiceWithSelfService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+        - service:naturalPersonService  # coreservice.NaturalPersonServicer from core-module
+        - service:credentialService
+        - service:sessionService
+        - service:challengeService
+        - infra:opReg                   # *authzapi.OperationRegistry — op resolver
+        - field:cfg.Auth.SelfServiceMaxAuthAge
+        - service:displayRegistry       # *display.Registry from core-module
+
+    # profileService — the party profile lifecycle: invitations, acceptance,
+    # suspension, resumption and ending (with departure cleanup), managed users
+    # and the lifecycle observers other modules subscribe to
+    # (AddLifecycleObserver, in-transaction).
+    - name: profileService
+      type: "*usersservice.ProfileService"
+      constructor: usersservice.NewProfileService
+      args:
+        - infra:pool
+        - queries:usersdb
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+        - service:userService
+        - service:credentialService
+        - service:sessionService
+
+    # partyPolicyService — how a party gates its profiles: the authentication
+    # policy (/v1/parties/{party_uuid}/authn-policy), the credentials authorized
+    # for it (/credential-authorizations) and those confined to it
+    # (/confinements).
+    - name: partyPolicyService
+      type: "*usersservice.PartyPolicyService"
+      constructor: usersservice.NewPartyPolicyService
+      args:
+        - infra:pool
+        - queries:coredb
+        - service:authorizer
+        - service:observerGroup
+        - service:userService
+
+    # personalPartyService — EnsurePersonalParty, the Go API mod-billing calls
+    # for personal team plans: it idempotently gives the acting user their own
+    # natural_person party and an owned-scope manage grant over it, in the
+    # caller's transaction. It has no HTTP route.
+    - name: personalPartyService
+      type: "*usersservice.PersonalPartyService"
+      constructor: usersservice.NewPersonalPartyService
+      args:
+        - service:observerGroup
+
+    # collaboratorGate — the outside-collaborator check mod-authz consults when
+    # a profile outside a party's own is added to the party's actor group or
+    # named as a grant actor: it compares the profile holder's credentials with
+    # the party's authentication policy and records the caller's confirmation of
+    # a mismatch (profile_policy_confirmations). mod-authz's manifest consumes it
+    # as optionalService:collaboratorGate and matches it structurally; it holds
+    # no state and needs no arguments.
+    - name: collaboratorGate
+      type: "*usersservice.CollaboratorGate"
+      constructor: usersservice.NewCollaboratorGate
+      args: []
+
+    # bootstrapService — the first-run bootstrap (POST /v1/bootstrap): in one
+    # transaction the first user, the operator party, the admin profile and
+    # its wildcard manage grant, the operator party's authentication policy
+    # and the landing session, with core_claim_operator_party as the single
+    # winner. Also answers the operator-administrator check of the OIDC
+    # configuration routes (operatorAdminChecker).
+    - name: bootstrapService
+      type: "*usersservice.BootstrapService"
+      constructor: usersservice.NewBootstrapService
+      args:
+        - infra:pool
+        - service:authorizer
+        - service:observerGroup
+        - service:userService
+        - service:credentialService
+        - service:sessionService
+        - service:profileService
+        - service:bootstrapOrganizationService
+
+    # bootstrapOrganizationService — mod-core's OrganizationService, extracted
+    # from the coreServices aggregate (mod-core's manifest provides no
+    # organization service of its own). Only bootstrapService consumes it, for
+    # the trusted, non-authorizing CreateInTx that creates the operator
+    # organization; no handler may take it.
+    - name: bootstrapOrganizationService
+      type: "coreservice.OrganizationServicer"
+      constructor: usersservice.OrganizationFromServices
+      args:
+        - service:coreServices
+
+    # operatorAdminChecker — the OIDC configuration routes' ambient admin
+    # check: a bearer session whose acting profile is an operator profile
+    # holding wildcard manage. Without it only the setup token authorizes
+    # those routes, and the token is cleared once the bootstrap is done and
+    # OIDC is confirmed.
+    - name: operatorAdminChecker
+      type: "handlers.OperatorAdminCheck"
+      constructor: handlers.NewOperatorAdminChecker
+      args:
+        - service:authenticator
+        - service:bootstrapService
+
+    # directoryService — batch display lookups for other modules; does no
+    # authorization (callers authorize first).
+    - name: directoryService
+      type: "*usersservice.DirectoryService"
+      constructor: usersservice.NewDirectoryService
+      args:
+        - infra:pool
+
+    # oidcResolver — decides what a verified external OIDC identity maps to
+    # (by issuer and subject credential, never by email).
+    - name: oidcResolver
+      type: "*auth.OIDCResolver"
+      constructor: auth.NewOIDCResolver
+      args:
+        - queries:usersdb
+
+    # onboardingHandler — OIDCConfigHandler; owns the oidc_config row, BootState
+    # and the setup token, which stays active while the bootstrap is pending
+    # (platform_settings.operator_party_id NULL) or OIDC is unconfirmed.
+    # Consumed by requireOIDCConfirmed middleware, the /v1/oidc-config route
+    # group and bootstrapHandler. The public handlers.NewOIDCConfigHandler
+    # wrapper constructs OIDCConfigDeps internally. adminChecker is the
+    # operator-administrator check; the trailing queries:coredb reads
+    # platform_settings.
     - name: onboardingHandler
       type: "*handlers.OIDCConfigHandler"
       constructor: handlers.NewOIDCConfigHandler
@@ -126,10 +297,11 @@ provides:
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
         - expr:oauthOrchestrator.EnvNoOIDCAccounts()
-        - expr:nil
+        - service:operatorAdminChecker
+        - queries:coredb
 
-    # authHandler — local auth and OIDC callback handler; serves /v1/auth/*.
-    # smtp infra singleton satisfies the email.Sender interface.
+    # authHandler — local auth handler; serves /v1/auth/*.
+    # smtp infra singleton satisfies the authhandlers.Sender interface.
     - name: authHandler
       type: "*authhandlers.Handler"
       constructor: authhandlers.New
@@ -137,54 +309,35 @@ provides:
         - infra:pool
         - queries:usersdb
         - queries:coredb
-        - field:cfg.LocalAuth.JWTSecret
-        - field:cfg.LocalAuth.LocalIssuer
-        - infra:smtp                 # *email.SMTPSender — satisfies email.Sender interface
+        - service:userService
+        - service:credentialService
+        - service:challengeService
+        - service:sessionService
+        - service:oauthOrchestrator
+        - infra:smtp                 # *email.SMTPSender — satisfies authhandlers.Sender
         - field:cfg.Server.GUIBaseURL
 
-    # assumeHandler — assume-identity handler; serves assume routes under /v1.
-    # Depends on userAccountService for identity switching and cfg for JWT signing.
-    - name: assumeHandler
-      type: "*handlers.AssumeHandler"
-      constructor: handlers.NewAssumeHandler
-      args:
-        - service:userAccountService
-        - field:cfg.LocalAuth.JWTSecret
-        - field:cfg.LocalAuth.LocalIssuer
-
-    # appsHandler — apps/user-accounts membership handler; serves the
-    # /v1/apps/{uuid}/user-accounts routes. Top-level /apps CRUD lives in
-    # mod-core. Depends on authorizer and observerGroup in addition to pool
-    # and queries:usersdb; entityResolver + queries:coredb resolve the
-    # {uuid} path param to the app's internal id (mod-users no longer has
-    # its own apps query).
-    - name: appsHandler
-      type: "*handlers.AppsHandler"
-      constructor: handlers.NewAppsHandler
-      args:
-        - infra:pool
-        - queries:usersdb
-        - service:authorizer
-        - service:observerGroup
-        - service:entityResolver
-        - queries:coredb              # *coredb.Queries
-
-    # oidcHandler — OIDC callback and token-exchange handler; serves /v1/auth OIDC routes.
-    # Depends on userResolver, userAccountService, oauthOrchestrator, and observerGroup.
+    # oidcHandler — OIDC sign-in start and callback (/v1/auth), plus the link
+    # start (/v1/me) and the step-up start (/v1/session).
     - name: oidcHandler
       type: "*authhandlers.OIDCHandler"
       constructor: authhandlers.NewOIDCHandler
       args:
         - infra:pool
         - queries:usersdb
+        - queries:coredb
         - service:oauthOrchestrator
-        - service:userResolver
-        - service:userAccountService
-        - infra:cfg
+        - service:oidcResolver
+        - service:userService
+        - service:credentialService
+        - service:challengeService
+        - service:sessionService
         - service:observerGroup
+        - infra:cfg
 
     # providersHandler — OIDC provider CRUD handler; serves /v1/oidc-config provider routes.
-    # Depends on oauthOrchestrator and onboardingHandler (as Confirmer).
+    # Depends on oauthOrchestrator and onboardingHandler (as Confirmer); the
+    # core queries resolve a provider's party_uuid.
     - name: providersHandler
       type: "*handlers.ProvidersHandler"
       constructor: handlers.NewProvidersHandler
@@ -193,80 +346,66 @@ provides:
         - service:oauthOrchestrator
         - field:cfg.Providers
         - field:cfg.Auth.OAuthRedirectBaseURL
+        - queries:coredb
         - service:onboardingHandler
 
-    # usersHandler — user account management handler; serves /v1/user-accounts/*.
-    # grantAdmin/revokeAdmin are composition-root closures defined in the app manifest.
-    - name: usersHandler
-      type: "*handlers.UserAccountsHandler"
-      constructor: handlers.NewUserAccountsHandler
+    # meHandler — /v1/me: own user, identifiers, credentials, sessions and the
+    # holder's profile actions (accept, decline, leave).
+    - name: meHandler
+      type: "*handlers.MeHandler"
+      constructor: handlers.NewMeHandler
       args:
-        - service:userAccountService
-        - closure:grantAdminFn       # handlers.GrantAdminFn — defined in app manifest closures
-        - closure:revokeAdminFn      # handlers.GrantAdminFn — defined in app manifest closures
+        - service:userService
+        - service:profileService
 
-    # selfHandler — /v1/self profile read/update handler. Composite identity
-    # endpoint: core-module owns entity data (given/family name) via
-    # coreServices.Entity.GetSelf; users-module owns the account row (email,
-    # timestamps, uuid). Depends on both query sets plus the core services aggregate.
-    - name: selfHandler
-      type: "*handlers.SelfHandler"
-      constructor: handlers.NewSelfHandler
+    # sessionHandler — /v1/session: current session, switch, fork, step-up, logout.
+    - name: sessionHandler
+      type: "*handlers.SessionHandler"
+      constructor: handlers.NewSessionHandler
       args:
-        - queries:usersdb            # *db.Queries
-        - queries:coredb             # *coredb.Queries
-        - service:coreServices       # *coreservice.Services (from mod-core)
+        - service:sessionService
 
-    # stepUpConsumed — the process-lifetime consumed-JTI cache for step-up
-    # tokens. The constructor starts the janitor goroutine (prunes expired
-    # entries) as a side effect and returns the live *sync.Map; declared here
-    # so the generated composition root builds it without an app-level
-    # startup hook.
-    - name: stepUpConsumed
-      type: "*sync.Map"
-      constructor: auth.NewStepUpConsumedCache
+    # impersonationHandler — /v1/impersonations: start, renew and end.
+    - name: impersonationHandler
+      type: "*handlers.ImpersonationHandler"
+      constructor: handlers.NewImpersonationHandler
       args:
-        - context
+        - service:impersonationService
 
-    # identitiesHandler — identity/credential self-service handler; serves
-    # /v1/self/identities and /v1/self/credential/* (Phase 4). args order is
-    # authoritative and matches handlers.NewIdentitiesHandler one-for-one.
-    - name: identitiesHandler
-      type: "*handlers.IdentitiesHandler"
-      constructor: handlers.NewIdentitiesHandler
+    # principalsHandler — /v1/principals: list, read, disable and enable.
+    - name: principalsHandler
+      type: "*handlers.PrincipalsHandler"
+      constructor: handlers.NewPrincipalsHandler
       args:
-        - infra:pool
-        - queries:usersdb
-        - service:oauthOrchestrator
-        - service:observerGroup
-        - infra:smtp                                        # satisfies the Sender interface
-        - field:cfg.LocalAuth.JWTSecret
-        - service:stepUpConsumed
-        - field:cfg.Auth.RequireStepUpForCredentialChange
-        - field:cfg.Auth.CookiePath                         # USERS_COOKIE_PATH
+        - service:userService
 
-    # sshKeyService — SSH public-key registration, listing, and revocation
-    # for a user account (docs/architecture/ssh-keys.md). args order matches
-    # usersservice.NewSSHKeyService exactly (api/internal/service/ssh_keys.go).
-    - name: sshKeyService
-      type: "*usersservice.SSHKeyService"
-      constructor: usersservice.NewSSHKeyService
+    # partiesHandler — party administration: /v1/parties/{party_uuid}/profiles,
+    # /managed-users, /authn-policy, /credential-authorizations and
+    # /confinements, and PATCH /v1/profiles/{uuid}.
+    - name: partiesHandler
+      type: "*handlers.PartiesHandler"
+      constructor: handlers.NewPartiesHandler
       args:
-        - infra:pool
-        - queries:usersdb
-        - queries:coredb
-        - service:authorizer
-        - service:observerGroup
+        - service:profileService
+        - service:partyPolicyService
 
-    # sshKeyResolver — resolves a candidate SSH public key to the
-    # account_holder entity id of the user account that registered it
-    # (docs/architecture/ssh-keys.md D11). A composing app (for example
-    # app-mfgit) adapts it into mod-repos' transport.KeyResolver; no
-    # mod-users route consumes it directly. It is pre-authentication,
+    # bootstrapHandler — the public /v1/bootstrap routes (status and the
+    # setup-token bootstrap).
+    - name: bootstrapHandler
+      type: "*handlers.BootstrapHandler"
+      constructor: handlers.NewBootstrapHandler
+      args:
+        - service:bootstrapService
+        - service:onboardingHandler
+
+    # sshKeyResolver — resolves a candidate SSH public key to the credential
+    # that registered it (docs/architecture/ssh-keys.md D11). A composing app
+    # (for example app-mfgit) adapts it into mod-repos' transport.KeyResolver;
+    # no mod-users route consumes it directly. It is pre-authentication,
     # read-only, and uncached — see SSHKeyResolver's own doc comment
     # (api/internal/service/ssh_key_resolver.go) for the hard guarantees it
     # upholds. The composing transport must rate-limit handshakes and cap
-    # candidate keys per connection, since ResolveActor runs once per
+    # candidate keys per connection, since ResolveCredential runs once per
     # candidate key, including unsigned probes from unauthenticated peers
     # (docs/architecture/ssh-keys.md).
     - name: sshKeyResolver
@@ -275,20 +414,6 @@ provides:
       args:
         - queries:usersdb
         - queries:coredb
-
-    # sshKeysHandler — SSH public-key HTTP handler; serves
-    # /v1/self/ssh-keys and /v1/user-accounts/{uuid}/ssh-keys
-    # (docs/architecture/ssh-keys.md D9). args order matches
-    # handlers.NewSSHKeysHandler one-for-one; the step-up deps (jwtSecret,
-    # stepUpConsumed, requireStepUp flag) mirror identitiesHandler's.
-    - name: sshKeysHandler
-      type: "*handlers.SSHKeysHandler"
-      constructor: handlers.NewSSHKeysHandler
-      args:
-        - service:sshKeyService
-        - field:cfg.LocalAuth.JWTSecret
-        - service:stepUpConsumed
-        - field:cfg.Auth.RequireStepUpForCredentialChange
 
   routes:
     # REMINDER when adding a route entry here: every `constructor:`/`register:`
@@ -299,7 +424,8 @@ provides:
     # consuming app's `mfgen generate` output. See AGENTS.md's Conventions
     # section for the full explanation and the self-route-manifest incident
     # (2026-07-15) this note is here because of.
-    # /v1/auth — local login, register, email-code, password-reset, OIDC callback.
+    # /v1/auth — local login, register, email-code, password-reset, token
+    # refresh, handoff, providers, and the OIDC start and callback.
     # NOTE: constructor/args below are informational only — the resolver skips
     # handler-node creation here because provides.services.authHandler (above)
     # is the canonical construction site for this same-named handler. Kept in
@@ -313,8 +439,11 @@ provides:
         - infra:pool
         - queries:usersdb
         - queries:coredb
-        - field:cfg.LocalAuth.JWTSecret
-        - field:cfg.LocalAuth.LocalIssuer
+        - service:userService
+        - service:credentialService
+        - service:challengeService
+        - service:sessionService
+        - service:oauthOrchestrator
         - infra:smtp
         - field:cfg.Server.GUIBaseURL
       register: authhandlers.RegisterRoutes
@@ -338,110 +467,91 @@ provides:
         - field:cfg.Providers
         - field:cfg.Onboarding.TokenDisplay
         - expr:oauthOrchestrator.EnvNoOIDCAccounts()
-        - expr:nil
+        - service:operatorAdminChecker
+        - queries:coredb
       register: handlers.RegisterOIDCConfigRoutes
       register_args:
         - service:providersHandler
 
-    # /v1 (account routes) — user-accounts CRUD, assume-identity, and apps/user-accounts.
-    - prefix: /v1
-      handler: usersHandler
-      register: handlers.RegisterAccountRoutes
+    # /v1/bootstrap — first-run bootstrap: GET /status and POST / with the
+    # X-Setup-Token header. Public and deliberately NOT behind
+    # requireOIDCConfirmed: the bootstrap may precede the OIDC configuration.
+    - prefix: /v1/bootstrap
+      scope: public             # unauthenticated — the setup token is the credential
+      handler: bootstrapHandler
+      register: handlers.RegisterBootstrapRoutes
+
+    # /v1/session — current session, switch, fork, step-up (password, email
+    # code, OIDC) and logout. Every route is bearer-authenticated.
+    # register_args supplies the OIDC handler for the step-up start.
+    - prefix: /v1/session
+      handler: sessionHandler
+      register: handlers.RegisterSessionRoutes
       register_args:
-        - service:assumeHandler
-        - service:appsHandler
-      middleware:
-        - requireOIDCConfirmed
-        - requireAuth
-        - requireVerifiedEmail
-
-    # /v1/self (GET) — read own profile. Reachable to accounts with UNVERIFIED
-    # email (so the GUI can render the "verify your email" page). Matches this
-    # file's standard convention: differentiation via each entry's own
-    # middleware: list, not a register-arg.
-    - prefix: /v1
-      handler: selfHandler
-      register: handlers.RegisterSelfGetRoute
+        - service:oidcHandler
       middleware:
         - requireOIDCConfirmed
         - requireAuth
 
-    # /v1/self (PUT) — update own profile. Requires a verified email.
-    - prefix: /v1
-      handler: selfHandler
-      register: handlers.RegisterSelfPutRoute
-      middleware:
-        - requireOIDCConfirmed
-        - requireAuth
-        - requireVerifiedEmail
-
-    # /v1/self/identities (GET) — list own identities (one optional local
-    # credential + zero-or-more OIDC identities). Reachable to accounts with
-    # UNVERIFIED email (so the GUI can render the "verify your email" page
-    # from it), matching the GET /self rationale above.
-    - prefix: /v1
-      handler: identitiesHandler
-      register: handlers.RegisterSelfIdentitiesReadRoute
+    # /v1/impersonations — start (POST /), renew (POST /current/renew) and end
+    # (DELETE /current) an impersonation session. Authorization is enforced at
+    # the service layer.
+    - prefix: /v1/impersonations
+      handler: impersonationHandler
+      register: handlers.RegisterImpersonationRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth
 
-    # /v1/self/identities, /v1/self/credential/* (six mutating endpoints) —
-    # link/unlink OIDC identities and set/remove/step-up the local password
-    # credential. Requires a verified email.
-    - prefix: /v1
-      handler: identitiesHandler
-      register: handlers.RegisterSelfIdentitiesWriteRoutes
-      middleware:
-        - requireOIDCConfirmed
-        - requireAuth
-        - requireVerifiedEmail
-
-    # /v1/self/ssh-keys (GET) — list own active SSH public keys
-    # (docs/architecture/ssh-keys.md D9). Reachable to accounts with
-    # UNVERIFIED email, and not step-up-gated, matching the
-    # identitiesHandler read-route entry above.
-    - prefix: /v1
-      handler: sshKeysHandler
-      register: handlers.RegisterSelfSSHKeysReadRoute
+    # /v1/me — own user, identifiers, credentials (including the OIDC link
+    # start), sessions and the holder's profile actions. Reachable to accounts with an UNVERIFIED email (so
+    # the GUI can render the "verify your email" page), hence no
+    # requireVerifiedEmail.
+    - prefix: /v1/me
+      handler: meHandler
+      register: handlers.RegisterMeRoutes
+      register_args:
+        - service:oidcHandler
       middleware:
         - requireOIDCConfirmed
         - requireAuth
 
-    # /v1/self/ssh-keys (POST), /v1/self/ssh-keys/{key_uuid} (DELETE) —
-    # register/revoke own SSH public key (docs/architecture/ssh-keys.md D9).
-    # Requires a verified email; the handler additionally enforces step-up
-    # when AUTH_REQUIRE_STEP_UP is on.
-    - prefix: /v1
-      handler: sshKeysHandler
-      register: handlers.RegisterSelfSSHKeysWriteRoutes
+    # /v1/principals — list, read, disable and enable principals. Authorization
+    # is enforced at the service layer.
+    - prefix: /v1/principals
+      handler: principalsHandler
+      register: handlers.RegisterPrincipalRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth
-        - requireVerifiedEmail
 
-    # /v1/user-accounts/{uuid}/ssh-keys[/{key_uuid}] — operator list/
-    # register/revoke of a user's SSH public keys
-    # (docs/architecture/ssh-keys.md D9), same middleware group as the
-    # /v1/user-accounts entries above. Register/revoke are step-up-gated
-    # when the path uuid is the caller's own account; a genuine
-    # operator-on-behalf-of-another-account call is not gated (task-006 fix).
-    - prefix: /v1
-      handler: sshKeysHandler
-      register: handlers.RegisterUserAccountSSHKeyRoutes
+    # /v1/parties — a party's profiles (list, invite) and managed users.
+    # Authorization is enforced at the service layer; a party the caller may not
+    # read is a 404. Later party administration routes (authentication policy,
+    # credential authorizations, confinements) register here too.
+    - prefix: /v1/parties
+      handler: partiesHandler
+      register: handlers.RegisterPartyRoutes
       middleware:
         - requireOIDCConfirmed
         - requireAuth
-        - requireVerifiedEmail
+
+    # /v1/profiles — PATCH /{uuid}: suspend, resume or end a party profile.
+    - prefix: /v1/profiles
+      handler: partiesHandler
+      register: handlers.RegisterProfileRoutes
+      middleware:
+        - requireOIDCConfirmed
+        - requireAuth
 
   middleware:
-    # requireAuth validates the Bearer token and sets the Principal in the request context.
+    # requireAuth authenticates the Bearer token (per-request session or
+    # credential and profile liveness) and installs the Identity and
+    # opctx.AuthContext on the request context.
     - name: requireAuth
-      constructor: auth.RequireAuth
+      constructor: auth.NewRequireAuth
       args:
-        - service:verifier
-        - service:claimMapper
-        - service:userResolver
+        - service:authenticator
 
     # requireVerifiedEmail gates routes to accounts with completed email verification.
     # NewRequireVerifiedEmail() returns RequireVerifiedEmail as a chi.Middleware value.
@@ -455,7 +565,7 @@ provides:
       args:
         - method:onboardingHandler.CurrentState
 
-    # resolveActorOrAnonymous is opt-in middleware: it behaves exactly like
+    # resolveOrAnonymous is opt-in middleware: it behaves exactly like
     # requireAuth except a request presenting no Authorization header at all
     # resolves to the shared, zero-authority anonymousActor instead of being
     # rejected with 401. A presented-but-bad credential is never downgraded —
@@ -464,11 +574,11 @@ provides:
     # Consuming modules reference this middleware by name from a
     # scope: public route group's middleware: list, with
     # requireOIDCConfirmed listed first (e.g.
-    # middleware: [requireOIDCConfirmed, resolveActorOrAnonymous]). It must
+    # middleware: [requireOIDCConfirmed, resolveOrAnonymous]). It must
     # never be combined with requireAuth or requireVerifiedEmail on the same
     # route group: composing with requireAuth is contradictory, and
     # composing with requireVerifiedEmail fails closed with a 500 (no
-    # UserContext is placed on the anonymous branch).
+    # Identity is placed on the anonymous branch).
     #
     # provides.middleware nodes are unconditional reachability roots in
     # mfgen (internal/resolver/reachability.go): this middleware — and
@@ -477,34 +587,17 @@ provides:
     # in, so every consuming app now hard-fails at boot if this module's
     # 0100_baseline.sql has not been applied. See the anonymousActor
     # service entry's comment above for why this is intentional and safe.
-    - name: resolveActorOrAnonymous
-      constructor: auth.NewResolveActorOrAnonymous
+    - name: resolveOrAnonymous
+      constructor: auth.NewResolveOrAnonymous
       args:
-        - service:verifier
-        - service:claimMapper
-        - service:userResolver
+        - service:authenticator
         - service:anonymousActor
-
-hooks:
-  # firstUserGrant bootstraps the wildcard manage grant for the first created user.
-  firstUserGrant:
-    symbol: users.NewFirstUserHook
-    args:
-      - infra:pool                   # *pgxpool.Pool
-      - service:grantService         # GrantServicer from authz-module
-    registeredOn:
-      - method:userResolver.SetFirstUserHook
-      - method:authHandler.SetFirstUserHook
 
 requires:
   services:
     - name: naturalPersonService   # coreservice.NaturalPersonServicer from core-module
-    - name: typeResolver           # *types.Resolver from core-module
-    - name: coreServices           # *coreservice.Services from core-module
-    - name: grantService           # GrantServicer from authz-module
-    - name: entityResolver         # *entity.Resolver from core-module — resolves apps.{uuid} to internal id
-    # operationRegistry moved to requires.infra as opReg (infra singleton in app manifest)
-    # grantAdminFn/revokeAdminFn: composition-root closures; deferred to phase-4 compiler (JEDl)
+    - name: displayRegistry        # *display.Registry from core-module
+    - name: coreServices           # *coreservice.Services from core-module (bootstrapOrganizationService)
   infra:
     - name: pool                   # *pgxpool.Pool
     - name: opReg                  # *authzapi.OperationRegistry — infra singleton
