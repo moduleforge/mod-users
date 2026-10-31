@@ -1435,6 +1435,7 @@ phases:
           path: phase-23-remediation-11/006-document-app-option-as-uuid.md
           done: false
           tier: haiku-med
+          digest: Switched five required app-option doc comments plus one story doc comment from slug to uuid, matching api/openapi.yaml and api.ts. Both validation checks pass.
           findings:
             - paQk
           git:
