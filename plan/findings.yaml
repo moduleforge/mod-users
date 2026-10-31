@@ -4,10 +4,10 @@ items:
       id: 4HXk
       date: "2026-10-31"
       tags:
-        - type:ambiguity
+        - type:documentation
         - plan/phase:users-identity-final
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: Scan docs/mf-standards for old identity terms (type:documentation). Submodule uninitialized in the worktree, so not scanned. Check it for old-model terms.
     - title: PROPOSED REMOVALS for manager to apply after
       id: 1JCd
