@@ -1666,6 +1666,7 @@ phases:
           path: phase-27-remediation-15/001-align-cors-setup-token-and-docs.md
           done: false
           tier: sonnet-med
+          digest: Added X-Setup-Token to CORS allowed headers with a test, corrected docs/cors.md, removed two stale Known limits lines.
           findings:
             - gz8M
             - EqWE
