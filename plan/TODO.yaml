@@ -1463,7 +1463,8 @@ phases:
             - 6qD2
           git:
             branch: plan/identity-model-impl-24-001
-            commit: []
+            commit:
+                - dc7c836
             merge: null
         - number: 2
           slug: fail-closed-impersonation-detection
