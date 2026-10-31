@@ -1524,6 +1524,7 @@ phases:
           path: phase-25-remediation-13/002-tighten-impersonation-marker-fail-closed.md
           done: false
           tier: sonnet-med
+          digest: Tightened the impersonation marker so undecodable stored tokens are treated as impersonating, and made the step-up path set-only. Migrated the GUI test fixtures to JWT-shaped tokens and added tests for both scenarios.
           findings:
             - moDM
             - m3Jr
