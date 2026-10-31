@@ -18,6 +18,268 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: After a sign-in answers selection_required, LoginForm/RegisterForm/EmailCodePage/OidcCallbackPage hand the host the selection route and the return path (onSelectionRequired), but SelectProfilePage (gui/src/components/select-profile-page.tsx) has no prop or storage to resume at that return path, so each host must carry it itself. Also, selectionRequired lives only in AuthProvider memory (gui/src/lib/auth-context.tsx), so reloading the selection page renders nothing (SelectProfilePage returns null when selectionRequired is false) even though the tab still holds a refresh token. Consider persisting the pending-selection flag per tab and accepting a returnPath on SelectProfilePage.
+    - title: Login, register, email-code verify, handoff…
+      id: zwCX
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/auth-context.tsx
+        lines: 282-290, 369
+        severity: major
+        confidence: high
+        concerns: correctness
+        description:
+          Login, register, email-code verify, handoff and the sibling fork now commit the token response
+          and start `void loadUser()` without awaiting it, and the call resolves (and isLoading becomes
+          false after fork) while `user` is still null. RequireAuth (components/require-auth.tsx 33-36)
+          calls onUnauthenticated whenever `!user` once isLoading is false. So after a successful sign-in
+          the host navigates to a protected page, RequireAuth mounts with user null, and
+          onUnauthenticated fires (typically a redirect back to login) before GET /v1/me returns. The
+          same happens in a freshly forked tab (hydrate awaits forkFromSibling but not the user load).
+          The previous implementation set token and user together, so this is a regression.
+        recommendation:
+          Track a user-loading state (or have the token_response handler/hydrate await loadUser and keep
+          isLoading true until it settles), and make RequireAuth treat "token present, user not yet
+          loaded" as loading, not unauthenticated. Alternatively make login/register/handoff/fork
+          resolve only after loadUser completes.
+    - title: The API's OIDC callback redirects every outc…
+      id: 4ohc
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/components/oidc-callback-page.tsx
+        lines: 87-118
+        severity: major
+        confidence: high
+        concerns: correctness
+        description:
+          The API's OIDC callback redirects every outcome to the frontend return URL
+          (/auth/oidc/return): `#handoff=<code>` for sign-in, `#linked=1` for credential linking,
+          `#stepped_up=1` for OIDC step-up, each with `return=<path>` (api/internal/handlers/auth/oidc.go
+          redirectOutcome, lines ~165 and ~278). CredentialsPanel.linkProvider, StepUpDialog.startProvider
+          and ProfileRemedy.startProviderStepUp all start those flows. OidcCallbackPage only understands
+          `handoff` and `error`; with `linked` or `stepped_up` it takes the "neither a code nor an error"
+          branch and calls onError('Sign-in failed. Please try again.'). Nothing in gui/src references
+          `linked` or `stepped_up`. Result: after a successful OIDC link or step-up the user sees a
+          sign-in failure and is not returned to the page they came from. The comments in
+          step-up-dialog.tsx (provider callback "returns here") and credentials-panel.tsx are false for
+          the delivered code.
+        recommendation:
+          Handle `linked=1` and `stepped_up=1` in OidcCallbackPage (or a sibling export): strip the
+          fragment, validate `return` with isSafeReturnPath, and route back to it (for step-up also
+          obtain a fresh access token, for example via the refresh grant, so the next call sees the
+          raised assurance). Add tests for both fragments, and correct the component comments.
+    - title: After a sign-in that answers selection_requi…
+      id: b1HZ
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/api.ts
+        lines: 778-790
+        severity: major
+        confidence: high
+        concerns: correctness
+        description:
+          After a sign-in that answers selection_required, commitTokenResponse stores a refresh token,
+          clears the access token and clears the stored profile uuid (lines 711-733). On reload,
+          auth-context hydrate sees a refresh token and calls session.get() with no Authorization
+          header; the 401 goes to refreshTabToken, and doRefresh finds no profile uuid, so it calls
+          endTabSession('unauthenticated'): the refresh token is cleared and handleUnauthenticated
+          navigates to the login route. A reload on the selection page therefore ends the whole sign-in
+          (and the server-side session stays orphaned) rather than merely rendering nothing as filed
+          in AReg. The README/AReg framing ("tab still holds a refresh token") is not true after the
+          reload.
+        recommendation:
+          Persist the pending-selection state per tab and, in hydrate, restore selectionRequired and the
+          profile list (for example by storing the profile list or re-reading it) instead of calling
+          session.get; or make doRefresh with a refresh token but no profile uuid surface
+          selection-required instead of signing out. Fold into the AReg remediation and update AReg's
+          text.
+    - title: While impersonating, the tab holds the imper…
+      id: 4EHb
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/api.ts
+        lines: 973-984, 1441-1452
+        severity: major
+        confidence: medium
+        concerns: correctness
+        description:
+          While impersonating, the tab holds the impersonation access token but the administrator's own
+          refresh token and profile uuid. When the impersonation token expires, any request 401s
+          with a non-revocation code and the pipeline refreshes; the grant returns the
+          administrator's own access token, which is committed and the original request is replayed with
+          it. A write the user issued from the impersonated context therefore executes as the
+          administrator's own profile, and the impersonation silently ends (the banner just disappears).
+          The same replay hazard applies to ImpersonationBanner "End" when the token already expired:
+          DELETE /v1/impersonations/current is replayed with the administrator's token.
+        recommendation:
+          When the request was sent with an impersonation session (session.impersonating in the
+          last committed response, or a stored marker), do not auto-refresh and replay: end the
+          impersonation locally (restore the administrator token), emit an event, and fail the
+          request with a clear error so the UI can tell the user. Make end() tolerate an expired token.
+    - title: In hydrate, any failure of session.get other…
+      id: oFfM
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/auth-context.tsx
+        lines: 347-364
+        severity: minor
+        confidence: medium
+        concerns: correctness
+        description:
+          In hydrate, any failure of session.get other than action-required or profile_unavailable
+          clears the whole stored session ("Any other failure: the stored session is unusable"). That
+          includes network_error (status 0), 5xx, and a refresh that failed transiently, so a brief API
+          outage during a reload discards the refresh token and signs the user out although the server
+          session is intact. doRefresh itself deliberately keeps tokens on transient failures; hydrate
+          contradicts that.
+        recommendation:
+          Clear the session only for 401-class failures (already handled by the pipeline) and keep the
+          tokens on network and 5xx errors, showing a retryable error state.
+    - title: logout() calls api.session.logout(), which i…
+      id: A6aq
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/auth-context.tsx
+        lines: 412-428
+        severity: minor
+        confidence: medium
+        concerns: correctness
+        description:
+          logout() calls api.session.logout(), which is sent with skipAuthRedirect: true, so no refresh
+          is attempted. If the access token has expired (or is absent in the selection_required state)
+          the call 401s, the error is logged and the tab clears its tokens, but the server session is
+          never revoked and stays in the user's session list until it expires. The comment claims
+          "Revokes the server session (best effort)".
+        recommendation:
+          Let logout refresh once on a plain 401 (or use the refresh token to obtain an access token
+          first) before clearing local state, or document that logout with an expired token is
+          local-only.
+    - title: openVerify calls setVerifyTarget(identifier)…
+      id: Qo20
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/components/identifiers-panel.tsx
+        lines: 177-203
+        severity: minor
+        confidence: medium
+        concerns: correctness
+        description:
+          openVerify calls setVerifyTarget(identifier) and then sendCode(identifier) in the same
+          handler. sendCode reads `verifyTarget` from its render-time closure, which is still null on
+          the first open, so a failure to send the code is routed to the page-level banner via setError
+          instead of the open dialog (the code comment says "a failure shows inside the open dialog").
+          The dialog is then shown with no error and the user waits for a code that was never sent.
+        recommendation:
+          Pass an explicit flag/target to sendCode (for example sendCode(identifier, inDialog)) rather
+          than reading verifyTarget state, and add a test for a failing first send.
+    - title: The `app` option is documented as an app "sl…
+      id: paQk
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/auth-context.tsx
+        lines: 65-67
+        severity: minor
+        confidence: medium
+        concerns: correctness
+        description:
+          The `app` option is documented as an app "slug" in AuthContext RegisterOptions
+          (auth-context.tsx 66), LoginForm (login-form.tsx 87), RegisterForm (register-form.tsx 20),
+          EmailCodePage (email-code-page.tsx 31) and AuthPage (auth-page.tsx 59), but api/openapi.yaml
+          defines `app` on register, login and email-code verify as "The app (uuid)", and api.ts types
+          document uuid. A host following the prop docs would send a slug and be refused.
+        recommendation:
+          Change the prop docs to say uuid (or resolve slug to uuid explicitly if slug is intended).
+    - title: Comments still say the unauthenticated setup…
+      id: 8Wfo
+      date: "2026-10-31"
+      tags:
+        - type:bug
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/components/oidc-setup-gate.tsx
+        lines: 68-69, 180-181
+        severity: suggestion
+        confidence: high
+        concerns: correctness
+        description:
+          Comments still say the unauthenticated setup pages avoid `/v1/self` (also
+          client-layout.tsx line 57). That route was removed in this phase; the call that would 503
+          while OIDC is unconfirmed is now GET /v1/me / session routes. The README task requirement was to
+          remove documentation of removed symbols.
+        recommendation:
+          Replace `/v1/self` with `/v1/me` in those three comments.
+    - title: The panel calls api.auth.providers() on ever…
+      id: hcdm
+      date: "2026-10-31"
+      tags:
+        - type:optimization
+        - plan/phase:users-gui-and-frontend-contract
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/components/credentials-panel.tsx
+        lines: 193-203
+        severity: suggestion
+        confidence: medium
+        concerns: efficiency
+        description:
+          The panel calls api.auth.providers() on every mount with no caching, so each
+          visit to the credentials panel (and any login page that also lists providers)
+          re-fetches an essentially static list. Not a regression versus prior code.
+        recommendation:
+          Optionally memoize the providers list at module level in the api client with a
+          short TTL, if the list is fetched from several pages.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
