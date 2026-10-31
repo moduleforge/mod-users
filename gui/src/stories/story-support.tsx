@@ -64,11 +64,45 @@ export const STORY_INVITED: ProfileView = {
   lock: { reason: 'not_held', remedy: { kind: 'accept_invitation' } },
 };
 
+/** What a scripted story route answers: a ready Response, a JSON body, or nothing (204). */
+export type StoryReply = Response | object | undefined;
+
 export interface SignedInStoryProps {
   profiles: ProfileView[];
   active?: ProfileView;
   session?: Partial<SessionView>;
+  /** Overrides of the `GET /v1/me` record (for example `{ is_guest: true }`). */
+  user?: Record<string, unknown>;
+  /**
+   * Extra scripted routes keyed by "METHOD /path", consulted after the session
+   * and user defaults. A route may return a different answer each call, so a
+   * story can show a 409 first and a success after the user acts.
+   */
+  routes?: Record<string, (body: unknown) => StoryReply>;
   children: React.ReactNode;
+}
+
+/** A JSON error reply for story routes. */
+export function storyError(
+  status: number,
+  code: string,
+  message: string,
+  details?: { field: string; code: string; message: string }[],
+): Response {
+  return new Response(JSON.stringify({ error: { code, message, details } }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/** The step-up action-required reply (`409 users.step_up_required`). */
+export function storyStepUpRequired(): Response {
+  return new Response(
+    JSON.stringify({
+      action: { code: 'users.step_up_required', message: 'Confirm it is you.', path: '/step-up' },
+    }),
+    { status: 409, headers: { 'Content-Type': 'application/json' } },
+  );
 }
 
 /** Installs the scripted fetch once, before the provider's first request. */
@@ -76,6 +110,8 @@ export function SignedInStory({
   profiles,
   active = STORY_PERSONAL,
   session,
+  user,
+  routes,
   children,
 }: SignedInStoryProps) {
   // Lazy state initializer: runs once, before the first child effect, which is
@@ -121,9 +157,20 @@ export function SignedInStory({
           default_app_uuid: null,
           created_at: '2026-01-01T00:00:00Z',
           updated_at: '2026-01-01T00:00:00Z',
+          ...user,
         });
       }
       if (method === 'GET' && path === '/v1/me/profiles') return json({ profiles });
+      const route = routes?.[`${method} ${path}`];
+      if (route) {
+        // A scripted route: stories that need more than the session chrome
+        // supply their own answers, so the panels render with data.
+        const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
+        const reply = route(body);
+        if (reply instanceof Response) return reply;
+        if (reply === undefined) return new Response(null, { status: 204 });
+        return json(reply);
+      }
       // Every other action answers 404: the stories show presentation, not
       // server behavior.
       return new Response(
