@@ -1297,6 +1297,7 @@ phases:
           path: phase-22-remediation-10/001-require-sessionless-system-actor.md
           done: false
           tier: sonnet-med
+          digest: Marked system-actor contexts carrying a session or credential are now gated in gated() and access_row_permitted; stale session_meets_party_policy comment fixed; tests added and both mutation directions verified.
           findings:
             - tpls
           git:
