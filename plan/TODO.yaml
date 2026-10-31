@@ -1440,5 +1440,6 @@ phases:
             - paQk
           git:
             branch: plan/identity-model-impl-23-006
-            commit: []
+            commit:
+                - c4a6ecf
             merge: null
