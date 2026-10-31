@@ -305,7 +305,7 @@ phases:
           slug: build-profile-chrome
           title: Build Profile Chrome
           path: phase-09-users-gui-and-frontend-contract/002-build-profile-chrome.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Built profile chrome (switcher, lock notice, selection page, invitations view, impersonation banner); updated SidebarNav, RequireAuth, ClientLayout with no isAdmin; 28 new tests, stories, README. Remaining failures belong to tasks 003-005.
           git:
