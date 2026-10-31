@@ -427,7 +427,7 @@ phases:
           tier: haiku-med
           digest: 'Reconciled 21 mod-users followups read-only: 13 confirmed superseded with proposed removals, 2 closed cross-project, 6 retained for manager decision. No followups mutation made.'
           git:
-            branch: null
+            branch: plan/identity-model-impl-11-002
             commit: []
             merge: null
     - number: 12
