@@ -1477,7 +1477,8 @@ phases:
             - vAo0
           git:
             branch: plan/identity-model-impl-24-002
-            commit: []
+            commit:
+                - 1d6c29f
             merge: null
         - number: 3
           slug: revoke-admin-session-on-impersonated-logout
