@@ -1382,7 +1382,7 @@ phases:
           findings:
             - 4ohc
           git:
-            branch: null
+            branch: plan/identity-model-impl-23-002
             commit: []
             merge: null
         - number: 3
