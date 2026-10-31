@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 13
-    tasks_added: 63
+    tasks_added: 64
 phases:
     - number: 6
       slug: users-identity-core
@@ -1499,7 +1499,7 @@ phases:
       title: Remediation Round 13
       kind: remediation
       security_review: required
-      tasks_added: 1
+      tasks_added: 2
       remediates_phase: 9
       tasks:
         - number: 1
@@ -1512,6 +1512,19 @@ phases:
             - H5Po
             - NfAS
             - D3Q9
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 2
+          slug: tighten-impersonation-marker-fail-closed
+          title: Make the Impersonation Marker Fail Closed for Undecodable Tokens and Handler-Supplied Step-Up Tokens
+          path: phase-25-remediation-13/002-tighten-impersonation-marker-fail-closed.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - moDM
+            - m3Jr
           git:
             branch: null
             commit: []
