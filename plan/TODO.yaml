@@ -1683,6 +1683,7 @@ phases:
           path: phase-27-remediation-15/002-mark-field-key-seed-dev-only.md
           done: false
           tier: sonnet-low
+          digest: Added a development-only / generate-fresh comment to the field-encryption seed block in .env.example. The CORE_FIELD_KEY_HEX value is unchanged.
           findings:
             - CubF
           git:
