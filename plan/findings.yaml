@@ -153,6 +153,15 @@ items:
           architecture.md states the HTTP API is defined in api/openapi.yaml and lists the OIDC configuration routes (/v1/oidc-config/status, /confirm, /saved, /providers, /providers/{id}, /setup-token) in the API surface table, but api/openapi.yaml contains no /v1/oidc-config path (it does contain /v1/bootstrap and /v1/audit, and the architecture text notes the audit inclusion explicitly). sessions-and-tokens.md and the spec also point to openapi.yaml as the authoritative route reference. The omission is not stated anywhere.
         recommendation:
           Add a sentence to the OIDC configuration row (or the API layer intro) saying these routes are served by the manifest-mounted handlers but are not described in api/openapi.yaml, or add them to the OpenAPI document.
+    - title: api/server/CLAUDE.md unreachable from README
+      id: BpMF
+      date: "2026-10-31"
+      tags:
+        - type:documentation
+        - plan/phase:doc-updates
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Agent-authored report data (readme-reachability, severity minor/confidence medium): api/server/CLAUDE.md is not reachable from README.md via project doc links; likely an agent-config file exempt from the link chain. Recommendation: link it from the doc map or confirm exemption.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
