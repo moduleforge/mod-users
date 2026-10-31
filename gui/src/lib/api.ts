@@ -575,6 +575,10 @@ export const USERS_ERROR_CODES = {
   sessionRevoked: 'users.session_revoked',
   profileUnavailable: 'users.profile_unavailable',
   refreshReuse: 'users.refresh_reuse',
+  /** `409` from `POST /v1/bootstrap`: the deployment already has an operator party. */
+  alreadyBootstrapped: 'users.already_bootstrapped',
+  /** `401` from `POST /v1/bootstrap`: the `X-Setup-Token` is missing, wrong or no longer active. */
+  setupTokenInvalid: 'users.setup_token_invalid',
   /** Client-synthesized (status 0): an OIDC handoff was attempted without this tab's verifier. */
   handoffVerifierMissing: 'handoff_verifier_missing',
 } as const;

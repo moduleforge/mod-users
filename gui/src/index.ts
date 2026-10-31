@@ -119,10 +119,14 @@ export {
   revertOIDCProvider,
   PROVIDER_ID_PATTERN,
   WELL_KNOWN_HINTS,
+  OIDC_JIT_MODES,
+  OIDC_JIT_MODE_HELP,
+  validateJitPolicy,
   testProviderURL,
 } from './lib/oidc-provider';
 export type {
   OIDCProviderView,
+  OIDCJitMode,
   OIDCFieldSource,
   OIDCProviderWriteBody,
   OIDCProviderAuth,
@@ -169,6 +173,8 @@ export { OidcConfigPage } from './components/oidc-config-page';
 export type { OidcConfigPageProps } from './components/oidc-config-page';
 export { OidcSetupGate } from './components/oidc-setup-gate';
 export type { OidcSetupGateProps } from './components/oidc-setup-gate';
+export { BootstrapPage } from './components/bootstrap-page';
+export type { BootstrapPageProps } from './components/bootstrap-page';
 
 // ─── Account self-service panels ──────────────────────────────────────────────
 export { StepUpDialog } from './components/step-up-dialog';

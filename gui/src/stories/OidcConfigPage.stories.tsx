@@ -2,6 +2,8 @@ import type { Story } from '@ladle/react';
 import React, { useEffect, useState } from 'react';
 import { OidcConfigPage } from '../components/oidc-config-page';
 import type { OIDCStatus } from '../lib/oidc-config';
+import type { OIDCProviderView } from '../lib/oidc-provider';
+import { SignedInStory, STORY_PERSONAL } from './story-support';
 
 // The page talks to `/v1/oidc-config/*`; there is no live API in Ladle, so
 // each story swaps `window.fetch` for a canned responder while mounted.
@@ -29,6 +31,9 @@ type Responder = (path: string, init?: RequestInit) => Response;
 
 const happyPath: Responder = (path, init) => {
   if (path.endsWith('/v1/oidc-config/status')) return jsonResponse(200, STATUS);
+  if (path.endsWith('/v1/bootstrap/status')) {
+    return jsonResponse(200, { bootstrapped: true, oidc_confirmed: false });
+  }
   if (path.endsWith('/v1/oidc-config/saved')) {
     return jsonResponse(200, { enabled_providers: { google: true }, opt_out: false, saved_at: null });
   }
@@ -55,7 +60,35 @@ function MockFetch({ respond, children }: { respond: Responder; children: React.
   return <>{children}</>;
 }
 
-/** Token mode: paste any token, flip a toggle, and Save to see the success state. */
+const GOOGLE_VIEW: OIDCProviderView = {
+  id: 'google',
+  display_name: null,
+  display_name_default: 'Google',
+  display_name_source: 'well_known',
+  issuer_url: null,
+  issuer_url_default: 'https://accounts.google.com',
+  issuer_url_source: 'well_known',
+  client_id: 'story-client',
+  client_id_default: null,
+  client_id_source: 'db',
+  has_client_secret: true,
+  client_secret_source: 'db',
+  claim_style: null,
+  claim_style_default: 'google',
+  claim_style_source: 'well_known',
+  scopes: null,
+  scopes_default: ['openid', 'email', 'profile'],
+  scopes_source: 'well_known',
+  enabled: true,
+  party_uuid: null,
+  jit_mode: 'byo',
+  trust_acr: false,
+  init_ok: true,
+  callback_url: 'http://localhost:8080/v1/auth/oidc/google/callback',
+  well_known: true,
+};
+
+/** Token mode (no session, OIDC unconfirmed): paste any token, flip a toggle, and Save to see the success state. */
 export const TokenMode: Story = () => (
   <MockFetch respond={happyPath}>
     <OidcConfigPage onComplete={() => {}} />
@@ -85,4 +118,69 @@ export const StillFailing: Story = () => (
   >
     <OidcConfigPage />
   </MockFetch>
+);
+
+/**
+ * Token mode with the bootstrap still pending: after Save the page does not
+ * claim the setup token is spent and points at the bootstrap page.
+ */
+export const TokenModeBootstrapPending: Story = () => (
+  <MockFetch
+    respond={(path, init) =>
+      path.endsWith('/v1/bootstrap/status')
+        ? jsonResponse(200, { bootstrapped: false, oidc_confirmed: false })
+        : happyPath(path, init)
+    }
+  >
+    <OidcConfigPage onBootstrapPending={() => {}} />
+  </MockFetch>
+);
+
+/** Session mode: a signed-in tab; no token field, requests carry the Bearer token. */
+export const SessionMode: Story = () => (
+  <SignedInStory
+    profiles={[STORY_PERSONAL]}
+    routes={{
+      'GET /v1/oidc-config/status': () => ({ ...STATUS, confirmed: true, state: 'confirmed_ok' }),
+      'GET /v1/bootstrap/status': () => ({ bootstrapped: true, oidc_confirmed: true }),
+      'GET /v1/oidc-config/saved': () => ({ enabled_providers: { google: true }, opt_out: false, saved_at: null }),
+      'POST /v1/oidc-config/confirm': () => ({ ...STATUS, confirmed: true, state: 'confirmed_ok' }),
+    }}
+  >
+    <OidcConfigPage />
+  </SignedInStory>
+);
+
+/** Session mode where the server refuses the profile: the "requires an operator admin profile" message. */
+export const SessionModeForbidden: Story = () => (
+  <SignedInStory
+    profiles={[STORY_PERSONAL]}
+    routes={{
+      'GET /v1/oidc-config/status': () => ({ ...STATUS, confirmed: true, state: 'confirmed_ok' }),
+      'GET /v1/bootstrap/status': () => ({ bootstrapped: true, oidc_confirmed: true }),
+      'POST /v1/oidc-config/confirm': () =>
+        jsonResponse(403, { error: { code: 'forbidden', message: 'forbidden' } }),
+    }}
+  >
+    <OidcConfigPage />
+  </SignedInStory>
+);
+
+/** A provider with `jit_mode: managed` bound to a party: open "Edit Google" to see the policy fields. */
+export const ManagedProvider: Story = () => (
+  <SignedInStory
+    profiles={[STORY_PERSONAL]}
+    routes={{
+      'GET /v1/oidc-config/status': () => ({ ...STATUS, confirmed: true, state: 'confirmed_ok' }),
+      'GET /v1/bootstrap/status': () => ({ bootstrapped: true, oidc_confirmed: true }),
+      'GET /v1/oidc-config/providers/google': () => ({
+        ...GOOGLE_VIEW,
+        party_uuid: '11111111-2222-3333-4444-555555555555',
+        jit_mode: 'managed',
+        trust_acr: true,
+      }),
+    }}
+  >
+    <OidcConfigPage />
+  </SignedInStory>
 );

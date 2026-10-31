@@ -20,6 +20,11 @@ export interface ClientLayoutProps {
    */
   onNavigateToConfig?: () => void;
   /**
+   * Called when OIDC is confirmed but the deployment is not yet bootstrapped
+   * and the user is not already on `/bootstrap`. See `OidcSetupGate`.
+   */
+  onNavigateToBootstrap?: () => void;
+  /**
    * Called by `AuthProvider` when it needs to navigate (e.g., after logout).
    * The consumer injects framework-specific navigation.
    */
@@ -34,16 +39,22 @@ export function ClientLayout({
   children,
   currentPath,
   onNavigateToConfig,
+  onNavigateToBootstrap,
   onNavigate,
   LinkComponent,
 }: ClientLayoutProps) {
   return (
-    <OidcSetupGate currentPath={currentPath} onNavigateToConfig={onNavigateToConfig}>
+    <OidcSetupGate
+      currentPath={currentPath}
+      onNavigateToConfig={onNavigateToConfig}
+      onNavigateToBootstrap={onNavigateToBootstrap}
+    >
       {(state) =>
-        state === 'setup' ? (
-          // On the setup page itself, render children without an AuthProvider.
-          // The page is intentionally unauthenticated; no consumer on that page
-          // should be calling `useAuth()`.
+        state === 'setup' || state === 'bootstrap' ? (
+          // On a first-run setup page (OIDC config or bootstrap), render
+          // children without an AuthProvider. These pages are intentionally
+          // unauthenticated: the operator has no session yet, and the API
+          // would answer `/v1/self` with 503 while OIDC is unconfirmed.
           <main className="h-screen overflow-y-auto">{children}</main>
         ) : (
           <AuthProvider onNavigate={onNavigate}>

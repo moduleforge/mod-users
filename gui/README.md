@@ -174,9 +174,10 @@ All components are client components (`'use client'` is not retained in `dist`; 
 | `ResetPasswordPage` | `token: string`; `onSuccess?()`; `onNavigateToLogin?()` | You read the token from the URL and pass it in. No `AuthProvider` needed. |
 | `EmailCodePage` | `onSuccess?(returnPath: string \| null)`; `onSelectionRequired?(selectProfilePath, returnPath)`; `app?`; `onNavigateToLogin?()` | Sign in with an emailed code through `/v1/auth/email-code/request` and `/verify`. Needs `AuthProvider`. |
 | `VerifyEmailPage` | `onVerified?()`; `onNavigateToLogin?()`; `email?`; `message?`; `resendCooldownSeconds?` (default `30`, `0` disables) | See [Standard pages](#standard-pages). |
-| `OidcConfigPage` | `onComplete?()`; `redirectDelayMs?` (default `2000`) | See [Standard pages](#standard-pages). |
-| `OidcSetupGate` | `currentPath: string`; `onNavigateToConfig?()`; `children: (state: 'ready' \| 'setup') => ReactNode` | Render-prop gate for apps without the admin chrome. |
-| `ClientLayout` | `children`; `currentPath: string`; `onNavigateToConfig?()`; `onNavigate?(path)`; `LinkComponent` | mod-users admin chrome (`ImpersonationBanner` above a sidebar shell, plus `AuthProvider` plus `OidcSetupGate`). `SidebarNav` takes `currentPath` and `LinkComponent`, shows the `ProfileSwitcher` and an Invitations entry for a signed-in user, and no longer filters links by admin status (the server's `403` is the authority). |
+| `OidcConfigPage` | `onComplete?()`; `onBootstrapPending?()`; `redirectDelayMs?` (default `2000`) | See [Standard pages](#standard-pages). |
+| `BootstrapPage` | `onComplete?(response: TokenResponse)`; `onNavigateToLogin?()` | First-run setup: setup token, operator, first administrator. See [First-run setup](#first-run-setup). No `AuthProvider` needed. |
+| `OidcSetupGate` | `currentPath: string`; `onNavigateToConfig?()`; `onNavigateToBootstrap?()`; `children: (state: 'ready' \| 'setup' \| 'bootstrap') => ReactNode` | Render-prop gate for apps without the admin chrome. See [First-run setup](#first-run-setup). |
+| `ClientLayout` | `children`; `currentPath: string`; `onNavigateToConfig?()`; `onNavigateToBootstrap?()`; `onNavigate?(path)`; `LinkComponent` | mod-users admin chrome (`ImpersonationBanner` above a sidebar shell, plus `AuthProvider` plus `OidcSetupGate`). `SidebarNav` takes `currentPath` and `LinkComponent`, shows the `ProfileSwitcher` and an Invitations entry for a signed-in user, and no longer filters links by admin status (the server's `403` is the authority). |
 | `USERS_GUI_ROUTES` | constant | The standard path set; see [Routes](#routes). |
 
 ### Sign-in outcomes
@@ -229,6 +230,7 @@ Apps use the standard paths. A deviation needs a stated reason (for example an a
 | `/auth/email-code` | App | `EmailCodePage`. |
 | `/verify-email` | Backend (`403` action-required `users.email_unverified`) | `VerifyEmailPage`. |
 | `/auth/select-profile`, `/invitations`, `/account`, `/account/credentials`, `/account/identifiers`, `/account/sessions`, `/bootstrap` (standard) | App | Recommended defaults for landing profile selection, party invitations, account settings, and first-run bootstrap. |
+| `/bootstrap` | App (standard) | `BootstrapPage`. See [First-run setup](#first-run-setup). |
 | `/oidc-config` | Backend (`503` action-required `users.oidc_not_confirmed`; the setup-token banner in the server log prints this path) | `OidcConfigPage`, normally wrapped by `OidcSetupGate`. |
 
 **Action-required contract.** When an API response is an action-required envelope, the client throws `ApiActionRequiredError` carrying the envelope's `path`. `AuthProvider` handles it on its own calls (the mount-time session and `GET /v1/me` check and `refreshUser`): it keeps the session intact and calls `onNavigate(err.path)`, unless the browser is already on exactly that path (exact `pathname` equality; see the limitation noted under `AuthProvider`). So `/verify-email` and `/oidc-config` must exist and `onNavigate` must perform a real navigation. Unsafe envelope paths are rejected and replaced with a safe fallback.
@@ -255,16 +257,42 @@ A code-entry flow for the `/verify-email` route: the user requests a six-digit e
 
 The message is also rendered on the page itself, so an app that does not navigate away on `onError` still shows the reason.
 
-### `OidcConfigPage` and `OidcSetupGate`
+### First-run setup
+
+A new deployment starts with no operator and an unconfirmed OIDC configuration. Both steps share one **setup token**, printed in the server log (and, in localhost token-display mode, readable from `GET /v1/oidc-config/setup-token`). The token stays active while the deployment is not bootstrapped **or** OIDC is unconfirmed; whichever step finishes last clears it. Confirming OIDC therefore does not spend the token while the bootstrap is pending.
+
+The two steps can be done in either order:
+
+| Bootstrapped | OIDC confirmed | `OidcSetupGate` does |
+|---|---|---|
+| no | no | Allows `/oidc-config` (renders `'setup'`) and `/bootstrap` (renders `'bootstrap'`); any other route goes to `onNavigateToConfig` (OIDC first is the default). |
+| yes | no | Allows only `/oidc-config`; other routes go to `onNavigateToConfig`. |
+| no | yes | Allows only `/bootstrap`; other routes go to `onNavigateToBootstrap`. The OIDC routes no longer accept the setup token once OIDC is confirmed, so the config page would be a dead end. |
+| yes | yes | Renders `'ready'`. |
+
+A failure of either status probe counts as "bootstrapped, OIDC unconfirmed", so an operator with a broken API still reaches the config page, which shows the error.
+
+`BootstrapPage` reads `GET /v1/bootstrap/status`. When the deployment is not bootstrapped it collects the setup token (sent as `X-Setup-Token`, never stored), the operator (an organization with legal name, a legal form from mod-core's organization legal forms, and an optional jurisdiction; or a single person for a self-host) and the first administrator (email, password, given and family name), then calls `POST /v1/bootstrap`. The `201` token response is committed to the tab like a sign-in, so an `AuthProvider` above the page follows it and the tab lands on the administrator profile; `onComplete` receives the response and should perform a **full-page navigation** to the admin landing page. `409 users.already_bootstrapped` shows "Already set up" with a sign-in link; `401 users.setup_token_invalid` asks for the token again and keeps the rest of the form.
+
+### `OidcConfigPage`
 
 `OidcConfigPage` is the dual-mode page for the `/oidc-config` route:
 
-- **Setup-token mode** (no admin session): the operator pastes the setup token printed in the server log and chooses providers. On success it calls `onComplete` after `redirectDelayMs`.
-- **Admin mode** (signed-in admin, detected through `useOptionalAuth`): reconfigure providers; the page stays put and `onComplete` is not called.
+- **Token mode** (no session in this tab, OIDC unconfirmed): the operator pastes the setup token and chooses providers; every request sends it as `X-Setup-Token`. After a successful confirmation the page reads the bootstrap status: when the bootstrap is done (or not pending) it calls `onComplete` after `redirectDelayMs`; when it is still pending, or its status cannot be read, the token is **not** treated as spent: the page links to the bootstrap page and calls `onBootstrapPending` instead.
+- **Session mode** (the tab holds an access token, detected through `useOptionalAuth`): requests send the tab's Bearer token and the page stays put. Whether the profile is an operator admin is the server's decision; a `403` is shown as "requires an operator admin profile".
+- With no session and OIDC already confirmed the page offers no form: it points to sign-in, or to the bootstrap page when the bootstrap is still pending.
 
-`onComplete` should perform a **full-page navigation** to the login route (for example `window.location.assign(USERS_GUI_ROUTES.login)`). `OidcSetupGate` and `ClientLayout` probe OIDC status only on mount, so a soft client-side navigation would leave them in the stale needs-setup state.
+`onComplete` and `onBootstrapPending` should perform a **full-page navigation** (the login route, `USERS_GUI_ROUTES.bootstrap`). `OidcSetupGate` and `ClientLayout` probe status only on mount, so a soft client-side navigation would leave them in the stale needs-setup state.
 
-`OidcSetupGate` is for apps that do not use `ClientLayout`. While OIDC is unconfirmed even the login page's provider call fails, so the gate probes first: it renders `children('ready')` once OIDC is confirmed (any probe failure, including a network error, is treated as needs-setup so an operator can still reach the config page), calls `onNavigateToConfig` when the user is on any other route while OIDC is unconfirmed, and renders `children('setup')` when `currentPath` is the config page. Render the `'ready'` branch inside your `AuthProvider`; render the `'setup'` branch **without** one (`/v1/me` would answer `503`). `OidcConfigPage` itself works inside or outside an `AuthProvider`, and an `AuthProvider` above it will not loop because of the same-path guard.
+All `/v1/oidc-config` requests send `credentials: 'omit'` and only an explicit credential (Bearer, or the setup token header). The `oidc_state` cookie of the provider redirect is set and read by the server and needs no client handling.
+
+The provider modals (Add and Edit) cover, besides the connection fields, three account-creation fields:
+
+- `party_uuid`: optional. Binds the provider to one party; blank means a deployment-wide provider.
+- `jit_mode`: what an unknown identity creates on first sign-in. `byo` (the default) creates a personal account the person owns; `managed` creates an account managed by the provider's party and **requires a party UUID** (the modal checks this before sending, and shows the server's message when the server refuses, for example for an unknown party); `none` refuses unknown identities.
+- `trust_acr`: whether the identity provider's asserted authentication class counts toward the session's assurance.
+
+`OidcSetupGate` is for apps that do not use `ClientLayout`. While OIDC is unconfirmed even the login page's provider call fails, so the gate probes first (see [First-run setup](#first-run-setup) for what it renders and when it redirects). Render the `'ready'` branch inside your `AuthProvider`; render the `'setup'` and `'bootstrap'` branches **without** one (`/v1/me` would answer `503`). A consumer that only distinguishes `'setup'` from the rest must treat `'bootstrap'` like `'setup'`. `OidcConfigPage` itself works inside or outside an `AuthProvider`, and an `AuthProvider` above it will not loop because of the same-path guard.
 
 `ClientLayout` already composes `OidcSetupGate` and `AuthProvider`; use one or the other, not both.
 
