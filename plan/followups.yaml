@@ -785,14 +785,6 @@ items:
         - priority:low
         - effort:unspecified
       text: mod-users/gui/src/lib/api.ts (~332-335, 615-624) types the apps create/update body as {name, description?} with no slug. mod-core's strict DecodeJSON (plan core-handler-conformance) now rejects the unknown member 'description' and core requires 'slug'. No caller of apps.create/update exists in the mod-users GUI today, so nothing breaks now, but the wrapper is wrong; align it with the core apps contract.
-    - title: OpenAPI user-account paths are stale
-      id: fs0H
-      date: "2026-10-11"
-      tags:
-        - type:documentation
-        - priority:low
-        - effort:medium
-      text: api/openapi.yaml (AGENTS.md calls it the authoritative REST spec) documents /v1/users, /v1/users/{user_uuid}, /v1/users/{user_uuid}/grant, /v1/users/{user_uuid}/assume and /v1/users/{user_uuid}/audit, but the served routes (api/internal/handlers/account_routes.go RegisterAccountRoutes) are /v1/user-accounts, /v1/user-accounts/{uuid}, /grant-admin, /revoke-admin and /assume; the audit route moved to /v1/audit (mod-audit). docs/architecture.md's API-surface table repeats the /v1/users names. Separate from followup biJk (identities surface missing). Rewrite these paths and their request/response/error schemas to match the handlers.
     - title: PUT /self names 403 in assume session
       id: 7kHY
       date: "2026-10-11"
