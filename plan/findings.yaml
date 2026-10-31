@@ -24,8 +24,8 @@ items:
       tags:
         - type:security
         - plan/phase:adopt-core-engine-remediation
-        - priority:unspecified
-        - effort:unspecified
+        - priority:high
+        - effort:small
       text: 'needs-sibling: app-mfgit. app-mfgit/cmd/server/appsetup/access.go composes mod-users but installs access functions with setup.ApplyFuncs using mod-repos'' reposauthz.NewCompositeAccessFuncGeneratorWithPublicVisibility directly, without mod-users'' row filter. mod-users'' single-row Authorize applies the owning-party gate, so a cross-party collaborator below a party''s credential_rule or min_acr lists rows Authorize refuses. Wrap the composite: setup.NewRowFilterGenerator(composite, localAuthz.AccessRowFilter) (github.com/moduleforge/mod-users/api/localAuthz), failing startup on error, so the composite''s appended arms are filtered too; bind every list transaction with setup.BindAuthInputs.'
     - title: Missing ObserveAfterCommit for CreateInTx
       id: 06rd
