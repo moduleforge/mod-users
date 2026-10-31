@@ -287,6 +287,7 @@ phases:
     - number: 9
       slug: users-gui-and-frontend-contract
       title: Users GUI and Frontend Contract
+      diff_base: 264d8e63f03bde530184591770593a73ac2ec9d5
       tasks:
         - number: 1
           slug: rebuild-api-client-and-auth-context
