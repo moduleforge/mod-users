@@ -1325,6 +1325,7 @@ phases:
           path: phase-22-remediation-10/003-dispatch-after-commit-observations.md
           done: false
           tier: sonnet-med
+          digest: After-commit create observations now dispatched post-commit at Bootstrap, Register, OIDC just-in-time creation, and guest upgrade; no dispatch on rollback; payloads carry no ssn or tax_id.
           findings:
             - DDfb
             - bwMq
