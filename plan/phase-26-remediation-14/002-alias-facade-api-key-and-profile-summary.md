@@ -21,3 +21,7 @@ The work targets the plan branch plan/identity-model-impl and lands through the 
 ## References
 
 - Finding iZ3E in this plan's `plan/findings.yaml`.
+
+## Status
+
+succeeded, 2026-10-31. Added IssueAPIKeyInput, IssuedAPIKey, ProfileSummary aliases in api/usersservice/service.go; compile-only test api/usersservice/facade_aliases_test.go. go build, go vet, go test pass.
