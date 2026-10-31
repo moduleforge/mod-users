@@ -1,5 +1,14 @@
 version: 2
-items: []
+items:
+    - title: Update /v1/self paths in oidc_config_test (ty
+      id: 7eEW
+      date: "2026-10-31"
+      tags:
+        - type:ambiguity
+        - plan/phase:users-identity-final
+        - priority:unspecified
+        - effort:unspecified
+      text: Update /v1/self paths in oidc_config_test (type:documentation). api/internal/handlers/oidc_config_test.go lines 538, 576 and 743 issue GET /v1/self, a removed route. The test asserts the unconfirmed-OIDC gate answers 503 verbatim. Change the request path to /v1/me. Code change, left unedited by the task agent.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
