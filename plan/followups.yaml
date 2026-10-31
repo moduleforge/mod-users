@@ -2768,3 +2768,18 @@ items:
         recommendation:
           Optionally memoize the providers list at module level in the api client with a
           short TTL, if the list is fetched from several pages.
+    - title: OIDC state cookie vs credentials omit
+      id: jRXp
+      date: "2026-10-31"
+      tags:
+        - type:conflict
+        - priority:medium
+        - effort:medium
+        - plan/phase:users-gui-and-frontend-contract
+        - plan/slug:identity-model-impl
+      text: |-
+        gui/src/lib/api.ts startRedirectFlow (used by client.me.credentials.startOidcLink and client.session.stepUp.startOidc) sends credentials: 'include', which contradicts the frontend contract of 'credentials: omit on every request'. Both POST routes (api/openapi.yaml /v1/me/credentials/oidc/{provider}/start and /v1/session/step-up/oidc/{provider}/start) answer {authorize_url} AND set the signed oidc_state cookie on that response, and browsers discard Set-Cookie from a credentials: 'omit' fetch, so the callback would later fail with users.oidc_state_cookie_required. Decide whether to keep the include exception (requires CORS AllowCredentials with a non-wildcard origin, already set in api/internal/server/server.go) or change the API to carry the state outside a cookie (for example return it in the body and have the callback read it from the URL), and update the frontend contract text accordingly.
+
+        Escalation question (quoted data, unresolved by internal-escalation: certainty standard is off; decisions-and-resolutions.md retains the oidc_state cookie but does not decide the credentials mode): Should the two OIDC start POSTs remain a documented credentials:'include' exception to the 'omit' rule, or should the API carry the OIDC state outside a cookie so every request can use 'omit'?
+        Option A (recommended): Keep the include exception for the two start calls and amend the frontend contract (API-surface section 12, gui/README.md). No api/gui code change; keeps resolution (c) and overview 'What must not change' intact.
+        Option B: Remove the cookie; return state in the start body and verify in callback. API change in oidc.go and openapi.yaml, new CSRF binding needing security review; contradicts overview 'What must not change'.
