@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 11
-    tasks_added: 57
+    tasks_added: 58
 phases:
     - number: 6
       slug: users-identity-core
@@ -1352,7 +1352,7 @@ phases:
       slug: remediation-11
       title: Remediation Round 11
       kind: remediation
-      tasks_added: 4
+      tasks_added: 5
       remediates_phase: 9
       tasks:
         - number: 1
@@ -1402,6 +1402,18 @@ phases:
           findings:
             - b1HZ
             - AReg
+          git:
+            branch: null
+            commit: []
+            merge: null
+        - number: 5
+          slug: route-first-verify-send-error-to-dialog
+          title: Route First Verification-Code Send Failure to the Dialog
+          path: phase-23-remediation-11/005-route-first-verify-send-error-to-dialog.md
+          done: false
+          tier: sonnet-low
+          findings:
+            - Qo20
           git:
             branch: null
             commit: []
