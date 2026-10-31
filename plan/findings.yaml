@@ -36,15 +36,6 @@ items:
         - priority:medium
         - effort:medium
       text: 'mod-core''s NaturalPersonService.CreateInTx and OrganizationService.CreateInTx document that the caller dispatches ObserveAfterCommit (create, <resource>, entity id) after the transaction commits. mod-users never does: api/internal/service/user_service.go (np.CreateInTx near line 187), api/internal/service/user_self_service.go (np.CreateInTx near line 578) and api/internal/service/bootstrap_service.go (createOrganization via OrganizationService.CreateInTx) all rely on the in-transaction observation only, so post-commit observers (anything subscribed via ObserverGroup.ObserveAfterCommit) never see the natural_person or organization creation. Needs a design decision on how the committing public methods (Bootstrap, user registration and self-service flows) carry the entity id out of their InTx bodies and dispatch after commit.'
-    - title: Manager to grep plan/overview.md and plan/not
-      id: VZLf
-      date: "2026-10-30"
-      tags:
-        - type:ambiguity
-        - plan/phase:adopt-core-engine-remediation
-        - priority:unspecified
-        - effort:unspecified
-      text: Manager to grep plan/overview.md and plan/notes/work-packages.md (not read by agent) for 'inferred', 'sessionless', 'five-argument' and 'raw organization insert' and update stale statements.
     - title: Coordination note on link-siblings.sh in deci
       id: j7Ym
       date: "2026-10-30"
@@ -2135,4 +2126,13 @@ closed:
       title: 'Plan-note edits (manager-only, plan/notes/):'
       disposition: promoted
       ref: GNRh
+      date: "2026-10-31"
+    - id: VZLf
+      title: Manager to grep plan/overview.md and plan/not
+      disposition: dismissed
+      reason: |-
+        Already fixed: grep for 'inferred', 'sessionless', 'five-argument' and 'raw
+        organization' in plan/overview.md and plan/notes/work-packages.md finds only
+        plan/overview.md line 161 (the phase-21 row, which describes the current behavior) and
+        nothing in work-packages.md.
       date: "2026-10-31"
