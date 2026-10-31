@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: Facade lacks input/summary type aliases
-      id: iZ3E
-      date: "2026-10-31"
-      tags:
-        - type:bug
-        - plan/phase:doc-updates
-        - priority:medium
-        - effort:small
-      text: 'api/usersservice/service.go exports CredentialService, DirectoryService and PrincipalSummary but no aliases for inner.IssueAPIKeyInput, inner.IssuedAPIKey (arguments and result of CredentialService.IssueAPIKeyInTx) or inner.ProfileSummary (value of DirectoryService.ProfileSummaries). A module outside api/ cannot name these types, so a caller such as app-mfmanager cannot build the IssueAPIKeyInTx input. Add the three aliases to the facade (AGENTS.md convention: re-export every type a public method takes or returns).'
     - title: CORE_FIELD_KEY_HEX read by no code here
       id: RVUM
       date: "2026-10-31"
@@ -2334,4 +2325,13 @@ closed:
         X-Request-ID (no X-Step-Up-Token), and
         api/internal/server/cors_test.go:210-237 (TestCorsOptions_MethodsAndHeaders)
         asserts the header is absent.
+      date: "2026-10-31"
+    - id: iZ3E
+      title: Facade lacks input/summary type aliases
+      disposition: dismissed
+      reason: |-
+        Already fixed by phase 26 task 002: api/usersservice/service.go:97
+        (IssueAPIKeyInput), :101 (IssuedAPIKey) and :366 (ProfileSummary) now
+        alias the inner types, with a compile-only test in
+        api/usersservice/facade_aliases_test.go.
       date: "2026-10-31"
