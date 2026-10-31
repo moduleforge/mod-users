@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: app-mftodo installs unfiltered access fns
-      id: ck8O
-      date: "2026-10-30"
-      tags:
-        - type:security
-        - plan/phase:adopt-core-engine-remediation
-        - priority:high
-        - effort:small
-      text: 'needs-sibling: app-mftodo. app-mftodo/cmd/server/appsetup/access.go composes mod-users but installs access functions with setup.ApplyFuncs(ctx, pool, setup.NewGrantTableGenerator(), authzSlugs). mod-users'' single-row Authorize applies the owning-party gate (party credential_rule and min_acr for outside collaborators), so with the unfiltered generator a cross-party collaborator below a party''s policy lists rows Authorize refuses. Install through mod-users'' facade: gen, err := localAuthz.AccessFuncGenerator() (github.com/moduleforge/mod-users/api/localAuthz), failing startup on error, and bind every list transaction with setup.BindAuthInputs.'
     - title: app-mfgit installs unfiltered access fns
       id: yDll
       date: "2026-10-30"
@@ -1916,4 +1907,9 @@ closed:
       title: mod-authz stepUpStale infers system trust
       disposition: promoted
       ref: J86E
+      date: "2026-10-31"
+    - id: ck8O
+      title: app-mftodo installs unfiltered access fns
+      disposition: promoted
+      ref: ck8O
       date: "2026-10-31"
