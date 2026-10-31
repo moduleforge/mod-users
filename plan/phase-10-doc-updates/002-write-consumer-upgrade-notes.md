@@ -82,3 +82,10 @@ Suggested role doc: `plugins/flow/roles/tech-writer.md`.
   API), 8 (configuration), 10 (notes for specific consumers), 11 (manifest).
 - [Decisions and resolutions](../notes/decisions-and-resolutions.md) — U4, U7, U8, U16, U17 and the
   migration impact table.
+
+## Status
+
+- Outcome: succeeded (2026-10-31).
+- Edited `docs/consumer-upgrade-notes.md` only (plus this note). Added `## Identity model rewrite` (Go packages, HTTP routes, configuration, tokens/headers/cookies, database, manifest, bootstrap, impersonation, per-consumer notes) before `## Known limits and open items`. Rewrote the EdDSA, token hardening, GUI and HTTP error precedence sections that the rewrite made false; fixed the dangling `jwt-eddsa.md#derived-oauth-state-key` link; added operator-exemption and planned data-protection-class (H8qi, not built) notes.
+- Validation: removed-symbol, route, config-variable, `HS256|X-Step-Up-Token|JWT_ALG|AUTH_REQUIRE_STEP_UP` (removal lines only), no `plan/` link, and relative-link/anchor checks all passed.
+- Findings filed: stale `X-Step-Up-Token` in CORS allowed headers; missing facade aliases for `IssueAPIKeyInput`, `IssuedAPIKey`, `ProfileSummary`.
