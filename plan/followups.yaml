@@ -2863,3 +2863,12 @@ items:
         - cross-repo/origin:repos
         - effort:unspecified
       text: 'From mod-repos finding rJGk (user decision 2026-11-03: fix in mod-users within the identity-model-impl plan, before mod-core phase 5). The view/function credential_profile_availability (model/migrations/sql/0100_baseline.sql ~1648-1666) has no revoked_at/expires_at predicate, unlike credential_liveness (~2028-2080). A credential revoked or expired between SSH key resolution and profile derivation still authorizes fetch/push. Add the liveness predicate (or route through credential_liveness) and test it. Then mod-repos adds a regression scenario in api/transport/sshprofilederivation using the existing setAfterSessionCredential hook.'
+    - title: Narrow SSH resolver package, no api/auth
+      id: HUVO
+      date: "2026-11-03"
+      tags:
+        - type:enhancement
+        - priority:low
+        - cross-repo/origin:repos
+        - effort:unspecified
+      text: 'From mod-repos finding vsiV (accepted by the user 2026-11-03). mod-repos api/transport/userskeys imports usersservice -> api/auth -> api/internal/auth, pulling mod-users'' OIDC/JWT/oauth2/CORS dependency closure into any binary wiring the SSH adapter. Ask: expose a narrow SSH key resolver package in mod-users that does not depend on api/auth, so hosts such as app-mfgit avoid the extra closure.'
