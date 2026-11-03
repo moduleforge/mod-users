@@ -2854,3 +2854,12 @@ items:
         - plan/phase:users-identity-final
         - plan/slug:identity-model-impl
       text: 'Note for manager: removals of VJg2 and PRvD cite unlisted wip checkpoint commits (19018394, cdf9af64) as evidence; confirm before applying.'
+    - title: Revoked creds still derive profiles
+      id: 0D1g
+      date: "2026-11-03"
+      tags:
+        - type:security
+        - priority:medium
+        - cross-repo/origin:repos
+        - effort:unspecified
+      text: 'From mod-repos finding rJGk (user decision 2026-11-03: fix in mod-users within the identity-model-impl plan, before mod-core phase 5). The view/function credential_profile_availability (model/migrations/sql/0100_baseline.sql ~1648-1666) has no revoked_at/expires_at predicate, unlike credential_liveness (~2028-2080). A credential revoked or expired between SSH key resolution and profile derivation still authorizes fetch/push. Add the liveness predicate (or route through credential_liveness) and test it. Then mod-repos adds a regression scenario in api/transport/sshprofilederivation using the existing setAfterSessionCredential hook.'
