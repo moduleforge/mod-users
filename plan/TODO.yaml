@@ -1699,6 +1699,7 @@ phases:
     - number: 28
       slug: credential-profile-liveness
       title: Credential Profile Derivation Liveness
+      diff_base: efe5f26ea06f8c14324696b81b458214f8722f80
       tasks:
         - number: 1
           slug: add-liveness-to-credential-profile-availability
