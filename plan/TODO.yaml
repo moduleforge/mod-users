@@ -1699,4 +1699,14 @@ phases:
     - number: 28
       slug: credential-profile-liveness
       title: Credential Profile Derivation Liveness
-      tasks: []
+      tasks:
+        - number: 1
+          slug: add-liveness-to-credential-profile-availability
+          title: Add Liveness Predicate to credential_profile_availability
+          path: phase-28-credential-profile-liveness/001-add-liveness-to-credential-profile-availability.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
