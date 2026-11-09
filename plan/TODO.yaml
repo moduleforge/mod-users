@@ -1696,3 +1696,7 @@ phases:
             commit:
                 - 6617e64e
             merge: 07d788b5
+    - number: 28
+      slug: credential-profile-liveness
+      title: Credential Profile Derivation Liveness
+      tasks: []
