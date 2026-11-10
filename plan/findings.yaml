@@ -19,6 +19,15 @@ items:
           The CredentialProfileAvailability query (and the generated Querier method in model/db/querier.go and model/db/sessions.sql.go) carries no comment listing its status vocabulary. The new reasons credential_revoked and credential_expired are therefore not documented at the sqlc source (the ProfileAvailability comment lists only session reasons, which is correct for that query). Not a false statement, but the contract change is undiscoverable from the Go API.
         recommendation:
           Add a comment under '-- name: CredentialProfileAvailability :one' such as 'available or a lock reason: credential_revoked, credential_expired, then the ProfileAvailability reasons; not_held for an unknown credential', then regenerate model/db (do not hand-edit generated files).
+    - title: 'Root make build (Validation #3) not run per d'
+      id: ta2T
+      date: "2026-11-10"
+      tags:
+        - type:ambiguity
+        - plan/phase:remediation-16
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Root make build (Validation #3) not run per dispatch constraint; run from an allowed context if the gate requires it.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
