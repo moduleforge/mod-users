@@ -2892,3 +2892,13 @@ items:
           REASON_COPY has no entries for credential_revoked or credential_expired. describeLockReason falls back to FALLBACK_REASON_COPY for unknown reasons (explicitly designed to not crash or render a raw code), and lockFor in session_views.go adds no remedy, so behavior is safe. These reasons only arise for client-credential/SSH paths where a dead credential is already rejected earlier, so GUI exposure is unlikely.
         recommendation:
           Optional: add friendly copy for the two reasons; not required.
+    - title: Ambiguous ProfileAvailability wording
+      id: XXb9
+      date: "2026-11-10"
+      tags:
+        - type:documentation
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:remediation-16
+        - plan/slug:identity-model-impl
+      text: '[agent-authored review data] severity: suggestion, confidence: medium. model/queries/sessions.sql lines 190-197: comment says ''a ProfileAvailability reason'', but no such Go type exists; ProfileAvailability is the sqlc query name over mod_users.profile_availability. Content accurate, name ambiguous. Recommendation: reword to ''the reasons returned by mod_users.profile_availability (the ProfileAvailability query)'' and regenerate model/db.'
