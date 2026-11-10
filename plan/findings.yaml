@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'Root make build (Validation #3) not run per d'
-      id: ta2T
-      date: "2026-11-10"
-      tags:
-        - type:ambiguity
-        - plan/phase:remediation-16
-        - priority:unspecified
-        - effort:unspecified
-      text: 'Root make build (Validation #3) not run per dispatch constraint; run from an allowed context if the gate requires it.'
     - title: Ambiguous ProfileAvailability wording
       id: XXb9
       date: "2026-11-10"
@@ -2228,4 +2219,9 @@ closed:
       title: The CredentialProfileAvailability query (and…
       disposition: fixed
       ref: phase-29-remediation-16/001-document-credential-profile-availability-statuses.md
+      date: "2026-11-10"
+    - id: ta2T
+      title: 'Root make build (Validation #3) not run per d'
+      disposition: dismissed
+      reason: 'Accepted: diff verified comment-only (24 added comment lines across sessions.sql, querier.go, sessions.sql.go; no SQL/Go behavior change); go build in model/ is a sufficient substitute here, and the manager-tier root make build is run separately before landing.'
       date: "2026-11-10"
