@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: The CredentialProfileAvailability query (and…
-      id: IzAq
-      date: "2026-11-10"
-      tags:
-        - type:bug
-        - plan/phase:credential-profile-liveness
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: model/queries/sessions.sql
-        lines: 189-190
-        severity: minor
-        confidence: medium
-        concerns: correctness
-        description:
-          The CredentialProfileAvailability query (and the generated Querier method in model/db/querier.go and model/db/sessions.sql.go) carries no comment listing its status vocabulary. The new reasons credential_revoked and credential_expired are therefore not documented at the sqlc source (the ProfileAvailability comment lists only session reasons, which is correct for that query). Not a false statement, but the contract change is undiscoverable from the Go API.
-        recommendation:
-          Add a comment under '-- name: CredentialProfileAvailability :one' such as 'available or a lock reason: credential_revoked, credential_expired, then the ProfileAvailability reasons; not_held for an unknown credential', then regenerate model/db (do not hand-edit generated files).
     - title: 'Root make build (Validation #3) not run per d'
       id: ta2T
       date: "2026-11-10"
@@ -2242,4 +2223,9 @@ closed:
       title: REASON_COPY has no entries for credential_re…
       disposition: promoted
       ref: tEs4
+      date: "2026-11-10"
+    - id: IzAq
+      title: The CredentialProfileAvailability query (and…
+      disposition: fixed
+      ref: phase-29-remediation-16/001-document-credential-profile-availability-statuses.md
       date: "2026-11-10"
