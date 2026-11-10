@@ -1,5 +1,43 @@
 version: 2
-items: []
+items:
+    - title: The CredentialProfileAvailability query (and…
+      id: IzAq
+      date: "2026-11-10"
+      tags:
+        - type:bug
+        - plan/phase:credential-profile-liveness
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: model/queries/sessions.sql
+        lines: 189-190
+        severity: minor
+        confidence: medium
+        concerns: correctness
+        description:
+          The CredentialProfileAvailability query (and the generated Querier method in model/db/querier.go and model/db/sessions.sql.go) carries no comment listing its status vocabulary. The new reasons credential_revoked and credential_expired are therefore not documented at the sqlc source (the ProfileAvailability comment lists only session reasons, which is correct for that query). Not a false statement, but the contract change is undiscoverable from the Go API.
+        recommendation:
+          Add a comment under '-- name: CredentialProfileAvailability :one' such as 'available or a lock reason: credential_revoked, credential_expired, then the ProfileAvailability reasons; not_held for an unknown credential', then regenerate model/db (do not hand-edit generated files).
+    - title: REASON_COPY has no entries for credential_re…
+      id: tEs4
+      date: "2026-11-10"
+      tags:
+        - type:bug
+        - plan/phase:credential-profile-liveness
+        - priority:unspecified
+        - effort:unspecified
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/profile-lock.ts
+        lines: 9-23
+        severity: suggestion
+        confidence: high
+        concerns: correctness
+        description:
+          REASON_COPY has no entries for credential_revoked or credential_expired. describeLockReason falls back to FALLBACK_REASON_COPY for unknown reasons (explicitly designed to not crash or render a raw code), and lockFor in session_views.go adds no remedy, so behavior is safe. These reasons only arise for client-credential/SSH paths where a dead credential is already rejected earlier, so GUI exposure is unlikely.
+        recommendation:
+          Optional: add friendly copy for the two reasons; not required.
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
