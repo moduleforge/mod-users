@@ -1731,6 +1731,6 @@ phases:
           findings:
             - IzAq
           git:
-            branch: null
+            branch: plan/identity-model-impl-29-001
             commit: []
             merge: null
