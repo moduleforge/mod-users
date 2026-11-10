@@ -167,6 +167,14 @@ type CredentialProfileAvailabilityParams struct {
 	ProfileID    int64 `json:"profile_id"`
 }
 
+// Returns the availability status, one of (in this order):
+//  1. 'available'                   the profile is derivable from the credential;
+//  2. 'credential_revoked'          revoked_at is set (reported first);
+//  3. 'credential_expired'          expires_at <= now();
+//  4. a ProfileAvailability reason: 'not_held', 'inactive',
+//     'principal_disabled', 'confined', 'credential_not_authorized',
+//     'provider_required', or 'acr_too_low';
+//  5. 'not_held' for an unknown credential.
 func (q *Queries) CredentialProfileAvailability(ctx context.Context, arg CredentialProfileAvailabilityParams) (string, error) {
 	row := q.db.QueryRow(ctx, credentialProfileAvailability, arg.CredentialID, arg.ProfileID)
 	var availability string

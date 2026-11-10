@@ -187,6 +187,14 @@ SELECT mod_users.profile_availability_excluding(
 )::text AS availability;
 
 -- name: CredentialProfileAvailability :one
+-- Returns the availability status, one of (in this order):
+--   1. 'available'                   the profile is derivable from the credential;
+--   2. 'credential_revoked'          revoked_at is set (reported first);
+--   3. 'credential_expired'          expires_at <= now();
+--   4. a ProfileAvailability reason: 'not_held', 'inactive',
+--      'principal_disabled', 'confined', 'credential_not_authorized',
+--      'provider_required', or 'acr_too_low';
+--   5. 'not_held' for an unknown credential.
 SELECT mod_users.credential_profile_availability(@credential_id::bigint, @profile_id::bigint)::text AS availability;
 
 -- name: SessionLiveness :one
