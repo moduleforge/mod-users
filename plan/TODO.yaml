@@ -1725,11 +1725,13 @@ phases:
           slug: document-credential-profile-availability-statuses
           title: Document CredentialProfileAvailability Status Vocabulary In sqlc Query
           path: phase-29-remediation-16/001-document-credential-profile-availability-statuses.md
-          done: false
+          done: true
           tier: haiku-med
+          digest: Added status-vocabulary comment above CredentialProfileAvailability SELECT and regenerated model/db with sqlc; comment-only generated diff.
           findings:
             - IzAq
           git:
-            branch: null
-            commit: []
+            branch: plan/identity-model-impl-29-001
+            commit:
+                - d3be4994
             merge: null
