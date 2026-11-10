@@ -1643,7 +1643,10 @@ $$;
 
 -- credential_profile_availability(p_credential_id, p_profile_id): the same
 -- rules with the single credential as the only factor and its kind's base_acr
--- as the assurance. Used by client credentials and SSH.
+-- as the assurance. Used by client credentials and SSH. Credential liveness is
+-- part of the rule: a revoked credential yields 'credential_revoked' and an
+-- expired one 'credential_expired' (the credential_liveness vocabulary) before
+-- any profile rule is evaluated, so a dead credential never derives a profile.
 -- +goose StatementBegin
 CREATE FUNCTION mod_users.credential_profile_availability(p_credential_id BIGINT, p_profile_id BIGINT) RETURNS TEXT
 LANGUAGE sql
@@ -1652,13 +1655,29 @@ SECURITY INVOKER
 SET search_path = pg_catalog, pg_temp
 AS $$
   SELECT COALESCE((
-    SELECT mod_users.profile_availability_for(
-             c.principal_id,
-             NULL,
-             ARRAY[c.id],
-             k.base_acr,
-             p_profile_id,
-             false)
+    SELECT CASE
+             -- WHY: a credential can be revoked between SSH key resolution (or
+             -- token issue) and profile derivation, and this function is the
+             -- last gate for SSH and client credentials, so it must not trust
+             -- that the caller already checked liveness.
+             -- IMPLIES: a revoked credential yields no derivable profile, so
+             -- fetch/push is refused. Revoked is reported before expired, and
+             -- the status reuses the credential_liveness vocabulary.
+             WHEN c.revoked_at IS NOT NULL THEN 'credential_revoked'
+             -- WHY: same race as above for a credential that reaches its
+             -- expires_at after resolution. The predicate (and now() as the
+             -- clock) matches credential_liveness so the two cannot drift.
+             -- IMPLIES: an expired credential yields no derivable profile and
+             -- is refused exactly like a revoked one.
+             WHEN c.expires_at IS NOT NULL AND c.expires_at <= now() THEN 'credential_expired'
+             ELSE mod_users.profile_availability_for(
+                    c.principal_id,
+                    NULL,
+                    ARRAY[c.id],
+                    k.base_acr,
+                    p_profile_id,
+                    false)
+           END
       FROM mod_users.credentials c
       JOIN mod_users.credential_kinds k ON k.kind = c.kind
      WHERE c.id = p_credential_id

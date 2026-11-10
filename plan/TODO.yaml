@@ -2,8 +2,8 @@ slug: identity-model-impl
 version: 1
 title: ""
 remediation:
-    rounds: 15
-    tasks_added: 73
+    rounds: 16
+    tasks_added: 74
 phases:
     - number: 6
       slug: users-identity-core
@@ -1696,3 +1696,42 @@ phases:
             commit:
                 - 6617e64e
             merge: 07d788b5
+    - number: 28
+      slug: credential-profile-liveness
+      title: Credential Profile Derivation Liveness
+      diff_base: efe5f26ea06f8c14324696b81b458214f8722f80
+      tasks:
+        - number: 1
+          slug: add-liveness-to-credential-profile-availability
+          title: Add Liveness Predicate to credential_profile_availability
+          path: phase-28-credential-profile-liveness/001-add-liveness-to-credential-profile-availability.md
+          done: true
+          tier: sonnet-high
+          digest: credential_profile_availability now checks revoked_at (credential_revoked) then expires_at <= now() (credential_expired) in one SELECT before profile_availability_for; unknown credential stays not_held; signature, STABLE, SECURITY INVOKER, search_path unchanged; baseline edited in place, no new migration.
+          git:
+            branch: plan/identity-model-impl-28-001
+            commit:
+                - dbf93997
+            merge: 5706235d1afa1b5d0ea03d3cc5539daf59f0be10
+    - number: 29
+      slug: remediation-16
+      title: Remediation Round 16
+      diff_base: eb9c9bc090378abbe3addd54357158629125e3cf
+      kind: remediation
+      tasks_added: 1
+      remediates_phase: 28
+      tasks:
+        - number: 1
+          slug: document-credential-profile-availability-statuses
+          title: Document CredentialProfileAvailability Status Vocabulary In sqlc Query
+          path: phase-29-remediation-16/001-document-credential-profile-availability-statuses.md
+          done: true
+          tier: haiku-med
+          digest: Added status-vocabulary comment above CredentialProfileAvailability SELECT and regenerated model/db with sqlc; comment-only generated diff.
+          findings:
+            - IzAq
+          git:
+            branch: plan/identity-model-impl-29-001
+            commit:
+                - d3be4994
+            merge: 128eadc296dfe6df13e17c6a1a6e7a1e40054d3a
