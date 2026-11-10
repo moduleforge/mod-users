@@ -27,3 +27,10 @@ The work targets the plan branch `plan/identity-model-impl` and lands through th
 ## References
 
 - Finding IzAq, a finding in this plan's `plan/findings.yaml` (type:bug, plan/phase:credential-profile-liveness, priority:low).
+
+## Status
+
+- Outcome: succeeded (2026-11-09).
+- Change: added the result-vocabulary comment under `-- name: CredentialProfileAvailability :one` in `model/queries/sessions.sql`; regenerated with `cd model && sqlc generate`. Source files: `model/queries/sessions.sql`, `model/db/querier.go`, `model/db/sessions.sql.go`.
+- Diff under `model/db/` is comment-only (8 insertions, 0 deletions per file).
+- Validation: `make -C model verify` (with `MODULEFORGE_SIBLINGS_DIR` set) passed; `go build ./...` in `model/` passed. Root `make build` was not run (outside the worktree-safe command set for this dispatch).

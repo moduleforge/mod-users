@@ -114,6 +114,14 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// The per-request check for a client-credentials token; always one row.
 	CredentialLiveness(ctx context.Context, arg CredentialLivenessParams) (CredentialLivenessRow, error)
+	// Returns the availability status, one of (in this order):
+	//   1. 'available'                   the profile is derivable from the credential;
+	//   2. 'credential_revoked'          revoked_at is set (reported first);
+	//   3. 'credential_expired'          expires_at <= now();
+	//   4. a ProfileAvailability reason: 'not_held', 'inactive',
+	//      'principal_disabled', 'confined', 'credential_not_authorized',
+	//      'provider_required', or 'acr_too_low';
+	//   5. 'not_held' for an unknown credential.
 	CredentialProfileAvailability(ctx context.Context, arg CredentialProfileAvailabilityParams) (string, error)
 	// Departure cleanup: removes the party authorizations of every credential held
 	// by the departing principal.
