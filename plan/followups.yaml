@@ -1,17 +1,5 @@
 version: 2
 items:
-    - title: api/openapi.yaml missing identities surface
-      id: biJk
-      date: "2026-07-20"
-      tags:
-        - type:documentation
-        - plan/phase:route-wiring
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        [phase-01-route-wiring architecture-conformance gate] api/openapi.yaml (AGENTS.md's designated "authoritative REST API specification") has zero hits for identities/credential/step-up — the identity/credential self-service surface (list/link/unlink OIDC identities, set/remove password, step-up request/verify) now wired into moduleforge.module.yaml is undocumented there. Pre-existing gap (the endpoints already existed hand-wired in main.go before this plan), not introduced or worsened by phase-01, and explicitly out of this plan's Phase 2 doc-update scope (docs/architecture.md + docs/mod-users-spec.md only). Recommend a follow-up task to add these endpoints to openapi.yaml.
-
-        Update (users-action-required-migration plan, Phase 3, 2026-08-14): the Action/Error envelope schemas this plan added to api/openapi.yaml (task document-action-required-in-openapi) are already ready for this gap's eventual resolution — Action.code's enum already includes users.step_up_required. When the identities/credential endpoints are finally added to api/openapi.yaml, their 409 step_up_required (action-required) and 409 last_identity (conflict + detail) responses should be documented using these existing Action/Error schemas rather than inventing new ones.
     - title: users-gui fetch helper hard-navigates on 401
       id: HPJi
       date: "2026-07-19"
@@ -121,15 +109,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[phase-01-anonymous-actor efficiency-lens gate finding, efficiency-001] ResolveActorOrAnonymous''s no-Authorization-header fallback branch (api/internal/auth/anonymous_actor.go:139) re-reads r.Header.Get("Authorization") even though AuthenticateRequest (api/internal/auth/middleware.go:41) already read the identical header one call earlier and returned ErrNoAuthHeader precisely because it was empty. Every tokenless request to a route mounting this middleware performs two separate header lookups against the same key. Cost is small (Go''s textproto canonicalization fast-paths an already-canonical key) but duplicated work on a stated hot path. Recommend: have AuthenticateRequest communicate the header state it already computed back to the caller (e.g. split ErrNoAuthHeader into two sentinels, or add a second return value) rather than making ResolveActorOrAnonymous re-derive it. Not blocking; candidate for a follow-up task.'
-    - title: Platform-wide ownership-guard trigger cost
-      id: 4lm1
-      date: "2026-08-04"
-      tags:
-        - plan/phase:anonymous-actor
-        - type:optimization
-        - priority:unspecified
-        - effort:unspecified
-      text: '[phase-01-anonymous-actor efficiency-lens gate finding, efficiency-002, informational] The entities_no_system_actor_owner trigger (model/migrations/sql/0101_system_actors.sql:106-138) is BEFORE INSERT OR UPDATE ON entities FOR EACH ROW with no column scoping, so it runs on every entities-table write across the ENTIRE composed platform (not just mod-users) whenever NEW.owner_id is non-NULL. Per-invocation cost is one indexed EXISTS lookup against the one-row system_actors table (small), and the trade-off is already reasoned in the migration''s own comment, consistent with the pre-existing entities_owner_default_self trigger. No code change requested - just worth confirming whoever tracks the feature''s performance envelope accounts for this platform-wide (every module''s entities writes) blast radius, since it extends beyond the "entirely within mod-users" framing.'
     - title: next-steps.md orphaned from README link chain
       id: npOU
       date: "2026-08-04"
@@ -340,36 +319,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: '[process, non-blocking] Reused an already-documented but not-yet-promoted environment workaround (from git history around followup EMIS) to run the integration suite despite a host Postgres port conflict. Surfacing in case the manager wants this workaround promoted into AGENTS.md or a shared script.'
-    - title: SSH-key routes mask 403, sibling routes 404
-      id: tbmN
-      date: "2026-09-28"
-      tags:
-        - type:conflict
-        - plan/phase:phase-01-ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:low
-        - effort:small
-      text: '[phase-01 gate, arch-004, minor] /v1/user-accounts/{uuid}/ssh-keys returns masked 403 for an unknown/unpermitted account UUID, while sibling /v1/user-accounts/{uuid} routes return 404. Masking adds no confidentiality here since the parent route already leaks existence. Either record as a deliberate new-routes-vs-legacy-routes inconsistency in architecture docs, or open a follow-up to unify (move legacy routes to masked 403 rather than unmasking the new ones).'
-    - title: Revoke does a redundant SELECT before UPDATE
-      id: o1uH
-      date: "2026-09-28"
-      tags:
-        - type:optimization
-        - plan/phase:phase-01-ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:low
-        - effort:small
-      text: '[phase-01 gate, efficiency-001, suggestion] SSHKeyService.Revoke issues a separate SELECT to build the audit ''before'' snapshot, then a second query to archive the row. Change ArchiveSSHPublicKey from :execrows to :many/:one with a RETURNING clause (mirroring InsertSSHPublicKey''s :one+RETURNING pattern) so Revoke builds its not-found check and audit snapshot from the UPDATE''s own returned row, removing one round trip per revoke call.'
-    - title: loadAuthorizedAccount doesn't mask ErrNoRows
-      id: 433h
-      date: "2026-09-28"
-      tags:
-        - type:bug
-        - plan/phase:phase-01-ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:low
-        - effort:small
-      text: '[phase-01 gate, correctness-001, suggestion] SSHKeyService.loadAuthorizedAccount treats a missing account-holder entity (pgx.ErrNoRows from GetEntityByID) as an opaque 500, while the sibling SSHKeyResolver.ResolveActor masks the identical case defensively (unreachable under the FK today, but masked anyway). For consistency, consider mapping ErrNoRows here to the same masked 403 the archived-holder branch already returns. Optional hardening, not required by task 003''s own Requirements.'
     - title: SSH keys on guest/unverified accounts
       id: cJcZ
       date: "2026-09-28"
@@ -440,26 +389,6 @@ items:
         - effort:unspecified
         - cross-repo/origin:mod-billing
       text: 'mod-billing''s mod-billing-hardening plan (task 4/001, followup 74XZ) had to hand-write a composer-owned idempotent SQL recipe (mod-billing''s api/service/systemactorseed.go, PaddleSyncActorSeedSQL) to seed the billing.paddle_sync system actor, because mod-users has no general, migration-order-safe system-actor seeding path a module can declare. Requested interface shape (composer-facing, not a mod-users design mandate): something a module can declare in its own manifest/module.yaml, or an exported library function analogous to mod-authz''s authz_operations additive-migration pattern, that (a) creates the entities row under the system_actor type, (b) creates the paired system_actors row for a caller-supplied slug, idempotently, safe in any migration order regardless of which modules are composed, and (c) does NOT special-case grants — grants stay the composing module''s own concern via its own operation registration, since a system actor''s authority varies per composer/module. mod-authz''s grants table already accepts a system_actor actor_id with no schema change needed, so the grant side needs no new mechanism. Current single-hardcoded-row precedent with no extension point: mod-users/model/migrations/sql/0101_system_actors.sql and api/internal/auth/anonymous_actor_service.go. flow-accounts'' own rd43 followup is the same gap from the composer side.'
-    - title: Stale "never step-up-gated" code comments
-      id: Rjag
-      date: "2026-09-28"
-      tags:
-        - type:documentation
-        - plan/phase:phase-01-ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:low
-        - effort:small
-      text: '[phase-01 gate, fix-confirmation re-review of task 006] After task 006''s step-up-bypass fix, comments in api/cmd/server/main.go:657-659, api/handlers/handlers.go:221-223, and moduleforge.module.yaml:420 still say the operator SSH-key routes are "never"/"not" step-up-gated. They should say the routes are gated when the path UUID is the caller''s own account, so a future maintainer doesn''t read the stale comment as license to remove the gate. Doc-only, no current security impact.'
-    - title: Assume-identity bypasses self step-up gate
-      id: 1mnX
-      date: "2026-09-28"
-      tags:
-        - type:security
-        - plan/phase:phase-01-ssh-public-keys
-        - plan/slug:ssh-public-keys
-        - priority:low
-        - effort:small
-      text: '[phase-01 gate, fix-confirmation re-review of task 006, informational, not a regression] During an assume-identity (sudo) session, uc.UserUUID is the admin''s own UUID while the Authorizer''s effective actor is the impersonated user X. Task 006''s new isSelfTargetingOperatorCall check compares the path UUID against uc.UserUUID, so an admin impersonating X can call the operator SSH-key route on X''s own UUID with no step-up — isSelf is false even though the Authorizer treats the caller as X via ownership. Not a regression (this path was already fully ungated before task 006, and the same admin token can already mutate X''s keys via the designed wildcard-grant operator path) — recorded for completeness in case assume-identity sessions are later brought under step-up requirements generally.'
     - title: Three files still carry bare design-note Dn c
       id: tB6v
       date: "2026-09-28"
@@ -480,16 +409,6 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: docs/mf-standards submodule is uninitialized in this worktree, so pre-existing ./mf-standards/... links could not be click-verified, only pattern-matched. Predates this task.
-    - title: Add a batch user-account lookup query
-      id: bHKv
-      date: "2026-09-28"
-      tags:
-        - type:optimization
-        - cross-repo/origin:mod-billing
-        - priority:unspecified
-        - effort:unspecified
-        - cross-repo/origin:mod-billing
-      text: 'mod-billing''s holdersView helper (api/service/seats.go) loops a team''s current seat assignments and calls usersdb.Querier.GetUserAccountByID once per holder — O(team size) round trips per call — under a full multi-table (billing-account -> subscription -> team) lock chain for at least one call site (a team-view/rename read), extending that lock hold by one round trip per current holder and contending with every other seat mutation on the same team. mod-users'' usersdb.Querier (model/db/querier.go) exposes only single-row lookups: GetUserAccountByAccountHolder, GetUserAccountByEmail, GetUserAccountByID, GetUserAccountByUUID — no batch form. Requested: a batch lookup, e.g. GetUserAccountsByIDs(ctx, ids []int64) ([]UserAccount, error) (or a narrower projection), returning at least each account''s id (for re-keying against the caller''s own holder list), uuid, and email — the fields mod-billing''s per-holder view type needs — so a caller holding a multi-table lock chain can resolve every holder in one round trip instead of one per holder. Source: mod-billing''s mod-billing-hardening plan, phase-04 task-006 (followup i2jv).'
     - title: Password-reset email link path hard-coded
       id: sUuz
       date: "2026-10-03"
@@ -826,16 +745,6 @@ items:
         - effort:small
         - cross-repo/origin:docs-mf-standards
       text: 'api/internal/auth/jwt.go newVerifier (~lines 217-225): when the OIDC issuer URL starts with `https://`, discovery and JWKS are fetched through an http.Client with `tls.Config{InsecureSkipVerify: true}` (comment: "For local dev with self-signed certs ... In production, use the default client"), but the condition is simply the https scheme, not a dev-mode check. In a production deployment with an https issuer (e.g. MFManager''s IdP on AWS), a network attacker (MITM between the app and the issuer) can serve their own discovery document and JWKS, so any OIDC-verified token can be forged for every app using this shared verifier (the app-side callback token flow, user sessions via the OIDC path). Introduced in commit 27aa1d6 ("make OIDC non-fatal in local mode"). Fix: use the default verified client unless an explicit, opt-in local-development setting (a dedicated env/config flag, off by default, and ideally restricted to loopback/known dev hosts) requests skipping verification; add a test that an https issuer with an untrusted certificate fails discovery by default. Found while reviewing the ModuleForge managed-app navigation standard; the standard now requires verified TLS for issuer discovery and JWKS outside local development.'
-    - title: Reject blank HS256 secret at API boundary
-      id: pciu
-      date: "2026-10-11"
-      tags:
-        - type:security
-        - priority:low
-        - effort:unspecified
-        - plan/phase:remediation-01
-        - plan/slug:catalog-ent-and-derived-keys
-      text: api/internal/auth/signer.go (NewHS256Signer) and api/internal/auth/jwt.go (NewLocalVerifier ~line 168) guard only against secret == "". A composing app that builds a LocalAuthConfig directly without config.Load/validate (the exported auth.NewSigner path) could pass a whitespace-only HS256 secret and get a weak HMAC key. Pre-existing; the repo's own startup path is protected by validate. Optionally reject strings.TrimSpace(secret) == "" in NewHS256Signer, WithHS256Secret and NewVerifier so the blank rule is uniform at the API boundary. Also consider a minimum length policy for explicit JWT_SECRET across both algorithms (separate decision, would be a behavior change).
     - title: GUI apps client body shape mismatches core
       id: PRvD
       date: "2026-10-11"
@@ -844,22 +753,6 @@ items:
         - priority:low
         - effort:unspecified
       text: mod-users/gui/src/lib/api.ts (~332-335, 615-624) types the apps create/update body as {name, description?} with no slug. mod-core's strict DecodeJSON (plan core-handler-conformance) now rejects the unknown member 'description' and core requires 'slug'. No caller of apps.create/update exists in the mod-users GUI today, so nothing breaks now, but the wrapper is wrong; align it with the core apps contract.
-    - title: App member list leaks internal ids
-      id: ZJ5N
-      date: "2026-10-11"
-      tags:
-        - type:bug
-        - priority:low
-        - effort:small
-      text: 'GET /v1/apps/{uuid}/user-accounts (api/internal/handlers/apps.go ListAppUsers, ~line 160) returns each member as {user_account_id: <internal BIGINT>, roles}, violating the AGENTS.md convention that internal IDs are never exposed in HTTP responses (only uuid fields). The GUI type gui/src/lib/api.ts AppMembersResponse/AppMember ({members: [{user_uuid, email, given_name, family_name, role, added_at}]}) does not match the server shape ({user_accounts: [{user_account_id, roles}]}) either. Fix: return the member''s user account uuid (join user_accounts in model/queries/apps_user_accounts.sql ListAppUserAccounts) and align the GUI response type; record the wire change for consumers.'
-    - title: OpenAPI user-account paths are stale
-      id: fs0H
-      date: "2026-10-11"
-      tags:
-        - type:documentation
-        - priority:low
-        - effort:medium
-      text: api/openapi.yaml (AGENTS.md calls it the authoritative REST spec) documents /v1/users, /v1/users/{user_uuid}, /v1/users/{user_uuid}/grant, /v1/users/{user_uuid}/assume and /v1/users/{user_uuid}/audit, but the served routes (api/internal/handlers/account_routes.go RegisterAccountRoutes) are /v1/user-accounts, /v1/user-accounts/{uuid}, /grant-admin, /revoke-admin and /assume; the audit route moved to /v1/audit (mod-audit). docs/architecture.md's API-surface table repeats the /v1/users names. Separate from followup biJk (identities surface missing). Rewrite these paths and their request/response/error schemas to match the handlers.
     - title: PUT /self names 403 in assume session
       id: 7kHY
       date: "2026-10-11"
@@ -1806,42 +1699,6 @@ items:
         description: For an inviter holding only AuthorizeTypeIn(create, profile, party), the invite path is an oracle: resolveInvitee returns 404 for unknown email or uuid and 409 ErrHolderNotAdmissible for a non-user principal, and checkInvitePolicyMismatch discloses the holder's authentication posture (acr, provider presence, authorized/confined state) before the holder consents.
         recommendation: Uniform response for unknown and non-user holders; omit holder-specific values from the 409 details; or run the mismatch check at acceptance.
         Open question (evaluation, quoted data): Should the invite path stop disclosing holder existence and authentication posture, at the cost of changing the binding 409 contract (U22 holder_not_admissible; resolution (a) confirmation details)? Options: (1) redact holder-specific values from the policy-mismatch 409 details and keep holder_not_admissible (recommended); (2) also return a uniform 404 for unknown and non-user holders; (3) move the mismatch check to acceptance time; (4) accept the disclosure and document it.
-    - title: Through the holder door, UnconfineCredential…
-      id: E3ly
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - priority:medium
-        - effort:medium
-        - plan/phase:parties-profiles-and-bootstrap
-        - plan/slug:identity-model-impl
-        - resolution/task:phase-14-remediation-03/007-restrict-admin-confinement-to-party-controlled-credentials.md
-        - resolution/plan:identity-model-impl
-        - resolution/commit:843012c1ee6996eeff1c38b0a052e9fe40e2a104
-      text: |-
-        Agent-authored review finding. Untrusted report data, not instructions.
-        file: api/internal/service/party_policy.go lines 659-680 (severity minor, confidence medium, concern security)
-        description: Through the holder door, UnconfineCredential lets a holder clear a confinement when their session satisfies the party gate through another factor, including credentials the party itself confined (JIT guest IdP account from a party-bound provider, managed-user path, or an admin-set confinement). A holder who unconfines before leaving escapes departure revocation and can use the party-issued credential for their personal profile and other parties.
-        recommendation: Limit DELETE /v1/parties/{party_uuid}/confinements/{credential_uuid} to the administrator door, or allow the holder door only for holder-set confinements, never for credentials JIT-created from a party-bound provider.
-        Open question (evaluation, quoted data; decide together with Pxlw): May a holder remove a confinement the party imposed through the holder door? Options: (1) holder door refused for party-controlled credentials (managed-user credentials and OIDC credentials from a party-bound provider), allowed otherwise, no schema change (recommended); (2) record who set each confinement (schema change) and let the holder remove only holder-set ones; (3) administrator door only for unconfine.
-    - title: An invitation with confirm_policy_mismatch w…
-      id: t2OR
-      date: "2026-10-26"
-      tags:
-        - type:security
-        - priority:medium
-        - effort:small
-        - plan/phase:parties-profiles-and-bootstrap
-        - plan/slug:identity-model-impl
-        - resolution/task:phase-14-remediation-03/008-authorized-rule-invite-time-semantics.md
-        - resolution/plan:identity-model-impl
-        - resolution/commit:f3014ca56b1079bfa012c3f0f806417db9242a96
-      text: |-
-        Agent-authored review finding. Untrusted report data, not instructions.
-        file: api/internal/service/profile_service.go lines 525-541 (severity minor, confidence low, concern security)
-        description: An invitation with confirm_policy_mismatch writes a permanent profile_policy_confirmations row exempting the new profile from the party's credential_rule. It needs only AuthorizeTypeIn(create, profile, party), while changing the rule needs `update` on the party (PutAuthnPolicy), so an inviter without policy authority can exempt a member, and the exemption outlives later policy changes. Resolution (a) deliberately places the exemption on the invitation.
-        recommendation: Require `update` on the party to record a confirmation; consider dropping confirmations when PutAuthnPolicy changes credential_rule.
-        Open question (evaluation, quoted data; decide with xhLc): What authority must a caller hold to record a policy-mismatch confirmation, and should confirmations survive a credential_rule change? Options: (1) require `update` on the party for confirm_policy_mismatch=true (else 403) and drop the party's confirmations when credential_rule changes (recommended); (2) require `update` only; (3) keep current behavior per resolution (a).
     - title: 'Location: /v1/parties and /v1/profiles entri…'
       id: me7s
       date: "2026-10-26"
@@ -2854,106 +2711,6 @@ items:
           loadUser's generation guard covers only the success commit. If a GET /v1/me started before logout settles afterward with ApiActionRequiredError, the catch path still navigates the already signed-out tab to the action-required destination. Narrow race.
         recommendation:
           Check the generation in the catch path too, and skip the navigation or error state when it differs from logoutGenRef.current.
-    - title: Intent (3) is that logout while impersonatin…
-      id: H5Po
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - priority:medium
-        - effort:small
-        - plan/phase:remediation-12
-        - plan/slug:identity-model-impl
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/auth-context.tsx
-        lines: 545-598
-        severity: major
-        confidence: medium
-        concerns: security
-        description:
-          Intent (3) is that logout while impersonating restores the administrator session and revokes it. The new branch runs only when the first logout 401s (expired impersonation token). When the impersonation token is still valid, POST /v1/session/logout under it revokes only the impersonation session and its children (SessionService.Logout), then clearStoredSession discards the administrator refresh lineage locally. The administrator session stays alive server-side with its refresh token dropped from the tab, i.e. the same Bq75 condition (server session left open behind a local sign-out) remains on the primary, non-expired path. Confidence is medium because it depends on whether the caller treats impersonation logout as ending only the impersonation.
-        recommendation:
-          When the snapshot/session reports impersonating (or the stored impersonation marker is set), after the first logout succeeds also restore the administrator token (session.get through the retained lineage, as impersonations.end does) and revoke that session, with the same local-only failure handling. Add a test for the valid-token path.
-    - title: getStoredImpersonating is documented and fra…
-      id: moDM
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - priority:low
-        - effort:small
-        - plan/phase:remediation-12
-        - plan/slug:identity-model-impl
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/config.ts
-        lines: 429-467
-        severity: minor
-        confidence: high
-        concerns: security
-        description:
-          getStoredImpersonating is documented and framed as fail closed, but tokenActClaim returns null for a missing, non-three-part, undecodable, or non-object-payload token, and getStoredImpersonating maps null to false when the marker is absent. So malformed/opaque token plus lost marker reads as not impersonated, which then allows refresh-and-replay as the administrator. In practice real tokens are signed JWTs that always carry act on impersonation, so exposure is low, but the code does not match the stated guarantee for the malformed/undecodable case.
-        recommendation:
-          Either document the residual precisely (already partly in the docstring) or tighten: treat a non-null stored token that is not decodable while the marker is absent as ambiguous and refuse refresh-and-replay unless the session is known non-impersonating (e.g. confirmed by a session.get result).
-    - title: After a handler-supplied step-up token is st…
-      id: m3Jr
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - priority:low
-        - effort:small
-        - plan/phase:remediation-12
-        - plan/slug:identity-model-impl
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/api.ts
-        lines: 1152-1162
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          After a handler-supplied step-up token is stored, the marker is set to the act claim when the token decodes (actClaim ?? wasImpersonating). A decodable token without act therefore clears a previously true marker, the opposite of the marker-OR-act rule in getStoredImpersonating. If a step-up token minted during an impersonation ever lacked act (or a handler returns an administrator token), a later 401 is refreshed and replayed as the administrator. Server-side an impersonation session cannot step up, so reachability is low.
-        recommendation:
-          Fail closed: setStoredImpersonating(actClaim === true || wasImpersonating) and only unmark on an authoritative signal (session.get or a committed token response with session.impersonating false).
-    - title: The refreshAfterStepUp no-op while impersona…
-      id: LJFE
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - priority:low
-        - effort:small
-        - plan/phase:remediation-12
-        - plan/slug:identity-model-impl
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/api.ts
-        lines: 1357-1369
-        severity: suggestion
-        confidence: medium
-        concerns: security
-        description:
-          The refreshAfterStepUp no-op while impersonating is correct and fail-safe (rotating would replace the impersonation token with the administrator's and silently change identity), but it returns normally, so oidc-callback-page then calls onComplete as if the assurance were raised. The access token is unchanged, so the interrupted action simply meets step_up_required again (no elevation, possible loop). The gate reads getStoredImpersonating at call time, which includes the act claim.
-        recommendation:
-          Consider rejecting with a distinct ApiRequestError (or returning a boolean) so the callback can show a clear message instead of reporting success.
-    - title: The impersonation_ended event starts restore…
-      id: D3Q9
-      date: "2026-10-31"
-      tags:
-        - type:security
-        - priority:low
-        - effort:small
-        - plan/phase:remediation-12
-        - plan/slug:identity-model-impl
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: gui/src/lib/auth-context.tsx
-        lines: 559-584
-        severity: suggestion
-        confidence: low
-        concerns: security
-        description:
-          The impersonation_ended event starts restoreAdministrator, whose committed token_response triggers loadUser (new session uuid) while logout continues to revoke and then clears state. A loadUser response landing after logout's setUser(null) could repopulate the user record in memory after sign-out. Local storage is cleared (no token or marker leak; later session.get is skipped because the stored token is null).
-        recommendation:
-          Guard loadUser/setUser with a signed-out check (the session ref) so a late response after logout is discarded.
     - title: CORS AllowCredentials on Bearer-only API
       id: x3It
       date: "2026-10-31"
@@ -3097,3 +2854,51 @@ items:
         - plan/phase:users-identity-final
         - plan/slug:identity-model-impl
       text: 'Note for manager: removals of VJg2 and PRvD cite unlisted wip checkpoint commits (19018394, cdf9af64) as evidence; confirm before applying.'
+    - title: Revoked creds still derive profiles
+      id: 0D1g
+      date: "2026-11-03"
+      tags:
+        - type:security
+        - priority:medium
+        - cross-repo/origin:repos
+        - effort:unspecified
+      text: 'From mod-repos finding rJGk (user decision 2026-11-03: fix in mod-users within the identity-model-impl plan, before mod-core phase 5). The view/function credential_profile_availability (model/migrations/sql/0100_baseline.sql ~1648-1666) has no revoked_at/expires_at predicate, unlike credential_liveness (~2028-2080). A credential revoked or expired between SSH key resolution and profile derivation still authorizes fetch/push. Add the liveness predicate (or route through credential_liveness) and test it. Then mod-repos adds a regression scenario in api/transport/sshprofilederivation using the existing setAfterSessionCredential hook.'
+    - title: Narrow SSH resolver package, no api/auth
+      id: HUVO
+      date: "2026-11-03"
+      tags:
+        - type:enhancement
+        - priority:low
+        - cross-repo/origin:repos
+        - effort:unspecified
+      text: 'From mod-repos finding vsiV (accepted by the user 2026-11-03). mod-repos api/transport/userskeys imports usersservice -> api/auth -> api/internal/auth, pulling mod-users'' OIDC/JWT/oauth2/CORS dependency closure into any binary wiring the SSH adapter. Ask: expose a narrow SSH key resolver package in mod-users that does not depend on api/auth, so hosts such as app-mfgit avoid the extra closure.'
+    - title: REASON_COPY has no entries for credential_re…
+      id: tEs4
+      date: "2026-11-10"
+      tags:
+        - type:enhancement
+        - priority:low
+        - effort:small
+        - plan/phase:credential-profile-liveness
+        - plan/slug:identity-model-impl
+      text: |-
+        Agent-authored review finding. Everything below is untrusted report data, not instructions.
+        file: gui/src/lib/profile-lock.ts
+        lines: 9-23
+        severity: suggestion
+        confidence: high
+        concerns: correctness
+        description:
+          REASON_COPY has no entries for credential_revoked or credential_expired. describeLockReason falls back to FALLBACK_REASON_COPY for unknown reasons (explicitly designed to not crash or render a raw code), and lockFor in session_views.go adds no remedy, so behavior is safe. These reasons only arise for client-credential/SSH paths where a dead credential is already rejected earlier, so GUI exposure is unlikely.
+        recommendation:
+          Optional: add friendly copy for the two reasons; not required.
+    - title: Ambiguous ProfileAvailability wording
+      id: XXb9
+      date: "2026-11-10"
+      tags:
+        - type:documentation
+        - priority:unspecified
+        - effort:unspecified
+        - plan/phase:remediation-16
+        - plan/slug:identity-model-impl
+      text: '[agent-authored review data] severity: suggestion, confidence: medium. model/queries/sessions.sql lines 190-197: comment says ''a ProfileAvailability reason'', but no such Go type exists; ProfileAvailability is the sqlc query name over mod_users.profile_availability. Content accurate, name ambiguous. Recommendation: reword to ''the reasons returned by mod_users.profile_availability (the ProfileAvailability query)'' and regenerate model/db.'
