@@ -119,6 +119,8 @@ A principal acts only as a profile, and a profile is usable by a session only if
 | `credential_not_authorized` | The party's `authorized` rule is not met: no factor is authorized for the party or confined to it |
 | `provider_required` | The party's `provider` rule is not met: no factor from the required OIDC provider |
 | `acr_too_low` | The session's `acr` is below the party's `min_acr` |
+| `credential_revoked` | Credential-only (`credential_profile_availability`): the credential is revoked; reported before any other rule and before `credential_expired` |
+| `credential_expired` | Credential-only (`credential_profile_availability`): the credential's `expires_at` has passed |
 
 The rules, in order:
 
@@ -129,7 +131,7 @@ The rules, in order:
 
 Compliance is continuous because the function runs on every request: raising a party's `min_acr`, changing its rule, deauthorizing a credential or revoking a factor locks the affected profiles on the holders' next request without touching any token. Revoking a credential also revokes every session that holds it as a factor.
 
-Client-credentials calls use the sibling `mod_users.credential_profile_availability`, which applies the same rules with the single credential as the only factor and its kind's `base_acr`. The SSH resolver uses it for the profile an SSH key acts as (see [ssh-keys.md](./ssh-keys.md#d9-credentials-operation-and-profile-derivation)).
+Client-credentials calls use the sibling `mod_users.credential_profile_availability`, which applies the same rules with the single credential as the only factor and its kind's `base_acr`. The SSH resolver uses it for the profile an SSH key acts as (see [ssh-keys.md](./ssh-keys.md#d9-credentials-operation-and-profile-derivation)). Credential liveness is part of that rule, checked first and in the same statement that reads the credential: a revoked credential yields the lock reason `credential_revoked` and an expired one (`expires_at <= now()`) yields `credential_expired`, the same statuses and order `credential_liveness` uses, and neither reaches the profile rules. This matters because a credential can be revoked or expire between SSH key resolution and profile derivation, and the function is the last gate for SSH and client credentials; a dead credential derives no profile, so a fetch or push is refused. An unknown credential stays `not_held`. Consumers treat only `available` as success, so both reasons are refusals everywhere (the SSH resolver's `ErrSSHKeyNotAuthorized`, `users.profile_unavailable` for a client-credentials profile).
 
 The gate that guards **content owned by a party the acting profile is outside of** is a separate check made by the authorization engine, not by availability: see the owning-party gate in [API layer](../architecture.md#api-layer).
 
