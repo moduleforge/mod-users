@@ -255,7 +255,10 @@ func (r *SSHKeyResolver) activePartyProfile(ctx context.Context, principalID, pa
 }
 
 // available reports whether credential_profile_availability is 'available' for
-// the credential and profile.
+// the credential and profile. Only the exact string 'available' passes: the
+// function also reports credential_revoked and credential_expired when the key
+// died between resolution and derivation, and any other or unknown status
+// (including a future one) is refused, so a dead credential fails closed.
 func (r *SSHKeyResolver) available(ctx context.Context, cred SSHCredential, profileID int64) (bool, error) {
 	availability, err := r.q.CredentialProfileAvailability(ctx, usersdb.CredentialProfileAvailabilityParams{
 		CredentialID: cred.CredentialID,

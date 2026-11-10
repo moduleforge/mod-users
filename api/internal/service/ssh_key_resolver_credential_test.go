@@ -211,6 +211,32 @@ func TestSSHKeyResolver_AuthContextForOwner(t *testing.T) {
 		}
 	})
 
+	// A credential revoked or expired after resolution makes the availability
+	// query return its liveness status; only "available" passes, so it is refused
+	// for the personal profile and for a party profile alike.
+	t.Run("a dead credential is not authorized", func(t *testing.T) {
+		t.Parallel()
+		cq := &fakeCoreQ{
+			getPersonal: profile,
+			getEntity:   func(int64) (coredb.GetEntityByIDRow, error) { return coredb.GetEntityByIDRow{Uuid: uuid.New()}, nil },
+			listByHolder: func(int64) ([]coredb.Profile, error) {
+				return []coredb.Profile{
+					{EntityID: 77, HolderID: 5, PartyID: pgtype.Int8{Int64: 98, Valid: true}, Status: "active"},
+				}, nil
+			},
+		}
+		party := int64(98)
+		for _, status := range []string{"credential_revoked", "credential_expired"} {
+			for name, owner := range map[string]*int64{"personal": nil, "party": &party} {
+				r := NewSSHKeyResolver(&fakeSSHQ{availability: status}, cq)
+				_, err := r.AuthContextForOwner(context.Background(), SSHCredential{CredentialID: 9, PrincipalID: 5}, owner)
+				if !errors.Is(err, ErrSSHKeyNotAuthorized) {
+					t.Errorf("%s/%s: got %v, want ErrSSHKeyNotAuthorized", status, name, err)
+				}
+			}
+		}
+	})
+
 	t.Run("an unavailable personal profile is not authorized", func(t *testing.T) {
 		t.Parallel()
 		r := NewSSHKeyResolver(&fakeSSHQ{availability: "inactive"}, &fakeCoreQ{getPersonal: profile})

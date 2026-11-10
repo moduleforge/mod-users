@@ -197,6 +197,113 @@ func TestInteg_Availability_RevokedFactorDoesNotCount(t *testing.T) {
 	wantAvail(t, sessionAvail(t, s, m.PartyProfile), "credential_not_authorized", "revoked authorized factor")
 }
 
+// TestInteg_Availability_CredentialLiveness proves credential_profile_availability
+// fails closed for a dead credential: it is the last gate for SSH and client
+// credentials, and a credential can be revoked or expire between resolution and
+// profile derivation. Revoked is reported before expired, and an unknown
+// credential stays not_held.
+func TestInteg_Availability_CredentialLiveness(t *testing.T) {
+	party := seedOrg(t, "Credential liveness party")
+	m := seedMember(t, party)
+	expire := func(t *testing.T, credID int64) {
+		t.Helper()
+		fxExec(t, integPool, "expire credential",
+			`UPDATE mod_users.credentials SET expires_at = now() - interval '1 minute' WHERE id = $1`, credID)
+	}
+
+	t.Run("live credential is unchanged", func(t *testing.T) {
+		c, _ := fxAPIKey(t, integPool, m.User)
+		wantAvail(t, credAvail(t, c, m.Personal), "available", "live credential, personal profile")
+		wantAvail(t, credAvail(t, c, m.PartyProfile), "available", "live credential, party profile")
+		// A future expiry is still live.
+		fxExec(t, integPool, "set future expiry",
+			`UPDATE mod_users.credentials SET expires_at = now() + interval '1 hour' WHERE id = $1`, c)
+		wantAvail(t, credAvail(t, c, m.Personal), "available", "credential expiring in the future")
+	})
+
+	t.Run("revoked credential", func(t *testing.T) {
+		c, _ := fxAPIKey(t, integPool, m.User)
+		fxRevoke(t, integPool, c)
+		wantAvail(t, credAvail(t, c, m.Personal), "credential_revoked", "revoked credential, personal profile")
+		wantAvail(t, credAvail(t, c, m.PartyProfile), "credential_revoked", "revoked credential, party profile")
+		// The liveness reason wins over every profile rule, including a profile
+		// the principal does not hold.
+		other := seedMember(t, party)
+		wantAvail(t, credAvail(t, c, other.Personal), "credential_revoked", "revoked credential, another user's profile")
+	})
+
+	t.Run("expired credential", func(t *testing.T) {
+		c, _ := fxAPIKey(t, integPool, m.User)
+		expire(t, c)
+		wantAvail(t, credAvail(t, c, m.Personal), "credential_expired", "expired credential, personal profile")
+		wantAvail(t, credAvail(t, c, m.PartyProfile), "credential_expired", "expired credential, party profile")
+	})
+
+	t.Run("revoked and expired reports revoked", func(t *testing.T) {
+		c, _ := fxAPIKey(t, integPool, m.User)
+		expire(t, c)
+		fxRevoke(t, integPool, c)
+		wantAvail(t, credAvail(t, c, m.Personal), "credential_revoked", "revoked and expired credential")
+	})
+
+	t.Run("unknown credential stays not_held", func(t *testing.T) {
+		wantAvail(t, credAvail(t, 999999999, m.Personal), "not_held", "unknown credential")
+	})
+
+	t.Run("revoked after resolution", func(t *testing.T) {
+		c, _ := fxAPIKey(t, integPool, m.User)
+		wantAvail(t, credAvail(t, c, m.PartyProfile), "available", "resolved while live")
+		fxRevoke(t, integPool, c)
+		wantAvail(t, credAvail(t, c, m.PartyProfile), "credential_revoked", "same credential after revocation")
+	})
+
+	t.Run("expired after resolution", func(t *testing.T) {
+		c, _ := fxAPIKey(t, integPool, m.User)
+		wantAvail(t, credAvail(t, c, m.PartyProfile), "available", "resolved while live")
+		expire(t, c)
+		wantAvail(t, credAvail(t, c, m.PartyProfile), "credential_expired", "same credential after expiry")
+	})
+}
+
+// TestInteg_CredentialLiveness_StatusesUnchanged proves credential_liveness
+// still reports its own statuses now that credential_profile_availability also
+// checks liveness: ok, credential_revoked (revoked and unknown),
+// credential_expired and a profile lock reason pass-through.
+func TestInteg_CredentialLiveness_StatusesUnchanged(t *testing.T) {
+	u, personal := seedUserEntity(t)
+	status := func(credUUID string) string {
+		t.Helper()
+		var s string
+		if err := integPool.QueryRow(context.Background(),
+			`SELECT status FROM mod_users.credential_liveness($1::uuid, $2::uuid, $3::uuid)`,
+			credUUID, entityUUID(t, u), entityUUID(t, personal)).Scan(&s); err != nil {
+			t.Fatalf("credential_liveness: %v", err)
+		}
+		return s
+	}
+
+	_, liveUUID := fxAPIKey(t, integPool, u)
+	wantStatus(t, status(liveUUID), "ok", "live credential")
+
+	revID, revUUID := fxAPIKey(t, integPool, u)
+	fxRevoke(t, integPool, revID)
+	wantStatus(t, status(revUUID), "credential_revoked", "revoked credential")
+
+	expID, expUUID := fxAPIKey(t, integPool, u)
+	fxExec(t, integPool, "expire credential", `UPDATE mod_users.credentials SET expires_at = now() - interval '1 minute' WHERE id = $1`, expID)
+	wantStatus(t, status(expUUID), "credential_expired", "expired credential")
+
+	bothID, bothUUID := fxAPIKey(t, integPool, u)
+	fxExec(t, integPool, "expire credential", `UPDATE mod_users.credentials SET expires_at = now() - interval '1 minute' WHERE id = $1`, bothID)
+	fxRevoke(t, integPool, bothID)
+	wantStatus(t, status(bothUUID), "credential_revoked", "revoked and expired credential")
+
+	wantStatus(t, status("00000000-0000-0000-0000-000000000000"), "credential_revoked", "unknown credential")
+
+	fxExec(t, integPool, "suspend profile", `UPDATE profiles SET status = 'suspended' WHERE entity_id = $1`, personal)
+	wantStatus(t, status(liveUUID), "inactive", "lock reason passed through")
+}
+
 func TestInteg_Availability_CredentialRuleProvider(t *testing.T) {
 	party := seedOrg(t, "Provider rule party")
 	provider := "mf-" + fxTag("prov")
