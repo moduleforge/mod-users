@@ -1705,7 +1705,7 @@ phases:
           slug: add-liveness-to-credential-profile-availability
           title: Add Liveness Predicate to credential_profile_availability
           path: phase-28-credential-profile-liveness/001-add-liveness-to-credential-profile-availability.md
-          done: false
+          done: true
           tier: sonnet-high
           digest: credential_profile_availability now checks revoked_at (credential_revoked) then expires_at <= now() (credential_expired) in one SELECT before profile_availability_for; unknown credential stays not_held; signature, STABLE, SECURITY INVOKER, search_path unchanged; baseline edited in place, no new migration.
           git:
