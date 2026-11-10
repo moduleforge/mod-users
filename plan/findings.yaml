@@ -28,6 +28,15 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'Root make build (Validation #3) not run per dispatch constraint; run from an allowed context if the gate requires it.'
+    - title: Ambiguous ProfileAvailability wording
+      id: XXb9
+      date: "2026-11-10"
+      tags:
+        - type:documentation
+        - plan/phase:remediation-16
+        - priority:unspecified
+        - effort:unspecified
+      text: '[agent-authored review data] severity: suggestion, confidence: medium. model/queries/sessions.sql lines 190-197: comment says ''a ProfileAvailability reason'', but no such Go type exists; ProfileAvailability is the sqlc query name over mod_users.profile_availability. Content accurate, name ambiguous. Recommendation: reword to ''the reasons returned by mod_users.profile_availability (the ProfileAvailability query)'' and regenerate model/db.'
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
