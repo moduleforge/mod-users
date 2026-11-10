@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Ambiguous ProfileAvailability wording
-      id: XXb9
-      date: "2026-11-10"
-      tags:
-        - type:documentation
-        - plan/phase:remediation-16
-        - priority:unspecified
-        - effort:unspecified
-      text: '[agent-authored review data] severity: suggestion, confidence: medium. model/queries/sessions.sql lines 190-197: comment says ''a ProfileAvailability reason'', but no such Go type exists; ProfileAvailability is the sqlc query name over mod_users.profile_availability. Content accurate, name ambiguous. Recommendation: reword to ''the reasons returned by mod_users.profile_availability (the ProfileAvailability query)'' and regenerate model/db.'
+items: []
 closed:
     - id: 2yby
       title: Identifier delete vs bound credentials
@@ -2224,4 +2215,9 @@ closed:
       title: 'Root make build (Validation #3) not run per d'
       disposition: dismissed
       reason: 'Accepted: diff verified comment-only (24 added comment lines across sessions.sql, querier.go, sessions.sql.go; no SQL/Go behavior change); go build in model/ is a sufficient substitute here, and the manager-tier root make build is run separately before landing.'
+      date: "2026-11-10"
+    - id: XXb9
+      title: Ambiguous ProfileAvailability wording
+      disposition: promoted
+      ref: XXb9
       date: "2026-11-10"
