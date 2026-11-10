@@ -1710,5 +1710,6 @@ phases:
           digest: credential_profile_availability now checks revoked_at (credential_revoked) then expires_at <= now() (credential_expired) in one SELECT before profile_availability_for; unknown credential stays not_held; signature, STABLE, SECURITY INVOKER, search_path unchanged; baseline edited in place, no new migration.
           git:
             branch: plan/identity-model-impl-28-001
-            commit: []
+            commit:
+                - dbf93997
             merge: null
