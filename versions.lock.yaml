@@ -43,6 +43,6 @@ host:  github.com
 owner: moduleforge
 
 pins:
-  mod-core:  0c1719af14ae4742239a89346e95b66d95fd0cc3  # 2026-10-14 plan: add followup [LPd3]
-  mod-audit: e9913faa9938a4dbbc7eb5d98bf27c1723d9e6b1  # 2026-10-04 chore(mf-standards): bump submodule to 362374e (Merge branch 'task/propagate-prune-and-per-consum')
-  mod-authz: 48e0e66b9b05aabcbcd1123540a71cf8b8342425  # 2026-10-10 Merge branch 'task/regen-models-and-hhkb-docs'
+  mod-core:  f9a1a2a63c38f72bee2e8a41097207b46d49286c  # 2026-11-11 plan(identity-model-impl): remove leftover phase task documents
+  mod-audit: 42bd918d91694fb3d9a48271c716afad13258d83  # 2026-11-11 plan(identity-model-impl): remove leftover phase task documents
+  mod-authz: e1fd663e5bdb065fba8593385cf2f49f6b772917  # 2026-11-11 plan(identity-model-impl): remove leftover phase task documents
