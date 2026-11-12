@@ -39,4 +39,14 @@ phases:
     - number: 2
       slug: oidc-eddsa-login-e2e
       title: EdDSA OIDC Login End-to-End Coverage
-      tasks: []
+      tasks:
+        - number: 1
+          slug: eddsa-login-flow-tests
+          title: EdDSA OIDC Login Flow Tests Including Postgres Integration
+          path: phase-02-oidc-eddsa-login-e2e/001-eddsa-login-flow-tests.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
