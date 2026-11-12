@@ -5,7 +5,17 @@ phases:
     - number: 1
       slug: oidc-alg-pinning
       title: OIDC Verification Algorithm Pinning and EdDSA Acceptance
-      tasks: []
+      tasks:
+        - number: 1
+          slug: eddsa-issuer-harness-and-repro
+          title: Ed25519 Test Issuer Harness and Baseline Reproduction
+          path: phase-01-oidc-alg-pinning/001-eddsa-issuer-harness-and-repro.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: oidc-eddsa-login-e2e
       title: EdDSA OIDC Login End-to-End Coverage
