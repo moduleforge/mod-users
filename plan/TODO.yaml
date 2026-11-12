@@ -1,0 +1,8 @@
+slug: oidc-eddsa-audience-tokens
+version: 1
+title: ""
+phases:
+    - number: 1
+      slug: oidc-alg-pinning
+      title: OIDC Verification Algorithm Pinning and EdDSA Acceptance
+      tasks: []
