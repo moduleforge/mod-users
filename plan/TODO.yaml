@@ -26,6 +26,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 3
+          slug: alg-confusion-negative-tests
+          title: EdDSA and Algorithm-Confusion Verification Tests
+          path: phase-01-oidc-alg-pinning/003-alg-confusion-negative-tests.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: oidc-eddsa-login-e2e
       title: EdDSA OIDC Login End-to-End Coverage
