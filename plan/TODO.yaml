@@ -5,6 +5,7 @@ phases:
     - number: 1
       slug: oidc-alg-pinning
       title: OIDC Verification Algorithm Pinning and EdDSA Acceptance
+      diff_base: 98c8ac3b8f6d0b0c8f2014a010fe07b3b3a1c882
       tasks:
         - number: 1
           slug: eddsa-issuer-harness-and-repro
