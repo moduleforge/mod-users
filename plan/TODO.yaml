@@ -64,3 +64,13 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: consumer-notes-and-config-docs
+          title: Consumer Upgrade Notes, Config Reference and Troubleshooting
+          path: phase-03-doc-updates/002-consumer-notes-and-config-docs.md
+          done: false
+          tier: sonnet-med
+          git:
+            branch: null
+            commit: []
+            merge: null
