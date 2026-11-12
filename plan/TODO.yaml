@@ -16,6 +16,16 @@ phases:
             branch: null
             commit: []
             merge: null
+        - number: 2
+          slug: pin-oidc-signing-algs
+          title: Pin OIDC Signing Algorithms and Enforce typ Policy
+          path: phase-01-oidc-alg-pinning/002-pin-oidc-signing-algs.md
+          done: false
+          tier: sonnet-high
+          git:
+            branch: null
+            commit: []
+            merge: null
     - number: 2
       slug: oidc-eddsa-login-e2e
       title: EdDSA OIDC Login End-to-End Coverage
