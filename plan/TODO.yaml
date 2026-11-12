@@ -6,3 +6,7 @@ phases:
       slug: oidc-alg-pinning
       title: OIDC Verification Algorithm Pinning and EdDSA Acceptance
       tasks: []
+    - number: 2
+      slug: oidc-eddsa-login-e2e
+      title: EdDSA OIDC Login End-to-End Coverage
+      tasks: []
