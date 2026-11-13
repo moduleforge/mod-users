@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 3
-    tasks_added: 2
+    tasks_added: 3
 phases:
     - number: 1
       slug: oidc-alg-pinning
@@ -141,5 +141,21 @@ phases:
       slug: remediation-03
       title: Remediation Round 3
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 3
-      tasks: []
+      tasks:
+        - number: 1
+          slug: correct-oidc-typ-and-alg-doc-wording
+          title: Correct OIDC typ Helper, Empty typ and RS256 Default Wording in Docs
+          path: phase-06-remediation-03/001-correct-oidc-typ-and-alg-doc-wording.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - xwrM
+            - JOmI
+            - a3im
+          git:
+            branch: null
+            commit: []
+            merge: null
