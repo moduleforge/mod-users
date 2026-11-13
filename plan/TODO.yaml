@@ -76,7 +76,8 @@ phases:
           digest: Doc-only update across four docs describing OIDC algorithm pinning, the typ policy, the operator restriction, and the generic claim-style limitation; no code touched.
           git:
             branch: plan/oidc-eddsa-audience-tokens-03-001
-            commit: []
+            commit:
+                - 0e8c8772
             merge: null
         - number: 2
           slug: consumer-notes-and-config-docs
