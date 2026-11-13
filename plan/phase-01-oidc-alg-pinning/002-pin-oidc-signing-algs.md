@@ -37,3 +37,10 @@ Task 001's findings are available in its report; if the baseline showed a non-al
 - After wiring both verification paths.
 - After the config env var and facade option.
 - After the typ check and carrier change.
+
+## Status
+
+- Outcome: succeeded (2026-11-13).
+- Validation: `go build`, `go vet` and `go test` for `./internal/auth/... ./internal/config/... ./auth/...` pass; `make test.unit` passes; no non-test `oidc.Config{` construction lacks `SupportedSigningAlgs`; Task 001 baseline tests and the RS256 regression tests pass unchanged.
+- Changed: `api/internal/auth/oidc_algs.go` (helper, typ check), `api/internal/auth/jwt.go`, `api/internal/auth/oauth.go`, `api/internal/auth/carrier.go`, `api/auth/auth.go`, `api/auth/facade_test.go`, `api/internal/config/oidc_algs.go`, `api/internal/config/config.go`, `.env.example`, plus tests `api/internal/auth/oidc_algs_test.go` and `api/internal/config/oidc_algs_test.go`.
+- Decisions: the allowlist and name validation live in `api/internal/config` (auth imports config, not the reverse) and the auth helper consumes them; `WithOIDCSigningAlgs` with no arguments is an error and repeated use replaces; `OIDC_ALLOWED_SIGNING_ALGS` rejects empty list elements and wrong-case names.
