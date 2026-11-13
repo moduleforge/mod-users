@@ -55,7 +55,7 @@ phases:
           slug: eddsa-login-flow-tests
           title: EdDSA OIDC Login Flow Tests Including Postgres Integration
           path: phase-02-oidc-eddsa-login-e2e/001-eddsa-login-flow-tests.md
-          done: false
+          done: true
           tier: sonnet-high
           git:
             branch: plan/oidc-eddsa-audience-tokens-02-001
