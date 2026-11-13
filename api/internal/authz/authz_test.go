@@ -305,9 +305,9 @@ func TestAuthorize_NonOwner_NoGrant_Denied(t *testing.T) {
 }
 
 // TestAuthorize_NullOwnerTarget_Denied verifies that a target entity with a
-// NULL owner_id (corporation, authz_actor_group, authz_target_group by
-// design) is never matched by the own predicate: owner_id IS NULL makes
-// e.owner_id = $1 evaluate to NULL rather than true, so the real query
+// NULL owner_id (a corporation by design, or a group that a system actor with
+// no ownership subject created) is never matched by the own predicate:
+// owner_id IS NULL makes e.owner_id = $1 evaluate to NULL rather than true, so the real query
 // reports "not owned" exactly as grantOrOwnDenyFn does here — this test
 // documents that specific NULL-owner scenario (Requirement 3) even though it
 // exercises the same Authorize-level denial path as
