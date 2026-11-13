@@ -120,12 +120,13 @@ phases:
           slug: oidc-typ-compact-only-and-carrier-strict
           title: Reject Non-Compact OIDC Tokens In The Typ Check And Make Carrier Typ Parsing Strict
           path: phase-05-remediation-02/001-oidc-typ-compact-only-and-carrier-strict.md
-          done: false
+          done: true
           tier: sonnet-high
           findings:
             - JxLt
             - bPTZ
           git:
-            branch: null
-            commit: []
+            branch: plan/oidc-eddsa-audience-tokens-05-001
+            commit:
+                - af45c635
             merge: null
