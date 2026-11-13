@@ -97,7 +97,7 @@ phases:
           slug: fail-closed-oidc-typ
           title: Fail Closed On Non-String Or Undecodable OIDC Token Typ
           path: phase-04-remediation-01/001-fail-closed-oidc-typ.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: The OIDC typ check now fails closed on undecodable 3-segment headers and on non-string typ (array, number, object, bool, null). Absent, JWT and aud+jwt (case-insensitive) still accepted; carrier path untouched. New tests cover the check function, Verifier.Verify and OAuth.Exchange.
           findings:
