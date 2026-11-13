@@ -88,6 +88,15 @@ Details: the header comment and `--help` of [scripts/checkout-deps.sh](../script
 - A consumer that relied on a self-signed `https://` issuer in local development must build the verifier with `NewVerifierWithOptions`, passing `WithOIDC` and the new opt-in option `WithInsecureSkipTLSVerify()`.
 - `WithInsecureSkipTLSVerify` is for local development only. It logs a warning (`TLS verification is disabled for OIDC issuer; local development only`) naming the issuer host. Prefer trusting the CA instead; see [OIDC troubleshooting](./oidc-troubleshooting.md#self-signed-issuer-certificate).
 
+## OIDC signing algorithms, token typ and verifier constructor
+
+- OIDC providers that sign with EdDSA (OKP keys in their JWKS) are accepted alongside RS256 and the other asymmetric algorithms. RS256 behaves as before.
+- The accepted algorithm set is the provider's advertised `id_token_signing_alg_values_supported`, intersected with the fixed asymmetric allowlist (`RS256/384/512`, `PS256/384/512`, `ES256/384/512`, `EdDSA`) and, when set, the operator restriction. `none` and `HS*` are never accepted. When the provider advertises nothing usable, the set falls back to `RS256`. An empty intersection fails verifier construction. The algorithm is pinned from this set, never read from the token.
+- To restrict the set, pass `WithOIDCSigningAlgs("EdDSA", "RS256")` to `NewVerifierWithOptions`, or set `OIDC_ALLOWED_SIGNING_ALGS` (comma separated) in the API. Unknown names, `none` and `HS*` are rejected when the option or variable is read.
+- The `typ` header is optional. Absent, `JWT` and `aud+jwt` are accepted, compared case-insensitively; any other value is rejected, as is a non-string or undecodable `typ` and a non-compact (JSON-serialized) token. The bearer-path rejection of audience tokens presented as OIDC tokens is likewise case-insensitive.
+- The constructor `auth.NewVerifier(ctx, issuer, clientID, secret, localIssuer)` is removed. A consumer moving to this version builds the verifier with `NewVerifierWithOptions(ctx, WithOIDC(issuer, clientID))`, adding `WithOIDCSigningAlgs(...)` and `WithInsecureSkipTLSVerify()` as needed.
+- For browser login the provider must echo the `nonce` sent in the authorization request as a claim in the ID token; a token without it fails with `oauth: nonce mismatch`. A provider or token endpoint that does not issue the `nonce` claim must be fixed on its side (for example, the MFManager token endpoint must echo it for apps such as `app-mftodo`, which also take the dependency pin bump and the `NewVerifierWithOptions(WithOIDC...)` move above). See [OIDC troubleshooting](./oidc-troubleshooting.md#id-token-verification-failures).
+
 ## HTTP error precedence conformance
 
 Request order on authenticated routes is 401, 400, 403, 404, then 409 or 422; see [Request order and existence masking](./mod-users-spec.md#security-requirements). The routes that first carried these changes (`/v1/user-accounts*`, `/v1/self*`, the app-membership routes, the identities and ssh-key credential routes and `UserAccountService`) were removed by the [identity-model rewrite](#identity-model-rewrite); the rules below are the ones still in force on the replacement routes. Clients: `@moduleforge/users-gui`; the apps that compose mod-users (`app-mfdemo`, `app-mfgit`, `app-mfmanager`, `app-mftodo`); and external `/v1/auth/*` clients.
@@ -264,5 +273,6 @@ The first-user hook is removed: registering first no longer grants administrator
 
 ## Known limits and open items
 
+- The `generic` OIDC claim style cannot be used through the provider initialisation path, because that path supplies no email or roles claim paths for it. Use a named provider style; see [architecture](./architecture.md).
 - Local-mode CORS pattern reflection: see the caveat under [CORS](#cors). Pattern entries are not rejected in `DEPLOY_MODE=local` and are still reflected with credentials.
 - Impersonation data protection is a fixed list, not a general mechanism. An impersonating context is refused credential administration, managed-user creation, party policy and credential-authorization writes and ending a profile; see [Impersonation](#impersonation). A general **data protection class** design (planned, followup `H8qi`, **not built**) would replace these refusals with per-data `no-write`, `no-read` and `no-access` marks checked only when a function touches marked data. Until it exists, the listed refusals are the whole of the protection.
