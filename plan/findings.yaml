@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: checkOIDCTokenTyp also accepts an empty-stri…
-      id: a3im
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - plan/phase:doc-updates
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/architecture.md
-        lines: OIDC ID token verification section, typ paragraph
-        severity: suggestion
-        confidence: medium
-        concerns: architecture
-        description:
-          checkOIDCTokenTyp also accepts an empty-string typ (typ == ''), not only an absent one. The docs, spec and upgrade notes say only 'absent, JWT, aud+jwt'. The doc and code are slightly inconsistent.
-        recommendation:
-          State that an empty typ is treated as absent, or tighten the code to reject it.
     - title: Unreachable plan-summary docs, dangling links
       id: YqrL
       date: "2026-11-13"
@@ -238,6 +219,11 @@ closed:
       date: "2026-11-13"
     - id: JOmI
       title: The doc says the local carrier verifier uses…
+      disposition: fixed
+      ref: phase-06-remediation-03/001-correct-oidc-typ-and-alg-doc-wording.md
+      date: "2026-11-13"
+    - id: a3im
+      title: checkOIDCTokenTyp also accepts an empty-stri…
       disposition: fixed
       ref: phase-06-remediation-03/001-correct-oidc-typ-and-alg-doc-wording.md
       date: "2026-11-13"
