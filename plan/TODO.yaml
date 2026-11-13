@@ -49,6 +49,7 @@ phases:
     - number: 2
       slug: oidc-eddsa-login-e2e
       title: EdDSA OIDC Login End-to-End Coverage
+      diff_base: 185eb73f397ece922374cf327067a191b81da4cb
       tasks:
         - number: 1
           slug: eddsa-login-flow-tests
