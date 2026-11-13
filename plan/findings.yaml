@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: The statement that RS256 is accepted by defa…
-      id: xwrM
-      date: "2026-11-13"
-      tags:
-        - type:security
-        - plan/phase:doc-updates
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/architecture.md
-        lines: 187-190
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          The statement that RS256 is accepted by default (repeated in docs/jwt-eddsa.md, docs/mod-users-spec.md and docs/oidc-troubleshooting.md as RS256 is allowed by default) can be read as RS256 always being accepted. The same section says the accepted set is the issuer-advertised algorithms intersected with the allowlist, and RS256 is only the fallback when nothing usable is advertised (api/auth/auth.go:145-147). A provider advertising only ES256 or EdDSA does not get RS256, so the sentence misstates which algorithms are enforced.
-        recommendation:
-          Reword to: RS256 is the fallback only when the issuer advertises no usable algorithm, and is otherwise accepted only if advertised.
     - title: The doc says the local carrier verifier uses…
       id: JOmI
       date: "2026-11-13"
@@ -268,4 +249,9 @@ closed:
         names this sentence as a second occurrence, and JOmI is dispositioned
         fix. The defect is confirmed in code: two separate helpers exist,
         rawTokenTyp and checkOIDCTokenTyp.
+      date: "2026-11-13"
+    - id: xwrM
+      title: The statement that RS256 is accepted by defa…
+      disposition: fixed
+      ref: phase-06-remediation-03/001-correct-oidc-typ-and-alg-doc-wording.md
       date: "2026-11-13"
