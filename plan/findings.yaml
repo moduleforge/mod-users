@@ -6,8 +6,8 @@ items:
       tags:
         - type:documentation
         - plan/phase:oidc-eddsa-login-e2e
-        - priority:unspecified
-        - effort:unspecified
+        - priority:low
+        - effort:small
       text: Agent-authored report data. api/server/CLAUDE.md is not reachable from README.md via links (severity suggestion, confidence medium, concern documentation). It is a tool-loaded agent instruction file so it is likely intentionally unlinked; link it from README.md or AGENTS.md if it should be discoverable, otherwise accept. Not touched by this phase's diff.
 closed:
     - id: xByR
