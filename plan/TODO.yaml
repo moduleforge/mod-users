@@ -127,5 +127,6 @@ phases:
             - bPTZ
           git:
             branch: plan/oidc-eddsa-audience-tokens-05-001
-            commit: []
+            commit:
+                - af45c635
             merge: null
