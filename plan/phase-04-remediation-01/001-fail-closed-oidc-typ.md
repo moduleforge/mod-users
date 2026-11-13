@@ -26,3 +26,7 @@ This work targets the plan branch `plan/oidc-eddsa-audience-tokens` and lands th
 ## References
 
 - Finding GCnC, recorded in this plan's `plan/findings.yaml`.
+
+## Status
+
+Outcome: succeeded (2026-11-13). `checkOIDCTokenTyp` in `api/internal/auth/oidc_algs.go` now decodes the header itself and rejects undecodable headers and non-string (incl. null) typ with `errOIDCTokenTyp`; `rawTokenTyp` is untouched so `verifyCarrier` is unchanged. Non-3-segment input keeps its prior accepted outcome. Tests added in `api/internal/auth/oidc_algs_test.go`. `go test ./internal/auth/...`, `go vet ./internal/auth/` and `make test.unit` pass.
