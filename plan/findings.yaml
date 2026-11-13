@@ -19,25 +19,6 @@ items:
           checkOIDCTokenTyp relies on rawTokenTyp (api/internal/auth/carrier.go 381-397), which unmarshals the header into a struct with `Typ string`. A non-string typ (e.g. an array or number), or any other header field that breaks the unmarshal, makes json.Unmarshal fail and rawTokenTyp return "", which checkOIDCTokenTyp treats as absent and accepts. The typ policy therefore fails open for malformed typ values; a header such as {"typ":["at+jwt"]} bypasses the rejection of at+jwt/logout+jwt/step-up. Exploitability is limited: the token must still pass signature, issuer, audience and expiry checks with the pinned algorithm, so an attacker needs an issuer-signed token whose typ is non-string. Whether go-jose tolerates such a header is not established from the diff. Treating a non-string typ as absent is not safe by default in a type-confusion guard. The same helper in verifyCarrier (the aud+jwt rejection) has the same blind spot, but local tokens are produced by this module's signer, so that path is not reachable with attacker-chosen headers.
         recommendation:
           Fail closed: parse typ as json.RawMessage or any, return a distinct "present but non-string" result, and have checkOIDCTokenTyp reject it (and treat an undecodable header on a 3-segment token as a reject rather than absent). Keep absent = accepted. Add a test with a non-string typ.
-    - title: Project doc api/server/CLAUDE.md is not reac…
-      id: iHTc
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - plan/phase:oidc-alg-pinning
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/server/CLAUDE.md
-        lines: 1-2
-        severity: minor
-        confidence: high
-        concerns: documentation
-        description:
-          Project doc api/server/CLAUDE.md is not reachable from README.md: no outgoing link in the README-rooted link graph targets it.
-        recommendation:
-          Either link the file from a reachable doc (for example docs/project-structure.md) with real guidance, or remove it if it was committed unintentionally.
     - title: Exchange wraps go-oidc's verification error…
       id: vrvt
       date: "2026-11-13"
@@ -181,4 +162,9 @@ closed:
         open. GCnC is the more complete write-up and carries the security
         classification. It is not dismissed and is fixed in the
         fail-closed-oidc-typ spec.
+      date: "2026-11-13"
+    - id: iHTc
+      title: Project doc api/server/CLAUDE.md is not reac…
+      disposition: promoted
+      ref: iHTc
       date: "2026-11-13"
