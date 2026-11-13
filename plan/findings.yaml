@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: api/server/CLAUDE.md unreachable from README
-      id: JYWh
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - plan/phase:oidc-eddsa-login-e2e
-        - priority:low
-        - effort:small
-      text: Agent-authored report data. api/server/CLAUDE.md is not reachable from README.md via links (severity suggestion, confidence medium, concern documentation). It is a tool-loaded agent instruction file so it is likely intentionally unlinked; link it from README.md or AGENTS.md if it should be discoverable, otherwise accept. Not touched by this phase's diff.
+items: []
 closed:
     - id: xByR
       title: 'BASELINE: EdDSA is already accepted by the cu'
@@ -183,4 +174,9 @@ closed:
       title: Generic claim style unusable in initProvider
       disposition: promoted
       ref: FNE2
+      date: "2026-11-13"
+    - id: JYWh
+      title: api/server/CLAUDE.md unreachable from README
+      disposition: promoted
+      ref: JYWh
       date: "2026-11-13"
