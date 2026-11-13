@@ -1,14 +1,5 @@
 version: 2
-items:
-    - title: Unreachable plan-summary docs, dangling links
-      id: YqrL
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - priority:low
-        - plan/phase:remediation-03
-        - effort:medium
-      text: 'Agent-authored report data. The README reachability check found 14 docs/mf-standards/plan/plan-summary-*.md files unreachable from README.md, carrying 77 dangling relative links in total. None were touched by this phase''s diff; all six docs the phase changed are reachable with no dangling links. Pre-existing; recommend either linking or removing these summary docs. Report: .flow/reports/oidc-eddsa-audience-tokens/phase-06/readme-reachability-20261113T1930Z-g7h8.yaml'
+items: []
 closed:
     - id: xByR
       title: 'BASELINE: EdDSA is already accepted by the cu'
@@ -226,4 +217,9 @@ closed:
       title: checkOIDCTokenTyp also accepts an empty-stri…
       disposition: fixed
       ref: phase-06-remediation-03/001-correct-oidc-typ-and-alg-doc-wording.md
+      date: "2026-11-13"
+    - id: YqrL
+      title: Unreachable plan-summary docs, dangling links
+      disposition: promoted
+      ref: YqrL
       date: "2026-11-13"
