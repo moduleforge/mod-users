@@ -83,7 +83,7 @@ phases:
           slug: consumer-notes-and-config-docs
           title: Consumer Upgrade Notes, Config Reference and Troubleshooting
           path: phase-03-doc-updates/002-consumer-notes-and-config-docs.md
-          done: false
+          done: true
           tier: sonnet-med
           digest: Doc-only change across README.md, docs/consumer-upgrade-notes.md and docs/oidc-troubleshooting.md. It documents the delivered algorithm pinning, the typ policy, the removed constructor and the nonce echo requirement, and records the generic claim_style limitation. A Status note is appended to the task document.
           git:
