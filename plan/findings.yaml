@@ -35,9 +35,12 @@ items:
         confidence: low
         concerns: security
         description:
-          Exchange wraps go-oidc's verification error with %w. go-oidc messages such as the audience and issuer mismatch errors embed the token's claim values (e.g. "expected audience %q got %q"). The jwt.go Verify path returns a fixed generic error, but this path does not, and the tests that check for token content in errors cover only Verify, not Exchange. The id_token arrives from the provider's token endpoint over the back channel rather than from an end user, so the risk is limited to claim values in logs or responses. The behavior predates this diff apart from the added typ check.
+          Exchange wraps go-oidc's verification error with %w. go-oidc audience and issuer mismatch messages embed claim values. The jwt.go Verify path returns a fixed generic error, but Exchange does not, and the no-token-content test assertions cover only Verify. The id_token arrives over the back channel from the provider's token endpoint; the risk is claim values in logs or the admin test-mode banner. Behavior predates this change apart from the typ check.
         recommendation:
-          If Exchange errors can reach clients or shared logs, map go-oidc errors to a fixed string as Verify does, or confirm callers do not surface err.Error(). Optionally extend assertNoTokenContent coverage to Exchange.
+          Decide whether Exchange should keep go-oidc error text or map it to fixed strings.
+        Open question (quoted data): Should OAuth.Exchange keep surfacing go-oidc verification error text (which can include iss/aud claim values) in logs and on the admin test-mode /oidc-config banner, or map it to fixed strings like Verifier.Verify?
+        Options: (1) keep current text and add Exchange coverage to the no-token-content assertion (small, test-only); (2) map to fixed category strings without claim values (brittle, small-to-medium production change); (3) map to a single fixed string (simplest, removes test-mode diagnostics).
+        Recommended option: (1) keep current text and add Exchange coverage to the no-token-content assertion. The handler at api/internal/handlers/auth/oidc.go deliberately shows err.Error() on the admin test-mode banner for IdP diagnosis.
 closed:
     - id: xByR
       title: 'BASELINE: EdDSA is already accepted by the cu'
