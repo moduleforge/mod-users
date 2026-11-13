@@ -21,3 +21,7 @@ Document the change for consumers and operators. This repo has no CHANGELOG file
 ## Assumptions
 
 Phase 1 is merged so names are final.
+
+## Status
+
+Outcome: succeeded (2026-11-13). Validation: existing `consumer-upgrade-notes.md#` anchors intact; `OIDC_ALLOWED_SIGNING_ALGS` and `WithOIDCSigningAlgs` match code; no `plan/` links added. Files: `docs/consumer-upgrade-notes.md`, `docs/oidc-troubleshooting.md`, `README.md`. `.env.example` already documented the variable.

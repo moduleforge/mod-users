@@ -120,6 +120,18 @@ The resolver never links an identity by email. The codes below come from the dec
 | `missing_email` | `jit_mode` is `byo` and the provider returned no email | Request the `email` scope (`openid email profile`) and check the provider returns an email claim |
 | `authentication_failed` | The identity is linked to a different provider | Sign in with the provider it is linked to |
 
+### ID token verification failures
+
+Verify errors name the failed check and never echo token content (header, claims or signature).
+
+| Symptom | Cause | What to do |
+|---|---|---|
+| Algorithm rejected | The token's `alg` is not in the accepted set: the provider's advertised algorithms, limited to `RS*`, `PS*`, `ES*` and `EdDSA` and to `OIDC_ALLOWED_SIGNING_ALGS` / `WithOIDCSigningAlgs` when set. `none` and `HS*` are never accepted | Check the discovery document's `id_token_signing_alg_values_supported` and the restriction; a provider that advertises nothing usable is treated as `RS256` only |
+| `no acceptable signing algorithm` at startup | The provider's algorithms and the operator restriction have nothing in common | Widen the restriction or fix the provider's advertised algorithms |
+| `unsupported token typ` | The `typ` header is present and is not `JWT` or `aud+jwt` (case-insensitive), is not a string, or the token is not in compact form | Have the provider emit `JWT` or omit `typ` |
+| Key type mismatch | The token's `kid` resolves to a JWKS key whose type does not fit the algorithm (for example an `EdDSA` token against an RSA key) | Check the provider's JWKS publishes the key matching the `alg` and `kid` |
+| `oauth: nonce mismatch` | The ID token has no `nonce` claim, or a different one, than the login request sent | The provider or its token endpoint must echo the `nonce`; this is fixed on the provider side, not by widening algorithms |
+
 ### Just-in-time modes
 
 Each provider row (`oidc_providers`) carries a `jit_mode` that decides what a first sign-in
