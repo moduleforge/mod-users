@@ -22,3 +22,7 @@ Update architecture and spec docs to reflect the OIDC verification changes: expl
 ## Metadata
 
 architectural_impact: true
+
+## Status
+
+Outcome: succeeded (2026-11-13). Updated `docs/architecture.md` (new OIDC ID token verification section, flow step 3 link), `docs/mod-users-spec.md` (OIDC verification requirement), `docs/jwt-eddsa.md` (separate OIDC verification section, option name in API list) and `docs/architecture/sessions-and-tokens.md` (typ note). Validation: all edited links resolve except pre-existing `mf-standards` submodule links, which resolve only where the submodule is initialized; no links into `plan/`.
