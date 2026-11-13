@@ -328,7 +328,11 @@ func (v *Verifier) verifyCarrier(rawToken string, now time.Time) (*carrier, erro
 	if err != nil {
 		return nil, err
 	}
-	if strings.EqualFold(rawTokenTyp(rawToken), audienceTokenTyp) {
+	typ, ok := rawTokenTyp(rawToken)
+	if !ok {
+		return nil, errors.New("invalid jwt header")
+	}
+	if strings.EqualFold(typ, audienceTokenTyp) {
 		return nil, errors.New("audience token not accepted")
 	}
 	var p carrierPayload
@@ -377,23 +381,30 @@ func (v *Verifier) verifyCarrier(rawToken string, now time.Time) (*carrier, erro
 }
 
 // rawTokenTyp returns the JWS "typ" header of an already signature-verified
-// token, or "" when absent or not a string.
-func rawTokenTyp(rawToken string) string {
+// token, or "" when absent. ok is false when the header cannot be decoded or
+// typ is present but not a string.
+func rawTokenTyp(rawToken string) (typ string, ok bool) {
 	parts := strings.Split(rawToken, ".")
 	if len(parts) != 3 {
-		return ""
+		return "", false
 	}
 	b, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return ""
+		return "", false
 	}
 	var h struct {
-		Typ string `json:"typ"`
+		Typ json.RawMessage `json:"typ"`
 	}
 	if json.Unmarshal(b, &h) != nil {
-		return ""
+		return "", false
 	}
-	return h.Typ
+	if h.Typ == nil {
+		return "", true
+	}
+	if json.Unmarshal(h.Typ, &typ) != nil || string(h.Typ) == "null" {
+		return "", false
+	}
+	return typ, true
 }
 
 // audiencePolicy is the bearer-token audience rule: AUTH_ACCEPTED_AUDIENCES

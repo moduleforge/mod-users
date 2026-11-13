@@ -68,8 +68,100 @@ func TestCheckOIDCTokenTyp(t *testing.T) {
 			t.Errorf("typ %q: error echoes header value: %v", tc.typ, err)
 		}
 	}
-	if err := checkOIDCTokenTyp("not-a-jwt"); err != nil {
-		t.Errorf("malformed token has no readable typ, got %v", err)
+	if err := checkOIDCTokenTyp("not-a-jwt"); err != errOIDCTokenTyp {
+		t.Errorf("non-compact input must be rejected, got %v", err)
+	}
+}
+
+// jsonReWrap re-serializes a compact JWS as flattened JWS JSON, preserving the
+// original signature.
+func jsonReWrap(t *testing.T, compact string) string {
+	t.Helper()
+	parts := strings.Split(compact, ".")
+	if len(parts) != 3 {
+		t.Fatalf("not compact: %d segments", len(parts))
+	}
+	b, err := json.Marshal(map[string]string{"protected": parts[0], "payload": parts[1], "signature": parts[2]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestCheckOIDCTokenTyp_RejectsNonCompact(t *testing.T) {
+	t.Parallel()
+	_, priv := eddsaKey(t)
+	compact := mintEdDSAToken(t, priv, "EdDSA", "", "k1", map[string]any{"sub": "x"})
+	parts := strings.Split(compact, ".")
+	flattened := jsonReWrap(t, compact)
+	general, err := json.Marshal(map[string]any{
+		"payload":    parts[1],
+		"signatures": []map[string]string{{"protected": parts[0], "signature": parts[2]}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := map[string]string{
+		"two segments":      parts[0] + "." + parts[1],
+		"four segments":     compact + ".extra",
+		"json flattened":    flattened,
+		"json general":      string(general),
+		"whitespace json":   " \n\t" + flattened + "\n ",
+		"whitespace padded": " " + compact + " ",
+		"empty":             "",
+	}
+	for name, raw := range inputs {
+		if err := checkOIDCTokenTyp(raw); err != errOIDCTokenTyp {
+			t.Errorf("%s: err = %v, want errOIDCTokenTyp", name, err)
+		}
+	}
+	if err := checkOIDCTokenTyp(compact); err != nil {
+		t.Errorf("compact token rejected: %v", err)
+	}
+}
+
+func TestVerifier_OIDC_RejectsJSONSerialization(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	iss := newEdDSAIssuer(t, []string{"EdDSA"}, "k1")
+	v, err := NewVerifierWithOptions(ctx, WithOIDC(iss.URL, eddsaIssuerClientID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compact := mintEdDSAToken(t, iss.keys[0].priv, "EdDSA", "at+jwt", "k1", iss.claims(eddsaIssuerClientID, ""))
+	if _, err := v.Verify(ctx, jsonReWrap(t, compact)); err == nil {
+		t.Error("JSON-serialized at+jwt token accepted by Verify")
+	}
+	if _, err := v.Verify(ctx, compact+".extra"); err == nil {
+		t.Error("four-segment token accepted by Verify")
+	}
+}
+
+func TestOAuth_Exchange_RejectsJSONSerialization(t *testing.T) {
+	t.Parallel()
+	iss := newEdDSAIssuer(t, []string{"EdDSA"}, "k1")
+	o, err := NewOAuth(context.Background(), &config.Config{
+		Auth:      config.AuthConfig{FrontendReturnURL: "http://gui.test/r", OAuthRedirectBaseURL: "http://api.test"},
+		LocalAuth: config.LocalAuthConfig{JWTSecret: "test-jwt-secret-for-state-signer"},
+		Providers: config.ProviderRegistry{"mfidp": config.Provider{
+			ID: "mfidp", DisplayName: "MFIdP", IssuerURL: iss.URL, ClientID: eddsaIssuerClientID,
+			ClientSecret: "s", ClaimStyle: "generic", Scopes: []string{"openid", "email"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	compact := mintEdDSAToken(t, iss.keys[0].priv, "EdDSA", "at+jwt", "k1", iss.claims(eddsaIssuerClientID, "n"))
+	for name, raw := range map[string]string{"json": jsonReWrap(t, compact), "four segments": compact + ".extra"} {
+		_, stateTok, err := o.AuthorizeURL("mfidp", "/", false, testHandoffChallenge)
+		if err != nil {
+			t.Fatal(err)
+		}
+		iss.setIDToken(raw)
+		_, _, err = o.Exchange(context.Background(), "mfidp", "code", stateTok, stateTok)
+		if err == nil || !strings.Contains(err.Error(), "unsupported token typ") {
+			t.Errorf("%s: Exchange error = %v, want unsupported token typ", name, err)
+		}
 	}
 }
 

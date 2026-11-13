@@ -80,15 +80,16 @@ var errOIDCTokenTyp = errors.New("unsupported token typ")
 
 // checkOIDCTokenTyp enforces the typ policy for OIDC ID tokens, read from the
 // JWS protected header: an absent typ, "JWT" and "aud+jwt" are accepted
-// (case-insensitively, per RFC 7515); any other value is rejected. A
-// three-segment token whose protected header cannot be decoded, or whose typ is
-// present but not a string, is rejected. Input that is not three segments is
-// left to the signature verifier. It runs before signature verification and
-// trusts nothing the header says beyond this allow decision.
+// (case-insensitively, per RFC 7515); any other value is rejected. Only
+// compact serialization is accepted: input that is not exactly three
+// dot-separated segments (JWS JSON serialization, padded input, two or four
+// segments) is rejected, as is a token whose protected header cannot be
+// decoded or whose typ is present but not a string. It runs before signature
+// verification and trusts nothing the header says beyond this allow decision.
 func checkOIDCTokenTyp(rawToken string) error {
 	parts := strings.Split(rawToken, ".")
 	if len(parts) != 3 {
-		return nil
+		return errOIDCTokenTyp
 	}
 	b, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
