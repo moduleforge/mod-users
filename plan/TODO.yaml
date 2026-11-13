@@ -11,11 +11,13 @@ phases:
           slug: eddsa-issuer-harness-and-repro
           title: Ed25519 Test Issuer Harness and Baseline Reproduction
           path: phase-01-oidc-alg-pinning/001-eddsa-issuer-harness-and-repro.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Built a reusable Ed25519/OKP test issuer harness. The baseline shows go-oidc already accepts EdDSA aud+jwt tokens on both verifier paths, so the remaining plan is hardening plus tests. A missing nonce claim yields nonce mismatch in Exchange.
           git:
-            branch: null
-            commit: []
+            branch: plan/oidc-eddsa-audience-tokens-01-001
+            commit:
+                - 200e9daf
             merge: null
         - number: 2
           slug: pin-oidc-signing-algs
