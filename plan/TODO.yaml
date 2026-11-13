@@ -104,5 +104,6 @@ phases:
             - GCnC
           git:
             branch: plan/oidc-eddsa-audience-tokens-04-001
-            commit: []
+            commit:
+                - 8eac3549
             merge: null
