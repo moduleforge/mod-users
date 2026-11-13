@@ -57,6 +57,15 @@ items:
           checkOIDCTokenTyp also accepts an empty-string typ (typ == ''), not only an absent one. The docs, spec and upgrade notes say only 'absent, JWT, aud+jwt'. The doc and code are slightly inconsistent.
         recommendation:
           State that an empty typ is treated as absent, or tighten the code to reject it.
+    - title: Unreachable plan-summary docs, dangling links
+      id: YqrL
+      date: "2026-11-13"
+      tags:
+        - type:documentation
+        - priority:low
+        - plan/phase:remediation-03
+        - effort:unspecified
+      text: 'Agent-authored report data. The README reachability check found 14 docs/mf-standards/plan/plan-summary-*.md files unreachable from README.md, carrying 77 dangling relative links in total. None were touched by this phase''s diff; all six docs the phase changed are reachable with no dangling links. Pre-existing; recommend either linking or removing these summary docs. Report: .flow/reports/oidc-eddsa-audience-tokens/phase-06/readme-reachability-20261113T1930Z-g7h8.yaml'
 closed:
     - id: xByR
       title: 'BASELINE: EdDSA is already accepted by the cu'
