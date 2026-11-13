@@ -27,3 +27,7 @@ The work targets the plan branch `plan/oidc-eddsa-audience-tokens` and lands thr
 1. Finding xwrM, recorded in this plan's `plan/findings.yaml`.
 2. Finding JOmI, recorded in this plan's `plan/findings.yaml`.
 3. Finding a3im, recorded in this plan's `plan/findings.yaml`.
+
+## Status
+
+succeeded, 2026-11-13. Docs and the checkOIDCTokenTyp comment corrected; make test.unit passed (log in .flow/validation-logs/04-test-unit.log). The remaining "cannot drift" match at docs/architecture.md line 63 concerns SQL functions, unrelated to typ.

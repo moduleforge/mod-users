@@ -79,8 +79,9 @@ func oidcSigningAlgsFor(provider *oidc.Provider, issuerURL string, operatorAllow
 var errOIDCTokenTyp = errors.New("unsupported token typ")
 
 // checkOIDCTokenTyp enforces the typ policy for OIDC ID tokens, read from the
-// JWS protected header: an absent typ, "JWT" and "aud+jwt" are accepted
-// (case-insensitively, per RFC 7515); any other value is rejected. Only
+// JWS protected header: an absent or empty typ (an empty typ is
+// treated as absent), "JWT" and "aud+jwt" are accepted (case-insensitively,
+// per RFC 7515); any other value is rejected. Only
 // compact serialization is accepted: input that is not exactly three
 // dot-separated segments (JWS JSON serialization, padded input, two or four
 // segments) is rejected, as is a token whose protected header cannot be
