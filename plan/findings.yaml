@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: 'Dangling forward link: ./mf-standards/buildi…'
-      id: dLlw
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - plan/phase:oidc-alg-pinning
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/mod-users-spec.md
-        lines: 161
-        severity: major
-        confidence: high
-        concerns: documentation
-        description:
-          Dangling forward link: ./mf-standards/building-applications.md#first-time-setup targets a missing file.
-        recommendation:
-          Restore the target under docs/mf-standards/ or retarget the link; see the README.md finding on the same target.
     - title: 'Dangling forward link: ./mf-standards/archit…'
       id: BtjV
       date: "2026-11-13"
@@ -279,4 +260,14 @@ closed:
         (line 180), so README.md:33's link and anchor resolve. AGENTS.md:30
         already documents the required `git submodule update --init
         docs/mf-standards`. No document change is needed.
+      date: "2026-11-13"
+    - id: dLlw
+      title: 'Dangling forward link: ./mf-standards/buildi…'
+      disposition: dismissed
+      reason: |-
+        Not actionable (false positive, same cause as ByMy): the docs/mf-standards
+        submodule is uninitialized in this worktree. At pinned commit 2854009c,
+        building-applications.md exists with the #first-time-setup anchor
+        (line 180), so docs/mod-users-spec.md:161 resolves once the submodule is
+        initialized.
       date: "2026-11-13"
