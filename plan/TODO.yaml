@@ -3,7 +3,7 @@ version: 1
 title: ""
 remediation:
     rounds: 1
-    tasks_added: 0
+    tasks_added: 1
 phases:
     - number: 1
       slug: oidc-alg-pinning
@@ -88,5 +88,19 @@ phases:
       slug: remediation-01
       title: Remediation Round 1
       kind: remediation
+      security_review: required
+      tasks_added: 1
       remediates_phase: 1
-      tasks: []
+      tasks:
+        - number: 1
+          slug: fail-closed-oidc-typ
+          title: Fail Closed On Non-String Or Undecodable OIDC Token Typ
+          path: phase-04-remediation-01/001-fail-closed-oidc-typ.md
+          done: false
+          tier: sonnet-med
+          findings:
+            - GCnC
+          git:
+            branch: null
+            commit: []
+            merge: null
