@@ -40,7 +40,8 @@ phases:
           digest: Added a test-only file covering the EdDSA and algorithm-confusion matrix through NewVerifierWithOptions and initProvider, reusing the harness. Both mutation checks fail the expected tests and were reverted.
           git:
             branch: plan/oidc-eddsa-audience-tokens-01-003
-            commit: []
+            commit:
+                - 0b6fbb01
             merge: null
     - number: 2
       slug: oidc-eddsa-login-e2e
