@@ -73,6 +73,7 @@ phases:
           path: phase-03-doc-updates/001-update-architecture-docs.md
           done: false
           tier: sonnet-high
+          digest: Doc-only update across four docs describing OIDC algorithm pinning, the typ policy, the operator restriction, and the generic claim-style limitation; no code touched.
           git:
             branch: null
             commit: []
