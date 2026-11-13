@@ -71,11 +71,13 @@ phases:
           slug: update-architecture-docs
           title: Update Architecture Docs
           path: phase-03-doc-updates/001-update-architecture-docs.md
-          done: false
+          done: true
           tier: sonnet-high
+          digest: Doc-only update across four docs describing OIDC algorithm pinning, the typ policy, the operator restriction, and the generic claim-style limitation; no code touched.
           git:
-            branch: null
-            commit: []
+            branch: plan/oidc-eddsa-audience-tokens-03-001
+            commit:
+                - 0e8c8772
             merge: null
         - number: 2
           slug: consumer-notes-and-config-docs
