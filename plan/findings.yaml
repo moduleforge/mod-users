@@ -1,5 +1,14 @@
 version: 2
-items: []
+items:
+    - title: Generic claim style unusable in initProvider
+      id: FNE2
+      date: "2026-11-13"
+      tags:
+        - type:bug
+        - plan/phase:oidc-eddsa-login-e2e
+        - priority:unspecified
+        - effort:unspecified
+      text: 'api/internal/auth/oauth.go initProvider builds the claim mapper with NewClaimMapper(p.ClaimStyle, MapperOptions{}), so a provider with claim_style generic gets a genericMapper with empty EmailPath and RolesPath. Every OAuth.Exchange for such a provider then fails at the mapping step with ''oauth: map claims: auth: generic mapper requires opts.EmailPath'' even when signature, audience and nonce verify (pinned by TestOAuth_Exchange_EdDSAGenericStyleHasNoClaimPaths in api/internal/auth/oauth_eddsa_test.go). Providers need a way to supply the claim paths, or generic should default to email/roles paths.'
 closed:
     - id: xByR
       title: 'BASELINE: EdDSA is already accepted by the cu'
