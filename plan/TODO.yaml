@@ -152,6 +152,7 @@ phases:
           path: phase-06-remediation-03/001-correct-oidc-typ-and-alg-doc-wording.md
           done: false
           tier: sonnet-med
+          digest: Empty typ treated as absent and RS256 wording corrected across OIDC docs; typ helper described as two separate checks sharing aud+jwt constant; comment-only edit in oidc_algs.go; make test.unit 458 pass.
           findings:
             - xwrM
             - JOmI
