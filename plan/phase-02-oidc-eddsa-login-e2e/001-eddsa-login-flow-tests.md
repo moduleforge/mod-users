@@ -26,3 +26,11 @@ Phase 1 is merged. If the integration harness cannot build a provider through `i
 
 - After the unit-level end-to-end test.
 - After the integration test scaffolding.
+
+## Status
+
+Outcome: succeeded (2026-11-13). Validation: unit tests for `./internal/auth/...`, the integration suite against a throwaway postgres:16 container (`mod-users-integ-955e4228`, removed afterwards), and `make test.unit` all pass; no leftover container.
+
+- Added `api/internal/auth/oauth_eddsa_test.go`: EdDSA end-to-end login, nonce mismatch, and the generic-style mapping failure. The no-nonce case already exists as `TestOAuth_Exchange_EdDSAIDTokenWithoutNonce` (fails with `oauth: nonce mismatch` by design).
+- Added `api/internal/integration/oidc_eddsa_integration_test.go`: real `/start`, `/callback`, `/v1/auth/handoff` with `ExchangeFn` unset, provider built via `OAuth.Rebuild` (which runs `initProvider`); covers linked sign-in, unlinked `no_account` under `jit_mode none`, nonce mismatch and HS256 refusal.
+- Deviation: provider claim style is `google`, not `generic`, because `initProvider` gives the generic mapper no claim paths and it cannot map (filed as a finding).
