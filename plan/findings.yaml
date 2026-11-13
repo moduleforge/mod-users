@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'Nonce finding: OAuth.Exchange with an EdDSA I'
-      id: PED5
-      date: "2026-11-13"
-      tags:
-        - type:bug
-        - plan/phase:oidc-alg-pinning
-        - priority:high
-        - effort:small
-      text: 'Nonce finding: OAuth.Exchange with an EdDSA ID token lacking a nonce claim fails with oauth: nonce mismatch after the signature verifies. Plausible real cause of the owner-login failure; consumer or IdP-side follow-on, behaviour unchanged.'
     - title: 'Dangling forward link: ./docs/mf-standards/b…'
       id: ByMy
       date: "2026-11-13"
@@ -289,4 +280,9 @@ closed:
         accepted is already part of future task 3/002 (consumer upgrade notes)
         and task 3/001 (architecture docs). Reclassified from the default
         ambiguity stamp because no decision is pending.
+      date: "2026-11-13"
+    - id: PED5
+      title: 'Nonce finding: OAuth.Exchange with an EdDSA I'
+      disposition: promoted
+      ref: PED5
       date: "2026-11-13"
