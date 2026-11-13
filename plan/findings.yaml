@@ -1,40 +1,5 @@
 version: 2
 items:
-    - title: checkOIDCTokenTyp returns nil for any input…
-      id: JxLt
-      date: "2026-11-13"
-      tags:
-        - type:security
-        - plan/phase:remediation-01
-        - priority:high
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/auth/oidc_algs.go
-        lines: 88-92
-        severity: major
-        confidence: high
-        concerns: security
-        description:
-          checkOIDCTokenTyp returns nil for any input that does not split into exactly three dot-separated segments, on the
-          stated assumption that such input is "left to the signature verifier". That assumption is false for the pinned
-          dependencies. oidc.IDTokenVerifier.Verify (go-oidc v3.18.0, verify.go) calls jose.ParseSigned, which (go-jose
-          v4.1.4 jws.go:88-98) strips all whitespace and, when the string begins with "{", parses it as JWS JSON
-          serialization (flattened or general) instead of compact. A JSON-serialized JWS has no required dots, so it
-          yields len(parts) != 3 and skips the typ check entirely. The signature input is protected-b64 "." payload-b64, so any
-          validly signed compact token (for example an at+jwt access token minted by the same issuer with aud equal to
-          the client ID) can be re-wrapped as {"protected":...,"payload":...,"signature":...} with the signature still
-          valid, and go-oidc accepts it. This defeats the typ policy this phase is meant to enforce, and Verifier.Verify
-          accepts bearer-supplied tokens, so it is reachable by an unauthenticated caller who holds any such token. On
-          Exchange the token comes from the provider token endpoint, so exploitability there is lower. The new tests do not
-          cover non-3-segment/JSON-serialized input. Pre-existing gap in the original check, but the diff documents and
-          entrenches the incorrect assumption while claiming fail-closed behaviour.
-        recommendation:
-          Fail closed on anything that is not a well-formed compact JWS instead of returning nil: reject (errOIDCTokenTyp) when
-          len(parts) != 3, and when the trimmed input starts with "{". Alternatively, parse the header the way go-jose
-          does (strip whitespace, support the JSON form and read protected/header typ) or restrict the verifier input to
-          compact form before calling Verify. Add tests for a JSON-serialized token carrying typ at+jwt and for 2- and
-          4-segment inputs, in both Verify and Exchange.
     - title: rawTokenTyp (used by verifyCarrier to reject…
       id: bPTZ
       date: "2026-11-13"
@@ -216,4 +181,9 @@ closed:
         member matching can only make the check stricter (a "TYP" key carrying a disallowed value
         is rejected), and an empty typ is treated like an absent typ, which decision 4 accepts. No
         change is called for.
+      date: "2026-11-13"
+    - id: JxLt
+      title: checkOIDCTokenTyp returns nil for any input…
+      disposition: fixed
+      ref: phase-05-remediation-02/001-oidc-typ-compact-only-and-carrier-strict.md
       date: "2026-11-13"
