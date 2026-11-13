@@ -1,25 +1,6 @@
 version: 2
 items:
     - title: 'Dangling forward link: ./mf-standards/archit…'
-      id: 5R2E
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - plan/phase:oidc-alg-pinning
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: docs/architecture.md
-        lines: 5
-        severity: major
-        confidence: high
-        concerns: documentation
-        description:
-          Dangling forward link: ./mf-standards/architecture.md targets a missing file.
-        recommendation:
-          Restore the target under docs/mf-standards/ or retarget the link.
-    - title: 'Dangling forward link: ./mf-standards/archit…'
       id: GqoZ
       date: "2026-11-13"
       tags:
@@ -240,4 +221,12 @@ closed:
         exists at the pinned submodule commit 2854009c. The link at
         docs/mod-users-spec.md:381 dangles only because the submodule is
         uninitialized in this worktree.
+      date: "2026-11-13"
+    - id: 5R2E
+      title: 'Dangling forward link: ./mf-standards/archit…'
+      disposition: dismissed
+      reason: |-
+        Not actionable (false positive): mf-standards/architecture.md exists at
+        the pinned submodule commit 2854009c. The link at docs/architecture.md:5
+        dangles only because the submodule is uninitialized in this worktree.
       date: "2026-11-13"
