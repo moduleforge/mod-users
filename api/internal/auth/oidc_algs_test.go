@@ -2,6 +2,9 @@ package auth
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -276,5 +279,99 @@ func TestOAuth_Exchange_RejectsDisallowedTyp(t *testing.T) {
 	_, _, err = o.Exchange(context.Background(), "mfidp", "code", stateTok, stateTok)
 	if err == nil || !strings.Contains(err.Error(), "unsupported token typ") {
 		t.Fatalf("Exchange error = %v, want unsupported token typ", err)
+	}
+}
+
+// mintEdDSATokenRawHeader signs claims under a hand-built protected header so
+// a test can set header members the mint helper cannot express.
+func mintEdDSATokenRawHeader(t *testing.T, priv ed25519.PrivateKey, header string, claims string) string {
+	t.Helper()
+	input := base64.RawURLEncoding.EncodeToString([]byte(header)) + "." + base64.RawURLEncoding.EncodeToString([]byte(claims))
+	return input + "." + base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, []byte(input)))
+}
+
+var nonStringTypHeaders = map[string]string{
+	"array":  `{"alg":"EdDSA","kid":"k1","typ":["JWT"]}`,
+	"number": `{"alg":"EdDSA","kid":"k1","typ":7}`,
+	"object": `{"alg":"EdDSA","kid":"k1","typ":{"v":"JWT"}}`,
+	"bool":   `{"alg":"EdDSA","kid":"k1","typ":true}`,
+	"null":   `{"alg":"EdDSA","kid":"k1","typ":null}`,
+}
+
+func TestCheckOIDCTokenTyp_FailsClosed(t *testing.T) {
+	t.Parallel()
+	_, priv := eddsaKey(t)
+	for name, hdr := range nonStringTypHeaders {
+		raw := mintEdDSATokenRawHeader(t, priv, hdr, `{"sub":"x"}`)
+		err := checkOIDCTokenTyp(raw)
+		if err != errOIDCTokenTyp {
+			t.Errorf("%s typ: err = %v, want errOIDCTokenTyp", name, err)
+		}
+	}
+	undecodable := map[string]string{
+		"bad base64": "!!!notbase64!!!.e30.c2ln",
+		"bad json":   base64.RawURLEncoding.EncodeToString([]byte("{not json")) + ".e30.c2ln",
+		"not object": base64.RawURLEncoding.EncodeToString([]byte(`"secret-header"`)) + ".e30.c2ln",
+	}
+	for name, raw := range undecodable {
+		err := checkOIDCTokenTyp(raw)
+		if err != errOIDCTokenTyp {
+			t.Errorf("%s: err = %v, want errOIDCTokenTyp", name, err)
+			continue
+		}
+		if strings.Contains(err.Error(), "secret-header") || strings.Contains(err.Error(), "notbase64") {
+			t.Errorf("%s: error echoes header content: %v", name, err)
+		}
+	}
+}
+
+func TestVerifier_OIDC_RejectsNonStringTyp(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	iss := newEdDSAIssuer(t, []string{"EdDSA"}, "k1")
+	v, err := NewVerifierWithOptions(ctx, WithOIDC(iss.URL, eddsaIssuerClientID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := json.Marshal(iss.claims(eddsaIssuerClientID, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, hdr := range nonStringTypHeaders {
+		raw := mintEdDSATokenRawHeader(t, iss.keys[0].priv, hdr, string(claims))
+		if _, err := v.Verify(ctx, raw); err == nil {
+			t.Errorf("%s typ accepted by Verify", name)
+		}
+	}
+}
+
+func TestOAuth_Exchange_RejectsNonStringTyp(t *testing.T) {
+	t.Parallel()
+	iss := newEdDSAIssuer(t, []string{"EdDSA"}, "k1")
+	o, err := NewOAuth(context.Background(), &config.Config{
+		Auth:      config.AuthConfig{FrontendReturnURL: "http://gui.test/r", OAuthRedirectBaseURL: "http://api.test"},
+		LocalAuth: config.LocalAuthConfig{JWTSecret: "test-jwt-secret-for-state-signer"},
+		Providers: config.ProviderRegistry{"mfidp": config.Provider{
+			ID: "mfidp", DisplayName: "MFIdP", IssuerURL: iss.URL, ClientID: eddsaIssuerClientID,
+			ClientSecret: "s", ClaimStyle: "generic", Scopes: []string{"openid", "email"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := json.Marshal(iss.claims(eddsaIssuerClientID, "n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, hdr := range nonStringTypHeaders {
+		_, stateTok, err := o.AuthorizeURL("mfidp", "/", false, testHandoffChallenge)
+		if err != nil {
+			t.Fatal(err)
+		}
+		iss.setIDToken(mintEdDSATokenRawHeader(t, iss.keys[0].priv, hdr, string(claims)))
+		_, _, err = o.Exchange(context.Background(), "mfidp", "code", stateTok, stateTok)
+		if err == nil || !strings.Contains(err.Error(), "unsupported token typ") {
+			t.Errorf("%s typ: Exchange error = %v, want unsupported token typ", name, err)
+		}
 	}
 }
