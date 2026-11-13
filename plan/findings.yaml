@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: 'Dangling forward link: ./docs/mf-standards/b…'
-      id: ByMy
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - plan/phase:oidc-alg-pinning
-        - priority:unspecified
-        - effort:unspecified
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: README.md
-        lines: 33
-        severity: major
-        confidence: high
-        concerns: documentation
-        description:
-          Dangling forward link: ./docs/mf-standards/building-applications.md#first-time-setup targets a file that does not exist (docs/mf-standards/ is an empty, untracked directory).
-        recommendation:
-          Restore the target document into docs/mf-standards/ or retarget the link to the owning standard; remove the link if no source exists.
     - title: 'Dangling forward link: ./mf-standards/buildi…'
       id: dLlw
       date: "2026-11-13"
@@ -285,4 +266,17 @@ closed:
       title: 'Nonce finding: OAuth.Exchange with an EdDSA I'
       disposition: promoted
       ref: PED5
+      date: "2026-11-13"
+    - id: ByMy
+      title: 'Dangling forward link: ./docs/mf-standards/b…'
+      disposition: dismissed
+      reason: |-
+        Not actionable (false positive): the link target exists. docs/mf-standards
+        is a git submodule (.gitmodules; gitlink 2854009c at HEAD). It is not
+        initialized in this plan worktree (`git submodule status` shows a leading
+        "-"), so the review lens saw an empty directory. At the pinned commit
+        2854009c, building-applications.md exists and has "## First-time setup"
+        (line 180), so README.md:33's link and anchor resolve. AGENTS.md:30
+        already documents the required `git submodule update --init
+        docs/mf-standards`. No document change is needed.
       date: "2026-11-13"
