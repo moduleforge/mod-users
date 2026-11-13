@@ -27,3 +27,7 @@ The work targets the plan branch `plan/oidc-eddsa-audience-tokens` and lands thr
 
 - JxLt: a finding in this plan's `plan/findings.yaml` covered by this task (OIDC `typ` check accepts non-compact input).
 - bPTZ: a finding in this plan's `plan/findings.yaml` covered by this task (carrier `typ` parsing accepts a present but non-string value).
+
+## Status
+
+Outcome: succeeded (2026-11-13). checkOIDCTokenTyp now rejects any input that is not exactly three segments; rawTokenTyp returns (typ, ok) and verifyCarrier rejects a present non-string (including null) typ. Tests added in api/internal/auth/oidc_algs_test.go and carrier_test.go. Validation: go test ./internal/auth/... , go vet, make test.unit all pass.
