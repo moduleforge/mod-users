@@ -25,6 +25,7 @@ phases:
           path: phase-01-oidc-alg-pinning/002-pin-oidc-signing-algs.md
           done: false
           tier: sonnet-high
+          digest: Pinned the OIDC signing algorithms explicitly in both verification paths (discovery intersected with a fixed allowlist, RS256 fallback, optional operator restriction via WithOIDCSigningAlgs and OIDC_ALLOWED_SIGNING_ALGS). Enforced the typ policy before OIDC verification in Verify and Exchange. Unified the typ comparison in carrier.go with EqualFold. Covered with table-driven and issuer-harness tests; all validation green.
           git:
             branch: null
             commit: []
