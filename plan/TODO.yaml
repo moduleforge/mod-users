@@ -75,7 +75,7 @@ phases:
           tier: sonnet-high
           digest: Doc-only update across four docs describing OIDC algorithm pinning, the typ policy, the operator restriction, and the generic claim-style limitation; no code touched.
           git:
-            branch: null
+            branch: plan/oidc-eddsa-audience-tokens-03-001
             commit: []
             merge: null
         - number: 2
