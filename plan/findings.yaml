@@ -1,24 +1,5 @@
 version: 2
 items:
-    - title: checkOIDCTokenTyp relies on rawTokenTyp (api…
-      id: GCnC
-      date: "2026-11-13"
-      tags:
-        - type:security
-        - plan/phase:oidc-alg-pinning
-        - priority:medium
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/auth/oidc_algs.go
-        lines: 1096-1102
-        severity: minor
-        confidence: medium
-        concerns: security
-        description:
-          checkOIDCTokenTyp relies on rawTokenTyp (api/internal/auth/carrier.go 381-397), which unmarshals the header into a struct with `Typ string`. A non-string typ (e.g. an array or number), or any other header field that breaks the unmarshal, makes json.Unmarshal fail and rawTokenTyp return "", which checkOIDCTokenTyp treats as absent and accepts. The typ policy therefore fails open for malformed typ values; a header such as {"typ":["at+jwt"]} bypasses the rejection of at+jwt/logout+jwt/step-up. Exploitability is limited: the token must still pass signature, issuer, audience and expiry checks with the pinned algorithm, so an attacker needs an issuer-signed token whose typ is non-string. Whether go-jose tolerates such a header is not established from the diff. Treating a non-string typ as absent is not safe by default in a type-confusion guard. The same helper in verifyCarrier (the aud+jwt rejection) has the same blind spot, but local tokens are produced by this module's signer, so that path is not reachable with attacker-chosen headers.
-        recommendation:
-          Fail closed: parse typ as json.RawMessage or any, return a distinct "present but non-string" result, and have checkOIDCTokenTyp reject it (and treat an undecodable header on a 3-segment token as a reject rather than absent). Keep absent = accepted. Add a test with a non-string typ.
     - title: checkOIDCTokenTyp returns nil for any input…
       id: JxLt
       date: "2026-11-13"
@@ -229,4 +210,18 @@ closed:
       title: Exchange wraps go-oidc's verification error…
       disposition: promoted
       ref: vrvt
+      date: "2026-11-13"
+    - id: GCnC
+      title: checkOIDCTokenTyp relies on rawTokenTyp (api…
+      disposition: dismissed
+      reason: |-
+        Already fixed. api/internal/auth/oidc_algs.go:88-114 (checkOIDCTokenTyp) now decodes the
+        header itself with Typ as json.RawMessage, returns errOIDCTokenTyp when a 3-segment header
+        fails base64url or JSON decoding (lines 93-103), and rejects a present typ that is null or
+        not a string (lines 107-109); absent, "JWT" and "aud+jwt" remain accepted. Tests confirm it:
+        api/internal/auth/oidc_algs_test.go:293-325 (TestCheckOIDCTokenTyp_FailsClosed: array,
+        number, object, bool and null typ plus undecodable headers), :328
+        (TestVerifier_OIDC_RejectsNonStringTyp) and :348 (TestOAuth_Exchange_RejectsNonStringTyp).
+        The carrier-path part of the original text is tracked separately as bPTZ; the
+        non-3-segment bypass is tracked as JxLt.
       date: "2026-11-13"
