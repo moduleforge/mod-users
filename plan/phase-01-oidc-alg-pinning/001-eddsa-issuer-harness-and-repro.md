@@ -27,3 +27,11 @@ go-oidc v3.18.0 already derives algorithms from discovery; the expected baseline
 ## References
 
 - `api/internal/auth/jwt.go`, `api/internal/auth/oauth.go` (`initProvider`, `Exchange`), `api/internal/auth/jwt_tls_test.go` (`newOIDCTestServer`), `api/internal/auth/oauth_test.go`.
+
+## Status
+
+- Outcome: succeeded (2026-11-13).
+- Baseline: EdDSA `aud+jwt` token with kid from an Ed25519/OKP issuer advertising `["EdDSA"]` is ACCEPTED by current code on both the facade path (`v.oidcVerifier.Verify` and `Verifier.Verify`) and the login path (`initProvider` verifier). Kept as permanent regression tests.
+- `OAuth.Exchange` with an ID token lacking `nonce` fails with "oauth: nonce mismatch" (signature verifies first).
+- Validation: `go test ./internal/auth/... -run EdDSAAudience` passes; `go vet ./internal/auth/` clean; no production files modified; no new dependencies.
+- Files: `api/internal/auth/eddsa_issuer_test.go`.
