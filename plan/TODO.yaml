@@ -58,7 +58,7 @@ phases:
           done: false
           tier: sonnet-high
           git:
-            branch: null
+            branch: plan/oidc-eddsa-audience-tokens-02-001
             commit: []
             merge: null
     - number: 3
