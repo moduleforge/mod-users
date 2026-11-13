@@ -2,7 +2,7 @@ slug: oidc-eddsa-audience-tokens
 version: 1
 title: ""
 remediation:
-    rounds: 1
+    rounds: 2
     tasks_added: 1
 phases:
     - number: 1
@@ -107,3 +107,9 @@ phases:
             commit:
                 - 8eac3549
             merge: 20c7c28eee09c31ff208cf515acc5812c1c193c4
+    - number: 5
+      slug: remediation-02
+      title: Remediation Round 2
+      kind: remediation
+      remediates_phase: 1
+      tasks: []
