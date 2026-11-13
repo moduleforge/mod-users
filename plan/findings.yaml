@@ -1,14 +1,5 @@
 version: 2
 items:
-    - title: 'BASELINE: EdDSA is already accepted by the cu'
-      id: xByR
-      date: "2026-11-13"
-      tags:
-        - type:ambiguity
-        - plan/phase:oidc-alg-pinning
-        - priority:unspecified
-        - effort:unspecified
-      text: 'BASELINE: EdDSA is already accepted by the current unmodified code on both verifier paths (facade Verify and Verifier.Verify, and the initProvider login-path verifier). The reported algorithm-rejection root cause is not reproduced; the plan continues as hardening plus tests.'
     - title: 'Nonce finding: OAuth.Exchange with an EdDSA I'
       id: PED5
       date: "2026-11-13"
@@ -284,4 +275,18 @@ items:
           Exchange wraps go-oidc's verification error with %w. go-oidc messages such as the audience and issuer mismatch errors embed the token's claim values (e.g. "expected audience %q got %q"). The jwt.go Verify path returns a fixed generic error, but this path does not, and the tests that check for token content in errors cover only Verify, not Exchange. The id_token arrives from the provider's token endpoint over the back channel rather than from an end user, so the risk is limited to claim values in logs or responses. The behavior predates this diff apart from the added typ check.
         recommendation:
           If Exchange errors can reach clients or shared logs, map go-oidc errors to a fixed string as Verify does, or confirm callers do not surface err.Error(). Optionally extend assertNoTokenContent coverage to Exchange.
-closed: []
+closed:
+    - id: xByR
+      title: 'BASELINE: EdDSA is already accepted by the cu'
+      disposition: dismissed
+      reason: |-
+        Not actionable: this records the baseline reproduction outcome (EdDSA
+        already accepted by the unmodified verifier on both the facade and the
+        initProvider login paths), confirmed in the 001 task doc's Status
+        section. It asks for no change. The plan overview ("Key finding that
+        shapes the plan") already expects this and continues as explicit
+        pinning plus tests. The durable statement that EdDSA/OKP providers are
+        accepted is already part of future task 3/002 (consumer upgrade notes)
+        and task 3/001 (architecture docs). Reclassified from the default
+        ambiguity stamp because no decision is pending.
+      date: "2026-11-13"
