@@ -2893,3 +2893,13 @@ items:
         - plan/phase:remediation-16
         - plan/slug:identity-model-impl
       text: '[agent-authored review data] severity: suggestion, confidence: medium. model/queries/sessions.sql lines 190-197: comment says ''a ProfileAvailability reason'', but no such Go type exists; ProfileAvailability is the sqlc query name over mod_users.profile_availability. Content accurate, name ambiguous. Recommendation: reword to ''the reasons returned by mod_users.profile_availability (the ProfileAvailability query)'' and regenerate model/db.'
+    - title: 'Nonce finding: OAuth.Exchange with an EdDSA I'
+      id: PED5
+      date: "2026-11-13"
+      tags:
+        - type:bug
+        - priority:high
+        - effort:small
+        - plan/phase:oidc-alg-pinning
+        - plan/slug:oidc-eddsa-audience-tokens
+      text: 'Nonce finding: OAuth.Exchange with an EdDSA ID token lacking a nonce claim fails with oauth: nonce mismatch after the signature verifies. Plausible real cause of the owner-login failure; consumer or IdP-side follow-on, behaviour unchanged.'
