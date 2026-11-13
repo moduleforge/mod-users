@@ -30,7 +30,7 @@ phases:
             branch: plan/oidc-eddsa-audience-tokens-01-002
             commit:
                 - 0c7faac6
-            merge: null
+            merge: c48f4b85465ba0459f497c539b70768cb7e19bd6
         - number: 3
           slug: alg-confusion-negative-tests
           title: EdDSA and Algorithm-Confusion Verification Tests
