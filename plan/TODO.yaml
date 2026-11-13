@@ -39,7 +39,7 @@ phases:
           tier: sonnet-med
           digest: Added a test-only file covering the EdDSA and algorithm-confusion matrix through NewVerifierWithOptions and initProvider, reusing the harness. Both mutation checks fail the expected tests and were reverted.
           git:
-            branch: null
+            branch: plan/oidc-eddsa-audience-tokens-01-003
             commit: []
             merge: null
     - number: 2
