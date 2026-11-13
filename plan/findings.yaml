@@ -1,0 +1,12 @@
+version: 2
+items:
+    - title: 'BASELINE: EdDSA is already accepted by the cu'
+      id: xByR
+      date: "2026-11-13"
+      tags:
+        - type:ambiguity
+        - plan/phase:oidc-alg-pinning
+        - priority:unspecified
+        - effort:unspecified
+      text: 'BASELINE: EdDSA is already accepted by the current unmodified code on both verifier paths (facade Verify and Verifier.Verify, and the initProvider login-path verifier). The reported algorithm-rejection root cause is not reproduced; the plan continues as hardening plus tests.'
+closed: []
