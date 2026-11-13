@@ -27,10 +27,16 @@ const algEdDSA = "EdDSA"
 // maxVerifyKeys bounds the number of concurrently valid public keys.
 const maxVerifyKeys = 32
 
-// Verifier validates JWT tokens. It supports OIDC (RS256 via JWKS, for
-// external identity providers) and local EdDSA tokens verified against a set
-// of Ed25519 public keys selected by the token's "kid" header. Local tokens
-// signed with any other algorithm are rejected.
+// Verifier validates JWT tokens. It supports OIDC (for external identity
+// providers, with keys from the issuer's JWKS) and local EdDSA tokens verified
+// against a set of Ed25519 public keys selected by the token's "kid" header.
+// Local tokens signed with any other algorithm are rejected. OIDC tokens are
+// accepted only for a pinned set of asymmetric algorithms: the issuer's
+// advertised id_token_signing_alg_values_supported within RS256/384/512,
+// PS256/384/512, ES256/384/512 and EdDSA (RS256 when none is advertised),
+// narrowed by WithOIDCSigningAlgs when set. "none" and HMAC algorithms are
+// never accepted. An OIDC token's "typ" header, when present, must be JWT or
+// aud+jwt.
 type Verifier struct {
 	oidcVerifier *oidc.IDTokenVerifier
 	localIssuer  string
@@ -41,10 +47,13 @@ type Verifier struct {
 
 // verifierConfig is the accumulated state of VerifierOptions.
 type verifierConfig struct {
-	issuerURL   string
-	clientID    string
-	localIssuer string
-	edKeys      map[string]ed25519.PublicKey
+	issuerURL string
+	clientID  string
+	// oidcSigningAlgs is the operator restriction on OIDC signing algorithms;
+	// empty means no restriction beyond the allowlist and discovery.
+	oidcSigningAlgs []string
+	localIssuer     string
+	edKeys          map[string]ed25519.PublicKey
 	// insecureSkipTLSVerify disables TLS certificate verification for OIDC
 	// discovery and JWKS fetches. Local development only.
 	insecureSkipTLSVerify bool
@@ -58,6 +67,26 @@ type VerifierOption func(*verifierConfig) error
 func WithOIDC(issuerURL, clientID string) VerifierOption {
 	return func(c *verifierConfig) error {
 		c.issuerURL, c.clientID = issuerURL, clientID
+		return nil
+	}
+}
+
+// WithOIDCSigningAlgs restricts the JWS algorithms accepted for OIDC tokens to
+// algs, which must be on the fixed asymmetric allowlist (RS256, RS384, RS512,
+// PS256, PS384, PS512, ES256, ES384, ES512, EdDSA); "none", HMAC algorithms and
+// unknown names are rejected when the option is applied. The restriction
+// intersects with the algorithms the issuer advertises; an empty intersection
+// fails verifier construction. At least one algorithm is required, and a later
+// use replaces an earlier one.
+func WithOIDCSigningAlgs(algs ...string) VerifierOption {
+	return func(c *verifierConfig) error {
+		if len(algs) == 0 {
+			return errors.New("auth: no OIDC signing algorithms supplied")
+		}
+		if err := config.ValidateOIDCSigningAlgs(algs); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
+		c.oidcSigningAlgs = append([]string(nil), algs...)
 		return nil
 	}
 }
@@ -193,7 +222,11 @@ func newVerifier(ctx context.Context, c verifierConfig) (*Verifier, error) {
 		if err != nil {
 			return nil, fmt.Errorf("auth: oidc provider discovery: %w", err)
 		}
-		v.oidcVerifier = provider.Verifier(&oidc.Config{ClientID: clientID})
+		algs, err := oidcSigningAlgsFor(provider, issuerURL, c.oidcSigningAlgs)
+		if err != nil {
+			return nil, fmt.Errorf("auth: %w", err)
+		}
+		v.oidcVerifier = provider.Verifier(&oidc.Config{ClientID: clientID, SupportedSigningAlgs: algs})
 	}
 
 	return v, nil
@@ -210,7 +243,7 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (map[string]any,
 	}
 
 	// Try OIDC.
-	if v.oidcVerifier != nil {
+	if v.oidcVerifier != nil && checkOIDCTokenTyp(rawToken) == nil {
 		idToken, err := v.oidcVerifier.Verify(ctx, rawToken)
 		if err == nil {
 			var claims map[string]any

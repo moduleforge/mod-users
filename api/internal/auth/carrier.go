@@ -328,7 +328,7 @@ func (v *Verifier) verifyCarrier(rawToken string, now time.Time) (*carrier, erro
 	if err != nil {
 		return nil, err
 	}
-	if rawTokenTyp(rawToken) == audienceTokenTyp {
+	if strings.EqualFold(rawTokenTyp(rawToken), audienceTokenTyp) {
 		return nil, errors.New("audience token not accepted")
 	}
 	var p carrierPayload

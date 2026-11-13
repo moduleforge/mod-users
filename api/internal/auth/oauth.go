@@ -228,9 +228,16 @@ func initProvider(ctx context.Context, id string, p config.Provider, cfg *config
 		return state
 	}
 
+	algs, err := oidcSigningAlgsFor(provider, p.IssuerURL, cfg.Auth.OIDCAllowedSigningAlgs)
+	if err != nil {
+		state.Err = fmt.Errorf("provider %q signing algorithms: %w", id, err)
+		return state
+	}
+
 	state.Verifier = provider.Verifier(&oidc.Config{
-		ClientID:        p.ClientID,
-		SkipIssuerCheck: p.MultiTenantIssuer,
+		ClientID:             p.ClientID,
+		SkipIssuerCheck:      p.MultiTenantIssuer,
+		SupportedSigningAlgs: algs,
 	})
 	state.Mapper = mapper
 	state.OAuthCfg = &oauth2.Config{
@@ -531,6 +538,9 @@ func (o *OAuth) Exchange(ctx context.Context, providerID, code, rawState, cookie
 		return empty, emptyPayload, errors.New("oauth: provider did not return an id_token")
 	}
 
+	if err := checkOIDCTokenTyp(rawIDToken); err != nil {
+		return empty, emptyPayload, fmt.Errorf("oauth: verify id_token: %w", err)
+	}
 	idToken, err := s.Verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		return empty, emptyPayload, fmt.Errorf("oauth: verify id_token: %w", err)

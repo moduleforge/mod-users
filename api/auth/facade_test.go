@@ -29,6 +29,7 @@ var (
 	_ func(context.Context, config.LocalAuthConfig) (*Verifier, error)                        = NewLocalVerifier
 	_ func(context.Context, ...VerifierOption) (*Verifier, error)                             = NewVerifierWithOptions
 	_ func(config.LocalAuthConfig) (*Signer, error)                                           = NewSigner
+	_ func(...string) VerifierOption                                                          = WithOIDCSigningAlgs
 	_ func(*Signer, string, uuid.UUID, string, time.Duration, map[string]any) (string, error) = IssueAudienceToken
 	_ func(string) (string, error)                                                            = HashPassword
 	_ interface {
