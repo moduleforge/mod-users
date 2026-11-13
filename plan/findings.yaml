@@ -9,4 +9,13 @@ items:
         - priority:unspecified
         - effort:unspecified
       text: 'BASELINE: EdDSA is already accepted by the current unmodified code on both verifier paths (facade Verify and Verifier.Verify, and the initProvider login-path verifier). The reported algorithm-rejection root cause is not reproduced; the plan continues as hardening plus tests.'
+    - title: 'Nonce finding: OAuth.Exchange with an EdDSA I'
+      id: PED5
+      date: "2026-11-13"
+      tags:
+        - type:ambiguity
+        - plan/phase:oidc-alg-pinning
+        - priority:unspecified
+        - effort:unspecified
+      text: 'Nonce finding: OAuth.Exchange with an EdDSA ID token lacking a nonce claim fails with oauth: nonce mismatch after the signature verifies. Plausible real cause of the owner-login failure; consumer or IdP-side follow-on, behaviour unchanged.'
 closed: []
