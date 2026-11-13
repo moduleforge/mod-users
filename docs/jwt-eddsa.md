@@ -127,8 +127,10 @@ does not apply to them. The accepted algorithms are the provider's advertised
 list intersected with the fixed asymmetric allowlist (`RS*`, `PS*`, `ES*`,
 `EdDSA`) and, when set, the operator restriction `OIDC_ALLOWED_SIGNING_ALGS`
 (or the `WithOIDCSigningAlgs` option), for example `EdDSA,RS256`. `none` and
-`HS*` are never accepted; `RS256` is allowed by default; an empty intersection
-is a construction error. The JWS `typ` is optional, but if present must be `JWT`
+`HS*` are never accepted; `RS256` is accepted when the issuer advertises it, and is the sole fallback
+only when the issuer advertises no allowlisted algorithm; an empty intersection
+is a construction error. The JWS `typ` is optional (an empty `typ` is treated as
+absent), but if present must be `JWT`
 or `aud+jwt` (case-insensitive), and non-compact tokens are rejected. Details:
 [OIDC ID token verification](./architecture.md#oidc-id-token-verification).
 
