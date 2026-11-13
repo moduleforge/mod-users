@@ -166,7 +166,7 @@ Every anonymous request shares the same actor id, so actor-based rate limiting i
 **OIDC (Google, Microsoft, Authelia, and others).** The OIDC flow is:
 1. Client generates a random verifier and calls `GET /v1/auth/oidc/{provider}/start?handoff_challenge=<base64url SHA-256 of the verifier>` → API carries the challenge in the signed state, sets the `oidc_state` cookie and redirects to the authorization URL. The callback's one-time handoff code is redeemable at `POST /v1/auth/handoff` only with that verifier.
 2. User authenticates at the IdP. IdP redirects to `GET /v1/auth/oidc/{provider}/callback`.
-3. API exchanges the code for an id_token, validates it with `go-oidc`, and extracts the issuer, `sub` and the claims it needs.
+3. API exchanges the code for an id_token, validates it with `go-oidc` (signature algorithm pinned as described under [OIDC ID token verification](#oidc-id-token-verification)), and extracts the issuer, `sub` and the claims it needs.
 4. API resolves the verified `(issuer, subject)` against active `oidc` credentials, and **never links an identity by email**.
    - Match found → create the session and a handoff code for the credential's principal.
    - No match, and the provider allows just-in-time creation (`jit_mode`): `byo` creates a bring-your-own user with its own person record and personal profile; `managed` creates a user managed by the provider's party; the new user's `oidc` credential is created with the same primitive the trusted link helper uses.
@@ -178,6 +178,20 @@ Every anonymous request shares the same actor id, so actor-based rate limiting i
 Provider configuration is loaded from environment variables (`AUTH_PROVIDER_<PROVIDER>_CLIENT_ID` / `_CLIENT_SECRET`) and can be overridden by rows in the `oidc_providers` table. In local dev, Authelia acts as the default IdP and is wired automatically by Docker Compose.
 
 OIDC issuer discovery and JWKS fetches verify the issuer's TLS certificate by default. Skipping verification requires the explicit, local-development-only `WithInsecureSkipTLSVerify()` verifier option (passed to `NewVerifierWithOptions` alongside `WithOIDC`), which applies only to an `https://` issuer and logs a warning naming the issuer host. Consumer migration steps are in [docs/consumer-upgrade-notes.md](./consumer-upgrade-notes.md#oidc-issuer-tls-verification).
+
+### OIDC ID token verification
+
+The verifier never takes the signature algorithm from the token header. The accepted set is computed once, when the verifier is constructed:
+
+1. The algorithms the issuer's discovery document advertises in `id_token_signing_alg_values_supported`,
+2. intersected with a fixed asymmetric allowlist: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512` and `EdDSA`,
+3. intersected with the operator restriction when one is set (the `WithOIDCSigningAlgs` verifier option, or the `OIDC_ALLOWED_SIGNING_ALGS` environment variable, a comma-separated list drawn from the same allowlist).
+
+`none` and every `HS*` algorithm are never accepted, even when the issuer advertises them, so an HMAC token keyed with the issuer's public key material (the algorithm-confusion attack) is refused. `RS256` is accepted by default. When discovery advertises no usable algorithm, the set falls back to `RS256` alone, the OIDC default. An empty intersection (for example an operator restriction that shares nothing with what the issuer advertises) is a construction error, not a runtime rejection: the verifier fails to build rather than accepting nothing silently. An operator list naming an algorithm outside the allowlist is rejected when configuration loads.
+
+The JWS `typ` header is not required. When present it must be a string equal, case-insensitively, to `JWT` or `aud+jwt`; any other value, a non-string or undecodable `typ`, and a non-compact (JSON-serialized) token are rejected (fail closed). The local carrier verifier uses the same `typ` check helper, so the local and external paths cannot drift. External OIDC tokens and local EdDSA access tokens are verified by separate paths with separate key sets (see [jwt-eddsa.md](./jwt-eddsa.md#oidc-id-token-verification-is-separate)).
+
+Known limitation: the `generic` claim style cannot be used through the provider initialisation path, because that path supplies no email or roles claim paths for it. Use a named provider style.
 
 For OIDC configuration issues and troubleshooting, see [docs/oidc-troubleshooting.md](./oidc-troubleshooting.md).
 
