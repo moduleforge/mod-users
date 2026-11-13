@@ -35,11 +35,13 @@ phases:
           slug: alg-confusion-negative-tests
           title: EdDSA and Algorithm-Confusion Verification Tests
           path: phase-01-oidc-alg-pinning/003-alg-confusion-negative-tests.md
-          done: false
+          done: true
           tier: sonnet-med
+          digest: Added a test-only file covering the EdDSA and algorithm-confusion matrix through NewVerifierWithOptions and initProvider, reusing the harness. Both mutation checks fail the expected tests and were reverted.
           git:
-            branch: null
-            commit: []
+            branch: plan/oidc-eddsa-audience-tokens-01-003
+            commit:
+                - 0b6fbb01
             merge: null
     - number: 2
       slug: oidc-eddsa-login-e2e
