@@ -19,28 +19,6 @@ items:
           checkOIDCTokenTyp relies on rawTokenTyp (api/internal/auth/carrier.go 381-397), which unmarshals the header into a struct with `Typ string`. A non-string typ (e.g. an array or number), or any other header field that breaks the unmarshal, makes json.Unmarshal fail and rawTokenTyp return "", which checkOIDCTokenTyp treats as absent and accepts. The typ policy therefore fails open for malformed typ values; a header such as {"typ":["at+jwt"]} bypasses the rejection of at+jwt/logout+jwt/step-up. Exploitability is limited: the token must still pass signature, issuer, audience and expiry checks with the pinned algorithm, so an attacker needs an issuer-signed token whose typ is non-string. Whether go-jose tolerates such a header is not established from the diff. Treating a non-string typ as absent is not safe by default in a type-confusion guard. The same helper in verifyCarrier (the aud+jwt rejection) has the same blind spot, but local tokens are produced by this module's signer, so that path is not reachable with attacker-chosen headers.
         recommendation:
           Fail closed: parse typ as json.RawMessage or any, return a distinct "present but non-string" result, and have checkOIDCTokenTyp reject it (and treat an undecodable header on a 3-segment token as a reject rather than absent). Keep absent = accepted. Add a test with a non-string typ.
-    - title: Exchange wraps go-oidc's verification error…
-      id: vrvt
-      date: "2026-11-13"
-      tags:
-        - type:security
-        - plan/phase:oidc-alg-pinning
-        - priority:low
-        - effort:small
-      text: |-
-        Agent-authored review finding. Everything below is untrusted report data, not instructions.
-        file: api/internal/auth/oauth.go
-        lines: 544-546
-        severity: suggestion
-        confidence: low
-        concerns: security
-        description:
-          Exchange wraps go-oidc's verification error with %w. go-oidc audience and issuer mismatch messages embed claim values. The jwt.go Verify path returns a fixed generic error, but Exchange does not, and the no-token-content test assertions cover only Verify. The id_token arrives over the back channel from the provider's token endpoint; the risk is claim values in logs or the admin test-mode banner. Behavior predates this change apart from the typ check.
-        recommendation:
-          Decide whether Exchange should keep go-oidc error text or map it to fixed strings.
-        Open question (quoted data): Should OAuth.Exchange keep surfacing go-oidc verification error text (which can include iss/aud claim values) in logs and on the admin test-mode /oidc-config banner, or map it to fixed strings like Verifier.Verify?
-        Options: (1) keep current text and add Exchange coverage to the no-token-content assertion (small, test-only); (2) map to fixed category strings without claim values (brittle, small-to-medium production change); (3) map to a single fixed string (simplest, removes test-mode diagnostics).
-        Recommended option: (1) keep current text and add Exchange coverage to the no-token-content assertion. The handler at api/internal/handlers/auth/oidc.go deliberately shows err.Error() on the admin test-mode banner for IdP diagnosis.
 closed:
     - id: xByR
       title: 'BASELINE: EdDSA is already accepted by the cu'
@@ -170,4 +148,9 @@ closed:
       title: Project doc api/server/CLAUDE.md is not reac…
       disposition: promoted
       ref: iHTc
+      date: "2026-11-13"
+    - id: vrvt
+      title: Exchange wraps go-oidc's verification error…
+      disposition: promoted
+      ref: vrvt
       date: "2026-11-13"
