@@ -15,7 +15,7 @@ phases:
           tier: sonnet-med
           digest: Built a reusable Ed25519/OKP test issuer harness. The baseline shows go-oidc already accepts EdDSA aud+jwt tokens on both verifier paths, so the remaining plan is hardening plus tests. A missing nonce claim yields nonce mismatch in Exchange.
           git:
-            branch: null
+            branch: plan/oidc-eddsa-audience-tokens-01-001
             commit: []
             merge: null
         - number: 2
