@@ -42,7 +42,7 @@ phases:
             branch: plan/oidc-eddsa-audience-tokens-01-003
             commit:
                 - 0b6fbb01
-            merge: null
+            merge: 950975d06b0664b65834dc705cf284f4853021b0
     - number: 2
       slug: oidc-eddsa-login-e2e
       title: EdDSA OIDC Login End-to-End Coverage
