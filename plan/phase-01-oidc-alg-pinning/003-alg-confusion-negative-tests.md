@@ -32,3 +32,7 @@ Negative (each asserts rejection, and that the error text does not contain token
 ## Assumptions
 
 Depends on the harness task and on the algorithm pinning task being merged.
+
+## Status
+
+Outcome: succeeded (2026-11-13). Added `api/internal/auth/jwt_oidc_eddsa_test.go` covering positive EdDSA, typ variants, key rotation, RS256 regression, operator restriction, key-type mismatch, alg none/HS256 confusion, claim and signature negatives, typ mismatch with `verifyCarrier`, and the local path. Unit tests for `resolveOIDCSigningAlgs` and the `OIDC_ALLOWED_SIGNING_ALGS` parser already existed from the pinning task and were reused. Validation: `go test ./internal/auth/... ./internal/config/...` and `make test.unit` pass. Mutation checks: dropping the `SupportedSigningAlgs` assignment fails `TestVerifier_OIDC_AlgPinning` and `TestVerifier_OIDC_RS256Regression`; disabling the typ check fails four typ tests. Both mutations reverted.
