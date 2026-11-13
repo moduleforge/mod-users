@@ -18,7 +18,7 @@ phases:
             branch: plan/oidc-eddsa-audience-tokens-01-001
             commit:
                 - 200e9daf
-            merge: null
+            merge: 64936cbea9a4501c7a02406b0b759a48f089914f
         - number: 2
           slug: pin-oidc-signing-algs
           title: Pin OIDC Signing Algorithms and Enforce typ Policy
