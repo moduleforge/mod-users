@@ -141,6 +141,15 @@ func NewVerifierWithOptions(ctx context.Context, opts ...VerifierOption) (*Verif
 // WithOIDC enables verification of OIDC provider tokens from issuerURL.
 func WithOIDC(issuerURL, clientID string) VerifierOption { return inner.WithOIDC(issuerURL, clientID) }
 
+// WithOIDCSigningAlgs restricts the JWS algorithms accepted for OIDC tokens
+// to algs, a subset of RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384,
+// ES512 and EdDSA. By default the verifier accepts the algorithms the issuer
+// advertises within that set (RS256 when it advertises none); this option
+// narrows that further. "none", HMAC algorithms and unknown names are
+// rejected, and an empty intersection with the issuer's advertised algorithms
+// fails construction.
+func WithOIDCSigningAlgs(algs ...string) VerifierOption { return inner.WithOIDCSigningAlgs(algs...) }
+
 // WithInsecureSkipTLSVerify disables TLS certificate verification for OIDC
 // discovery and JWKS fetches. LOCAL DEVELOPMENT ONLY; never enable in
 // production.

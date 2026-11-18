@@ -118,9 +118,25 @@ verifiers should check `typ` to tell them apart: the access-token
 `Authenticator` rejects any token with `typ: aud+jwt`, so an audience token can
 never be replayed as a bearer token against mod-users.
 
+## OIDC ID token verification is separate
+
+Everything above concerns the local EdDSA access-token carrier. ID tokens from
+an external OIDC provider are verified by a different path, against the
+provider's JWKS rather than `JWT_VERIFY_PUBLIC_KEYS`, and the local `EdDSA` pin
+does not apply to them. The accepted algorithms are the provider's advertised
+list intersected with the fixed asymmetric allowlist (`RS*`, `PS*`, `ES*`,
+`EdDSA`) and, when set, the operator restriction `OIDC_ALLOWED_SIGNING_ALGS`
+(or the `WithOIDCSigningAlgs` option), for example `EdDSA,RS256`. `none` and
+`HS*` are never accepted; `RS256` is accepted when the issuer advertises it, and is the sole fallback
+only when the issuer advertises no allowlisted algorithm; an empty intersection
+is a construction error. The JWS `typ` is optional (an empty `typ` is treated as
+absent), but if present must be `JWT`
+or `aud+jwt` (case-insensitive), and non-compact tokens are rejected. Details:
+[OIDC ID token verification](./architecture.md#oidc-id-token-verification).
+
 Go API (package `github.com/moduleforge/mod-users/api/auth`):
 `NewSigner`, `NewLocalVerifier`, `NewVerifierWithOptions` with `WithOIDC`,
-`WithInsecureSkipTLSVerify`, `WithLocalIssuer`, `WithEd25519PublicKey`,
+`WithOIDCSigningAlgs`, `WithInsecureSkipTLSVerify`, `WithLocalIssuer`, `WithEd25519PublicKey`,
 `WithEd25519PublicKeys`, and `IssueAudienceToken`. The 5-argument `NewVerifier`
 and `WithHS256Secret` are removed.
 

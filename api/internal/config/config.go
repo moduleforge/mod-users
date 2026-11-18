@@ -166,6 +166,12 @@ type AuthConfig struct {
 	// Required when any provider is enabled.
 	OAuthRedirectBaseURL string
 
+	// OIDCAllowedSigningAlgs optionally restricts the JWS algorithms accepted
+	// for OIDC ID tokens to this subset of the fixed asymmetric allowlist
+	// (env var OIDC_ALLOWED_SIGNING_ALGS, comma separated). Empty applies the
+	// default: the algorithms the provider advertises, within the allowlist.
+	OIDCAllowedSigningAlgs []string
+
 	// CookiePath is the public base path (e.g. "/manage") under which this
 	// API is reachable when a proxy strips the mount prefix. When set, the
 	// oidc_state cookie Path is CookiePath + "/v1/auth/oidc/" instead of being
@@ -398,6 +404,9 @@ func Load() (*Config, error) {
 	authLifetimes, lifetimeProblems := loadAuthLifetimes()
 	parseErrors = append(parseErrors, lifetimeProblems...)
 
+	oidcAllowedAlgs, oidcAlgProblems := loadOIDCAllowedSigningAlgs()
+	parseErrors = append(parseErrors, oidcAlgProblems...)
+
 	cookiePath := os.Getenv("USERS_COOKIE_PATH")
 	if err := ValidateCookieBasePath(cookiePath); err != nil {
 		parseErrors = append(parseErrors, "USERS_COOKIE_PATH: "+err.Error())
@@ -413,18 +422,19 @@ func Load() (*Config, error) {
 			MaxConnIdleTime: maxConnIdleTime,
 		},
 		Auth: AuthConfig{
-			FrontendReturnURL:     os.Getenv("AUTH_FRONTEND_RETURN_URL"),
-			OAuthRedirectBaseURL:  os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
-			CookiePath:            cookiePath,
-			AccessTokenTTL:        authLifetimes.AccessTokenTTL,
-			SessionMaxAge:         authLifetimes.SessionMaxAge,
-			SessionIdleTimeout:    authLifetimes.SessionIdleTimeout,
-			ClientCredentialsTTL:  authLifetimes.ClientCredentialsTTL,
-			ImpersonationTTL:      authLifetimes.ImpersonationTTL,
-			ImpersonationMax:      authLifetimes.ImpersonationMax,
-			SelfServiceMaxAuthAge: authLifetimes.SelfServiceMaxAuthAge,
-			DefaultAudience:       strings.TrimSpace(getEnv("AUTH_DEFAULT_AUDIENCE", DefaultAudience)),
-			AcceptedAudiences:     parseList(os.Getenv("AUTH_ACCEPTED_AUDIENCES")),
+			FrontendReturnURL:      os.Getenv("AUTH_FRONTEND_RETURN_URL"),
+			OAuthRedirectBaseURL:   os.Getenv("AUTH_OAUTH_REDIRECT_BASE_URL"),
+			CookiePath:             cookiePath,
+			OIDCAllowedSigningAlgs: oidcAllowedAlgs,
+			AccessTokenTTL:         authLifetimes.AccessTokenTTL,
+			SessionMaxAge:          authLifetimes.SessionMaxAge,
+			SessionIdleTimeout:     authLifetimes.SessionIdleTimeout,
+			ClientCredentialsTTL:   authLifetimes.ClientCredentialsTTL,
+			ImpersonationTTL:       authLifetimes.ImpersonationTTL,
+			ImpersonationMax:       authLifetimes.ImpersonationMax,
+			SelfServiceMaxAuthAge:  authLifetimes.SelfServiceMaxAuthAge,
+			DefaultAudience:        strings.TrimSpace(getEnv("AUTH_DEFAULT_AUDIENCE", DefaultAudience)),
+			AcceptedAudiences:      parseList(os.Getenv("AUTH_ACCEPTED_AUDIENCES")),
 		},
 		Providers: registry,
 		Server: ServerConfig{

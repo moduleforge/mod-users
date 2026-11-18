@@ -243,6 +243,10 @@ func TestVerifyCarrier_Rejects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssueAudienceToken: %v", err)
 	}
+	baseJSON, err := json.Marshal(base())
+	if err != nil {
+		t.Fatal(err)
+	}
 	both := base()
 	both["cid"] = uuid.NewString()
 
@@ -258,6 +262,9 @@ func TestVerifyCarrier_Rejects(t *testing.T) {
 		"both sid and cid":    sign(both),
 		"audience token":      audTok,
 		"garbage":             "a.b.c",
+		"array typ":           mintEdDSATokenRawHeader(t, priv, `{"alg":"EdDSA","typ":["aud+jwt"]}`, string(baseJSON)),
+		"number typ":          mintEdDSATokenRawHeader(t, priv, `{"alg":"EdDSA","typ":7}`, string(baseJSON)),
+		"null typ":            mintEdDSATokenRawHeader(t, priv, `{"alg":"EdDSA","typ":null}`, string(baseJSON)),
 	}
 	for name, tok := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -284,7 +291,7 @@ func TestIssueAudienceToken(t *testing.T) {
 		t.Errorf("unexpected claims %v", claims)
 	}
 
-	if typ := rawTokenTyp(tok); typ != "aud+jwt" {
+	if typ, ok := rawTokenTyp(tok); !ok || typ != "aud+jwt" {
 		t.Errorf("typ header = %q, want aud+jwt", typ)
 	}
 	if _, err := v.verifyCarrier(tok, time.Now()); err == nil {
