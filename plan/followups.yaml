@@ -2936,16 +2936,6 @@ items:
         - plan/phase:oidc-eddsa-login-e2e
         - plan/slug:oidc-eddsa-audience-tokens
       text: 'api/internal/auth/oauth.go initProvider builds the claim mapper with NewClaimMapper(p.ClaimStyle, MapperOptions{}), so a provider with claim_style generic gets a genericMapper with empty EmailPath and RolesPath. Every OAuth.Exchange for such a provider then fails at the mapping step with ''oauth: map claims: auth: generic mapper requires opts.EmailPath'' even when signature, audience and nonce verify (pinned by TestOAuth_Exchange_EdDSAGenericStyleHasNoClaimPaths in api/internal/auth/oauth_eddsa_test.go). Providers need a way to supply the claim paths, or generic should default to email/roles paths.'
-    - title: api/server/CLAUDE.md unreachable from README
-      id: JYWh
-      date: "2026-11-13"
-      tags:
-        - type:documentation
-        - priority:low
-        - effort:small
-        - plan/phase:oidc-eddsa-login-e2e
-        - plan/slug:oidc-eddsa-audience-tokens
-      text: Agent-authored report data. api/server/CLAUDE.md is not reachable from README.md via links (severity suggestion, confidence medium, concern documentation). It is a tool-loaded agent instruction file so it is likely intentionally unlinked; link it from README.md or AGENTS.md if it should be discoverable, otherwise accept. Not touched by this phase's diff.
     - title: Unreachable plan-summary docs, dangling links
       id: YqrL
       date: "2026-11-13"
